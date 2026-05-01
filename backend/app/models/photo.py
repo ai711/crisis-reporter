@@ -21,7 +21,7 @@ class Photo(Base):
     # Storage
     storage_path: Mapped[str] = mapped_column(String(500), nullable=False)
     storage_backend: Mapped[str] = mapped_column(
-        String(20), nullable=False
+        String(50), nullable=False
     )  # local, r2
 
     # File metadata

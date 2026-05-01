@@ -10,7 +10,7 @@ from app.database import engine, Base
 import app.models
 
 # Import routers
-from app.routers import dashboard_auth, reporter_auth, crises, reports
+from app.routers import dashboard_auth, reporter_auth, crises, reports, photos
 
 
 @asynccontextmanager
@@ -52,6 +52,7 @@ app.include_router(dashboard_auth.router)
 app.include_router(reporter_auth.router)
 app.include_router(crises.router)
 app.include_router(reports.router)
+app.include_router(photos.router)
 
 
 @app.get("/api/health")
