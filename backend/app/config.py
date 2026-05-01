@@ -1,0 +1,60 @@
+from pydantic_settings import BaseSettings
+from typing import Literal
+import secrets
+
+
+class Settings(BaseSettings):
+    # Application
+    APP_NAME: str = "Crisis Reporter"
+    APP_VERSION: str = "1.0.0"
+    DEBUG: bool = False
+
+    # Database
+    DATABASE_URL: str = "postgresql+asyncpg://crisis_user:crisis_pass@localhost:5432/crisis_reporter"
+
+    # Redis
+    REDIS_URL: str = "redis://localhost:6379"
+
+    # JWT
+    JWT_SECRET_KEY: str = secrets.token_urlsafe(32)
+    JWT_ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+
+    # Encryption
+    FERNET_KEY: str = ""
+
+    # Storage
+    STORAGE_BACKEND: Literal["local", "r2"] = "local"
+    LOCAL_UPLOAD_PATH: str = "uploads/photos"
+    R2_ACCOUNT_ID: str = ""
+    R2_ACCESS_KEY_ID: str = ""
+    R2_SECRET_ACCESS_KEY: str = ""
+    R2_BUCKET_NAME: str = ""
+
+    # Maptiler
+    MAPTILER_API_KEY: str = ""
+
+    # Web Push
+    VAPID_PUBLIC_KEY: str = ""
+    VAPID_PRIVATE_KEY: str = ""
+
+    # Expo Push
+    EXPO_PUSH_TOKEN: str = ""
+
+    # LibreTranslate
+    LIBRETRANSLATE_URL: str = "https://libretranslate.com"
+
+    # CORS — origins allowed to call the API
+    ALLOWED_ORIGINS: list[str] = [
+        "http://localhost:5173",   # web/PWA dev server
+        "http://localhost:5174",   # dashboard dev server
+        "http://localhost:3000",
+    ]
+
+    class Config:
+        env_file = ".env"
+        env_file_encoding = "utf-8"
+
+
+settings = Settings()
