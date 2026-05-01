@@ -270,12 +270,26 @@ async def submit_report(
     await db.commit()
     await db.refresh(report)
 
+    # Publish SSE event to connected dashboard clients
+    from app.routers.dashboard_sse import publish_event
+    await publish_event(
+        crisis_id=str(report.crisis_id),
+        event_type="report_confirmed",
+        data={
+            "report_id": str(report.id),
+            "flag_status": report.flag_status,
+            "damage_level": report.damage_level,
+            "latitude": report.gps_latitude,
+            "longitude": report.gps_longitude,
+            "platform": report.platform,
+        },
+    )
+
     return ReportSubmitResponse(
         report_id=str(report.id),
         flag_status=report.flag_status,
         message="Report received successfully",
     )
-
 
 @router.get("/{report_id}", response_model=ReportResponse)
 async def get_report(

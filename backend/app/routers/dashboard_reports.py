@@ -313,6 +313,18 @@ async def update_report_flag(
     db.add(flag_event)
     await db.commit()
 
+    # Publish SSE event
+    from app.routers.dashboard_sse import publish_event
+    await publish_event(
+        crisis_id=str(report.crisis_id),
+        event_type="flag_changed",
+        data={
+            "report_id": report_id,
+            "flag_from": previous_flag,
+            "flag_to": request.flag_status,
+        },
+    )
+
     return {
         "report_id": report_id,
         "flag_from": previous_flag,
