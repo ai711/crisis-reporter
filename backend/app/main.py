@@ -10,21 +10,15 @@ from app.database import engine, Base
 import app.models
 
 # Import routers
-from app.routers import dashboard_auth
+from app.routers import dashboard_auth, reporter_auth, crises, reports
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup — create all tables
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-
-    # Ensure upload directory exists
     Path(settings.LOCAL_UPLOAD_PATH).mkdir(parents=True, exist_ok=True)
-
     yield
-
-    # Shutdown — dispose engine
     await engine.dispose()
 
 
@@ -36,7 +30,6 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.ALLOWED_ORIGINS,
@@ -45,7 +38,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Serve local uploads as static files (development only)
 if settings.STORAGE_BACKEND == "local":
     uploads_path = Path(settings.LOCAL_UPLOAD_PATH)
     uploads_path.mkdir(parents=True, exist_ok=True)
@@ -57,6 +49,9 @@ if settings.STORAGE_BACKEND == "local":
 
 # Register routers
 app.include_router(dashboard_auth.router)
+app.include_router(reporter_auth.router)
+app.include_router(crises.router)
+app.include_router(reports.router)
 
 
 @app.get("/api/health")
