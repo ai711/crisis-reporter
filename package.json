@@ -1,0 +1,14 @@
+{
+  "dependencies": {
+    "@tanstack/react-query": "^5.100.7",
+    "axios": "^1.15.2",
+    "i18next": "^26.0.8",
+    "maplibre-gl": "^5.24.0",
+    "react-i18next": "^17.0.6",
+    "react-router-dom": "^7.14.2"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "vite-plugin-pwa": "^1.2.0"
+  }
+}

@@ -1,0 +1,72 @@
+{
+  "app": { "name": "危机报告" },
+  "onboarding": {
+    "selectCountry": "选择您的国家",
+    "selectLanguage": "选择语言",
+    "countryPlaceholder": "搜索您的国家...",
+    "inactive": "我们目前无法为您所在地区提供帮助",
+    "continue": "继续"
+  },
+  "home": {
+    "reportButton": "报告事件",
+    "queuedReports": "{{count}} 份报告等待同步",
+    "myReports": "我的报告"
+  },
+  "report": {
+    "title": "报告损坏",
+    "damageLevel": "损坏程度",
+    "minimal": "轻微或无损坏",
+    "partial": "部分损坏",
+    "complete": "完全损毁",
+    "infrastructureType": "基础设施类型",
+    "residential": "住宅建筑",
+    "commercial": "商业建筑",
+    "school": "学校",
+    "hospital": "医院",
+    "road": "道路或桥梁",
+    "other": "其他",
+    "description": "描述（可选）",
+    "descriptionPlaceholder": "描述您观察到的损坏情况...",
+    "photos": "照片",
+    "addPhoto": "添加照片",
+    "takePhoto": "拍摄照片",
+    "uploadPhoto": "从相册上传",
+    "photoRequired": "至少需要一张照片",
+    "maxPhotos": "每份报告最多3张照片",
+    "location": "位置",
+    "selectBuilding": "在地图上选择建筑",
+    "manualLocation": "手动输入位置",
+    "address": "地址",
+    "landmark": "附近地标",
+    "buildingName": "建筑名称",
+    "submit": "提交报告",
+    "submitting": "提交中...",
+    "queued": "报告已保存。有网络时将自动同步。",
+    "success": "报告提交成功",
+    "error": "提交失败，请重试。"
+  },
+  "map": {
+    "loading": "地图加载中...",
+    "selectLocation": "点击建筑以选择",
+    "gpsUnavailable": "GPS不可用 — 请手动选择位置",
+    "searchPlaceholder": "搜索位置..."
+  },
+  "settings": {
+    "title": "设置",
+    "language": "语言",
+    "country": "国家",
+    "account": "账户",
+    "login": "登录",
+    "register": "创建账户",
+    "logout": "退出登录"
+  },
+  "offline": {
+    "banner": "您已离线。报告将被保存，重新连接后发送。",
+    "syncing": "正在同步您的报告..."
+  },
+  "errors": {
+    "required": "此字段为必填项",
+    "networkError": "网络错误，请检查您的连接。",
+    "unknownError": "出现错误，请重试。"
+  }
+}

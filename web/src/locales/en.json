@@ -1,0 +1,74 @@
+{
+  "app": {
+    "name": "Crisis Reporter"
+  },
+  "onboarding": {
+    "selectCountry": "Select Your Country",
+    "selectLanguage": "Select Language",
+    "countryPlaceholder": "Search for your country...",
+    "inactive": "We are unable to provide any assistance for your region at this moment",
+    "continue": "Continue"
+  },
+  "home": {
+    "reportButton": "Report an Incident",
+    "queuedReports": "{{count}} report(s) waiting to sync",
+    "myReports": "My Reports"
+  },
+  "report": {
+    "title": "Report Damage",
+    "damageLevel": "Damage Level",
+    "minimal": "Minimal or No Damage",
+    "partial": "Partially Damaged",
+    "complete": "Completely Destroyed",
+    "infrastructureType": "Infrastructure Type",
+    "residential": "Residential Building",
+    "commercial": "Commercial Building",
+    "school": "School",
+    "hospital": "Hospital",
+    "road": "Road or Bridge",
+    "other": "Other",
+    "description": "Description (optional)",
+    "descriptionPlaceholder": "Describe the damage you observed...",
+    "photos": "Photos",
+    "addPhoto": "Add Photo",
+    "takePhoto": "Take a Photo",
+    "uploadPhoto": "Upload from Gallery",
+    "photoRequired": "At least one photo is required",
+    "maxPhotos": "Maximum 3 photos per report",
+    "location": "Location",
+    "selectBuilding": "Select building on map",
+    "manualLocation": "Enter location manually",
+    "address": "Address",
+    "landmark": "Nearby Landmark",
+    "buildingName": "Building Name",
+    "submit": "Submit Report",
+    "submitting": "Submitting...",
+    "queued": "Report saved. Will sync when internet is available.",
+    "success": "Report submitted successfully",
+    "error": "Failed to submit report. Please try again."
+  },
+  "map": {
+    "loading": "Loading map...",
+    "selectLocation": "Tap a building to select it",
+    "gpsUnavailable": "GPS unavailable — please select location manually",
+    "searchPlaceholder": "Search for a location..."
+  },
+  "settings": {
+    "title": "Settings",
+    "language": "Language",
+    "country": "Country",
+    "account": "Account",
+    "login": "Log In",
+    "register": "Create Account",
+    "logout": "Log Out"
+  },
+  "offline": {
+    "banner": "You are offline. Reports will be saved and sent when you reconnect.",
+    "syncing": "Syncing your reports..."
+  },
+  "errors": {
+    "required": "This field is required",
+    "networkError": "Network error. Please check your connection.",
+    "unknownError": "Something went wrong. Please try again."
+  }
+}

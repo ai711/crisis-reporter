@@ -1,0 +1,74 @@
+{
+  "app": {
+    "name": "Crisis Reporter"
+  },
+  "onboarding": {
+    "selectCountry": "Sélectionnez votre pays",
+    "selectLanguage": "Sélectionner la langue",
+    "countryPlaceholder": "Rechercher votre pays...",
+    "inactive": "Nous ne sommes pas en mesure de fournir une assistance pour votre région pour le moment",
+    "continue": "Continuer"
+  },
+  "home": {
+    "reportButton": "Signaler un incident",
+    "queuedReports": "{{count}} rapport(s) en attente de synchronisation",
+    "myReports": "Mes rapports"
+  },
+  "report": {
+    "title": "Signaler des dommages",
+    "damageLevel": "Niveau de dommages",
+    "minimal": "Dommages minimaux ou nuls",
+    "partial": "Partiellement endommagé",
+    "complete": "Complètement détruit",
+    "infrastructureType": "Type d'infrastructure",
+    "residential": "Bâtiment résidentiel",
+    "commercial": "Bâtiment commercial",
+    "school": "École",
+    "hospital": "Hôpital",
+    "road": "Route ou pont",
+    "other": "Autre",
+    "description": "Description (optionnel)",
+    "descriptionPlaceholder": "Décrivez les dommages observés...",
+    "photos": "Photos",
+    "addPhoto": "Ajouter une photo",
+    "takePhoto": "Prendre une photo",
+    "uploadPhoto": "Télécharger depuis la galerie",
+    "photoRequired": "Au moins une photo est requise",
+    "maxPhotos": "Maximum 3 photos par rapport",
+    "location": "Localisation",
+    "selectBuilding": "Sélectionner un bâtiment sur la carte",
+    "manualLocation": "Saisir la localisation manuellement",
+    "address": "Adresse",
+    "landmark": "Point de repère",
+    "buildingName": "Nom du bâtiment",
+    "submit": "Soumettre le rapport",
+    "submitting": "Envoi en cours...",
+    "queued": "Rapport sauvegardé. Sera synchronisé dès que la connexion sera disponible.",
+    "success": "Rapport soumis avec succès",
+    "error": "Échec de la soumission. Veuillez réessayer."
+  },
+  "map": {
+    "loading": "Chargement de la carte...",
+    "selectLocation": "Appuyez sur un bâtiment pour le sélectionner",
+    "gpsUnavailable": "GPS indisponible — veuillez sélectionner la localisation manuellement",
+    "searchPlaceholder": "Rechercher un emplacement..."
+  },
+  "settings": {
+    "title": "Paramètres",
+    "language": "Langue",
+    "country": "Pays",
+    "account": "Compte",
+    "login": "Se connecter",
+    "register": "Créer un compte",
+    "logout": "Se déconnecter"
+  },
+  "offline": {
+    "banner": "Vous êtes hors ligne. Les rapports seront sauvegardés et envoyés lors de la reconnexion.",
+    "syncing": "Synchronisation de vos rapports..."
+  },
+  "errors": {
+    "required": "Ce champ est obligatoire",
+    "networkError": "Erreur réseau. Veuillez vérifier votre connexion.",
+    "unknownError": "Une erreur s'est produite. Veuillez réessayer."
+  }
+}
