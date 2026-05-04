@@ -1,0 +1,72 @@
+{
+  "app": { "name": "Crisis Reporter" },
+  "onboarding": {
+    "selectCountry": "Selecciona tu país",
+    "selectLanguage": "Seleccionar idioma",
+    "countryPlaceholder": "Busca tu país...",
+    "inactive": "No podemos brindar asistencia para tu región en este momento",
+    "continue": "Continuar"
+  },
+  "home": {
+    "reportButton": "Reportar un incidente",
+    "queuedReports": "{{count}} reporte(s) esperando sincronización",
+    "myReports": "Mis reportes"
+  },
+  "report": {
+    "title": "Reportar daños",
+    "damageLevel": "Nivel de daño",
+    "minimal": "Daño mínimo o nulo",
+    "partial": "Parcialmente dañado",
+    "complete": "Completamente destruido",
+    "infrastructureType": "Tipo de infraestructura",
+    "residential": "Edificio residencial",
+    "commercial": "Edificio comercial",
+    "school": "Escuela",
+    "hospital": "Hospital",
+    "road": "Carretera o puente",
+    "other": "Otro",
+    "description": "Descripción (opcional)",
+    "descriptionPlaceholder": "Describe el daño observado...",
+    "photos": "Fotos",
+    "addPhoto": "Agregar foto",
+    "takePhoto": "Tomar una foto",
+    "uploadPhoto": "Subir desde galería",
+    "photoRequired": "Se requiere al menos una foto",
+    "maxPhotos": "Máximo 3 fotos por reporte",
+    "location": "Ubicación",
+    "selectBuilding": "Selecciona un edificio en el mapa",
+    "manualLocation": "Ingresar ubicación manualmente",
+    "address": "Dirección",
+    "landmark": "Punto de referencia",
+    "buildingName": "Nombre del edificio",
+    "submit": "Enviar reporte",
+    "submitting": "Enviando...",
+    "queued": "Reporte guardado. Se enviará cuando haya conexión.",
+    "success": "Reporte enviado exitosamente",
+    "error": "Error al enviar. Por favor intenta de nuevo."
+  },
+  "map": {
+    "loading": "Cargando mapa...",
+    "selectLocation": "Toca un edificio para seleccionarlo",
+    "gpsUnavailable": "GPS no disponible — selecciona la ubicación manualmente",
+    "searchPlaceholder": "Buscar una ubicación..."
+  },
+  "settings": {
+    "title": "Configuración",
+    "language": "Idioma",
+    "country": "País",
+    "account": "Cuenta",
+    "login": "Iniciar sesión",
+    "register": "Crear cuenta",
+    "logout": "Cerrar sesión"
+  },
+  "offline": {
+    "banner": "Estás sin conexión. Los reportes se guardarán y enviarán al reconectarte.",
+    "syncing": "Sincronizando tus reportes..."
+  },
+  "errors": {
+    "required": "Este campo es obligatorio",
+    "networkError": "Error de red. Verifica tu conexión.",
+    "unknownError": "Algo salió mal. Por favor intenta de nuevo."
+  }
+}

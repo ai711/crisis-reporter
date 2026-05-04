@@ -1,0 +1,72 @@
+{
+  "app": { "name": "Crisis Reporter" },
+  "onboarding": {
+    "selectCountry": "اختر بلدك",
+    "selectLanguage": "اختر اللغة",
+    "countryPlaceholder": "ابحث عن بلدك...",
+    "inactive": "لا يمكننا تقديم المساعدة لمنطقتك في الوقت الحالي",
+    "continue": "متابعة"
+  },
+  "home": {
+    "reportButton": "الإبلاغ عن حادثة",
+    "queuedReports": "{{count}} تقرير(تقارير) في انتظار المزامنة",
+    "myReports": "تقاريري"
+  },
+  "report": {
+    "title": "الإبلاغ عن أضرار",
+    "damageLevel": "مستوى الضرر",
+    "minimal": "ضرر ضئيل أو لا يوجد",
+    "partial": "تضرر جزئي",
+    "complete": "مدمر بالكامل",
+    "infrastructureType": "نوع البنية التحتية",
+    "residential": "مبنى سكني",
+    "commercial": "مبنى تجاري",
+    "school": "مدرسة",
+    "hospital": "مستشفى",
+    "road": "طريق أو جسر",
+    "other": "أخرى",
+    "description": "وصف (اختياري)",
+    "descriptionPlaceholder": "صف الأضرار التي لاحظتها...",
+    "photos": "صور",
+    "addPhoto": "إضافة صورة",
+    "takePhoto": "التقاط صورة",
+    "uploadPhoto": "تحميل من المعرض",
+    "photoRequired": "مطلوب صورة واحدة على الأقل",
+    "maxPhotos": "الحد الأقصى 3 صور لكل تقرير",
+    "location": "الموقع",
+    "selectBuilding": "اختر مبنى على الخريطة",
+    "manualLocation": "إدخال الموقع يدوياً",
+    "address": "العنوان",
+    "landmark": "معلم قريب",
+    "buildingName": "اسم المبنى",
+    "submit": "إرسال التقرير",
+    "submitting": "جارٍ الإرسال...",
+    "queued": "تم حفظ التقرير. سيتم الإرسال عند توفر الإنترنت.",
+    "success": "تم إرسال التقرير بنجاح",
+    "error": "فشل الإرسال. يرجى المحاولة مجدداً."
+  },
+  "map": {
+    "loading": "جارٍ تحميل الخريطة...",
+    "selectLocation": "انقر على مبنى لتحديده",
+    "gpsUnavailable": "نظام GPS غير متاح — يرجى تحديد الموقع يدوياً",
+    "searchPlaceholder": "ابحث عن موقع..."
+  },
+  "settings": {
+    "title": "الإعدادات",
+    "language": "اللغة",
+    "country": "البلد",
+    "account": "الحساب",
+    "login": "تسجيل الدخول",
+    "register": "إنشاء حساب",
+    "logout": "تسجيل الخروج"
+  },
+  "offline": {
+    "banner": "أنت غير متصل. سيتم حفظ التقارير وإرسالها عند إعادة الاتصال.",
+    "syncing": "جارٍ مزامنة تقاريرك..."
+  },
+  "errors": {
+    "required": "هذا الحقل مطلوب",
+    "networkError": "خطأ في الشبكة. يرجى التحقق من اتصالك.",
+    "unknownError": "حدث خطأ ما. يرجى المحاولة مجدداً."
+  }
+}

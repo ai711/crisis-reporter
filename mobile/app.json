@@ -1,0 +1,70 @@
+{
+  "expo": {
+    "name": "Crisis Reporter",
+    "slug": "crisis-reporter",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1A2B4A"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "org.undp.crisisreporter"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#1A2B4A"
+      },
+      "package": "org.undp.crisisreporter",
+      "permissions": [
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.WAKE_LOCK"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-secure-store",
+      "@maplibre/maplibre-react-native",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Crisis Reporter needs location access to tag damage reports accurately."
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Crisis Reporter needs camera access to photograph damage."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Crisis Reporter needs photo library access to attach damage photos."
+        }
+      ],
+      "expo-task-manager",
+      "expo-background-fetch"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "8cdcae5d-9452-4d00-8bfe-e2f4a73e1ab1"
+      }
+    },
+    "owner": "i711"
+  }
+}
