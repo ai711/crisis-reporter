@@ -1,6 +1,6 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 
 interface AuthState {
   reporterId: string | null;
@@ -28,12 +28,12 @@ export const useAuthStore = create<AuthState>()(
       isOnboarded: false,
       activeCrisisId: null,
 
-      setReporter: (reporterId, isVerified) =>
+      setReporter: (reporterId: string, isVerified: boolean) =>
         set({ reporterId, isVerified }),
-      setCountry: (countryCode) => set({ countryCode }),
-      setLanguage: (languageCode) => set({ languageCode }),
+      setCountry: (countryCode: string) => set({ countryCode }),
+      setLanguage: (languageCode: string) => set({ languageCode }),
       setOnboarded: () => set({ isOnboarded: true }),
-      setActiveCrisis: (activeCrisisId) => set({ activeCrisisId }),
+      setActiveCrisis: (activeCrisisId: string) => set({ activeCrisisId }),
       reset: () =>
         set({
           reporterId: null,
