@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -23,24 +23,34 @@ const queryClient = new QueryClient({
   },
 });
 
-export default function App() {
+function Navigation() {
   const { isOnboarded } = useAuthStore();
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <NavigationContainer>
-        <Stack.Navigator
-          screenOptions={{ headerShown: false }}
-          initialRouteName={isOnboarded ? "Home" : "Onboarding"}
-        >
+    <NavigationContainer>
+      <Stack.Navigator
+        screenOptions={{ headerShown: false }}
+      >
+        {!isOnboarded ? (
           <Stack.Screen name="Onboarding" component={OnboardingScreen} />
-          <Stack.Screen name="Home" component={HomeScreen} />
-          <Stack.Screen name="Report" component={ReportScreen} />
-          <Stack.Screen name="Map" component={MapScreen} />
-          <Stack.Screen name="Settings" component={SettingsScreen} />
-          <Stack.Screen name="MyReports" component={MyReportsScreen} />
-        </Stack.Navigator>
-      </NavigationContainer>
+        ) : (
+          <>
+            <Stack.Screen name="Home" component={HomeScreen} />
+            <Stack.Screen name="Report" component={ReportScreen} />
+            <Stack.Screen name="Map" component={MapScreen} />
+            <Stack.Screen name="Settings" component={SettingsScreen} />
+            <Stack.Screen name="MyReports" component={MyReportsScreen} />
+          </>
+        )}
+      </Stack.Navigator>
+    </NavigationContainer>
+  );
+}
+
+export default function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <Navigation />
     </QueryClientProvider>
   );
 }

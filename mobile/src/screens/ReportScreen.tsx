@@ -194,7 +194,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
             : "Your damage report has been submitted to UNDP."}
         </Text>
         <TouchableOpacity
-          style={styles.primaryButton}
+          style={styles.homeButton}
           onPress={() => navigation.navigate("Home")}
         >
           <Text style={styles.primaryButtonText}>Back to Home</Text>
@@ -597,6 +597,14 @@ const styles = StyleSheet.create({
     padding: 40,
     gap: 20,
     backgroundColor: "#f4f6f9",
+  },
+  homeButton: {
+    backgroundColor: "#0468B1",
+    borderRadius: 8,
+    padding: 16,
+    alignItems: "center",
+    width: "100%",
+    maxWidth: 300,
   },
   successIcon: { fontSize: 72 },
   successTitle: { fontSize: 22, fontWeight: "700", color: "#1A2B4A", textAlign: "center" },
