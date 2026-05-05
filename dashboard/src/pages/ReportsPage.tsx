@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 import Header from "../components/Header";
 import { useAuthStore } from "../stores/authStore";
 import api from "../services/api";
@@ -24,6 +25,7 @@ export default function ReportsPage() {
   const queryClient = useQueryClient();
   const [flagFilter, setFlagFilter] = useState<FlagStatus | "">("");
   const [selectedReport, setSelectedReport] = useState<string | null>(null);
+  const navigate = useNavigate();
 
   const { data, isLoading } = useQuery({
     queryKey: ["reports", activeCrisisId, flagFilter],
@@ -109,9 +111,7 @@ export default function ReportsPage() {
                       background:
                         selectedReport === report.id ? "#E8F4FD" : "#fff",
                     }}
-                    onClick={() => setSelectedReport(
-                      selectedReport === report.id ? null : report.id
-                    )}
+                    onClick={() => navigate(`/reports/${report.id}`)}
                   >
                     <td style={styles.td}>
                       <span style={{

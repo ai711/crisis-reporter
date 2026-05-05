@@ -1,3 +1,4 @@
+import ReportDetailPage from "./pages/ReportDetailPage";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Suspense } from "react";
@@ -48,6 +49,14 @@ export default function App() {
               element={
                 <ProtectedRoute>
                   <ReportsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/reports/:reportId"
+              element={
+                <ProtectedRoute>
+                  <ReportDetailPage />
                 </ProtectedRoute>
               }
             />

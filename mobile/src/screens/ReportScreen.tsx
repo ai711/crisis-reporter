@@ -35,79 +35,50 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
   const [wasQueued, setWasQueued] = useState(false);
   const insets = useSafeAreaInsets();
 
-    const handleAddPhoto = async () => {
-    if (photos.length >= 3) {
-      Alert.alert("Maximum Photos", t("report.maxPhotos"));
-      return;
+const handleTakePhoto = async () => {
+    try {
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (permission.status !== "granted") {
+        Alert.alert("Permission needed", "Please allow camera access in settings.");
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ["images"],
+        quality: 0.8,
+      });
+      if (!result.canceled && result.assets[0]) {
+        const asset = result.assets[0];
+        setPhotos((prev) => [
+          ...prev,
+          { uri: asset.uri, filename: `photo_${Date.now()}.jpg`, type: "image/jpeg" },
+        ]);
+      }
+    } catch (e) {
+      Alert.alert("Camera Error", String(e));
     }
+  };
 
-    Alert.alert(
-      t("report.addPhoto"),
-      "Choose an option",
-      [
-        {
-          text: t("report.takePhoto"),
-          onPress: async () => {
-            try {
-              const permission = await ImagePicker.requestCameraPermissionsAsync();
-              if (permission.status !== "granted") {
-                Alert.alert("Permission needed", "Please allow camera access in your phone settings.");
-                return;
-              }
-              const result = await ImagePicker.launchCameraAsync({
-                mediaTypes: ["images"],
-                quality: 0.8,
-                allowsEditing: false,
-              });
-              if (!result.canceled && result.assets[0]) {
-                const asset = result.assets[0];
-                setPhotos((prev) => [
-                  ...prev,
-                  {
-                    uri: asset.uri,
-                    filename: `photo_${Date.now()}.jpg`,
-                    type: "image/jpeg",
-                  },
-                ]);
-              }
-            } catch (e) {
-              Alert.alert("Camera Error", String(e));
-            }
-          },
-        },
-        {
-          text: t("report.uploadPhoto"),
-          onPress: async () => {
-            try {
-              const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-              if (permission.status !== "granted") {
-                Alert.alert("Permission needed", "Please allow photo library access in your phone settings.");
-                return;
-              }
-              const result = await ImagePicker.launchImageLibraryAsync({
-                mediaTypes: ["images"],
-                quality: 0.8,
-                allowsEditing: false,
-              });
-              if (!result.canceled && result.assets[0]) {
-                const asset = result.assets[0];
-                setPhotos((prev) => [
-                  ...prev,
-                  {
-                    uri: asset.uri,
-                    filename: `photo_${Date.now()}.jpg`,
-                    type: "image/jpeg",
-                  },
-                ]);
-              }
-            } catch (e) {
-              Alert.alert("Gallery Error", String(e));
-            }
-          },
-        },
-        { text: "Cancel", style: "cancel" },
-      ]
-    );
+  const handlePickPhoto = async () => {
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (permission.status !== "granted") {
+        Alert.alert("Permission needed", "Please allow photo library access in settings.");
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        quality: 0.8,
+      });
+      if (!result.canceled && result.assets[0]) {
+        const asset = result.assets[0];
+        setPhotos((prev) => [
+          ...prev,
+          { uri: asset.uri, filename: `photo_${Date.now()}.jpg`, type: "image/jpeg" },
+        ]);
+      }
+    } catch (e) {
+      Alert.alert("Gallery Error", String(e));
+    }
   };
 
   const handleGetGPS = async () => {
@@ -133,7 +104,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
 
     setSubmitting(true);
 
-    const crisisId = activeCrisisId || "744f9a34-e82f-4b86-916e-bda9cf45a8ec";
+    const crisisId = activeCrisisId || "62304240-9cba-474d-9997-790dbb6e6e9a";
 
     const reportPayload = {
       crisis_id: crisisId,
@@ -378,13 +349,26 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                   </TouchableOpacity>
                 </View>
               ))}
-              {photos.length < 3 && (
-                <TouchableOpacity style={styles.addPhotoBtn} onPress={handleAddPhoto}>
-                  <Text style={styles.addPhotoIcon}>📷</Text>
-                  <Text style={styles.addPhotoText}>{t("report.addPhoto")}</Text>
-                </TouchableOpacity>
-              )}
             </View>
+
+            {photos.length < 3 && (
+              <View style={styles.photoButtons}>
+                <TouchableOpacity
+                  style={styles.photoOptionBtn}
+                  onPress={handleTakePhoto}
+                >
+                  <Text style={styles.photoOptionIcon}>📷</Text>
+                  <Text style={styles.photoOptionText}>{t("report.takePhoto")}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.photoOptionBtn}
+                  onPress={handlePickPhoto}
+                >
+                  <Text style={styles.photoOptionIcon}>🖼️</Text>
+                  <Text style={styles.photoOptionText}>{t("report.uploadPhoto")}</Text>
+                </TouchableOpacity>
+              </View>
+            )}
 
             <View style={styles.navButtons}>
               <TouchableOpacity
@@ -627,6 +611,22 @@ const styles = StyleSheet.create({
     width: "100%",
     maxWidth: 300,
   },
+  photoButtons: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  photoOptionBtn: {
+    flex: 1,
+    backgroundColor: "#fff",
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: "#0468B1",
+    padding: 16,
+    alignItems: "center",
+    gap: 8,
+  },
+  photoOptionIcon: { fontSize: 28 },
+  photoOptionText: { fontSize: 13, color: "#0468B1", fontWeight: "500" },
   successIcon: { fontSize: 72 },
   successTitle: { fontSize: 22, fontWeight: "700", color: "#1A2B4A", textAlign: "center" },
   successText: { fontSize: 16, color: "#666", textAlign: "center", lineHeight: 24 },

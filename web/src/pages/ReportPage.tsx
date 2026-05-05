@@ -49,7 +49,7 @@ export default function ReportPage() {
     setError("");
 
     const reportPayload = {
-      crisis_id: "744f9a34-e82f-4b86-916e-bda9cf45a8ec", // Will be dynamic
+      crisis_id: "62304240-9cba-474d-9997-790dbb6e6e9a",
       damage_level: damageLevel as DamageLevel,
       infrastructure_type: infrastructureType,
       platform: "web" as const,
