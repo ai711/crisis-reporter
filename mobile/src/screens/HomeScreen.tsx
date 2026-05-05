@@ -2,12 +2,13 @@ import { useEffect, useState } from "react";
 import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
 import { useAuthStore } from "../stores/authStore";
 import { getQueueCount, syncQueue } from "../utils/offlineQueue";
 import NetInfo from "@react-native-community/netinfo";
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL || "http://10.0.2.2:8000";
+const API_URL = "https://crisis-reporter-production.up.railway.app";
 
 interface HomeScreenProps {
   navigation: any;
@@ -15,6 +16,7 @@ interface HomeScreenProps {
 
 export default function HomeScreen({ navigation }: HomeScreenProps) {
   const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
   const { isVerified } = useAuthStore();
   const [queueCount, setQueueCount] = useState(0);
   const [isOnline, setIsOnline] = useState(true);
@@ -36,7 +38,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
   }, []);
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
@@ -65,7 +67,6 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
       )}
 
       <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
-        {/* Status card */}
         <View style={styles.statusCard}>
           <Text style={styles.statusTitle}>Powered by UNDP Crisis Response</Text>
           <View style={styles.statusRow}>
@@ -79,7 +80,6 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
           </View>
         </View>
 
-        {/* Main report button */}
         <TouchableOpacity
           style={styles.reportButton}
           onPress={() => navigation.navigate("Report")}
@@ -88,7 +88,6 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
           <Text style={styles.reportButtonText}>{t("home.reportButton")}</Text>
         </TouchableOpacity>
 
-        {/* Secondary actions */}
         <View style={styles.secondaryActions}>
           <TouchableOpacity
             style={styles.secondaryButton}
@@ -108,7 +107,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
       </ScrollView>
 
       {/* Bottom nav */}
-      <View style={styles.bottomNav}>
+      <View style={[styles.bottomNav, { paddingBottom: insets.bottom }]}>
         <TouchableOpacity style={styles.navItem}>
           <Text style={styles.navIcon}>🏠</Text>
           <Text style={styles.navLabel}>Home</Text>

@@ -7,6 +7,7 @@ import { useTranslation } from "react-i18next";
 import { useAuthStore } from "../stores/authStore";
 import { createAnonymousSession } from "../services/auth";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const COUNTRIES = [
   { code: "AF", name: "Afghanistan" },
@@ -52,14 +53,16 @@ export default function OnboardingScreen() {
   const [selectedLanguage, setSelectedLanguage] = useState("en");
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
+  const insets = useSafeAreaInsets();
 
   const filteredCountries = COUNTRIES.filter((c) =>
     c.name.toLowerCase().includes(search.toLowerCase())
   );
 
-  const handleFinish = async () => {
+    const handleFinish = async () => {
     setLoading(true);
     try {
+      console.log("Attempting to connect to:", process.env.EXPO_PUBLIC_API_URL);
       const session = await createAnonymousSession(
         selectedCountry,
         selectedLanguage
@@ -68,15 +71,16 @@ export default function OnboardingScreen() {
       setCountry(selectedCountry);
       setLanguage(selectedLanguage);
       setOnboarded();
-    } catch {
+    } catch (error) {
+      console.log("Connection error:", error);
       Alert.alert(
         "Connection Error",
-        "Could not connect to the server. Please check your internet connection and try again."
+        `Could not connect to: ${process.env.EXPO_PUBLIC_API_URL || "no URL set"}. Error: ${error}`
       );
     } finally {
       setLoading(false);
     }
-  };
+    };
 
   const handleLanguageSelect = async (code: string) => {
     setSelectedLanguage(code);
@@ -86,7 +90,7 @@ export default function OnboardingScreen() {
 
   if (step === "country") {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { paddingTop: insets.top }]}>
         <View style={styles.header}>
           <Text style={styles.logo}>🆘</Text>
           <Text style={styles.appName}>Crisis Reporter</Text>
@@ -139,7 +143,7 @@ export default function OnboardingScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <Text style={styles.logo}>🆘</Text>
         <Text style={styles.appName}>Crisis Reporter</Text>

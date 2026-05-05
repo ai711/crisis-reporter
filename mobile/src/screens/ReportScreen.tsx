@@ -1,3 +1,4 @@
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useState, useRef } from "react";
 import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView,
@@ -11,7 +12,7 @@ import api from "../services/api";
 import { addToQueue } from "../utils/offlineQueue";
 import type { DamageLevel, QueuedPhoto } from "../types";
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL || "http://10.0.2.2:8000";
+const API_URL = "https://crisis-reporter-production.up.railway.app";
 
 interface ReportScreenProps {
   navigation: any;
@@ -32,8 +33,9 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [wasQueued, setWasQueued] = useState(false);
+  const insets = useSafeAreaInsets();
 
-  const handleAddPhoto = async () => {
+    const handleAddPhoto = async () => {
     if (photos.length >= 3) {
       Alert.alert("Maximum Photos", t("report.maxPhotos"));
       return;
@@ -41,50 +43,65 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
 
     Alert.alert(
       t("report.addPhoto"),
-      "",
+      "Choose an option",
       [
         {
           text: t("report.takePhoto"),
           onPress: async () => {
-            const { status } = await ImagePicker.requestCameraPermissionsAsync();
-            if (status !== "granted") {
-              Alert.alert("Permission needed", "Camera permission is required.");
-              return;
-            }
-            const result = await ImagePicker.launchCameraAsync({
-              mediaTypes: ImagePicker.MediaTypeOptions.Images,
-              quality: 0.8,
-            });
-            if (!result.canceled && result.assets[0]) {
-              const asset = result.assets[0];
-              setPhotos((prev) => [
-                ...prev,
-                {
-                  uri: asset.uri,
-                  filename: `photo_${Date.now()}.jpg`,
-                  type: "image/jpeg",
-                },
-              ]);
+            try {
+              const permission = await ImagePicker.requestCameraPermissionsAsync();
+              if (permission.status !== "granted") {
+                Alert.alert("Permission needed", "Please allow camera access in your phone settings.");
+                return;
+              }
+              const result = await ImagePicker.launchCameraAsync({
+                mediaTypes: ["images"],
+                quality: 0.8,
+                allowsEditing: false,
+              });
+              if (!result.canceled && result.assets[0]) {
+                const asset = result.assets[0];
+                setPhotos((prev) => [
+                  ...prev,
+                  {
+                    uri: asset.uri,
+                    filename: `photo_${Date.now()}.jpg`,
+                    type: "image/jpeg",
+                  },
+                ]);
+              }
+            } catch (e) {
+              Alert.alert("Camera Error", String(e));
             }
           },
         },
         {
           text: t("report.uploadPhoto"),
           onPress: async () => {
-            const result = await ImagePicker.launchImageLibraryAsync({
-              mediaTypes: ImagePicker.MediaTypeOptions.Images,
-              quality: 0.8,
-            });
-            if (!result.canceled && result.assets[0]) {
-              const asset = result.assets[0];
-              setPhotos((prev) => [
-                ...prev,
-                {
-                  uri: asset.uri,
-                  filename: `photo_${Date.now()}.jpg`,
-                  type: "image/jpeg",
-                },
-              ]);
+            try {
+              const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+              if (permission.status !== "granted") {
+                Alert.alert("Permission needed", "Please allow photo library access in your phone settings.");
+                return;
+              }
+              const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ["images"],
+                quality: 0.8,
+                allowsEditing: false,
+              });
+              if (!result.canceled && result.assets[0]) {
+                const asset = result.assets[0];
+                setPhotos((prev) => [
+                  ...prev,
+                  {
+                    uri: asset.uri,
+                    filename: `photo_${Date.now()}.jpg`,
+                    type: "image/jpeg",
+                  },
+                ]);
+              }
+            } catch (e) {
+              Alert.alert("Gallery Error", String(e));
             }
           },
         },
@@ -105,6 +122,8 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
     });
     Alert.alert("GPS Captured", `${location.coords.latitude.toFixed(4)}, ${location.coords.longitude.toFixed(4)}`);
   };
+
+  Alert.alert("Debug", `Submitting to: ${API_URL}`);
 
   const handleSubmit = async () => {
     if (!damageLevel || !infrastructureType || photos.length === 0) {
@@ -160,7 +179,9 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
 
       setSubmitted(true);
       setWasQueued(false);
-    } catch {
+    } catch (error: any) {
+      console.log("Submit error:", error?.message, error?.response?.status, error?.response?.data);
+      Alert.alert("Debug", `Error: ${error?.message}\nURL: ${API_URL}`);
       // Save to offline queue
       const queuedPhotos: QueuedPhoto[] = photos.map((p, i) => ({
         uri: p.uri,
@@ -206,7 +227,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
   const stepNumber = step === "damage" ? 1 : step === "location" ? 2 : step === "photos" ? 3 : 4;
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
