@@ -52,6 +52,7 @@ class Settings(BaseSettings):
         "http://localhost:3000",
         "http://192.168.1.69:5173",
         "http://192.168.1.69:5174",
+        "https://crisis-reporter-production.up.railway.app",
     ]
 
     class Config:
