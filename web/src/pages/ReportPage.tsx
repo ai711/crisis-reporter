@@ -22,7 +22,7 @@ export default function ReportPage() {
   const [locationLandmark, setLocationLandmark] = useState("");
 
   // UI state
-  const [step, setStep] = useState<"damage" | "location" | "photos" | "review">("damage");
+  const [step, setStep] = useState<"photos" | "location" | "damage" | "review">("photos");
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState("");
@@ -151,7 +151,7 @@ export default function ReportPage() {
         <button style={styles.backBtn} onClick={() => navigate(-1)}>←</button>
         <h1 style={styles.title}>{t("report.title")}</h1>
         <span style={styles.stepIndicator}>
-          {step === "damage" ? "1/4" : step === "location" ? "2/4" : step === "photos" ? "3/4" : "4/4"}
+          {step === "photos" ? "1/4" : step === "location" ? "2/4" : step === "damage" ? "3/4" : "4/4"}
         </span>
       </div>
 
@@ -159,13 +159,13 @@ export default function ReportPage() {
       <div style={styles.progressBar}>
         <div style={{
           ...styles.progressFill,
-          width: step === "damage" ? "25%" : step === "location" ? "50%" : step === "photos" ? "75%" : "100%",
+          width: step === "photos" ? "25%" : step === "location" ? "50%" : step === "damage" ? "75%" : "100%",
         }} />
       </div>
 
       <div style={styles.content}>
 
-        {/* Step 1 — Damage Level */}
+        {/* Step 3 — Damage Assessment */}
         {step === "damage" && (
           <div style={styles.step}>
             <h2 style={styles.stepTitle}>{t("report.damageLevel")} *</h2>
@@ -221,16 +221,21 @@ export default function ReportPage() {
               rows={4}
             />
 
-            <button
-              style={{
-                ...styles.primaryButton,
-                opacity: damageLevel && infrastructureType ? 1 : 0.5,
-              }}
-              disabled={!damageLevel || !infrastructureType}
-              onClick={() => setStep("location")}
-            >
-              Next →
-            </button>
+            <div style={styles.navButtons}>
+              <button style={styles.secondaryButton} onClick={() => setStep("location")}>
+                ← Back
+              </button>
+              <button
+                style={{
+                  ...styles.primaryButton,
+                  opacity: damageLevel && infrastructureType ? 1 : 0.5,
+                }}
+                disabled={!damageLevel || !infrastructureType}
+                onClick={() => setStep("review")}
+              >
+                Next →
+              </button>
+            </div>
           </div>
         )}
 
@@ -262,17 +267,17 @@ export default function ReportPage() {
             />
 
             <div style={styles.navButtons}>
-              <button style={styles.secondaryButton} onClick={() => setStep("damage")}>
+              <button style={styles.secondaryButton} onClick={() => setStep("photos")}>
                 ← Back
               </button>
-              <button style={styles.primaryButton} onClick={() => setStep("photos")}>
+              <button style={styles.primaryButton} onClick={() => setStep("damage")}>
                 Next →
               </button>
             </div>
           </div>
         )}
 
-        {/* Step 3 — Photos */}
+        {/* Step 1 — Photos */}
         {step === "photos" && (
           <div style={styles.step}>
             <h2 style={styles.stepTitle}>{t("report.photos")} *</h2>
@@ -317,21 +322,16 @@ export default function ReportPage() {
               onChange={handlePhotoAdd}
             />
 
-            <div style={styles.navButtons}>
-              <button style={styles.secondaryButton} onClick={() => setStep("location")}>
-                ← Back
-              </button>
-              <button
-                style={{
-                  ...styles.primaryButton,
-                  opacity: photos.length > 0 ? 1 : 0.5,
-                }}
-                disabled={photos.length === 0}
-                onClick={() => setStep("review")}
-              >
-                Next →
-              </button>
-            </div>
+            <button
+              style={{
+                ...styles.primaryButton,
+                opacity: photos.length > 0 ? 1 : 0.5,
+              }}
+              disabled={photos.length === 0}
+              onClick={() => setStep("location")}
+            >
+              Next →
+            </button>
           </div>
         )}
 
@@ -378,7 +378,7 @@ export default function ReportPage() {
             {error && <p style={styles.error}>{error}</p>}
 
             <div style={styles.navButtons}>
-              <button style={styles.secondaryButton} onClick={() => setStep("photos")}>
+              <button style={styles.secondaryButton} onClick={() => setStep("damage")}>
                 ← Back
               </button>
               <button

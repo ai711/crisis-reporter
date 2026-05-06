@@ -21,7 +21,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
   const { t } = useTranslation();
   const { reporterId, languageCode, activeCrisisId } = useAuthStore();
 
-  const [step, setStep] = useState<"damage" | "location" | "photos" | "review">("damage");
+  const [step, setStep] = useState<"photos" | "location" | "damage" | "review">("photos");
   const [damageLevel, setDamageLevel] = useState<DamageLevel | "">("");
   const [infrastructureType, setInfrastructureType] = useState("");
   const [description, setDescription] = useState("");
@@ -191,7 +191,7 @@ const handleTakePhoto = async () => {
     );
   }
 
-  const stepNumber = step === "damage" ? 1 : step === "location" ? 2 : step === "photos" ? 3 : 4;
+  const stepNumber = step === "photos" ? 1 : step === "location" ? 2 : step === "damage" ? 3 : 4;
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -211,7 +211,7 @@ const handleTakePhoto = async () => {
 
       <ScrollView style={styles.content} contentContainerStyle={styles.contentPadding}>
 
-        {/* Step 1 — Damage */}
+        {/* Step 3 — Damage Assessment */}
         {step === "damage" && (
           <View style={styles.step}>
             <Text style={styles.stepTitle}>{t("report.damageLevel")} *</Text>
@@ -268,16 +268,24 @@ const handleTakePhoto = async () => {
               numberOfLines={4}
             />
 
-            <TouchableOpacity
-              style={[
-                styles.primaryButton,
-                (!damageLevel || !infrastructureType) && styles.buttonDisabled,
-              ]}
-              onPress={() => damageLevel && infrastructureType && setStep("location")}
-              disabled={!damageLevel || !infrastructureType}
-            >
-              <Text style={styles.primaryButtonText}>Next →</Text>
-            </TouchableOpacity>
+            <View style={styles.navButtons}>
+              <TouchableOpacity
+                style={styles.secondaryButton}
+                onPress={() => setStep("location")}
+              >
+                <Text style={styles.secondaryButtonText}>← Back</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.primaryButton,
+                  (!damageLevel || !infrastructureType) && styles.buttonDisabled,
+                ]}
+                onPress={() => damageLevel && infrastructureType && setStep("review")}
+                disabled={!damageLevel || !infrastructureType}
+              >
+                <Text style={styles.primaryButtonText}>Next →</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         )}
 
@@ -311,13 +319,13 @@ const handleTakePhoto = async () => {
             <View style={styles.navButtons}>
               <TouchableOpacity
                 style={styles.secondaryButton}
-                onPress={() => setStep("damage")}
+                onPress={() => setStep("photos")}
               >
                 <Text style={styles.secondaryButtonText}>← Back</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.primaryButton}
-                onPress={() => setStep("photos")}
+                onPress={() => setStep("damage")}
               >
                 <Text style={styles.primaryButtonText}>Next →</Text>
               </TouchableOpacity>
@@ -325,7 +333,7 @@ const handleTakePhoto = async () => {
           </View>
         )}
 
-        {/* Step 3 — Photos */}
+        {/* Step 1 — Photos */}
         {step === "photos" && (
           <View style={styles.step}>
             <Text style={styles.stepTitle}>{t("report.photos")} *</Text>
@@ -366,28 +374,20 @@ const handleTakePhoto = async () => {
               </View>
             )}
 
-            <View style={styles.navButtons}>
-              <TouchableOpacity
-                style={styles.secondaryButton}
-                onPress={() => setStep("location")}
-              >
-                <Text style={styles.secondaryButtonText}>← Back</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.primaryButton,
-                  photos.length === 0 && styles.buttonDisabled,
-                ]}
-                onPress={() => photos.length > 0 && setStep("review")}
-                disabled={photos.length === 0}
-              >
-                <Text style={styles.primaryButtonText}>Next →</Text>
-              </TouchableOpacity>
-            </View>
+            <TouchableOpacity
+              style={[
+                styles.primaryButton,
+                photos.length === 0 && styles.buttonDisabled,
+              ]}
+              onPress={() => photos.length > 0 && setStep("location")}
+              disabled={photos.length === 0}
+            >
+              <Text style={styles.primaryButtonText}>Next →</Text>
+            </TouchableOpacity>
           </View>
         )}
 
-        {/* Step 4 — Review */}
+        {/* Step 4 — Review and Submit */}
         {step === "review" && (
           <View style={styles.step}>
             <Text style={styles.stepTitle}>Review Your Report</Text>
@@ -429,7 +429,7 @@ const handleTakePhoto = async () => {
             <View style={styles.navButtons}>
               <TouchableOpacity
                 style={styles.secondaryButton}
-                onPress={() => setStep("photos")}
+                onPress={() => setStep("damage")}
               >
                 <Text style={styles.secondaryButtonText}>← Back</Text>
               </TouchableOpacity>
