@@ -13,6 +13,39 @@ import { addToQueue } from "../utils/offlineQueue";
 import type { DamageLevel, QueuedPhoto } from "../types";
 
 
+const DAMAGE_LABELS: Record<string, string> = {
+  minimal: "Minimal / No damage",
+  partial: "Partially damaged",
+  complete: "Completely damaged",
+};
+
+const INFRA_LABELS: Record<string, string> = {
+  residential: "Residential Infrastructure",
+  commercial: "Commercial Infrastructure",
+  government: "Government Building",
+  utility: "Utility Infrastructure",
+  transport_communication: "Transport & Communication Infrastructure",
+  community: "Community Infrastructure",
+  public_spaces: "Public Spaces / Recreation Infrastructure",
+  other: "Other",
+};
+
+const DISASTER_LABELS: Record<string, string> = {
+  earthquake: "Earthquake",
+  flood: "Flood",
+  cyclone: "Cyclone / Typhoon / Hurricane",
+  landslide: "Landslide",
+  fire: "Fire",
+  conflict: "Conflict / War",
+  other: "Other",
+};
+
+const DEBRIS_LABELS: Record<string, string> = {
+  yes: "Yes",
+  no: "No",
+  partially: "Partially",
+};
+
 interface ReportScreenProps {
   navigation: any;
 }
@@ -23,8 +56,12 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
 
   const [step, setStep] = useState<"photos" | "location" | "damage" | "review">("photos");
   const [damageLevel, setDamageLevel] = useState<DamageLevel | "">("");
-  const [infrastructureType, setInfrastructureType] = useState("");
-  const [description, setDescription] = useState("");
+  const [infrastructureTypes, setInfrastructureTypes] = useState<string[]>([]);
+  const [infrastructureOther, setInfrastructureOther] = useState("");
+  const [infrastructureName, setInfrastructureName] = useState("");
+  const [disasterType, setDisasterType] = useState("");
+  const [debrisBlocking, setDebrisBlocking] = useState("");
+  const [damageQuestion, setDamageQuestion] = useState(1);
   const [photos, setPhotos] = useState<{ uri: string; filename: string; type: string }[]>([]);
   const [locationAddress, setLocationAddress] = useState("");
   const [locationLandmark, setLocationLandmark] = useState("");
@@ -110,8 +147,35 @@ const handleTakePhoto = async () => {
     Alert.alert("GPS Captured", `${location.coords.latitude.toFixed(4)}, ${location.coords.longitude.toFixed(4)}`);
   };
 
+  const toggleInfraType = (value: string) => {
+    setInfrastructureTypes((prev) =>
+      prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]
+    );
+  };
+
+  const isDamageQuestionAnswered = (): boolean => {
+    switch (damageQuestion) {
+      case 1: return !!damageLevel;
+      case 2: return infrastructureTypes.length > 0;
+      case 3: return infrastructureName.trim().length > 0;
+      case 4: return !!disasterType;
+      case 5: return !!debrisBlocking;
+      default: return false;
+    }
+  };
+
+  const handleDamageBack = () => {
+    if (damageQuestion === 1) setStep("location");
+    else setDamageQuestion((q) => q - 1);
+  };
+
+  const handleDamageNext = () => {
+    if (damageQuestion < 5) setDamageQuestion((q) => q + 1);
+    else setStep("review");
+  };
+
   const handleSubmit = async () => {
-    if (!damageLevel || !infrastructureType || photos.length === 0) {
+    if (!damageLevel || infrastructureTypes.length === 0 || !infrastructureName.trim() || !disasterType || !debrisBlocking || photos.length === 0) {
       Alert.alert("Required Fields", "Please complete all required fields.");
       return;
     }
@@ -121,7 +185,11 @@ const handleTakePhoto = async () => {
     const reportPayload = {
       crisis_id: crisisId!,
       damage_level: damageLevel as DamageLevel,
-      infrastructure_type: infrastructureType,
+      infrastructure_types: infrastructureTypes,
+      ...(infrastructureTypes.includes("other") && { infrastructure_other: infrastructureOther }),
+      infrastructure_name: infrastructureName,
+      disaster_type: disasterType,
+      debris_blocking: debrisBlocking,
       platform: "android" as const,
       submitted_at: new Date().toISOString(),
       location: {
@@ -134,7 +202,6 @@ const handleTakePhoto = async () => {
         location_building_name: null,
       },
       reporter_id: reporterId || undefined,
-      description: description || undefined,
       language_code: languageCode,
       was_queued: false,
     };
@@ -250,74 +317,136 @@ const handleTakePhoto = async () => {
         {/* Step 3 — Damage Assessment */}
         {step === "damage" && (
           <View style={styles.step}>
-            <Text style={styles.stepTitle}>{t("report.damageLevel")} *</Text>
+            <Text style={styles.questionProgress}>Question {damageQuestion} of 5</Text>
 
-            {(["minimal", "partial", "complete"] as DamageLevel[]).map((level) => (
-              <TouchableOpacity
-                key={level}
-                style={[
-                  styles.optionBtn,
-                  damageLevel === level && styles.optionBtnSelected,
-                ]}
-                onPress={() => setDamageLevel(level)}
-              >
-                <Text style={styles.optionIcon}>
-                  {level === "minimal" ? "🟢" : level === "partial" ? "🟠" : "🔴"}
-                </Text>
-                <Text style={styles.optionText}>{t(`report.${level}`)}</Text>
-              </TouchableOpacity>
-            ))}
+            {/* Q1 — Damage level */}
+            {damageQuestion === 1 && (
+              <>
+                <Text style={styles.stepTitle}>How bad is the damage? *</Text>
+                {([
+                  { value: "minimal" as DamageLevel, label: "Minimal / No damage" },
+                  { value: "partial" as DamageLevel, label: "Partially damaged" },
+                  { value: "complete" as DamageLevel, label: "Completely damaged" },
+                ]).map(({ value, label }) => (
+                  <TouchableOpacity
+                    key={value}
+                    style={[styles.optionBtn, damageLevel === value && styles.optionBtnSelected]}
+                    onPress={() => setDamageLevel(value)}
+                  >
+                    <Text style={styles.optionIcon}>
+                      {value === "minimal" ? "🟢" : value === "partial" ? "🟠" : "🔴"}
+                    </Text>
+                    <Text style={styles.optionText}>{label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </>
+            )}
 
-            <Text style={[styles.stepTitle, { marginTop: 24 }]}>
-              {t("report.infrastructureType")} *
-            </Text>
+            {/* Q2 — Infrastructure type (multi-select) */}
+            {damageQuestion === 2 && (
+              <>
+                <Text style={styles.stepTitle}>What type of infrastructure is this? *</Text>
+                <Text style={styles.hintText}>Select all that apply.</Text>
+                {[
+                  { value: "residential", label: "Residential Infrastructure" },
+                  { value: "commercial", label: "Commercial Infrastructure" },
+                  { value: "government", label: "Government Building" },
+                  { value: "utility", label: "Utility Infrastructure" },
+                  { value: "transport_communication", label: "Transport and Communication Infrastructure" },
+                  { value: "community", label: "Community Infrastructure" },
+                  { value: "public_spaces", label: "Public Spaces / Recreation Infrastructure" },
+                  { value: "other", label: "Other (please specify)" },
+                ].map(({ value, label }) => (
+                  <TouchableOpacity
+                    key={value}
+                    style={styles.checkRow}
+                    onPress={() => toggleInfraType(value)}
+                  >
+                    <View style={[styles.checkbox, infrastructureTypes.includes(value) && styles.checkboxSelected]}>
+                      {infrastructureTypes.includes(value) && <Text style={styles.checkmark}>✓</Text>}
+                    </View>
+                    <Text style={styles.checkRowText}>{label}</Text>
+                  </TouchableOpacity>
+                ))}
+                {infrastructureTypes.includes("other") && (
+                  <TextInput
+                    style={[styles.input, { marginTop: 8 }]}
+                    placeholder="Please specify (max 100 characters)"
+                    value={infrastructureOther}
+                    onChangeText={(t) => setInfrastructureOther(t.slice(0, 100))}
+                    maxLength={100}
+                  />
+                )}
+              </>
+            )}
 
-            <View style={styles.typeGrid}>
-              {["residential", "commercial", "school", "hospital", "road", "other"].map((type) => (
-                <TouchableOpacity
-                  key={type}
-                  style={[
-                    styles.typeBtn,
-                    infrastructureType === type && styles.typeBtnSelected,
-                  ]}
-                  onPress={() => setInfrastructureType(type)}
-                >
-                  <Text style={[
-                    styles.typeBtnText,
-                    infrastructureType === type && styles.typeBtnTextSelected,
-                  ]}>
-                    {t(`report.${type}`)}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+            {/* Q3 — Infrastructure name */}
+            {damageQuestion === 3 && (
+              <>
+                <Text style={styles.stepTitle}>What is the name of this infrastructure? *</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g. Main Street Bridge"
+                  value={infrastructureName}
+                  onChangeText={(t) => setInfrastructureName(t.slice(0, 200))}
+                  maxLength={200}
+                />
+                <Text style={styles.charCounter}>{infrastructureName.length} / 200</Text>
+              </>
+            )}
 
-            <Text style={[styles.stepTitle, { marginTop: 24 }]}>
-              {t("report.description")}
-            </Text>
-            <TextInput
-              style={styles.textarea}
-              placeholder={t("report.descriptionPlaceholder")}
-              value={description}
-              onChangeText={setDescription}
-              multiline
-              numberOfLines={4}
-            />
+            {/* Q4 — Disaster type */}
+            {damageQuestion === 4 && (
+              <>
+                <Text style={styles.stepTitle}>What type of disaster caused this damage? *</Text>
+                {[
+                  { value: "earthquake", label: "Earthquake" },
+                  { value: "flood", label: "Flood" },
+                  { value: "cyclone", label: "Cyclone / Typhoon / Hurricane" },
+                  { value: "landslide", label: "Landslide" },
+                  { value: "fire", label: "Fire" },
+                  { value: "conflict", label: "Conflict / War" },
+                  { value: "other", label: "Other" },
+                ].map(({ value, label }) => (
+                  <TouchableOpacity
+                    key={value}
+                    style={[styles.optionBtn, disasterType === value && styles.optionBtnSelected]}
+                    onPress={() => setDisasterType(value)}
+                  >
+                    <Text style={styles.optionText}>{label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </>
+            )}
+
+            {/* Q5 — Debris blocking */}
+            {damageQuestion === 5 && (
+              <>
+                <Text style={styles.stepTitle}>Is there debris blocking access? *</Text>
+                {[
+                  { value: "yes", label: "Yes" },
+                  { value: "no", label: "No" },
+                  { value: "partially", label: "Partially" },
+                ].map(({ value, label }) => (
+                  <TouchableOpacity
+                    key={value}
+                    style={[styles.optionBtn, debrisBlocking === value && styles.optionBtnSelected]}
+                    onPress={() => setDebrisBlocking(value)}
+                  >
+                    <Text style={styles.optionText}>{label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </>
+            )}
 
             <View style={styles.navButtons}>
-              <TouchableOpacity
-                style={styles.secondaryButton}
-                onPress={() => setStep("location")}
-              >
+              <TouchableOpacity style={styles.secondaryButton} onPress={handleDamageBack}>
                 <Text style={styles.secondaryButtonText}>← Back</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[
-                  styles.primaryButton,
-                  (!damageLevel || !infrastructureType) && styles.buttonDisabled,
-                ]}
-                onPress={() => damageLevel && infrastructureType && setStep("review")}
-                disabled={!damageLevel || !infrastructureType}
+                style={[styles.primaryButton, !isDamageQuestionAnswered() && styles.buttonDisabled]}
+                onPress={handleDamageNext}
+                disabled={!isDamageQuestionAnswered()}
               >
                 <Text style={styles.primaryButtonText}>Next →</Text>
               </TouchableOpacity>
@@ -431,16 +560,25 @@ const handleTakePhoto = async () => {
             <View style={styles.reviewCard}>
               <View style={styles.reviewRow}>
                 <Text style={styles.reviewLabel}>Damage Level</Text>
-                <Text style={styles.reviewValue}>
-                  {damageLevel === "minimal" ? "🟢 " : damageLevel === "partial" ? "🟠 " : "🔴 "}
-                  {t(`report.${damageLevel}`)}
-                </Text>
+                <Text style={styles.reviewValue}>{DAMAGE_LABELS[damageLevel] ?? damageLevel}</Text>
               </View>
               <View style={styles.reviewRow}>
                 <Text style={styles.reviewLabel}>Infrastructure</Text>
                 <Text style={styles.reviewValue}>
-                  {t(`report.${infrastructureType}`)}
+                  {infrastructureTypes.map((t) => INFRA_LABELS[t] ?? t).join(", ")}
                 </Text>
+              </View>
+              <View style={styles.reviewRow}>
+                <Text style={styles.reviewLabel}>Infrastructure Name</Text>
+                <Text style={styles.reviewValue}>{infrastructureName}</Text>
+              </View>
+              <View style={styles.reviewRow}>
+                <Text style={styles.reviewLabel}>Disaster Type</Text>
+                <Text style={styles.reviewValue}>{DISASTER_LABELS[disasterType] ?? disasterType}</Text>
+              </View>
+              <View style={styles.reviewRow}>
+                <Text style={styles.reviewLabel}>Debris Blocking</Text>
+                <Text style={styles.reviewValue}>{DEBRIS_LABELS[debrisBlocking] ?? debrisBlocking}</Text>
               </View>
               <View style={styles.reviewRow}>
                 <Text style={styles.reviewLabel}>Photos</Text>
@@ -465,7 +603,7 @@ const handleTakePhoto = async () => {
             <View style={styles.navButtons}>
               <TouchableOpacity
                 style={styles.secondaryButton}
-                onPress={() => setStep("damage")}
+                onPress={() => { setDamageQuestion(5); setStep("damage"); }}
               >
                 <Text style={styles.secondaryButtonText}>← Back</Text>
               </TouchableOpacity>
@@ -663,4 +801,27 @@ const styles = StyleSheet.create({
   successTitle: { fontSize: 22, fontWeight: "700", color: "#1A2B4A", textAlign: "center" },
   successText: { fontSize: 16, color: "#666", textAlign: "center", lineHeight: 24 },
   errorText: { fontSize: 16, color: "#d32f2f", textAlign: "center", lineHeight: 24 },
+  questionProgress: { fontSize: 13, fontWeight: "600", color: "#0468B1", textAlign: "center" },
+  checkRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f0f0f0",
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderWidth: 2,
+    borderColor: "#ccc",
+    borderRadius: 4,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  checkboxSelected: { borderColor: "#0468B1", backgroundColor: "#0468B1" },
+  checkmark: { color: "#fff", fontSize: 13, fontWeight: "700" },
+  checkRowText: { flex: 1, fontSize: 15, color: "#1A2B4A" },
+  charCounter: { fontSize: 12, color: "#999", textAlign: "right" },
 });

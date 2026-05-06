@@ -8,6 +8,39 @@ import type { DamageLevel, QueuedPhoto } from "../types";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
+const DAMAGE_LABELS: Record<string, string> = {
+  minimal: "Minimal / No damage",
+  partial: "Partially damaged",
+  complete: "Completely damaged",
+};
+
+const INFRA_LABELS: Record<string, string> = {
+  residential: "Residential Infrastructure",
+  commercial: "Commercial Infrastructure",
+  government: "Government Building",
+  utility: "Utility Infrastructure",
+  transport_communication: "Transport & Communication Infrastructure",
+  community: "Community Infrastructure",
+  public_spaces: "Public Spaces / Recreation Infrastructure",
+  other: "Other",
+};
+
+const DISASTER_LABELS: Record<string, string> = {
+  earthquake: "Earthquake",
+  flood: "Flood",
+  cyclone: "Cyclone / Typhoon / Hurricane",
+  landslide: "Landslide",
+  fire: "Fire",
+  conflict: "Conflict / War",
+  other: "Other",
+};
+
+const DEBRIS_LABELS: Record<string, string> = {
+  yes: "Yes",
+  no: "No",
+  partially: "Partially",
+};
+
 export default function ReportPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -15,8 +48,12 @@ export default function ReportPage() {
 
   // Form state
   const [damageLevel, setDamageLevel] = useState<DamageLevel | "">("");
-  const [infrastructureType, setInfrastructureType] = useState("");
-  const [description, setDescription] = useState("");
+  const [infrastructureTypes, setInfrastructureTypes] = useState<string[]>([]);
+  const [infrastructureOther, setInfrastructureOther] = useState("");
+  const [infrastructureName, setInfrastructureName] = useState("");
+  const [disasterType, setDisasterType] = useState("");
+  const [debrisBlocking, setDebrisBlocking] = useState("");
+  const [damageQuestion, setDamageQuestion] = useState(1);
   const [photos, setPhotos] = useState<File[]>([]);
   const [locationAddress, setLocationAddress] = useState("");
   const [locationLandmark, setLocationLandmark] = useState("");
@@ -46,6 +83,33 @@ export default function ReportPage() {
       .finally(() => setCrisisLoading(false));
   }, []);
 
+  const toggleInfraType = (value: string) => {
+    setInfrastructureTypes((prev) =>
+      prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]
+    );
+  };
+
+  const isDamageQuestionAnswered = (): boolean => {
+    switch (damageQuestion) {
+      case 1: return !!damageLevel;
+      case 2: return infrastructureTypes.length > 0;
+      case 3: return infrastructureName.trim().length > 0;
+      case 4: return !!disasterType;
+      case 5: return !!debrisBlocking;
+      default: return false;
+    }
+  };
+
+  const handleDamageBack = () => {
+    if (damageQuestion === 1) setStep("location");
+    else setDamageQuestion((q) => q - 1);
+  };
+
+  const handleDamageNext = () => {
+    if (damageQuestion < 5) setDamageQuestion((q) => q + 1);
+    else setStep("review");
+  };
+
   const handlePhotoAdd = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     const remaining = 3 - photos.length;
@@ -57,7 +121,7 @@ export default function ReportPage() {
   };
 
   const handleSubmit = async () => {
-    if (!damageLevel || !infrastructureType || photos.length === 0) {
+    if (!damageLevel || infrastructureTypes.length === 0 || !infrastructureName.trim() || !disasterType || !debrisBlocking || photos.length === 0) {
       setError("Please complete all required fields");
       return;
     }
@@ -68,7 +132,11 @@ export default function ReportPage() {
     const reportPayload = {
       crisis_id: crisisId!,
       damage_level: damageLevel as DamageLevel,
-      infrastructure_type: infrastructureType,
+      infrastructure_types: infrastructureTypes,
+      ...(infrastructureTypes.includes("other") && { infrastructure_other: infrastructureOther }),
+      infrastructure_name: infrastructureName,
+      disaster_type: disasterType,
+      debris_blocking: debrisBlocking,
       platform: "web" as const,
       submitted_at: new Date().toISOString(),
       location: {
@@ -81,7 +149,6 @@ export default function ReportPage() {
         location_building_name: null,
       },
       reporter_id: reporterId || undefined,
-      description: description || undefined,
       language_code: languageCode,
       was_queued: false,
     };
@@ -210,70 +277,156 @@ export default function ReportPage() {
         {/* Step 3 — Damage Assessment */}
         {step === "damage" && (
           <div style={styles.step}>
-            <h2 style={styles.stepTitle}>{t("report.damageLevel")} *</h2>
-            {(["minimal", "partial", "complete"] as DamageLevel[]).map((level) => (
-              <button
-                key={level}
-                style={{
-                  ...styles.optionBtn,
-                  borderColor: damageLevel === level ? "#0468B1" : "#e0e0e0",
-                  background: damageLevel === level ? "#E8F4FD" : "#fff",
-                }}
-                onClick={() => setDamageLevel(level)}
-              >
-                <span style={styles.optionIcon}>
-                  {level === "minimal" ? "🟢" : level === "partial" ? "🟠" : "🔴"}
-                </span>
-                <div>
-                  <div style={styles.optionTitle}>
-                    {t(`report.${level}`)}
+            <div style={styles.questionProgress}>Question {damageQuestion} of 5</div>
+
+            {/* Q1 — Damage level */}
+            {damageQuestion === 1 && (
+              <>
+                <h2 style={styles.stepTitle}>How bad is the damage? *</h2>
+                {([
+                  { value: "minimal" as DamageLevel, label: "Minimal / No damage" },
+                  { value: "partial" as DamageLevel, label: "Partially damaged" },
+                  { value: "complete" as DamageLevel, label: "Completely damaged" },
+                ]).map(({ value, label }) => (
+                  <button
+                    key={value}
+                    style={{
+                      ...styles.optionBtn,
+                      borderColor: damageLevel === value ? "#0468B1" : "#e0e0e0",
+                      background: damageLevel === value ? "#E8F4FD" : "#fff",
+                    }}
+                    onClick={() => setDamageLevel(value)}
+                  >
+                    <span style={styles.optionIcon}>
+                      {value === "minimal" ? "🟢" : value === "partial" ? "🟠" : "🔴"}
+                    </span>
+                    <span style={styles.optionTitle}>{label}</span>
+                  </button>
+                ))}
+              </>
+            )}
+
+            {/* Q2 — Infrastructure type (multi-select) */}
+            {damageQuestion === 2 && (
+              <>
+                <h2 style={styles.stepTitle}>What type of infrastructure is this? *</h2>
+                <p style={styles.photoHint}>Select all that apply.</p>
+                {[
+                  { value: "residential", label: "Residential Infrastructure" },
+                  { value: "commercial", label: "Commercial Infrastructure" },
+                  { value: "government", label: "Government Building" },
+                  { value: "utility", label: "Utility Infrastructure" },
+                  { value: "transport_communication", label: "Transport and Communication Infrastructure" },
+                  { value: "community", label: "Community Infrastructure" },
+                  { value: "public_spaces", label: "Public Spaces / Recreation Infrastructure" },
+                  { value: "other", label: "Other (please specify)" },
+                ].map(({ value, label }) => (
+                  <div
+                    key={value}
+                    style={styles.checkRow}
+                    onClick={() => toggleInfraType(value)}
+                  >
+                    <div style={{
+                      ...styles.checkbox,
+                      ...(infrastructureTypes.includes(value) ? styles.checkboxSelected : {}),
+                    }}>
+                      {infrastructureTypes.includes(value) && <span style={styles.checkmark}>✓</span>}
+                    </div>
+                    <span style={styles.checkRowText}>{label}</span>
                   </div>
-                </div>
-              </button>
-            ))}
+                ))}
+                {infrastructureTypes.includes("other") && (
+                  <input
+                    style={{ ...styles.input, marginTop: 8 }}
+                    type="text"
+                    maxLength={100}
+                    placeholder="Please specify (max 100 characters)"
+                    value={infrastructureOther}
+                    onChange={(e) => setInfrastructureOther(e.target.value)}
+                  />
+                )}
+              </>
+            )}
 
-            <h2 style={{ ...styles.stepTitle, marginTop: 24 }}>
-              {t("report.infrastructureType")} *
-            </h2>
-            <div style={styles.typeGrid}>
-              {["residential", "commercial", "school", "hospital", "road", "other"].map((type) => (
-                <button
-                  key={type}
-                  style={{
-                    ...styles.typeBtn,
-                    borderColor: infrastructureType === type ? "#0468B1" : "#e0e0e0",
-                    background: infrastructureType === type ? "#E8F4FD" : "#fff",
-                    color: infrastructureType === type ? "#0468B1" : "#1A2B4A",
-                  }}
-                  onClick={() => setInfrastructureType(type)}
-                >
-                  {t(`report.${type}`)}
-                </button>
-              ))}
-            </div>
+            {/* Q3 — Infrastructure name */}
+            {damageQuestion === 3 && (
+              <>
+                <h2 style={styles.stepTitle}>What is the name of this infrastructure? *</h2>
+                <input
+                  style={styles.input}
+                  type="text"
+                  maxLength={200}
+                  placeholder="e.g. Main Street Bridge"
+                  value={infrastructureName}
+                  onChange={(e) => setInfrastructureName(e.target.value)}
+                />
+                <div style={styles.charCounter}>{infrastructureName.length} / 200</div>
+              </>
+            )}
 
-            <h2 style={{ ...styles.stepTitle, marginTop: 24 }}>
-              {t("report.description")}
-            </h2>
-            <textarea
-              style={styles.textarea}
-              placeholder={t("report.descriptionPlaceholder")}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={4}
-            />
+            {/* Q4 — Disaster type */}
+            {damageQuestion === 4 && (
+              <>
+                <h2 style={styles.stepTitle}>What type of disaster caused this damage? *</h2>
+                {[
+                  { value: "earthquake", label: "Earthquake" },
+                  { value: "flood", label: "Flood" },
+                  { value: "cyclone", label: "Cyclone / Typhoon / Hurricane" },
+                  { value: "landslide", label: "Landslide" },
+                  { value: "fire", label: "Fire" },
+                  { value: "conflict", label: "Conflict / War" },
+                  { value: "other", label: "Other" },
+                ].map(({ value, label }) => (
+                  <button
+                    key={value}
+                    style={{
+                      ...styles.optionBtn,
+                      borderColor: disasterType === value ? "#0468B1" : "#e0e0e0",
+                      background: disasterType === value ? "#E8F4FD" : "#fff",
+                    }}
+                    onClick={() => setDisasterType(value)}
+                  >
+                    <span style={styles.optionTitle}>{label}</span>
+                  </button>
+                ))}
+              </>
+            )}
+
+            {/* Q5 — Debris blocking */}
+            {damageQuestion === 5 && (
+              <>
+                <h2 style={styles.stepTitle}>Is there debris blocking access? *</h2>
+                {[
+                  { value: "yes", label: "Yes" },
+                  { value: "no", label: "No" },
+                  { value: "partially", label: "Partially" },
+                ].map(({ value, label }) => (
+                  <button
+                    key={value}
+                    style={{
+                      ...styles.optionBtn,
+                      borderColor: debrisBlocking === value ? "#0468B1" : "#e0e0e0",
+                      background: debrisBlocking === value ? "#E8F4FD" : "#fff",
+                    }}
+                    onClick={() => setDebrisBlocking(value)}
+                  >
+                    <span style={styles.optionTitle}>{label}</span>
+                  </button>
+                ))}
+              </>
+            )}
 
             <div style={styles.navButtons}>
-              <button style={styles.secondaryButton} onClick={() => setStep("location")}>
+              <button style={styles.secondaryButton} onClick={handleDamageBack}>
                 ← Back
               </button>
               <button
                 style={{
                   ...styles.primaryButton,
-                  opacity: damageLevel && infrastructureType ? 1 : 0.5,
+                  opacity: isDamageQuestionAnswered() ? 1 : 0.5,
                 }}
-                disabled={!damageLevel || !infrastructureType}
-                onClick={() => setStep("review")}
+                disabled={!isDamageQuestionAnswered()}
+                onClick={handleDamageNext}
               >
                 Next →
               </button>
@@ -385,13 +538,25 @@ export default function ReportPage() {
             <div style={styles.reviewCard}>
               <div style={styles.reviewRow}>
                 <span style={styles.reviewLabel}>Damage Level</span>
-                <span style={styles.reviewValue}>
-                  {damageLevel === "minimal" ? "🟢" : damageLevel === "partial" ? "🟠" : "🔴"} {t(`report.${damageLevel}`)}
-                </span>
+                <span style={styles.reviewValue}>{DAMAGE_LABELS[damageLevel] ?? damageLevel}</span>
               </div>
               <div style={styles.reviewRow}>
                 <span style={styles.reviewLabel}>Infrastructure</span>
-                <span style={styles.reviewValue}>{t(`report.${infrastructureType}`)}</span>
+                <span style={styles.reviewValue}>
+                  {infrastructureTypes.map((v) => INFRA_LABELS[v] ?? v).join(", ")}
+                </span>
+              </div>
+              <div style={styles.reviewRow}>
+                <span style={styles.reviewLabel}>Infrastructure Name</span>
+                <span style={styles.reviewValue}>{infrastructureName}</span>
+              </div>
+              <div style={styles.reviewRow}>
+                <span style={styles.reviewLabel}>Disaster Type</span>
+                <span style={styles.reviewValue}>{DISASTER_LABELS[disasterType] ?? disasterType}</span>
+              </div>
+              <div style={styles.reviewRow}>
+                <span style={styles.reviewLabel}>Debris Blocking</span>
+                <span style={styles.reviewValue}>{DEBRIS_LABELS[debrisBlocking] ?? debrisBlocking}</span>
               </div>
               <div style={styles.reviewRow}>
                 <span style={styles.reviewLabel}>Photos</span>
@@ -401,12 +566,6 @@ export default function ReportPage() {
                 <div style={styles.reviewRow}>
                   <span style={styles.reviewLabel}>Address</span>
                   <span style={styles.reviewValue}>{locationAddress}</span>
-                </div>
-              )}
-              {description && (
-                <div style={styles.reviewRow}>
-                  <span style={styles.reviewLabel}>Description</span>
-                  <span style={styles.reviewValue}>{description}</span>
                 </div>
               )}
             </div>
@@ -420,7 +579,7 @@ export default function ReportPage() {
             {error && <p style={styles.error}>{error}</p>}
 
             <div style={styles.navButtons}>
-              <button style={styles.secondaryButton} onClick={() => setStep("damage")}>
+              <button style={styles.secondaryButton} onClick={() => { setDamageQuestion(5); setStep("damage"); }}>
                 ← Back
               </button>
               <button
@@ -695,6 +854,49 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#d32f2f",
     fontSize: 14,
     textAlign: "center",
+  },
+  questionProgress: {
+    fontSize: 13,
+    fontWeight: 600,
+    color: "#0468B1",
+    textAlign: "center" as const,
+    marginBottom: 4,
+  },
+  checkRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 12,
+    padding: "10px 4px",
+    borderBottom: "1px solid #f0f0f0",
+    cursor: "pointer",
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    border: "2px solid #ccc",
+    borderRadius: 4,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  checkboxSelected: {
+    border: "2px solid #0468B1",
+    background: "#0468B1",
+  },
+  checkmark: {
+    color: "#fff",
+    fontSize: 13,
+    fontWeight: 700,
+  },
+  checkRowText: {
+    fontSize: 15,
+    color: "#1A2B4A",
+  },
+  charCounter: {
+    fontSize: 12,
+    color: "#999",
+    textAlign: "right" as const,
   },
   centeredMessage: {
     flex: 1,
