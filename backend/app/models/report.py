@@ -5,7 +5,7 @@ from sqlalchemy import (
     Boolean, ForeignKey, Index
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, ARRAY
 from app.database import Base
 
 
@@ -53,6 +53,15 @@ class Report(Base):
     infrastructure_type: Mapped[str] = mapped_column(
         String(50), nullable=False
     )
+    # New question fields (UNDP required)
+    infrastructure_types: Mapped[list[str] | None] = mapped_column(
+        ARRAY(String), nullable=True
+    )
+    infrastructure_other: Mapped[str | None] = mapped_column(Text, nullable=True)
+    infrastructure_name: Mapped[str | None] = mapped_column(Text, nullable=True)
+    disaster_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    debris_blocking: Mapped[str | None] = mapped_column(String(50), nullable=True)
+
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     description_translated: Mapped[str | None] = mapped_column(Text, nullable=True)
     description_language: Mapped[str | None] = mapped_column(

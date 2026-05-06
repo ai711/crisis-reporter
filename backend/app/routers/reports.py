@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 
 from app.database import get_db
 from app.models.report import Report
@@ -43,8 +43,13 @@ class ReportSubmitRequest(BaseModel):
     reporter_id: Optional[str] = None
     building_id: Optional[str] = None
     building_name: Optional[str] = None
-    description: Optional[str] = None
     language_code: str = "en"
+    # New UNDP question fields
+    infrastructure_types: Optional[List[str]] = None
+    infrastructure_other: Optional[str] = None
+    infrastructure_name: Optional[str] = None
+    disaster_type: Optional[str] = None
+    debris_blocking: Optional[str] = None
     app_version: Optional[str] = None
     question_package_version: Optional[int] = None
     translation_version: Optional[int] = None
@@ -73,7 +78,11 @@ class ReportResponse(BaseModel):
     building_name: Optional[str]
     damage_level: str
     infrastructure_type: str
-    description: Optional[str]
+    infrastructure_types: Optional[List[str]]
+    infrastructure_other: Optional[str]
+    infrastructure_name: Optional[str]
+    disaster_type: Optional[str]
+    debris_blocking: Optional[str]
     flag_status: str
     platform: str
     language_code: str
@@ -215,7 +224,11 @@ async def submit_report(
         location_building_name=request.location.location_building_name,
         damage_level=request.damage_level,
         infrastructure_type=request.infrastructure_type,
-        description=request.description,
+        infrastructure_types=request.infrastructure_types,
+        infrastructure_other=request.infrastructure_other,
+        infrastructure_name=request.infrastructure_name,
+        disaster_type=request.disaster_type,
+        debris_blocking=request.debris_blocking,
         description_language=request.language_code,
         flag_status="grey",
         platform=request.platform,
@@ -314,7 +327,11 @@ async def get_report(
         building_name=report.building_name,
         damage_level=report.damage_level,
         infrastructure_type=report.infrastructure_type,
-        description=report.description,
+        infrastructure_types=report.infrastructure_types,
+        infrastructure_other=report.infrastructure_other,
+        infrastructure_name=report.infrastructure_name,
+        disaster_type=report.disaster_type,
+        debris_blocking=report.debris_blocking,
         flag_status=report.flag_status,
         platform=report.platform,
         language_code=report.language_code,

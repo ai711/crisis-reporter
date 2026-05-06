@@ -16,5 +16,6 @@ httpx==0.28.1
 python-multipart==0.0.27
 python-dotenv==1.2.2
 alembic==1.18.4
+psycopg2-binary==2.9.12
 pydantic-settings==2.14.0
 # fiona and geopandas deferred — requires GDAL, added at export stage
