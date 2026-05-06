@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "../stores/authStore";
@@ -26,8 +26,25 @@ export default function ReportPage() {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState("");
+  const [crisisId, setCrisisId] = useState<string | null>(null);
+  const [crisisLoading, setCrisisLoading] = useState(true);
+  const [crisisError, setCrisisError] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    api.get("/api/crises/active")
+      .then((res) => {
+        const list = Array.isArray(res.data) ? res.data : (res.data?.items ?? []);
+        if (list.length > 0) {
+          setCrisisId(list[0].id);
+        } else {
+          setCrisisError(true);
+        }
+      })
+      .catch(() => setCrisisError(true))
+      .finally(() => setCrisisLoading(false));
+  }, []);
 
   const handlePhotoAdd = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -49,7 +66,7 @@ export default function ReportPage() {
     setError("");
 
     const reportPayload = {
-      crisis_id: "62304240-9cba-474d-9997-790dbb6e6e9a",
+      crisis_id: crisisId!,
       damage_level: damageLevel as DamageLevel,
       infrastructure_type: infrastructureType,
       platform: "web" as const,
@@ -138,6 +155,31 @@ export default function ReportPage() {
             onClick={() => navigate("/")}
           >
             Back to Home
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (crisisLoading) {
+    return (
+      <div style={styles.container}>
+        <div style={styles.centeredMessage}>
+          <div style={{ fontSize: 16, color: "#666" }}>Loading...</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (crisisError || !crisisId) {
+    return (
+      <div style={styles.container}>
+        <div style={styles.centeredMessage}>
+          <p style={styles.centeredError}>
+            No active crisis found. Please try again later.
+          </p>
+          <button style={styles.secondaryButton} onClick={() => navigate(-1)}>
+            Go Back
           </button>
         </div>
       </div>
@@ -652,6 +694,22 @@ const styles: Record<string, React.CSSProperties> = {
   error: {
     color: "#d32f2f",
     fontSize: 14,
+    textAlign: "center",
+  },
+  centeredMessage: {
+    flex: 1,
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "40px 24px",
+    gap: 20,
+    textAlign: "center",
+    minHeight: "100vh",
+  },
+  centeredError: {
+    fontSize: 16,
+    color: "#d32f2f",
     textAlign: "center",
   },
 };

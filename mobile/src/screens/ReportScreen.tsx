@@ -1,5 +1,5 @@
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView,
   TextInput, Alert, ActivityIndicator, Image
@@ -19,7 +19,7 @@ interface ReportScreenProps {
 
 export default function ReportScreen({ navigation }: ReportScreenProps) {
   const { t } = useTranslation();
-  const { reporterId, languageCode, activeCrisisId } = useAuthStore();
+  const { reporterId, languageCode } = useAuthStore();
 
   const [step, setStep] = useState<"photos" | "location" | "damage" | "review">("photos");
   const [damageLevel, setDamageLevel] = useState<DamageLevel | "">("");
@@ -32,7 +32,24 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [wasQueued, setWasQueued] = useState(false);
+  const [crisisId, setCrisisId] = useState<string | null>(null);
+  const [crisisLoading, setCrisisLoading] = useState(true);
+  const [crisisError, setCrisisError] = useState(false);
   const insets = useSafeAreaInsets();
+
+  useEffect(() => {
+    api.get("/api/crises/active")
+      .then((res) => {
+        const list = Array.isArray(res.data) ? res.data : (res.data?.items ?? []);
+        if (list.length > 0) {
+          setCrisisId(list[0].id);
+        } else {
+          setCrisisError(true);
+        }
+      })
+      .catch(() => setCrisisError(true))
+      .finally(() => setCrisisLoading(false));
+  }, []);
 
 const handleTakePhoto = async () => {
     try {
@@ -101,10 +118,8 @@ const handleTakePhoto = async () => {
 
     setSubmitting(true);
 
-    const crisisId = activeCrisisId || "62304240-9cba-474d-9997-790dbb6e6e9a";
-
     const reportPayload = {
-      crisis_id: crisisId,
+      crisis_id: crisisId!,
       damage_level: damageLevel as DamageLevel,
       infrastructure_type: infrastructureType,
       platform: "android" as const,
@@ -186,6 +201,27 @@ const handleTakePhoto = async () => {
           onPress={() => navigation.navigate("Home")}
         >
           <Text style={styles.primaryButtonText}>Back to Home</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  if (crisisLoading) {
+    return (
+      <View style={styles.successContainer}>
+        <ActivityIndicator size="large" color="#0468B1" />
+      </View>
+    );
+  }
+
+  if (crisisError || !crisisId) {
+    return (
+      <View style={styles.successContainer}>
+        <Text style={styles.errorText}>
+          No active crisis found. Please try again later.
+        </Text>
+        <TouchableOpacity style={styles.homeButton} onPress={() => navigation.goBack()}>
+          <Text style={styles.primaryButtonText}>Go Back</Text>
         </TouchableOpacity>
       </View>
     );
@@ -626,4 +662,5 @@ const styles = StyleSheet.create({
   successIcon: { fontSize: 72 },
   successTitle: { fontSize: 22, fontWeight: "700", color: "#1A2B4A", textAlign: "center" },
   successText: { fontSize: 16, color: "#666", textAlign: "center", lineHeight: 24 },
+  errorText: { fontSize: 16, color: "#d32f2f", textAlign: "center", lineHeight: 24 },
 });
