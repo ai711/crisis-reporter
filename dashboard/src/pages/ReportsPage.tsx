@@ -24,7 +24,6 @@ export default function ReportsPage() {
   const { activeCrisisId } = useAuthStore();
   const queryClient = useQueryClient();
   const [flagFilter, setFlagFilter] = useState<FlagStatus | "">("");
-  const [selectedReport, setSelectedReport] = useState<string | null>(null);
   const navigate = useNavigate();
 
   const { data, isLoading } = useQuery({
@@ -108,8 +107,7 @@ export default function ReportsPage() {
                     key={report.id}
                     style={{
                       ...styles.tableRow,
-                      background:
-                        selectedReport === report.id ? "#E8F4FD" : "#fff",
+                      background: "#fff",
                     }}
                     onClick={() => navigate(`/reports/${report.id}`)}
                   >

@@ -1,7 +1,6 @@
 import { useState } from "react";
 import Header from "../components/Header";
 import { useAuthStore } from "../stores/authStore";
-import api from "../services/api";
 
 const EXPORT_TYPES = [
   {

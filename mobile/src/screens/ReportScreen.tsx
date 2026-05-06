@@ -1,5 +1,5 @@
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useState, useRef } from "react";
+import { useState } from "react";
 import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView,
   TextInput, Alert, ActivityIndicator, Image
@@ -12,7 +12,6 @@ import api from "../services/api";
 import { addToQueue } from "../utils/offlineQueue";
 import type { DamageLevel, QueuedPhoto } from "../types";
 
-const API_URL = "https://crisis-reporter-production.up.railway.app";
 
 interface ReportScreenProps {
   navigation: any;
@@ -94,8 +93,6 @@ const handleTakePhoto = async () => {
     Alert.alert("GPS Captured", `${location.coords.latitude.toFixed(4)}, ${location.coords.longitude.toFixed(4)}`);
   };
 
-  Alert.alert("Debug", `Submitting to: ${API_URL}`);
-
   const handleSubmit = async () => {
     if (!damageLevel || !infrastructureType || photos.length === 0) {
       Alert.alert("Required Fields", "Please complete all required fields.");
@@ -152,7 +149,6 @@ const handleTakePhoto = async () => {
       setWasQueued(false);
     } catch (error: any) {
       console.log("Submit error:", error?.message, error?.response?.status, error?.response?.data);
-      Alert.alert("Debug", `Error: ${error?.message}\nURL: ${API_URL}`);
       // Save to offline queue
       const queuedPhotos: QueuedPhoto[] = photos.map((p, i) => ({
         uri: p.uri,
