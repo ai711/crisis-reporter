@@ -53,10 +53,13 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-// Redirects away from onboarding if already complete.
+// Redirects away from onboarding if already complete, unless a specific step
+// is requested (e.g. viewing T&C from Settings via ?step=terms).
 function OnboardingRoute() {
+  const location = useLocation();
+  const stepParam = new URLSearchParams(location.search).get("step");
   const missingStep = getFirstMissingStep();
-  if (!missingStep) return <Navigate to="/" replace />;
+  if (!missingStep && !stepParam) return <Navigate to="/" replace />;
   return <OnboardingPage />;
 }
 
