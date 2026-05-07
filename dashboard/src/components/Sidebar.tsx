@@ -3,15 +3,16 @@ import { useAuthStore } from "../stores/authStore";
 import { logout } from "../services/auth";
 
 const NAV_ITEMS = [
-  { path: "/", icon: "🗺️", label: "Map" },
-  { path: "/crises", icon: "🌐", label: "Crisis Management" },
-  { path: "/reports", icon: "📋", label: "Reports" },
-  { path: "/report-queue", icon: "📥", label: "Report Queue" },
-  { path: "/review-queue", icon: "🔍", label: "Review Queue" },
-  { path: "/reporters", icon: "👥", label: "Reporters" },
-  { path: "/analytics", icon: "📊", label: "Analytics" },
-  { path: "/export", icon: "📤", label: "Export" },
-  { path: "/settings", icon: "⚙️", label: "Settings" },
+  { path: "/", icon: "🗺️", label: "Map", adminOnly: false },
+  { path: "/crises", icon: "🌐", label: "Crisis Management", adminOnly: false },
+  { path: "/reports", icon: "📋", label: "Reports", adminOnly: false },
+  { path: "/report-queue", icon: "📥", label: "Report Queue", adminOnly: false },
+  { path: "/review-queue", icon: "🔍", label: "Review Queue", adminOnly: false },
+  { path: "/reporters", icon: "👥", label: "Reporters", adminOnly: false },
+  { path: "/analytics", icon: "📊", label: "Analytics", adminOnly: false },
+  { path: "/export", icon: "📤", label: "Export", adminOnly: false },
+  { path: "/users", icon: "🔑", label: "User Management", adminOnly: true },
+  { path: "/settings", icon: "⚙️", label: "Settings", adminOnly: false },
 ];
 
 export default function Sidebar() {
@@ -38,7 +39,7 @@ export default function Sidebar() {
 
       {/* Nav items */}
       <nav style={styles.nav}>
-        {NAV_ITEMS.map((item) => {
+        {NAV_ITEMS.filter((item) => !item.adminOnly || user?.role === "admin").map((item) => {
           const isActive = location.pathname === item.path;
           return (
             <button
