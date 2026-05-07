@@ -9,6 +9,7 @@ const SettingsPage = lazy(() => import("./pages/SettingsPage"));
 const MyReportsPage = lazy(() => import("./pages/MyReportsPage"));
 const ProfilePage = lazy(() => import("./pages/ProfilePage"));
 const SafetyTipsPage = lazy(() => import("./pages/SafetyTipsPage"));
+const BadgesPage = lazy(() => import("./pages/BadgesPage"));
 
 function LoadingSpinner() {
   return (
@@ -124,6 +125,14 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <SafetyTipsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/badges"
+            element={
+              <ProtectedRoute>
+                <BadgesPage />
               </ProtectedRoute>
             }
           />
