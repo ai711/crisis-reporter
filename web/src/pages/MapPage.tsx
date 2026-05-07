@@ -4,6 +4,7 @@ import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useAuthStore } from "../stores/authStore";
 import api from "../services/api";
+import SideMenu from "../components/SideMenu";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -225,6 +226,26 @@ async function fetchBuildings(mapInstance: maplibregl.Map): Promise<void> {
   }
 }
 
+// ── Icons ─────────────────────────────────────────────────────────────────────
+
+function IconHamburger() {
+  return (
+    <svg
+      width={22}
+      height={22}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="#fff"
+      strokeWidth={2}
+      strokeLinecap="round"
+    >
+      <line x1="3" y1="6" x2="21" y2="6" />
+      <line x1="3" y1="12" x2="21" y2="12" />
+      <line x1="3" y1="18" x2="21" y2="18" />
+    </svg>
+  );
+}
+
 // ── Footer icons ──────────────────────────────────────────────────────────────
 
 function IconHome({ active }: { active: boolean }) {
@@ -275,6 +296,7 @@ export default function MapPage() {
   const countryCodeAtMount = useRef(countryCode);
 
   const [showZoomHint, setShowZoomHint] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
     if (!mapContainer.current || map.current) return;
@@ -437,9 +459,20 @@ export default function MapPage() {
 
   return (
     <div style={s.page}>
+      <SideMenu open={menuOpen} onClose={() => setMenuOpen(false)} />
+
       {/* Header */}
       <header style={s.header}>
+        <button
+          style={s.hamburgerBtn}
+          onClick={() => setMenuOpen(true)}
+          aria-label="Open menu"
+        >
+          <IconHamburger />
+        </button>
         <span style={s.headerTitle}>Crisis Map</span>
+        {/* spacer to keep title visually centred */}
+        <div style={{ width: 30 }} />
       </header>
 
       {/* Map + zoom hint overlay */}
@@ -488,13 +521,24 @@ const s: Record<string, React.CSSProperties> = {
     padding: "16px 20px",
     display: "flex",
     alignItems: "center",
-    justifyContent: "center",
+    justifyContent: "space-between",
     flexShrink: 0,
   },
   headerTitle: {
     color: "#fff",
     fontSize: 18,
     fontWeight: 700,
+  },
+  hamburgerBtn: {
+    background: "transparent",
+    border: "none",
+    cursor: "pointer",
+    padding: 4,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 6,
+    width: 30,
   },
   mapWrapper: {
     flex: 1,
