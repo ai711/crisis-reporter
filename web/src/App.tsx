@@ -7,6 +7,7 @@ const ReportPage = lazy(() => import("./pages/ReportPage"));
 const MapPage = lazy(() => import("./pages/MapPage"));
 const SettingsPage = lazy(() => import("./pages/SettingsPage"));
 const MyReportsPage = lazy(() => import("./pages/MyReportsPage"));
+const ProfilePage = lazy(() => import("./pages/ProfilePage"));
 
 function LoadingSpinner() {
   return (
@@ -106,6 +107,14 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <MyReportsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/profile"
+            element={
+              <ProtectedRoute>
+                <ProfilePage />
               </ProtectedRoute>
             }
           />
