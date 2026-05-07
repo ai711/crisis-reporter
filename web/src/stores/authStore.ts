@@ -33,14 +33,18 @@ export const useAuthStore = create<AuthState>()(
 
       setOnboarded: () => set({ isOnboarded: true }),
 
-      reset: () =>
+      reset: () => {
+        localStorage.removeItem("cr_country");
+        localStorage.removeItem("cr_language");
+        localStorage.removeItem("cr_tc_accepted");
         set({
           reporterId: null,
           isVerified: false,
           countryCode: null,
           languageCode: "en",
           isOnboarded: false,
-        }),
+        });
+      },
     }),
     {
       name: "cr_auth",

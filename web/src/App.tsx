@@ -1,8 +1,6 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { useAuthStore } from "./stores/authStore";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { Suspense, lazy } from "react";
 
-// Lazy load pages for better performance
 const OnboardingPage = lazy(() => import("./pages/OnboardingPage"));
 const HomePage = lazy(() => import("./pages/HomePage"));
 const ReportPage = lazy(() => import("./pages/ReportPage"));
@@ -31,28 +29,43 @@ function LoadingSpinner() {
   );
 }
 
+// Returns the first incomplete onboarding step, or null if fully onboarded.
+function getFirstMissingStep(): "country" | "language" | "terms" | null {
+  if (!localStorage.getItem("cr_country")) return "country";
+  if (!localStorage.getItem("cr_language")) return "language";
+  if (!localStorage.getItem("cr_tc_accepted")) return "terms";
+  return null;
+}
+
+// Redirects to the first incomplete onboarding step, storing the intended URL.
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { isOnboarded } = useAuthStore();
-  if (!isOnboarded) {
-    return <Navigate to="/onboarding" replace />;
+  const location = useLocation();
+  const missingStep = getFirstMissingStep();
+  if (missingStep) {
+    const next = encodeURIComponent(location.pathname + location.search);
+    return (
+      <Navigate
+        to={`/onboarding?step=${missingStep}&next=${next}`}
+        replace
+      />
+    );
   }
   return <>{children}</>;
 }
 
-export default function App() {
-  const { isOnboarded } = useAuthStore();
+// Redirects away from onboarding if already complete.
+function OnboardingRoute() {
+  const missingStep = getFirstMissingStep();
+  if (!missingStep) return <Navigate to="/" replace />;
+  return <OnboardingPage />;
+}
 
+export default function App() {
   return (
     <BrowserRouter>
       <Suspense fallback={<LoadingSpinner />}>
         <Routes>
-          <Route
-            path="/onboarding"
-            element={isOnboarded
-              ? <Navigate to="/" replace />
-              : <OnboardingPage />
-            }
-          />
+          <Route path="/onboarding" element={<OnboardingRoute />} />
           <Route
             path="/"
             element={
@@ -95,7 +108,12 @@ export default function App() {
           />
           <Route
             path="*"
-            element={<Navigate to={isOnboarded ? "/" : "/onboarding"} replace />}
+            element={
+              <Navigate
+                to={getFirstMissingStep() ? "/onboarding" : "/"}
+                replace
+              />
+            }
           />
         </Routes>
       </Suspense>
