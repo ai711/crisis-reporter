@@ -5,6 +5,8 @@ import { logout } from "../services/auth";
 const NAV_ITEMS = [
   { path: "/", icon: "🗺️", label: "Map" },
   { path: "/reports", icon: "📋", label: "Reports" },
+  { path: "/report-queue", icon: "📥", label: "Report Queue" },
+  { path: "/review-queue", icon: "🔍", label: "Review Queue" },
   { path: "/reporters", icon: "👥", label: "Reporters" },
   { path: "/analytics", icon: "📊", label: "Analytics" },
   { path: "/export", icon: "📤", label: "Export" },

@@ -11,6 +11,8 @@ import ReportersPage from "./pages/ReportersPage";
 import AnalyticsPage from "./pages/AnalyticsPage";
 import ExportPage from "./pages/ExportPage";
 import SettingsPage from "./pages/SettingsPage";
+import ReportQueuePage from "./pages/ReportQueuePage";
+import ReviewQueuePage from "./pages/ReviewQueuePage";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -89,6 +91,22 @@ export default function App() {
               element={
                 <ProtectedRoute>
                   <SettingsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/report-queue"
+              element={
+                <ProtectedRoute>
+                  <ReportQueuePage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/review-queue"
+              element={
+                <ProtectedRoute>
+                  <ReviewQueuePage />
                 </ProtectedRoute>
               }
             />
