@@ -13,6 +13,7 @@ import ExportPage from "./pages/ExportPage";
 import SettingsPage from "./pages/SettingsPage";
 import ReportQueuePage from "./pages/ReportQueuePage";
 import ReviewQueuePage from "./pages/ReviewQueuePage";
+import CrisisManagementPage from "./pages/CrisisManagementPage";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -107,6 +108,14 @@ export default function App() {
               element={
                 <ProtectedRoute>
                   <ReviewQueuePage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/crises"
+              element={
+                <ProtectedRoute>
+                  <CrisisManagementPage />
                 </ProtectedRoute>
               }
             />
