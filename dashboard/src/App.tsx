@@ -10,7 +10,7 @@ import ReportsPage from "./pages/ReportsPage";
 import ReportersPage from "./pages/ReportersPage";
 import AnalyticsPage from "./pages/AnalyticsPage";
 import ExportPage from "./pages/ExportPage";
-import SettingsPage from "./pages/SettingsPage";
+import SystemSettingsPage from "./pages/SystemSettingsPage";
 import ReportQueuePage from "./pages/ReportQueuePage";
 import ReviewQueuePage from "./pages/ReviewQueuePage";
 import CrisisManagementPage from "./pages/CrisisManagementPage";
@@ -92,7 +92,7 @@ export default function App() {
               path="/settings"
               element={
                 <ProtectedRoute>
-                  <SettingsPage />
+                  <SystemSettingsPage />
                 </ProtectedRoute>
               }
             />

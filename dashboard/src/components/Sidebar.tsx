@@ -12,7 +12,7 @@ const NAV_ITEMS = [
   { path: "/analytics", icon: "📊", label: "Analytics", adminOnly: false },
   { path: "/export", icon: "📤", label: "Export", adminOnly: false },
   { path: "/users", icon: "🔑", label: "User Management", adminOnly: true },
-  { path: "/settings", icon: "⚙️", label: "Settings", adminOnly: false },
+  { path: "/settings", icon: "⚙️", label: "System Settings", adminOnly: true },
 ];
 
 export default function Sidebar() {
