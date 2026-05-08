@@ -6,6 +6,7 @@ from app.models.flag_event import FlagEvent
 from app.models.dashboard_user import DashboardUser
 from app.models.push_token import PushToken
 from app.models.question_package import QuestionPackage, Question, QuestionOption
+from app.models.language_package import StringKey, Translation, LanguagePackage
 
 __all__ = [
     "Crisis",
@@ -18,4 +19,7 @@ __all__ = [
     "QuestionPackage",
     "Question",
     "QuestionOption",
+    "StringKey",
+    "Translation",
+    "LanguagePackage",
 ]

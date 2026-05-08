@@ -23,8 +23,10 @@ from app.routers import (
     exports,
     question_packages,
     flag_rules,
+    language_packages,
 )
 from app.routers.question_packages import seed_initial_package
+from app.routers.language_packages import seed_string_keys
 
 
 @asynccontextmanager
@@ -34,6 +36,8 @@ async def lifespan(app: FastAPI):
     Path(settings.LOCAL_UPLOAD_PATH).mkdir(parents=True, exist_ok=True)
     # Seed v1.0.0 question package if none exists
     await seed_initial_package()
+    # Seed string keys for all 8 questions if table is empty
+    await seed_string_keys()
     yield
     await engine.dispose()
 
@@ -76,6 +80,9 @@ app.include_router(analytics.router)
 app.include_router(exports.router)
 app.include_router(question_packages.router)
 app.include_router(flag_rules.router)
+app.include_router(language_packages.packages_router)
+app.include_router(language_packages.keys_router)
+app.include_router(language_packages.translations_router)
 
 
 @app.get("/api/health")
