@@ -1,17 +1,108 @@
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useState, useEffect } from "react";
+import { useState, useRef } from "react";
 import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView,
-  TextInput, Alert, ActivityIndicator, Image
+  TextInput, Alert, ActivityIndicator, Image,
+  type NativeSyntheticEvent,
 } from "react-native";
 import { useTranslation } from "react-i18next";
 import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
+import {
+  Map as MLMap,
+  Camera,
+  GeoJSONSource,
+  Layer,
+  type CameraRef,
+  type ViewStateChangeEvent,
+  type PressEventWithFeatures,
+} from "@maplibre/maplibre-react-native";
+import { useEffect } from "react";
 import { useAuthStore } from "../stores/authStore";
 import api from "../services/api";
 import { addToQueue } from "../utils/offlineQueue";
 import type { DamageLevel, QueuedPhoto } from "../types";
 
+const MAPTILER_KEY = process.env.EXPO_PUBLIC_MAPTILER_KEY ?? "";
+const MAP_STYLE_URL = `https://api.maptiler.com/maps/streets/style.json?key=${MAPTILER_KEY}`;
+
+// ── Overpass types ─────────────────────────────────────────────────────────────
+
+interface OverpassNode { type: "node"; id: number; lat: number; lon: number; }
+interface OverpassWay { type: "way"; id: number; nodes: number[]; tags?: Record<string, string>; }
+interface OverpassOther { type: "relation" | "area"; id: number; tags?: Record<string, string>; }
+type OverpassElement = OverpassNode | OverpassWay | OverpassOther;
+interface OverpassResponse { elements: OverpassElement[]; }
+
+// ── GeoJSON helpers ────────────────────────────────────────────────────────────
+
+function buildBuildingsFC(data: OverpassResponse): GeoJSON.FeatureCollection {
+  const nodes = new Map<number, [number, number]>();
+  for (const el of data.elements) {
+    if (el.type === "node") nodes.set(el.id, [el.lon, el.lat]);
+  }
+
+  const features: GeoJSON.Feature[] = [];
+  for (const el of data.elements) {
+    if (el.type !== "way") continue;
+    const way = el as OverpassWay;
+    if (!way.tags?.building) continue;
+
+    const ring: [number, number][] = [];
+    for (const nodeId of way.nodes) {
+      const coord = nodes.get(nodeId);
+      if (coord) ring.push(coord);
+    }
+    if (ring.length < 3) continue;
+
+    const first = ring[0];
+    const last = ring[ring.length - 1];
+    if (first[0] !== last[0] || first[1] !== last[1]) ring.push([first[0], first[1]]);
+
+    features.push({
+      type: "Feature",
+      properties: {
+        osm_id: way.id,
+        name: way.tags?.name ?? "",
+        building: way.tags?.building ?? "yes",
+      },
+      geometry: { type: "Polygon", coordinates: [ring] },
+    });
+  }
+
+  return { type: "FeatureCollection", features };
+}
+
+function computeCentroid(ring: number[][]): [number, number] {
+  const pts =
+    ring[0][0] === ring[ring.length - 1][0] && ring[0][1] === ring[ring.length - 1][1]
+      ? ring.slice(0, -1)
+      : ring;
+  const lng = pts.reduce((s, p) => s + p[0], 0) / pts.length;
+  const lat = pts.reduce((s, p) => s + p[1], 0) / pts.length;
+  return [lng, lat];
+}
+
+async function fetchBuildingsForBounds(
+  west: number, south: number, east: number, north: number
+): Promise<GeoJSON.FeatureCollection | null> {
+  const query =
+    `[out:json][timeout:25][bbox:${south.toFixed(6)},${west.toFixed(6)},${north.toFixed(6)},${east.toFixed(6)}];` +
+    `(way["building"];relation["building"]["type"="multipolygon"];);out body;>;out skel qt;`;
+  try {
+    const res = await fetch("https://overpass-api.de/api/interpreter", {
+      method: "POST",
+      body: new URLSearchParams({ data: query }),
+    });
+    if (!res.ok) return null;
+    const data: OverpassResponse = await res.json();
+    return buildBuildingsFC(data);
+  } catch {
+    return null;
+  }
+}
+
+// ── Label maps ────────────────────────────────────────────────────────────────
 
 const DAMAGE_LABELS: Record<string, string> = {
   minimal: "Minimal / No damage",
@@ -46,15 +137,19 @@ const DEBRIS_LABELS: Record<string, string> = {
   partially: "Partially",
 };
 
-interface ReportScreenProps {
-  navigation: any;
-}
+interface ReportScreenProps { navigation: any; }
+
+// ── Component ─────────────────────────────────────────────────────────────────
 
 export default function ReportScreen({ navigation }: ReportScreenProps) {
   const { t } = useTranslation();
   const { reporterId, languageCode } = useAuthStore();
+  const insets = useSafeAreaInsets();
 
+  // Step
   const [step, setStep] = useState<"photos" | "location" | "damage" | "review">("photos");
+
+  // Damage form
   const [damageLevel, setDamageLevel] = useState<DamageLevel | "">("");
   const [infrastructureTypes, setInfrastructureTypes] = useState<string[]>([]);
   const [infrastructureOther, setInfrastructureOther] = useState("");
@@ -63,48 +158,144 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
   const [debrisBlocking, setDebrisBlocking] = useState("");
   const [damageQuestion, setDamageQuestion] = useState(1);
   const [photos, setPhotos] = useState<{ uri: string; filename: string; type: string }[]>([]);
+
+  // Location
+  const [gpsCoords, setGpsCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [selectedBuilding, setSelectedBuilding] = useState<{
+    id: number;
+    name: string;
+    building: string;
+    centroid: [number, number];
+  } | null>(null);
+  const [buildingsFC, setBuildingsFC] = useState<GeoJSON.FeatureCollection | null>(null);
+  const [selectedBuildingFC, setSelectedBuildingFC] = useState<GeoJSON.FeatureCollection | null>(null);
   const [locationAddress, setLocationAddress] = useState("");
   const [locationLandmark, setLocationLandmark] = useState("");
-  const [gpsCoords, setGpsCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [locationBuildingName, setLocationBuildingName] = useState("");
+  const [manualExpanded, setManualExpanded] = useState(false);
+  const [gpsCapturing, setGpsCapturing] = useState(false);
+  const [mapZoom, setMapZoom] = useState(2);
+
+  // Submit
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [wasQueued, setWasQueued] = useState(false);
   const [crisisId, setCrisisId] = useState<string | null>(null);
   const [crisisLoading, setCrisisLoading] = useState(true);
   const [crisisError, setCrisisError] = useState(false);
-  const insets = useSafeAreaInsets();
+
+  // Map refs
+  const cameraRef = useRef<CameraRef | null>(null);
+  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     api.get("/api/crises/active")
       .then((res) => {
         const list = Array.isArray(res.data) ? res.data : (res.data?.items ?? []);
-        if (list.length > 0) {
-          setCrisisId(list[0].id);
-        } else {
-          setCrisisError(true);
-        }
+        if (list.length > 0) setCrisisId(list[0].id);
+        else setCrisisError(true);
       })
       .catch(() => setCrisisError(true))
       .finally(() => setCrisisLoading(false));
   }, []);
 
-const handleTakePhoto = async () => {
+  // Cleanup debounce timer on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    };
+  }, []);
+
+  // ── Map handlers ─────────────────────────────────────────────────────────────
+
+  const handleMapLoaded = async () => {
+    try {
+      const { status } = await Location.getForegroundPermissionsAsync();
+      if (status !== "granted") return;
+      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      cameraRef.current?.flyTo({
+        center: [loc.coords.longitude, loc.coords.latitude],
+        zoom: 15,
+        duration: 1000,
+      });
+    } catch {
+      // Silent — map remains at world view
+    }
+  };
+
+  const handleRegionChange = (event: NativeSyntheticEvent<ViewStateChangeEvent>) => {
+    const { zoom, bounds } = event.nativeEvent;
+    setMapZoom(zoom);
+    if (zoom < 14) return;
+
+    const [west, south, east, north] = bounds;
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    debounceTimer.current = setTimeout(async () => {
+      const fc = await fetchBuildingsForBounds(west, south, east, north);
+      if (fc) setBuildingsFC(fc);
+    }, 1000);
+  };
+
+  const handleBuildingPress = (event: NativeSyntheticEvent<PressEventWithFeatures>) => {
+    const { features } = event.nativeEvent;
+    if (!features?.length) return;
+
+    const f = features[0];
+    const props = f.properties as { osm_id: number; name: string; building: string };
+    const geom = f.geometry as GeoJSON.Polygon;
+    const ring = geom.coordinates[0];
+    const [centLng, centLat] = computeCentroid(ring);
+
+    setSelectedBuilding({
+      id: props.osm_id,
+      name: props.name ?? "",
+      building: props.building ?? "yes",
+      centroid: [centLng, centLat],
+    });
+    setGpsCoords({ lat: centLat, lng: centLng });
+    setSelectedBuildingFC({ type: "FeatureCollection", features: [f] });
+  };
+
+  // ── Location actions ──────────────────────────────────────────────────────────
+
+  const handleGetGPS = async () => {
+    setGpsCapturing(true);
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") return;
+      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      const lat = loc.coords.latitude;
+      const lng = loc.coords.longitude;
+      setGpsCoords({ lat, lng });
+      setSelectedBuilding(null);
+      setSelectedBuildingFC(null);
+      cameraRef.current?.flyTo({ center: [lng, lat], zoom: 16, duration: 800 });
+    } catch {
+      Alert.alert("GPS Error", "Could not get location.");
+    } finally {
+      setGpsCapturing(false);
+    }
+  };
+
+  const isLocationValid = (): boolean =>
+    !!gpsCoords ||
+    locationAddress.trim().length > 0 ||
+    locationLandmark.trim().length > 0 ||
+    locationBuildingName.trim().length > 0;
+
+  // ── Photo handlers ────────────────────────────────────────────────────────────
+
+  const handleTakePhoto = async () => {
     try {
       const permission = await ImagePicker.requestCameraPermissionsAsync();
       if (permission.status !== "granted") {
         Alert.alert("Permission needed", "Please allow camera access in settings.");
         return;
       }
-      const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ["images"],
-        quality: 0.8,
-      });
+      const result = await ImagePicker.launchCameraAsync({ mediaTypes: ["images"], quality: 0.8 });
       if (!result.canceled && result.assets[0]) {
         const asset = result.assets[0];
-        setPhotos((prev) => [
-          ...prev,
-          { uri: asset.uri, filename: `photo_${Date.now()}.jpg`, type: "image/jpeg" },
-        ]);
+        setPhotos((prev) => [...prev, { uri: asset.uri, filename: `photo_${Date.now()}.jpg`, type: "image/jpeg" }]);
       }
     } catch (e) {
       Alert.alert("Camera Error", String(e));
@@ -118,34 +309,17 @@ const handleTakePhoto = async () => {
         Alert.alert("Permission needed", "Please allow photo library access in settings.");
         return;
       }
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ["images"],
-        quality: 0.8,
-      });
+      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.8 });
       if (!result.canceled && result.assets[0]) {
         const asset = result.assets[0];
-        setPhotos((prev) => [
-          ...prev,
-          { uri: asset.uri, filename: `photo_${Date.now()}.jpg`, type: "image/jpeg" },
-        ]);
+        setPhotos((prev) => [...prev, { uri: asset.uri, filename: `photo_${Date.now()}.jpg`, type: "image/jpeg" }]);
       }
     } catch (e) {
       Alert.alert("Gallery Error", String(e));
     }
   };
 
-  const handleGetGPS = async () => {
-    const { status } = await Location.requestForegroundPermissionsAsync();
-    if (status !== "granted") return;
-    const location = await Location.getCurrentPositionAsync({
-      accuracy: Location.Accuracy.High,
-    });
-    setGpsCoords({
-      lat: location.coords.latitude,
-      lng: location.coords.longitude,
-    });
-    Alert.alert("GPS Captured", `${location.coords.latitude.toFixed(4)}, ${location.coords.longitude.toFixed(4)}`);
-  };
+  // ── Damage handlers ───────────────────────────────────────────────────────────
 
   const toggleInfraType = (value: string) => {
     setInfrastructureTypes((prev) =>
@@ -174,6 +348,19 @@ const handleTakePhoto = async () => {
     else setStep("review");
   };
 
+  // ── Submit ────────────────────────────────────────────────────────────────────
+
+  const buildLocationAddress = (): string | null => {
+    if (selectedBuilding) {
+      const parts = [
+        selectedBuilding.name,
+        selectedBuilding.building !== "yes" ? selectedBuilding.building : "",
+      ].filter(Boolean);
+      return parts.length > 0 ? parts.join(" — ") : null;
+    }
+    return locationAddress || null;
+  };
+
   const handleSubmit = async () => {
     if (!damageLevel || infrastructureTypes.length === 0 || !infrastructureName.trim() || !disasterType || !debrisBlocking || photos.length === 0) {
       Alert.alert("Required Fields", "Please complete all required fields.");
@@ -193,13 +380,13 @@ const handleTakePhoto = async () => {
       platform: "android" as const,
       submitted_at: new Date().toISOString(),
       location: {
-        gps_latitude: gpsCoords?.lat || null,
-        gps_longitude: gpsCoords?.lng || null,
+        gps_latitude: gpsCoords?.lat ?? null,
+        gps_longitude: gpsCoords?.lng ?? null,
         gps_accuracy_meters: null,
         gps_available: !!gpsCoords,
-        location_address: locationAddress || null,
+        location_address: buildLocationAddress(),
         location_landmark: locationLandmark || null,
-        location_building_name: null,
+        location_building_name: locationBuildingName || null,
       },
       reporter_id: reporterId || undefined,
       language_code: languageCode,
@@ -207,49 +394,36 @@ const handleTakePhoto = async () => {
     };
 
     try {
-      // Try online submission first
       const response = await api.post("/api/reports", reportPayload);
       const reportId = response.data.report_id;
 
-      // Upload photos
       for (let i = 0; i < photos.length; i++) {
         const formData = new FormData();
         formData.append("report_id", reportId);
         formData.append("display_order", String(i));
-        formData.append("file", {
-          uri: photos[i].uri,
-          name: photos[i].filename,
-          type: photos[i].type,
-        } as any);
-
-        await api.post("/api/photos", formData, {
-          headers: { "Content-Type": "multipart/form-data" },
-        });
+        formData.append("file", { uri: photos[i].uri, name: photos[i].filename, type: photos[i].type } as any);
+        await api.post("/api/photos", formData, { headers: { "Content-Type": "multipart/form-data" } });
       }
 
       setSubmitted(true);
       setWasQueued(false);
     } catch (error: any) {
-      console.log("Submit error:", error?.message, error?.response?.status, error?.response?.data);
-      // Save to offline queue
       const queuedPhotos: QueuedPhoto[] = photos.map((p, i) => ({
         uri: p.uri,
         filename: p.filename,
         content_type: p.type,
         display_order: i,
       }));
-
-      await addToQueue(
-        { ...reportPayload, was_queued: true },
-        queuedPhotos
-      );
-
+      // ReportSubmitRequest type predates multi-type infra fields — cast to bypass
+      await addToQueue({ ...reportPayload, was_queued: true } as any, queuedPhotos);
       setSubmitted(true);
       setWasQueued(true);
     } finally {
       setSubmitting(false);
     }
   };
+
+  // ── Early returns ─────────────────────────────────────────────────────────────
 
   if (submitted) {
     return (
@@ -263,10 +437,7 @@ const handleTakePhoto = async () => {
             ? "Your report is saved and will sync when you reconnect."
             : "Your damage report has been submitted to UNDP."}
         </Text>
-        <TouchableOpacity
-          style={styles.homeButton}
-          onPress={() => navigation.navigate("Home")}
-        >
+        <TouchableOpacity style={styles.homeButton} onPress={() => navigation.navigate("Home")}>
           <Text style={styles.primaryButtonText}>Back to Home</Text>
         </TouchableOpacity>
       </View>
@@ -284,9 +455,7 @@ const handleTakePhoto = async () => {
   if (crisisError || !crisisId) {
     return (
       <View style={styles.successContainer}>
-        <Text style={styles.errorText}>
-          No active crisis found. Please try again later.
-        </Text>
+        <Text style={styles.errorText}>No active crisis found. Please try again later.</Text>
         <TouchableOpacity style={styles.homeButton} onPress={() => navigation.goBack()}>
           <Text style={styles.primaryButtonText}>Go Back</Text>
         </TouchableOpacity>
@@ -295,6 +464,8 @@ const handleTakePhoto = async () => {
   }
 
   const stepNumber = step === "photos" ? 1 : step === "location" ? 2 : step === "damage" ? 3 : 4;
+
+  // ── Render ─────────────────────────────────────────────────────────────────────
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -312,319 +483,416 @@ const handleTakePhoto = async () => {
         <View style={[styles.progressFill, { width: `${stepNumber * 25}%` as any }]} />
       </View>
 
-      <ScrollView style={styles.content} contentContainerStyle={styles.contentPadding}>
+      {/* Step 2 — Location (map-based, outside ScrollView) */}
+      {step === "location" && (
+        <View style={{ flex: 1 }}>
+          {/* Map fills most of the screen */}
+          <View style={{ flex: 1 }}>
+            <MLMap
+              mapStyle={MAP_STYLE_URL}
+              style={{ flex: 1 }}
+              onRegionDidChange={handleRegionChange}
+              onDidFinishLoadingMap={handleMapLoaded}
+            >
+              <Camera
+                ref={cameraRef}
+                initialViewState={{ center: [0, 20], zoom: 2 }}
+              />
 
-        {/* Step 3 — Damage Assessment */}
-        {step === "damage" && (
-          <View style={styles.step}>
-            <Text style={styles.questionProgress}>Question {damageQuestion} of 5</Text>
-
-            {/* Q1 — Damage level */}
-            {damageQuestion === 1 && (
-              <>
-                <Text style={styles.stepTitle}>How bad is the damage? *</Text>
-                {([
-                  { value: "minimal" as DamageLevel, label: "Minimal / No damage" },
-                  { value: "partial" as DamageLevel, label: "Partially damaged" },
-                  { value: "complete" as DamageLevel, label: "Completely damaged" },
-                ]).map(({ value, label }) => (
-                  <TouchableOpacity
-                    key={value}
-                    style={[styles.optionBtn, damageLevel === value && styles.optionBtnSelected]}
-                    onPress={() => setDamageLevel(value)}
-                  >
-                    <Text style={styles.optionIcon}>
-                      {value === "minimal" ? "🟢" : value === "partial" ? "🟠" : "🔴"}
-                    </Text>
-                    <Text style={styles.optionText}>{label}</Text>
-                  </TouchableOpacity>
-                ))}
-              </>
-            )}
-
-            {/* Q2 — Infrastructure type (multi-select) */}
-            {damageQuestion === 2 && (
-              <>
-                <Text style={styles.stepTitle}>What type of infrastructure is this? *</Text>
-                <Text style={styles.hintText}>Select all that apply.</Text>
-                {[
-                  { value: "residential", label: "Residential Infrastructure" },
-                  { value: "commercial", label: "Commercial Infrastructure" },
-                  { value: "government", label: "Government Building" },
-                  { value: "utility", label: "Utility Infrastructure" },
-                  { value: "transport_communication", label: "Transport and Communication Infrastructure" },
-                  { value: "community", label: "Community Infrastructure" },
-                  { value: "public_spaces", label: "Public Spaces / Recreation Infrastructure" },
-                  { value: "other", label: "Other (please specify)" },
-                ].map(({ value, label }) => (
-                  <TouchableOpacity
-                    key={value}
-                    style={styles.checkRow}
-                    onPress={() => toggleInfraType(value)}
-                  >
-                    <View style={[styles.checkbox, infrastructureTypes.includes(value) && styles.checkboxSelected]}>
-                      {infrastructureTypes.includes(value) && <Text style={styles.checkmark}>✓</Text>}
-                    </View>
-                    <Text style={styles.checkRowText}>{label}</Text>
-                  </TouchableOpacity>
-                ))}
-                {infrastructureTypes.includes("other") && (
-                  <TextInput
-                    style={[styles.input, { marginTop: 8 }]}
-                    placeholder="Please specify (max 100 characters)"
-                    value={infrastructureOther}
-                    onChangeText={(t) => setInfrastructureOther(t.slice(0, 100))}
-                    maxLength={100}
+              {/* Default building footprints */}
+              {buildingsFC && (
+                <GeoJSONSource id="buildings" data={buildingsFC} onPress={handleBuildingPress}>
+                  <Layer
+                    id="buildings-fill"
+                    type="fill"
+                    paint={{ "fill-color": "#CBD5E0", "fill-opacity": 0.5 }}
                   />
-                )}
-              </>
-            )}
+                  <Layer
+                    id="buildings-outline"
+                    type="line"
+                    paint={{ "line-color": "#718096", "line-width": 0.6 }}
+                  />
+                </GeoJSONSource>
+              )}
 
-            {/* Q3 — Infrastructure name */}
-            {damageQuestion === 3 && (
-              <>
-                <Text style={styles.stepTitle}>What is the name of this infrastructure? *</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="e.g. Main Street Bridge"
-                  value={infrastructureName}
-                  onChangeText={(t) => setInfrastructureName(t.slice(0, 200))}
-                  maxLength={200}
-                />
-                <Text style={styles.charCounter}>{infrastructureName.length} / 200</Text>
-              </>
-            )}
+              {/* Selected building highlight */}
+              {selectedBuildingFC && (
+                <GeoJSONSource id="selected-building" data={selectedBuildingFC}>
+                  <Layer
+                    id="selected-building-fill"
+                    type="fill"
+                    paint={{ "fill-color": "#0468B1", "fill-opacity": 0.7 }}
+                  />
+                  <Layer
+                    id="selected-building-outline"
+                    type="line"
+                    paint={{ "line-color": "#0468B1", "line-width": 2 }}
+                  />
+                </GeoJSONSource>
+              )}
+            </MLMap>
 
-            {/* Q4 — Disaster type */}
-            {damageQuestion === 4 && (
-              <>
-                <Text style={styles.stepTitle}>What type of disaster caused this damage? *</Text>
-                {[
-                  { value: "earthquake", label: "Earthquake" },
-                  { value: "flood", label: "Flood" },
-                  { value: "cyclone", label: "Cyclone / Typhoon / Hurricane" },
-                  { value: "landslide", label: "Landslide" },
-                  { value: "fire", label: "Fire" },
-                  { value: "conflict", label: "Conflict / War" },
-                  { value: "other", label: "Other" },
-                ].map(({ value, label }) => (
-                  <TouchableOpacity
-                    key={value}
-                    style={[styles.optionBtn, disasterType === value && styles.optionBtnSelected]}
-                    onPress={() => setDisasterType(value)}
-                  >
-                    <Text style={styles.optionText}>{label}</Text>
-                  </TouchableOpacity>
-                ))}
-              </>
+            {/* Zoom hint overlay */}
+            {mapZoom < 14 && (
+              <View style={styles.zoomHint} pointerEvents="none">
+                <Text style={styles.zoomHintText}>Zoom in to see and select buildings</Text>
+              </View>
             )}
-
-            {/* Q5 — Debris blocking */}
-            {damageQuestion === 5 && (
-              <>
-                <Text style={styles.stepTitle}>Is there debris blocking access? *</Text>
-                {[
-                  { value: "yes", label: "Yes" },
-                  { value: "no", label: "No" },
-                  { value: "partially", label: "Partially" },
-                ].map(({ value, label }) => (
-                  <TouchableOpacity
-                    key={value}
-                    style={[styles.optionBtn, debrisBlocking === value && styles.optionBtnSelected]}
-                    onPress={() => setDebrisBlocking(value)}
-                  >
-                    <Text style={styles.optionText}>{label}</Text>
-                  </TouchableOpacity>
-                ))}
-              </>
-            )}
-
-            <View style={styles.navButtons}>
-              <TouchableOpacity style={styles.secondaryButton} onPress={handleDamageBack}>
-                <Text style={styles.secondaryButtonText}>← Back</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.primaryButton, !isDamageQuestionAnswered() && styles.buttonDisabled]}
-                onPress={handleDamageNext}
-                disabled={!isDamageQuestionAnswered()}
-              >
-                <Text style={styles.primaryButtonText}>Next →</Text>
-              </TouchableOpacity>
-            </View>
           </View>
-        )}
 
-        {/* Step 2 — Location */}
-        {step === "location" && (
-          <View style={styles.step}>
+          {/* Bottom panel */}
+          <ScrollView
+            style={styles.locationPanel}
+            contentContainerStyle={styles.locationPanelContent}
+            keyboardShouldPersistTaps="handled"
+          >
             <Text style={styles.stepTitle}>{t("report.location")}</Text>
 
-            <TouchableOpacity style={styles.gpsButton} onPress={handleGetGPS}>
+            {/* Building selection info card */}
+            {selectedBuilding && (
+              <View style={styles.selectionCard}>
+                <Text style={styles.selectionCardTitle}>Building Selected</Text>
+                <Text style={styles.selectionCardName}>
+                  {selectedBuilding.name || "Unnamed building"}
+                </Text>
+                {selectedBuilding.building !== "yes" && (
+                  <Text style={styles.selectionCardMeta}>Type: {selectedBuilding.building}</Text>
+                )}
+                <Text style={styles.selectionCardCoords}>
+                  {selectedBuilding.centroid[1].toFixed(6)}, {selectedBuilding.centroid[0].toFixed(6)}
+                </Text>
+              </View>
+            )}
+
+            {/* GPS-only info card (when GPS captured without building) */}
+            {gpsCoords && !selectedBuilding && (
+              <View style={styles.selectionCard}>
+                <Text style={styles.selectionCardTitle}>GPS Location Captured</Text>
+                <Text style={styles.selectionCardCoords}>
+                  {gpsCoords.lat.toFixed(6)}, {gpsCoords.lng.toFixed(6)}
+                </Text>
+              </View>
+            )}
+
+            {/* GPS capture button */}
+            <TouchableOpacity
+              style={[styles.gpsButton, gpsCapturing && styles.buttonDisabled]}
+              onPress={handleGetGPS}
+              disabled={gpsCapturing}
+            >
               <Text style={styles.gpsButtonText}>
-                {gpsCoords ? "✅ GPS Captured" : "📍 Capture GPS Location"}
+                {gpsCapturing ? "Getting location…" : "📍 Use My GPS Location"}
               </Text>
             </TouchableOpacity>
 
-            <Text style={styles.fieldLabel}>{t("report.address")}</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Street address or area name"
-              value={locationAddress}
-              onChangeText={setLocationAddress}
-            />
+            {/* Manual location toggle */}
+            <TouchableOpacity onPress={() => setManualExpanded(!manualExpanded)}>
+              <Text style={styles.manualToggle}>
+                {manualExpanded ? "Hide manual entry ▲" : "Enter location manually instead ▼"}
+              </Text>
+            </TouchableOpacity>
 
-            <Text style={styles.fieldLabel}>{t("report.landmark")}</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="e.g. Near the central market"
-              value={locationLandmark}
-              onChangeText={setLocationLandmark}
-            />
+            {manualExpanded && (
+              <View style={{ gap: 8 }}>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Address"
+                  value={locationAddress}
+                  onChangeText={setLocationAddress}
+                />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Landmark (e.g. Near central market)"
+                  value={locationLandmark}
+                  onChangeText={setLocationLandmark}
+                />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Building Name"
+                  value={locationBuildingName}
+                  onChangeText={setLocationBuildingName}
+                />
+              </View>
+            )}
 
             <View style={styles.navButtons}>
-              <TouchableOpacity
-                style={styles.secondaryButton}
-                onPress={() => setStep("photos")}
-              >
+              <TouchableOpacity style={styles.secondaryButton} onPress={() => setStep("photos")}>
                 <Text style={styles.secondaryButtonText}>← Back</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={styles.primaryButton}
+                style={[styles.primaryButton, !isLocationValid() && styles.buttonDisabled]}
                 onPress={() => setStep("damage")}
+                disabled={!isLocationValid()}
               >
                 <Text style={styles.primaryButtonText}>Next →</Text>
               </TouchableOpacity>
             </View>
-          </View>
-        )}
+          </ScrollView>
+        </View>
+      )}
 
-        {/* Step 1 — Photos */}
-        {step === "photos" && (
-          <View style={styles.step}>
-            <Text style={styles.stepTitle}>{t("report.photos")} *</Text>
-            <Text style={styles.hintText}>
-              Add up to 3 photos. At least 1 required.
-            </Text>
+      {/* All other steps inside ScrollView */}
+      {step !== "location" && (
+        <ScrollView style={styles.content} contentContainerStyle={styles.contentPadding}>
 
-            <View style={styles.photoGrid}>
-              {photos.map((photo, index) => (
-                <View key={index} style={styles.photoThumb}>
-                  <Image source={{ uri: photo.uri }} style={styles.thumbImage} />
-                  <TouchableOpacity
-                    style={styles.removePhotoBtn}
-                    onPress={() => setPhotos((prev) => prev.filter((_, i) => i !== index))}
-                  >
-                    <Text style={styles.removePhotoBtnText}>✕</Text>
+          {/* Step 1 — Photos */}
+          {step === "photos" && (
+            <View style={styles.step}>
+              <Text style={styles.stepTitle}>{t("report.photos")} *</Text>
+              <Text style={styles.hintText}>Add up to 3 photos. At least 1 required.</Text>
+
+              <View style={styles.photoGrid}>
+                {photos.map((photo, index) => (
+                  <View key={index} style={styles.photoThumb}>
+                    <Image source={{ uri: photo.uri }} style={styles.thumbImage} />
+                    <TouchableOpacity
+                      style={styles.removePhotoBtn}
+                      onPress={() => setPhotos((prev) => prev.filter((_, i) => i !== index))}
+                    >
+                      <Text style={styles.removePhotoBtnText}>✕</Text>
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </View>
+
+              {photos.length < 3 && (
+                <View style={styles.photoButtons}>
+                  <TouchableOpacity style={styles.photoOptionBtn} onPress={handleTakePhoto}>
+                    <Text style={styles.photoOptionIcon}>📷</Text>
+                    <Text style={styles.photoOptionText}>{t("report.takePhoto")}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.photoOptionBtn} onPress={handlePickPhoto}>
+                    <Text style={styles.photoOptionIcon}>🖼️</Text>
+                    <Text style={styles.photoOptionText}>{t("report.uploadPhoto")}</Text>
                   </TouchableOpacity>
                 </View>
-              ))}
+              )}
+
+              <TouchableOpacity
+                style={[styles.primaryButton, photos.length === 0 && styles.buttonDisabled]}
+                onPress={() => photos.length > 0 && setStep("location")}
+                disabled={photos.length === 0}
+              >
+                <Text style={styles.primaryButtonText}>Next →</Text>
+              </TouchableOpacity>
             </View>
+          )}
 
-            {photos.length < 3 && (
-              <View style={styles.photoButtons}>
-                <TouchableOpacity
-                  style={styles.photoOptionBtn}
-                  onPress={handleTakePhoto}
-                >
-                  <Text style={styles.photoOptionIcon}>📷</Text>
-                  <Text style={styles.photoOptionText}>{t("report.takePhoto")}</Text>
+          {/* Step 3 — Damage Assessment */}
+          {step === "damage" && (
+            <View style={styles.step}>
+              <Text style={styles.questionProgress}>Question {damageQuestion} of 5</Text>
+
+              {damageQuestion === 1 && (
+                <>
+                  <Text style={styles.stepTitle}>How bad is the damage? *</Text>
+                  {([
+                    { value: "minimal" as DamageLevel, label: "Minimal / No damage" },
+                    { value: "partial" as DamageLevel, label: "Partially damaged" },
+                    { value: "complete" as DamageLevel, label: "Completely damaged" },
+                  ]).map(({ value, label }) => (
+                    <TouchableOpacity
+                      key={value}
+                      style={[styles.optionBtn, damageLevel === value && styles.optionBtnSelected]}
+                      onPress={() => setDamageLevel(value)}
+                    >
+                      <Text style={styles.optionIcon}>
+                        {value === "minimal" ? "🟢" : value === "partial" ? "🟠" : "🔴"}
+                      </Text>
+                      <Text style={styles.optionText}>{label}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </>
+              )}
+
+              {damageQuestion === 2 && (
+                <>
+                  <Text style={styles.stepTitle}>What type of infrastructure is this? *</Text>
+                  <Text style={styles.hintText}>Select all that apply.</Text>
+                  {[
+                    { value: "residential", label: "Residential Infrastructure" },
+                    { value: "commercial", label: "Commercial Infrastructure" },
+                    { value: "government", label: "Government Building" },
+                    { value: "utility", label: "Utility Infrastructure" },
+                    { value: "transport_communication", label: "Transport and Communication Infrastructure" },
+                    { value: "community", label: "Community Infrastructure" },
+                    { value: "public_spaces", label: "Public Spaces / Recreation Infrastructure" },
+                    { value: "other", label: "Other (please specify)" },
+                  ].map(({ value, label }) => (
+                    <TouchableOpacity key={value} style={styles.checkRow} onPress={() => toggleInfraType(value)}>
+                      <View style={[styles.checkbox, infrastructureTypes.includes(value) && styles.checkboxSelected]}>
+                        {infrastructureTypes.includes(value) && <Text style={styles.checkmark}>✓</Text>}
+                      </View>
+                      <Text style={styles.checkRowText}>{label}</Text>
+                    </TouchableOpacity>
+                  ))}
+                  {infrastructureTypes.includes("other") && (
+                    <TextInput
+                      style={[styles.input, { marginTop: 8 }]}
+                      placeholder="Please specify (max 100 characters)"
+                      value={infrastructureOther}
+                      onChangeText={(t) => setInfrastructureOther(t.slice(0, 100))}
+                      maxLength={100}
+                    />
+                  )}
+                </>
+              )}
+
+              {damageQuestion === 3 && (
+                <>
+                  <Text style={styles.stepTitle}>What is the name of this infrastructure? *</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="e.g. Main Street Bridge"
+                    value={infrastructureName}
+                    onChangeText={(t) => setInfrastructureName(t.slice(0, 200))}
+                    maxLength={200}
+                  />
+                  <Text style={styles.charCounter}>{infrastructureName.length} / 200</Text>
+                </>
+              )}
+
+              {damageQuestion === 4 && (
+                <>
+                  <Text style={styles.stepTitle}>What type of disaster caused this damage? *</Text>
+                  {[
+                    { value: "earthquake", label: "Earthquake" },
+                    { value: "flood", label: "Flood" },
+                    { value: "cyclone", label: "Cyclone / Typhoon / Hurricane" },
+                    { value: "landslide", label: "Landslide" },
+                    { value: "fire", label: "Fire" },
+                    { value: "conflict", label: "Conflict / War" },
+                    { value: "other", label: "Other" },
+                  ].map(({ value, label }) => (
+                    <TouchableOpacity
+                      key={value}
+                      style={[styles.optionBtn, disasterType === value && styles.optionBtnSelected]}
+                      onPress={() => setDisasterType(value)}
+                    >
+                      <Text style={styles.optionText}>{label}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </>
+              )}
+
+              {damageQuestion === 5 && (
+                <>
+                  <Text style={styles.stepTitle}>Is there debris blocking access? *</Text>
+                  {[
+                    { value: "yes", label: "Yes" },
+                    { value: "no", label: "No" },
+                    { value: "partially", label: "Partially" },
+                  ].map(({ value, label }) => (
+                    <TouchableOpacity
+                      key={value}
+                      style={[styles.optionBtn, debrisBlocking === value && styles.optionBtnSelected]}
+                      onPress={() => setDebrisBlocking(value)}
+                    >
+                      <Text style={styles.optionText}>{label}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </>
+              )}
+
+              <View style={styles.navButtons}>
+                <TouchableOpacity style={styles.secondaryButton} onPress={handleDamageBack}>
+                  <Text style={styles.secondaryButtonText}>← Back</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={styles.photoOptionBtn}
-                  onPress={handlePickPhoto}
+                  style={[styles.primaryButton, !isDamageQuestionAnswered() && styles.buttonDisabled]}
+                  onPress={handleDamageNext}
+                  disabled={!isDamageQuestionAnswered()}
                 >
-                  <Text style={styles.photoOptionIcon}>🖼️</Text>
-                  <Text style={styles.photoOptionText}>{t("report.uploadPhoto")}</Text>
+                  <Text style={styles.primaryButtonText}>Next →</Text>
                 </TouchableOpacity>
               </View>
-            )}
+            </View>
+          )}
 
-            <TouchableOpacity
-              style={[
-                styles.primaryButton,
-                photos.length === 0 && styles.buttonDisabled,
-              ]}
-              onPress={() => photos.length > 0 && setStep("location")}
-              disabled={photos.length === 0}
-            >
-              <Text style={styles.primaryButtonText}>Next →</Text>
-            </TouchableOpacity>
-          </View>
-        )}
+          {/* Step 4 — Review and Submit */}
+          {step === "review" && (
+            <View style={styles.step}>
+              <Text style={styles.stepTitle}>Review Your Report</Text>
 
-        {/* Step 4 — Review and Submit */}
-        {step === "review" && (
-          <View style={styles.step}>
-            <Text style={styles.stepTitle}>Review Your Report</Text>
-
-            <View style={styles.reviewCard}>
-              <View style={styles.reviewRow}>
-                <Text style={styles.reviewLabel}>Damage Level</Text>
-                <Text style={styles.reviewValue}>{DAMAGE_LABELS[damageLevel] ?? damageLevel}</Text>
-              </View>
-              <View style={styles.reviewRow}>
-                <Text style={styles.reviewLabel}>Infrastructure</Text>
-                <Text style={styles.reviewValue}>
-                  {infrastructureTypes.map((t) => INFRA_LABELS[t] ?? t).join(", ")}
-                </Text>
-              </View>
-              <View style={styles.reviewRow}>
-                <Text style={styles.reviewLabel}>Infrastructure Name</Text>
-                <Text style={styles.reviewValue}>{infrastructureName}</Text>
-              </View>
-              <View style={styles.reviewRow}>
-                <Text style={styles.reviewLabel}>Disaster Type</Text>
-                <Text style={styles.reviewValue}>{DISASTER_LABELS[disasterType] ?? disasterType}</Text>
-              </View>
-              <View style={styles.reviewRow}>
-                <Text style={styles.reviewLabel}>Debris Blocking</Text>
-                <Text style={styles.reviewValue}>{DEBRIS_LABELS[debrisBlocking] ?? debrisBlocking}</Text>
-              </View>
-              <View style={styles.reviewRow}>
-                <Text style={styles.reviewLabel}>Photos</Text>
-                <Text style={styles.reviewValue}>{photos.length} photo(s)</Text>
-              </View>
-              {gpsCoords && (
+              <View style={styles.reviewCard}>
                 <View style={styles.reviewRow}>
-                  <Text style={styles.reviewLabel}>GPS</Text>
+                  <Text style={styles.reviewLabel}>Damage Level</Text>
+                  <Text style={styles.reviewValue}>{DAMAGE_LABELS[damageLevel] ?? damageLevel}</Text>
+                </View>
+                <View style={styles.reviewRow}>
+                  <Text style={styles.reviewLabel}>Infrastructure</Text>
                   <Text style={styles.reviewValue}>
-                    {gpsCoords.lat.toFixed(4)}, {gpsCoords.lng.toFixed(4)}
+                    {infrastructureTypes.map((v) => INFRA_LABELS[v] ?? v).join(", ")}
                   </Text>
                 </View>
-              )}
-              {locationAddress ? (
                 <View style={styles.reviewRow}>
-                  <Text style={styles.reviewLabel}>Address</Text>
-                  <Text style={styles.reviewValue}>{locationAddress}</Text>
+                  <Text style={styles.reviewLabel}>Infrastructure Name</Text>
+                  <Text style={styles.reviewValue}>{infrastructureName}</Text>
                 </View>
-              ) : null}
-            </View>
-
-            <View style={styles.navButtons}>
-              <TouchableOpacity
-                style={styles.secondaryButton}
-                onPress={() => { setDamageQuestion(5); setStep("damage"); }}
-              >
-                <Text style={styles.secondaryButtonText}>← Back</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.primaryButton, submitting && styles.buttonDisabled]}
-                onPress={handleSubmit}
-                disabled={submitting}
-              >
-                {submitting ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text style={styles.primaryButtonText}>{t("report.submit")}</Text>
+                <View style={styles.reviewRow}>
+                  <Text style={styles.reviewLabel}>Disaster Type</Text>
+                  <Text style={styles.reviewValue}>{DISASTER_LABELS[disasterType] ?? disasterType}</Text>
+                </View>
+                <View style={styles.reviewRow}>
+                  <Text style={styles.reviewLabel}>Debris Blocking</Text>
+                  <Text style={styles.reviewValue}>{DEBRIS_LABELS[debrisBlocking] ?? debrisBlocking}</Text>
+                </View>
+                <View style={styles.reviewRow}>
+                  <Text style={styles.reviewLabel}>Photos</Text>
+                  <Text style={styles.reviewValue}>{photos.length} photo(s)</Text>
+                </View>
+                {selectedBuilding && (
+                  <View style={styles.reviewRow}>
+                    <Text style={styles.reviewLabel}>Location</Text>
+                    <Text style={styles.reviewValue}>
+                      {selectedBuilding.name || "Building selected"}
+                    </Text>
+                  </View>
                 )}
-              </TouchableOpacity>
+                {gpsCoords && !selectedBuilding && (
+                  <View style={styles.reviewRow}>
+                    <Text style={styles.reviewLabel}>GPS</Text>
+                    <Text style={styles.reviewValue}>
+                      {gpsCoords.lat.toFixed(4)}, {gpsCoords.lng.toFixed(4)}
+                    </Text>
+                  </View>
+                )}
+                {locationAddress && !gpsCoords ? (
+                  <View style={styles.reviewRow}>
+                    <Text style={styles.reviewLabel}>Address</Text>
+                    <Text style={styles.reviewValue}>{locationAddress}</Text>
+                  </View>
+                ) : null}
+              </View>
+
+              <View style={styles.navButtons}>
+                <TouchableOpacity
+                  style={styles.secondaryButton}
+                  onPress={() => { setDamageQuestion(5); setStep("damage"); }}
+                >
+                  <Text style={styles.secondaryButtonText}>← Back</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.primaryButton, submitting && styles.buttonDisabled]}
+                  onPress={handleSubmit}
+                  disabled={submitting}
+                >
+                  {submitting ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.primaryButtonText}>{t("report.submit")}</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
-        )}
-      </ScrollView>
+          )}
+        </ScrollView>
+      )}
     </View>
   );
 }
+
+// ── Styles ─────────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#f4f6f9" },
@@ -644,6 +912,42 @@ const styles = StyleSheet.create({
   contentPadding: { padding: 16 },
   step: { gap: 12 },
   stepTitle: { fontSize: 17, fontWeight: "600", color: "#1A2B4A" },
+
+  // Location step
+  locationPanel: { flexShrink: 0, maxHeight: 340, backgroundColor: "#fff", borderTopWidth: 1, borderTopColor: "#e0e0e0" },
+  locationPanelContent: { padding: 14, gap: 10 },
+  zoomHint: {
+    position: "absolute",
+    bottom: 12,
+    alignSelf: "center",
+    backgroundColor: "rgba(26,43,74,0.82)",
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    zIndex: 10,
+  },
+  zoomHintText: { color: "#fff", fontSize: 12, fontWeight: "500" },
+  selectionCard: {
+    backgroundColor: "#E8F4FD",
+    borderWidth: 1.5,
+    borderColor: "#0468B1",
+    borderRadius: 8,
+    padding: 12,
+    gap: 2,
+  },
+  selectionCardTitle: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#0468B1",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  selectionCardName: { fontSize: 15, fontWeight: "600", color: "#1A2B4A" },
+  selectionCardMeta: { fontSize: 12, color: "#718096" },
+  selectionCardCoords: { fontSize: 11, color: "#718096", fontVariant: ["tabular-nums"] },
+  manualToggle: { fontSize: 13, color: "#0468B1", textDecorationLine: "underline" },
+
+  // Damage / shared
   optionBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -657,151 +961,6 @@ const styles = StyleSheet.create({
   optionBtnSelected: { borderColor: "#0468B1", backgroundColor: "#E8F4FD" },
   optionIcon: { fontSize: 28 },
   optionText: { fontSize: 16, fontWeight: "600", color: "#1A2B4A" },
-  typeGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
-  typeBtn: {
-    width: "47%",
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 1.5,
-    borderColor: "#e0e0e0",
-    backgroundColor: "#fff",
-    alignItems: "center",
-  },
-  typeBtnSelected: { borderColor: "#0468B1", backgroundColor: "#E8F4FD" },
-  typeBtnText: { fontSize: 13, fontWeight: "500", color: "#1A2B4A" },
-  typeBtnTextSelected: { color: "#0468B1" },
-  textarea: {
-    backgroundColor: "#fff",
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#e0e0e0",
-    padding: 12,
-    fontSize: 15,
-    minHeight: 100,
-    textAlignVertical: "top",
-  },
-  gpsButton: {
-    backgroundColor: "#E8F4FD",
-    borderRadius: 8,
-    padding: 16,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#0468B1",
-  },
-  gpsButtonText: { color: "#0468B1", fontWeight: "600", fontSize: 15 },
-  fieldLabel: { fontSize: 14, fontWeight: "500", color: "#666" },
-  input: {
-    backgroundColor: "#fff",
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#e0e0e0",
-    padding: 12,
-    fontSize: 15,
-  },
-  hintText: { fontSize: 14, color: "#666" },
-  photoGrid: { flexDirection: "row", gap: 10, flexWrap: "wrap" },
-  photoThumb: { width: 100, height: 100, borderRadius: 8, overflow: "hidden", position: "relative" },
-  thumbImage: { width: "100%", height: "100%" },
-  removePhotoBtn: {
-    position: "absolute",
-    top: 4,
-    right: 4,
-    backgroundColor: "rgba(0,0,0,0.6)",
-    borderRadius: 12,
-    width: 24,
-    height: 24,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  removePhotoBtnText: { color: "#fff", fontSize: 12 },
-  addPhotoBtn: {
-    width: 100,
-    height: 100,
-    borderRadius: 8,
-    borderWidth: 2,
-    borderColor: "#ccc",
-    borderStyle: "dashed",
-    backgroundColor: "#fff",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 4,
-  },
-  addPhotoIcon: { fontSize: 32 },
-  addPhotoText: { fontSize: 11, color: "#666" },
-  reviewCard: {
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    overflow: "hidden",
-    shadowColor: "#000",
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  reviewRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    padding: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f0f0f0",
-  },
-  reviewLabel: { fontSize: 14, color: "#666" },
-  reviewValue: { fontSize: 14, fontWeight: "500", color: "#1A2B4A", maxWidth: "60%", textAlign: "right" },
-  navButtons: { flexDirection: "row", gap: 12, marginTop: 16 },
-  primaryButton: {
-    flex: 1,
-    backgroundColor: "#0468B1",
-    borderRadius: 8,
-    padding: 16,
-    alignItems: "center",
-  },
-  buttonDisabled: { opacity: 0.5 },
-  primaryButtonText: { color: "#fff", fontSize: 16, fontWeight: "600" },
-  secondaryButton: {
-    padding: 16,
-    backgroundColor: "#fff",
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#e0e0e0",
-    alignItems: "center",
-  },
-  secondaryButtonText: { fontSize: 15, color: "#1A2B4A" },
-  successContainer: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 40,
-    gap: 20,
-    backgroundColor: "#f4f6f9",
-  },
-  homeButton: {
-    backgroundColor: "#0468B1",
-    borderRadius: 8,
-    padding: 16,
-    alignItems: "center",
-    width: "100%",
-    maxWidth: 300,
-  },
-  photoButtons: {
-    flexDirection: "row",
-    gap: 12,
-  },
-  photoOptionBtn: {
-    flex: 1,
-    backgroundColor: "#fff",
-    borderRadius: 10,
-    borderWidth: 1.5,
-    borderColor: "#0468B1",
-    padding: 16,
-    alignItems: "center",
-    gap: 8,
-  },
-  photoOptionIcon: { fontSize: 28 },
-  photoOptionText: { fontSize: 13, color: "#0468B1", fontWeight: "500" },
-  successIcon: { fontSize: 72 },
-  successTitle: { fontSize: 22, fontWeight: "700", color: "#1A2B4A", textAlign: "center" },
-  successText: { fontSize: 16, color: "#666", textAlign: "center", lineHeight: 24 },
-  errorText: { fontSize: 16, color: "#d32f2f", textAlign: "center", lineHeight: 24 },
-  questionProgress: { fontSize: 13, fontWeight: "600", color: "#0468B1", textAlign: "center" },
   checkRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -824,4 +983,128 @@ const styles = StyleSheet.create({
   checkmark: { color: "#fff", fontSize: 13, fontWeight: "700" },
   checkRowText: { flex: 1, fontSize: 15, color: "#1A2B4A" },
   charCounter: { fontSize: 12, color: "#999", textAlign: "right" },
+  input: {
+    backgroundColor: "#fff",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
+    padding: 12,
+    fontSize: 15,
+  },
+  hintText: { fontSize: 14, color: "#666" },
+
+  // GPS button (reused for location panel)
+  gpsButton: {
+    backgroundColor: "#1A2B4A",
+    borderRadius: 8,
+    padding: 14,
+    alignItems: "center",
+  },
+  gpsButtonText: { color: "#fff", fontWeight: "600", fontSize: 15 },
+
+  // Photos
+  photoGrid: { flexDirection: "row", gap: 10, flexWrap: "wrap" },
+  photoThumb: { width: 100, height: 100, borderRadius: 8, overflow: "hidden", position: "relative" },
+  thumbImage: { width: "100%", height: "100%" },
+  removePhotoBtn: {
+    position: "absolute",
+    top: 4,
+    right: 4,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    borderRadius: 12,
+    width: 24,
+    height: 24,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  removePhotoBtnText: { color: "#fff", fontSize: 12 },
+  photoButtons: { flexDirection: "row", gap: 12 },
+  photoOptionBtn: {
+    flex: 1,
+    backgroundColor: "#fff",
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: "#0468B1",
+    padding: 16,
+    alignItems: "center",
+    gap: 8,
+  },
+  photoOptionIcon: { fontSize: 28 },
+  photoOptionText: { fontSize: 13, color: "#0468B1", fontWeight: "500" },
+
+  // Review
+  reviewCard: {
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  reviewRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    padding: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f0f0f0",
+  },
+  reviewLabel: { fontSize: 14, color: "#666" },
+  reviewValue: { fontSize: 14, fontWeight: "500", color: "#1A2B4A", maxWidth: "60%", textAlign: "right" },
+
+  // Nav
+  navButtons: { flexDirection: "row", gap: 12, marginTop: 8 },
+  primaryButton: {
+    flex: 1,
+    backgroundColor: "#0468B1",
+    borderRadius: 8,
+    padding: 16,
+    alignItems: "center",
+  },
+  buttonDisabled: { opacity: 0.5 },
+  primaryButtonText: { color: "#fff", fontSize: 16, fontWeight: "600" },
+  secondaryButton: {
+    padding: 16,
+    backgroundColor: "#fff",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
+    alignItems: "center",
+  },
+  secondaryButtonText: { fontSize: 15, color: "#1A2B4A" },
+
+  // Success / error screens
+  successContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 40,
+    gap: 20,
+    backgroundColor: "#f4f6f9",
+  },
+  homeButton: {
+    backgroundColor: "#0468B1",
+    borderRadius: 8,
+    padding: 16,
+    alignItems: "center",
+    width: "100%",
+    maxWidth: 300,
+  },
+  successIcon: { fontSize: 72 },
+  successTitle: { fontSize: 22, fontWeight: "700", color: "#1A2B4A", textAlign: "center" },
+  successText: { fontSize: 16, color: "#666", textAlign: "center", lineHeight: 24 },
+  errorText: { fontSize: 16, color: "#d32f2f", textAlign: "center", lineHeight: 24 },
+  questionProgress: { fontSize: 13, fontWeight: "600", color: "#0468B1", textAlign: "center" },
+
+  // Unused legacy keys kept to avoid StyleSheet warnings if referenced elsewhere
+  typeGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  typeBtn: { width: "47%", padding: 12, borderRadius: 8, borderWidth: 1.5, borderColor: "#e0e0e0", backgroundColor: "#fff", alignItems: "center" },
+  typeBtnSelected: { borderColor: "#0468B1", backgroundColor: "#E8F4FD" },
+  typeBtnText: { fontSize: 13, fontWeight: "500", color: "#1A2B4A" },
+  typeBtnTextSelected: { color: "#0468B1" },
+  textarea: { backgroundColor: "#fff", borderRadius: 8, borderWidth: 1, borderColor: "#e0e0e0", padding: 12, fontSize: 15, minHeight: 100, textAlignVertical: "top" },
+  addPhotoBtn: { width: 100, height: 100, borderRadius: 8, borderWidth: 2, borderColor: "#ccc", borderStyle: "dashed", backgroundColor: "#fff", alignItems: "center", justifyContent: "center", gap: 4 },
+  addPhotoIcon: { fontSize: 32 },
+  addPhotoText: { fontSize: 11, color: "#666" },
+  fieldLabel: { fontSize: 14, fontWeight: "500", color: "#666" },
 });
