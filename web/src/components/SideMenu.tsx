@@ -62,87 +62,12 @@ const MENU_ITEMS: MenuItem[] = [
   { icon: "ℹ️",  label: "About Crisis Reporter",    action: "about" },
 ];
 
-// ── About modal ────────────────────────────────────────────────────────────────
-
-function AboutModal({ onClose }: { onClose: () => void }) {
-  return createPortal(
-    <div
-      onClick={onClose}
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.55)",
-        zIndex: 1200,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: 24,
-      }}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          background: "#fff",
-          borderRadius: 16,
-          padding: "28px 24px",
-          maxWidth: 340,
-          width: "100%",
-          boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
-        }}
-      >
-        <div style={{ fontSize: 36, textAlign: "center", marginBottom: 12 }}>ℹ️</div>
-        <h2
-          style={{
-            fontSize: 17,
-            fontWeight: 700,
-            color: "#1a202c",
-            textAlign: "center",
-            margin: "0 0 14px",
-          }}
-        >
-          About Crisis Reporter
-        </h2>
-        <p
-          style={{
-            fontSize: 14,
-            color: "#4a5568",
-            lineHeight: 1.65,
-            margin: "0 0 24px",
-            textAlign: "center",
-          }}
-        >
-          Crisis Reporter is built for UNDP to enable community-driven crisis
-          damage mapping. Version 1.0.0.
-        </p>
-        <button
-          onClick={onClose}
-          style={{
-            width: "100%",
-            padding: "12px 0",
-            background: BLUE,
-            color: "#fff",
-            border: "none",
-            borderRadius: 10,
-            fontSize: 15,
-            fontWeight: 700,
-            cursor: "pointer",
-          }}
-        >
-          Close
-        </button>
-      </div>
-    </div>,
-    document.body
-  );
-}
-
 // ── SideMenu ───────────────────────────────────────────────────────────────────
 
 export default function SideMenu({ open, onClose }: SideMenuProps) {
   const navigate = useNavigate();
   const { reporterId } = useAuthStore();
   const [profile, setProfile] = useState<ReporterProfile | null>(null);
-  const [showAbout, setShowAbout] = useState(false);
 
   const fetchProfile = useCallback(() => {
     if (!reporterId || profile) return;
@@ -169,7 +94,7 @@ export default function SideMenu({ open, onClose }: SideMenuProps) {
 
   function handleItemClick(item: MenuItem) {
     if (item.action === "about") {
-      setShowAbout(true);
+      handleNavigate("/about");
       return;
     }
     if (item.route) handleNavigate(item.route);
@@ -334,8 +259,6 @@ export default function SideMenu({ open, onClose }: SideMenuProps) {
         </div>
       </div>
 
-      {/* About modal */}
-      {showAbout && <AboutModal onClose={() => setShowAbout(false)} />}
     </>
   );
 
