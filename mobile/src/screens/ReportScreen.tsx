@@ -137,6 +137,36 @@ const DEBRIS_LABELS: Record<string, string> = {
   partially: "Partially",
 };
 
+const ELECTRICITY_LABELS: Record<string, string> = {
+  no_damage: "No damage observed",
+  minor: "Minor damage — service disruptions but quickly repairable",
+  moderate: "Moderate damage — partial outages requiring repairs",
+  severe: "Severe damage — major infrastructure damaged, prolonged outages",
+  destroyed: "Completely destroyed — no electricity infrastructure functioning",
+  unknown: "Unknown / cannot be assessed",
+};
+
+const HEALTH_LABELS: Record<string, string> = {
+  fully_functional: "Fully functional",
+  partially_functional: "Partially functional",
+  largely_disrupted: "Largely disrupted",
+  not_functioning: "Not functioning at all",
+  unknown: "Unknown",
+};
+
+const PRESSING_NEEDS_LABELS: Record<string, string> = {
+  food_water: "Food assistance and safe drinking water",
+  cash_financial: "Cash or financial assistance",
+  healthcare: "Access to healthcare and essential medicines",
+  shelter: "Shelter, housing repair, or temporary accommodation",
+  livelihoods: "Restoration of livelihoods or income sources",
+  wash: "Water, sanitation, and hygiene (toilets, washing facilities)",
+  basic_services: "Restoration of basic services and infrastructure (electricity, roads, schools)",
+  protection: "Protection services and psychosocial support",
+  local_support: "Support from local authorities and community organizations",
+  other: "Other — please specify",
+};
+
 interface ReportScreenProps { navigation: any; }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -156,6 +186,10 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
   const [infrastructureName, setInfrastructureName] = useState("");
   const [disasterType, setDisasterType] = useState("");
   const [debrisBlocking, setDebrisBlocking] = useState("");
+  const [electricityCondition, setElectricityCondition] = useState("");
+  const [healthServicesCondition, setHealthServicesCondition] = useState("");
+  const [pressingNeeds, setPressingNeeds] = useState<string[]>([]);
+  const [pressingNeedsOther, setPressingNeedsOther] = useState("");
   const [damageQuestion, setDamageQuestion] = useState(1);
   const [photos, setPhotos] = useState<{ uri: string; filename: string; type: string }[]>([]);
 
@@ -327,6 +361,12 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
     );
   };
 
+  const togglePressingNeed = (value: string) => {
+    setPressingNeeds((prev) =>
+      prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]
+    );
+  };
+
   const isDamageQuestionAnswered = (): boolean => {
     switch (damageQuestion) {
       case 1: return !!damageLevel;
@@ -334,6 +374,9 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
       case 3: return infrastructureName.trim().length > 0;
       case 4: return !!disasterType;
       case 5: return !!debrisBlocking;
+      case 6: return !!electricityCondition;
+      case 7: return !!healthServicesCondition;
+      case 8: return pressingNeeds.length > 0;
       default: return false;
     }
   };
@@ -344,7 +387,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
   };
 
   const handleDamageNext = () => {
-    if (damageQuestion < 5) setDamageQuestion((q) => q + 1);
+    if (damageQuestion < 8) setDamageQuestion((q) => q + 1);
     else setStep("review");
   };
 
@@ -362,7 +405,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
   };
 
   const handleSubmit = async () => {
-    if (!damageLevel || infrastructureTypes.length === 0 || !infrastructureName.trim() || !disasterType || !debrisBlocking || photos.length === 0) {
+    if (!damageLevel || infrastructureTypes.length === 0 || !infrastructureName.trim() || !disasterType || !debrisBlocking || !electricityCondition || !healthServicesCondition || pressingNeeds.length === 0 || photos.length === 0) {
       Alert.alert("Required Fields", "Please complete all required fields.");
       return;
     }
@@ -377,6 +420,10 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
       infrastructure_name: infrastructureName,
       disaster_type: disasterType,
       debris_blocking: debrisBlocking,
+      electricity_condition: electricityCondition,
+      health_services_condition: healthServicesCondition,
+      pressing_needs: pressingNeeds,
+      ...(pressingNeeds.includes("other") && { pressing_needs_other: pressingNeedsOther }),
       platform: "android" as const,
       submitted_at: new Date().toISOString(),
       location: {
@@ -681,7 +728,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
           {/* Step 3 — Damage Assessment */}
           {step === "damage" && (
             <View style={styles.step}>
-              <Text style={styles.questionProgress}>Question {damageQuestion} of 5</Text>
+              <Text style={styles.questionProgress}>Question {damageQuestion} of 8</Text>
 
               {damageQuestion === 1 && (
                 <>
@@ -794,6 +841,87 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                 </>
               )}
 
+              {damageQuestion === 6 && (
+                <>
+                  <Text style={styles.stepTitle}>What is the current condition of electricity infrastructure in your community following the crisis? *</Text>
+                  {[
+                    { value: "no_damage", label: "No damage observed" },
+                    { value: "minor", label: "Minor damage — service disruptions but quickly repairable" },
+                    { value: "moderate", label: "Moderate damage — partial outages requiring repairs" },
+                    { value: "severe", label: "Severe damage — major infrastructure damaged, prolonged outages" },
+                    { value: "destroyed", label: "Completely destroyed — no electricity infrastructure functioning" },
+                    { value: "unknown", label: "Unknown / cannot be assessed" },
+                  ].map(({ value, label }) => (
+                    <TouchableOpacity
+                      key={value}
+                      style={[styles.optionBtn, electricityCondition === value && styles.optionBtnSelected]}
+                      onPress={() => setElectricityCondition(value)}
+                    >
+                      <Text style={styles.optionText}>{label}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </>
+              )}
+
+              {damageQuestion === 7 && (
+                <>
+                  <Text style={styles.stepTitle}>How would you rate the overall functioning of health services in your community since the event? *</Text>
+                  {[
+                    { value: "fully_functional", label: "Fully functional" },
+                    { value: "partially_functional", label: "Partially functional" },
+                    { value: "largely_disrupted", label: "Largely disrupted" },
+                    { value: "not_functioning", label: "Not functioning at all" },
+                    { value: "unknown", label: "Unknown" },
+                  ].map(({ value, label }) => (
+                    <TouchableOpacity
+                      key={value}
+                      style={[styles.optionBtn, healthServicesCondition === value && styles.optionBtnSelected]}
+                      onPress={() => setHealthServicesCondition(value)}
+                    >
+                      <Text style={styles.optionText}>{label}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </>
+              )}
+
+              {damageQuestion === 8 && (
+                <>
+                  <Text style={styles.stepTitle}>What are the most pressing needs in your community right now? *</Text>
+                  <Text style={styles.hintText}>Select all that apply. At least one required.</Text>
+                  {[
+                    { value: "food_water", label: "Food assistance and safe drinking water" },
+                    { value: "cash_financial", label: "Cash or financial assistance" },
+                    { value: "healthcare", label: "Access to healthcare and essential medicines" },
+                    { value: "shelter", label: "Shelter, housing repair, or temporary accommodation" },
+                    { value: "livelihoods", label: "Restoration of livelihoods or income sources" },
+                    { value: "wash", label: "Water, sanitation, and hygiene (toilets, washing facilities)" },
+                    { value: "basic_services", label: "Restoration of basic services and infrastructure (electricity, roads, schools)" },
+                    { value: "protection", label: "Protection services and psychosocial support" },
+                    { value: "local_support", label: "Support from local authorities and community organizations" },
+                    { value: "other", label: "Other — please specify" },
+                  ].map(({ value, label }) => (
+                    <TouchableOpacity key={value} style={styles.checkRow} onPress={() => togglePressingNeed(value)}>
+                      <View style={[styles.checkbox, pressingNeeds.includes(value) && styles.checkboxSelected]}>
+                        {pressingNeeds.includes(value) && <Text style={styles.checkmark}>✓</Text>}
+                      </View>
+                      <Text style={styles.checkRowText}>{label}</Text>
+                    </TouchableOpacity>
+                  ))}
+                  {pressingNeeds.includes("other") && (
+                    <View>
+                      <TextInput
+                        style={[styles.input, { marginTop: 8 }]}
+                        placeholder="Please specify (max 100 characters)"
+                        value={pressingNeedsOther}
+                        onChangeText={(txt) => setPressingNeedsOther(txt.slice(0, 100))}
+                        maxLength={100}
+                      />
+                      <Text style={styles.charCounter}>{pressingNeedsOther.length} / 100</Text>
+                    </View>
+                  )}
+                </>
+              )}
+
               <View style={styles.navButtons}>
                 <TouchableOpacity style={styles.secondaryButton} onPress={handleDamageBack}>
                   <Text style={styles.secondaryButtonText}>← Back</Text>
@@ -838,6 +966,21 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                   <Text style={styles.reviewValue}>{DEBRIS_LABELS[debrisBlocking] ?? debrisBlocking}</Text>
                 </View>
                 <View style={styles.reviewRow}>
+                  <Text style={styles.reviewLabel}>Electricity</Text>
+                  <Text style={styles.reviewValue}>{ELECTRICITY_LABELS[electricityCondition] ?? electricityCondition}</Text>
+                </View>
+                <View style={styles.reviewRow}>
+                  <Text style={styles.reviewLabel}>Health Services</Text>
+                  <Text style={styles.reviewValue}>{HEALTH_LABELS[healthServicesCondition] ?? healthServicesCondition}</Text>
+                </View>
+                <View style={styles.reviewRow}>
+                  <Text style={styles.reviewLabel}>Pressing Needs</Text>
+                  <Text style={styles.reviewValue}>
+                    {pressingNeeds.map((v) => PRESSING_NEEDS_LABELS[v] ?? v).join(", ")}
+                    {pressingNeeds.includes("other") && pressingNeedsOther ? ` (${pressingNeedsOther})` : ""}
+                  </Text>
+                </View>
+                <View style={styles.reviewRow}>
                   <Text style={styles.reviewLabel}>Photos</Text>
                   <Text style={styles.reviewValue}>{photos.length} photo(s)</Text>
                 </View>
@@ -868,7 +1011,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
               <View style={styles.navButtons}>
                 <TouchableOpacity
                   style={styles.secondaryButton}
-                  onPress={() => { setDamageQuestion(5); setStep("damage"); }}
+                  onPress={() => { setDamageQuestion(8); setStep("damage"); }}
                 >
                   <Text style={styles.secondaryButtonText}>← Back</Text>
                 </TouchableOpacity>

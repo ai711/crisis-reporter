@@ -60,6 +60,36 @@ const DEBRIS_LABELS: Record<string, string> = {
   partially: "Partially",
 };
 
+const ELECTRICITY_LABELS: Record<string, string> = {
+  no_damage: "No damage observed",
+  minor: "Minor damage — service disruptions but quickly repairable",
+  moderate: "Moderate damage — partial outages requiring repairs",
+  severe: "Severe damage — major infrastructure damaged, prolonged outages",
+  destroyed: "Completely destroyed — no electricity infrastructure functioning",
+  unknown: "Unknown / cannot be assessed",
+};
+
+const HEALTH_LABELS: Record<string, string> = {
+  fully_functional: "Fully functional",
+  partially_functional: "Partially functional",
+  largely_disrupted: "Largely disrupted",
+  not_functioning: "Not functioning at all",
+  unknown: "Unknown",
+};
+
+const PRESSING_NEEDS_LABELS: Record<string, string> = {
+  food_water: "Food assistance and safe drinking water",
+  cash_financial: "Cash or financial assistance",
+  healthcare: "Access to healthcare and essential medicines",
+  shelter: "Shelter, housing repair, or temporary accommodation",
+  livelihoods: "Restoration of livelihoods or income sources",
+  wash: "Water, sanitation, and hygiene (toilets, washing facilities)",
+  basic_services: "Restoration of basic services and infrastructure (electricity, roads, schools)",
+  protection: "Protection services and psychosocial support",
+  local_support: "Support from local authorities and community organizations",
+  other: "Other — please specify",
+};
+
 // ── Overpass types ─────────────────────────────────────────────────────────────
 
 interface OverpassNode { type: "node"; id: number; lat: number; lon: number; }
@@ -152,6 +182,10 @@ export default function ReportPage() {
   const [infrastructureName, setInfrastructureName] = useState("");
   const [disasterType, setDisasterType] = useState("");
   const [debrisBlocking, setDebrisBlocking] = useState("");
+  const [electricityCondition, setElectricityCondition] = useState("");
+  const [healthServicesCondition, setHealthServicesCondition] = useState("");
+  const [pressingNeeds, setPressingNeeds] = useState<string[]>([]);
+  const [pressingNeedsOther, setPressingNeedsOther] = useState("");
   const [damageQuestion, setDamageQuestion] = useState(1);
   const [photos, setPhotos] = useState<File[]>([]);
 
@@ -342,6 +376,12 @@ export default function ReportPage() {
     );
   };
 
+  const togglePressingNeed = (value: string) => {
+    setPressingNeeds((prev) =>
+      prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]
+    );
+  };
+
   const isDamageQuestionAnswered = (): boolean => {
     switch (damageQuestion) {
       case 1: return !!damageLevel;
@@ -349,6 +389,9 @@ export default function ReportPage() {
       case 3: return infrastructureName.trim().length > 0;
       case 4: return !!disasterType;
       case 5: return !!debrisBlocking;
+      case 6: return !!electricityCondition;
+      case 7: return !!healthServicesCondition;
+      case 8: return pressingNeeds.length > 0;
       default: return false;
     }
   };
@@ -359,7 +402,7 @@ export default function ReportPage() {
   };
 
   const handleDamageNext = () => {
-    if (damageQuestion < 5) setDamageQuestion((q) => q + 1);
+    if (damageQuestion < 8) setDamageQuestion((q) => q + 1);
     else setStep("review");
   };
 
@@ -382,7 +425,7 @@ export default function ReportPage() {
   };
 
   const handleSubmit = async () => {
-    if (!damageLevel || infrastructureTypes.length === 0 || !infrastructureName.trim() || !disasterType || !debrisBlocking || photos.length === 0) {
+    if (!damageLevel || infrastructureTypes.length === 0 || !infrastructureName.trim() || !disasterType || !debrisBlocking || !electricityCondition || !healthServicesCondition || pressingNeeds.length === 0 || photos.length === 0) {
       setError("Please complete all required fields");
       return;
     }
@@ -398,6 +441,10 @@ export default function ReportPage() {
       infrastructure_name: infrastructureName,
       disaster_type: disasterType,
       debris_blocking: debrisBlocking,
+      electricity_condition: electricityCondition,
+      health_services_condition: healthServicesCondition,
+      pressing_needs: pressingNeeds,
+      ...(pressingNeeds.includes("other") && { pressing_needs_other: pressingNeedsOther }),
       platform: "web" as const,
       submitted_at: new Date().toISOString(),
       location: {
@@ -666,7 +713,7 @@ export default function ReportPage() {
         {/* Step 3 — Damage Assessment */}
         {step === "damage" && (
           <div style={styles.step}>
-            <div style={styles.questionProgress}>Question {damageQuestion} of 5</div>
+            <div style={styles.questionProgress}>Question {damageQuestion} of 8</div>
 
             {/* Q1 — Damage level */}
             {damageQuestion === 1 && (
@@ -801,6 +848,102 @@ export default function ReportPage() {
               </>
             )}
 
+            {/* Q6 — Electricity condition */}
+            {damageQuestion === 6 && (
+              <>
+                <h2 style={styles.stepTitle}>What is the current condition of electricity infrastructure in your community following the crisis? *</h2>
+                {[
+                  { value: "no_damage", label: "No damage observed" },
+                  { value: "minor", label: "Minor damage — service disruptions but quickly repairable" },
+                  { value: "moderate", label: "Moderate damage — partial outages requiring repairs" },
+                  { value: "severe", label: "Severe damage — major infrastructure damaged, prolonged outages" },
+                  { value: "destroyed", label: "Completely destroyed — no electricity infrastructure functioning" },
+                  { value: "unknown", label: "Unknown / cannot be assessed" },
+                ].map(({ value, label }) => (
+                  <button
+                    key={value}
+                    style={{
+                      ...styles.optionBtn,
+                      borderColor: electricityCondition === value ? "#0468B1" : "#e0e0e0",
+                      background: electricityCondition === value ? "#E8F4FD" : "#fff",
+                    }}
+                    onClick={() => setElectricityCondition(value)}
+                  >
+                    <span style={styles.optionTitle}>{label}</span>
+                  </button>
+                ))}
+              </>
+            )}
+
+            {/* Q7 — Health services */}
+            {damageQuestion === 7 && (
+              <>
+                <h2 style={styles.stepTitle}>How would you rate the overall functioning of health services in your community since the event? *</h2>
+                {[
+                  { value: "fully_functional", label: "Fully functional" },
+                  { value: "partially_functional", label: "Partially functional" },
+                  { value: "largely_disrupted", label: "Largely disrupted" },
+                  { value: "not_functioning", label: "Not functioning at all" },
+                  { value: "unknown", label: "Unknown" },
+                ].map(({ value, label }) => (
+                  <button
+                    key={value}
+                    style={{
+                      ...styles.optionBtn,
+                      borderColor: healthServicesCondition === value ? "#0468B1" : "#e0e0e0",
+                      background: healthServicesCondition === value ? "#E8F4FD" : "#fff",
+                    }}
+                    onClick={() => setHealthServicesCondition(value)}
+                  >
+                    <span style={styles.optionTitle}>{label}</span>
+                  </button>
+                ))}
+              </>
+            )}
+
+            {/* Q8 — Pressing needs (multi-select) */}
+            {damageQuestion === 8 && (
+              <>
+                <h2 style={styles.stepTitle}>What are the most pressing needs in your community right now? *</h2>
+                <p style={styles.photoHint}>Select all that apply. At least one required.</p>
+                {[
+                  { value: "food_water", label: "Food assistance and safe drinking water" },
+                  { value: "cash_financial", label: "Cash or financial assistance" },
+                  { value: "healthcare", label: "Access to healthcare and essential medicines" },
+                  { value: "shelter", label: "Shelter, housing repair, or temporary accommodation" },
+                  { value: "livelihoods", label: "Restoration of livelihoods or income sources" },
+                  { value: "wash", label: "Water, sanitation, and hygiene (toilets, washing facilities)" },
+                  { value: "basic_services", label: "Restoration of basic services and infrastructure (electricity, roads, schools)" },
+                  { value: "protection", label: "Protection services and psychosocial support" },
+                  { value: "local_support", label: "Support from local authorities and community organizations" },
+                  { value: "other", label: "Other — please specify" },
+                ].map(({ value, label }) => (
+                  <div key={value} style={styles.checkRow} onClick={() => togglePressingNeed(value)}>
+                    <div style={{
+                      ...styles.checkbox,
+                      ...(pressingNeeds.includes(value) ? styles.checkboxSelected : {}),
+                    }}>
+                      {pressingNeeds.includes(value) && <span style={styles.checkmark}>✓</span>}
+                    </div>
+                    <span style={styles.checkRowText}>{label}</span>
+                  </div>
+                ))}
+                {pressingNeeds.includes("other") && (
+                  <div>
+                    <input
+                      style={{ ...styles.input, marginTop: 8 }}
+                      type="text"
+                      maxLength={100}
+                      placeholder="Please specify (max 100 characters)"
+                      value={pressingNeedsOther}
+                      onChange={(e) => setPressingNeedsOther(e.target.value)}
+                    />
+                    <div style={styles.charCounter}>{pressingNeedsOther.length} / 100</div>
+                  </div>
+                )}
+              </>
+            )}
+
             <div style={styles.navButtons}>
               <button style={styles.secondaryButton} onClick={handleDamageBack}>← Back</button>
               <button
@@ -843,6 +986,21 @@ export default function ReportPage() {
                 <span style={styles.reviewValue}>{DEBRIS_LABELS[debrisBlocking] ?? debrisBlocking}</span>
               </div>
               <div style={styles.reviewRow}>
+                <span style={styles.reviewLabel}>Electricity</span>
+                <span style={styles.reviewValue}>{ELECTRICITY_LABELS[electricityCondition] ?? electricityCondition}</span>
+              </div>
+              <div style={styles.reviewRow}>
+                <span style={styles.reviewLabel}>Health Services</span>
+                <span style={styles.reviewValue}>{HEALTH_LABELS[healthServicesCondition] ?? healthServicesCondition}</span>
+              </div>
+              <div style={styles.reviewRow}>
+                <span style={styles.reviewLabel}>Pressing Needs</span>
+                <span style={styles.reviewValue}>
+                  {pressingNeeds.map((v) => PRESSING_NEEDS_LABELS[v] ?? v).join(", ")}
+                  {pressingNeeds.includes("other") && pressingNeedsOther ? ` (${pressingNeedsOther})` : ""}
+                </span>
+              </div>
+              <div style={styles.reviewRow}>
                 <span style={styles.reviewLabel}>Photos</span>
                 <span style={styles.reviewValue}>{photos.length} photo(s)</span>
               </div>
@@ -873,7 +1031,7 @@ export default function ReportPage() {
             {error && <p style={styles.error}>{error}</p>}
 
             <div style={styles.navButtons}>
-              <button style={styles.secondaryButton} onClick={() => { setDamageQuestion(5); setStep("damage"); }}>
+              <button style={styles.secondaryButton} onClick={() => { setDamageQuestion(8); setStep("damage"); }}>
                 ← Back
               </button>
               <button

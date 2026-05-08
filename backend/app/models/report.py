@@ -61,6 +61,10 @@ class Report(Base):
     infrastructure_name: Mapped[str | None] = mapped_column(Text, nullable=True)
     disaster_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
     debris_blocking: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    electricity_condition: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    health_services_condition: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    pressing_needs: Mapped[list[str] | None] = mapped_column(ARRAY(String), nullable=True)
+    pressing_needs_other: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     description_translated: Mapped[str | None] = mapped_column(Text, nullable=True)

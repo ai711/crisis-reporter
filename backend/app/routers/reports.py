@@ -50,6 +50,11 @@ class ReportSubmitRequest(BaseModel):
     infrastructure_name: Optional[str] = None
     disaster_type: Optional[str] = None
     debris_blocking: Optional[str] = None
+    # Appendix questions
+    electricity_condition: Optional[str] = None
+    health_services_condition: Optional[str] = None
+    pressing_needs: Optional[List[str]] = None
+    pressing_needs_other: Optional[str] = None
     app_version: Optional[str] = None
     question_package_version: Optional[int] = None
     translation_version: Optional[int] = None
@@ -83,6 +88,10 @@ class ReportResponse(BaseModel):
     infrastructure_name: Optional[str]
     disaster_type: Optional[str]
     debris_blocking: Optional[str]
+    electricity_condition: Optional[str]
+    health_services_condition: Optional[str]
+    pressing_needs: Optional[List[str]]
+    pressing_needs_other: Optional[str]
     flag_status: str
     platform: str
     language_code: str
@@ -229,6 +238,10 @@ async def submit_report(
         infrastructure_name=request.infrastructure_name,
         disaster_type=request.disaster_type,
         debris_blocking=request.debris_blocking,
+        electricity_condition=request.electricity_condition,
+        health_services_condition=request.health_services_condition,
+        pressing_needs=request.pressing_needs,
+        pressing_needs_other=request.pressing_needs_other,
         description_language=request.language_code,
         flag_status="grey",
         platform=request.platform,
@@ -332,6 +345,10 @@ async def get_report(
         infrastructure_name=report.infrastructure_name,
         disaster_type=report.disaster_type,
         debris_blocking=report.debris_blocking,
+        electricity_condition=report.electricity_condition,
+        health_services_condition=report.health_services_condition,
+        pressing_needs=report.pressing_needs,
+        pressing_needs_other=report.pressing_needs_other,
         flag_status=report.flag_status,
         platform=report.platform,
         language_code=report.language_code,
