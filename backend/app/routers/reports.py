@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from pydantic import BaseModel
@@ -13,6 +13,7 @@ from app.models.crisis import Crisis
 from app.models.flag_event import FlagEvent
 from app.services.dependencies import get_optional_reporter
 from app.services.encryption import encrypt_field
+from app.services.auto_flagging import auto_flag_report
 
 router = APIRouter(prefix="/api/reports", tags=["Reports"])
 
@@ -108,53 +109,13 @@ class ReportResponse(BaseModel):
         from_attributes = True
 
 
-# ── Auto-flagging logic ───────────────────────────────────────────────────────
-
-async def run_auto_flagging(
-    report: Report,
-    reporter: Optional[Reporter],
-    db: AsyncSession,
-) -> str:
-    """Run auto-flagging rules in order. Returns the assigned flag status.
-
-    Rules (in order):
-    1. Blocked device ID → Red
-    2. Blocked IP address → Red
-    3. Duplicate (same reporter + same building + within 24h) → Orange
-    4. All checks pass → Green
-    """
-
-    # Rule 1 — Blocked reporter
-    if reporter and reporter.is_blocked:
-        return "red"
-
-    # Rule 2 — Duplicate detection
-    if report.reporter_id and report.building_id:
-        from datetime import timedelta
-        window_start = datetime.now(timezone.utc) - timedelta(hours=24)
-        result = await db.execute(
-            select(func.count(Report.id)).where(
-                Report.reporter_id == report.reporter_id,
-                Report.building_id == report.building_id,
-                Report.created_at >= window_start,
-                Report.id != report.id,
-                Report.flag_status.in_(["green", "orange"]),
-            )
-        )
-        duplicate_count = result.scalar()
-        if duplicate_count and duplicate_count > 0:
-            return "orange"
-
-    # Rule 3 — All checks pass
-    return "green"
-
-
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 @router.post("", response_model=ReportSubmitResponse)
 async def submit_report(
     request: ReportSubmitRequest,
     http_request: Request,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_reporter: Optional[Reporter] = Depends(get_optional_reporter),
 ):
@@ -260,33 +221,16 @@ async def submit_report(
     )
 
     db.add(report)
-    await db.flush()  # Get report ID without committing
+    await db.flush()  # Obtain report.id before commit
 
-    # Run auto-flagging synchronously for now
-    # (will be moved to ARQ worker in next stage)
-    new_flag = await run_auto_flagging(report, reporter, db)
-
-    # Record initial flag event
-    flag_event = FlagEvent(
+    # Record initial grey flag event — report is pending auto-flagging
+    db.add(FlagEvent(
         report_id=report.id,
         flag_from=None,
         flag_to="grey",
         changed_by="auto",
-        reason="Report received",
-    )
-    db.add(flag_event)
-
-    # Record auto-flagging result if different from grey
-    if new_flag != "grey":
-        report.flag_status = new_flag
-        flag_event2 = FlagEvent(
-            report_id=report.id,
-            flag_from="grey",
-            flag_to=new_flag,
-            changed_by="auto",
-            reason="Auto-flagging rules applied",
-        )
-        db.add(flag_event2)
+        reason="Report received — pending auto-flagging",
+    ))
 
     # Update reporter activity
     if reporter:
@@ -296,14 +240,14 @@ async def submit_report(
     await db.commit()
     await db.refresh(report)
 
-    # Publish SSE event to connected dashboard clients
+    # Notify dashboard that a new report arrived (flag still grey)
     from app.routers.dashboard_sse import publish_event
     await publish_event(
         crisis_id=str(report.crisis_id),
         event_type="report_confirmed",
         data={
             "report_id": str(report.id),
-            "flag_status": report.flag_status,
+            "flag_status": "grey",
             "damage_level": report.damage_level,
             "latitude": report.gps_latitude,
             "longitude": report.gps_longitude,
@@ -311,10 +255,13 @@ async def submit_report(
         },
     )
 
+    # Auto-flagging runs after the response is sent to the reporter
+    background_tasks.add_task(auto_flag_report, str(report.id))
+
     return ReportSubmitResponse(
         report_id=str(report.id),
-        flag_status=report.flag_status,
-        message="Report received successfully",
+        flag_status="grey",
+        message="Report received — verification in progress",
     )
 
 @router.get("/{report_id}", response_model=ReportResponse)

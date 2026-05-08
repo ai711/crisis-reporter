@@ -22,6 +22,7 @@ from app.routers import (
     analytics,
     exports,
     question_packages,
+    flag_rules,
 )
 from app.routers.question_packages import seed_initial_package
 
@@ -74,6 +75,7 @@ app.include_router(dashboard_map.router)
 app.include_router(analytics.router)
 app.include_router(exports.router)
 app.include_router(question_packages.router)
+app.include_router(flag_rules.router)
 
 
 @app.get("/api/health")
