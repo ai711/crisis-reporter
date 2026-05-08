@@ -1,12 +1,31 @@
 import { useState, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
+import maplibregl from "maplibre-gl";
+import "maplibre-gl/dist/maplibre-gl.css";
 import { useAuthStore } from "../stores/authStore";
 import api from "../services/api";
 import { addToQueue } from "../utils/offlineQueue";
 import type { DamageLevel, QueuedPhoto } from "../types";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
+const MAPTILER_KEY = import.meta.env.VITE_MAPTILER_KEY || "";
+const MAP_STYLE = `https://api.maptiler.com/maps/streets/style.json?key=${MAPTILER_KEY}`;
+
+const OSM_STYLE: maplibregl.StyleSpecification = {
+  version: 8,
+  sources: {
+    osm: {
+      type: "raster",
+      tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
+      tileSize: 256,
+      attribution: "© OpenStreetMap contributors",
+    },
+  },
+  layers: [{ id: "osm", type: "raster", source: "osm" }],
+};
+
+const EMPTY_FC = { type: "FeatureCollection" as const, features: [] as never[] };
 
 const DAMAGE_LABELS: Record<string, string> = {
   minimal: "Minimal / No damage",
@@ -41,6 +60,86 @@ const DEBRIS_LABELS: Record<string, string> = {
   partially: "Partially",
 };
 
+// ── Overpass types ─────────────────────────────────────────────────────────────
+
+interface OverpassNode { type: "node"; id: number; lat: number; lon: number; }
+interface OverpassWay { type: "way"; id: number; nodes: number[]; tags?: Record<string, string>; }
+interface OverpassOther { type: "relation" | "area"; id: number; tags?: Record<string, string>; }
+type OverpassElement = OverpassNode | OverpassWay | OverpassOther;
+interface OverpassResponse { elements: OverpassElement[]; }
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
+
+function buildingsGeoJSON(data: OverpassResponse): Parameters<maplibregl.GeoJSONSource["setData"]>[0] {
+  const nodes = new Map<number, [number, number]>();
+  for (const el of data.elements) {
+    if (el.type === "node") nodes.set(el.id, [el.lon, el.lat]);
+  }
+
+  const features: Array<{
+    type: "Feature";
+    properties: { osm_id: number; name: string; building: string };
+    geometry: { type: "Polygon"; coordinates: [number, number][][] };
+  }> = [];
+
+  for (const el of data.elements) {
+    if (el.type !== "way" || !el.tags?.building) continue;
+    const ring: [number, number][] = [];
+    for (const nodeId of el.nodes) {
+      const coord = nodes.get(nodeId);
+      if (coord) ring.push(coord);
+    }
+    if (ring.length < 3) continue;
+    const first = ring[0];
+    const last = ring[ring.length - 1];
+    if (first[0] !== last[0] || first[1] !== last[1]) ring.push([first[0], first[1]]);
+
+    features.push({
+      type: "Feature",
+      properties: {
+        osm_id: el.id,
+        name: (el as OverpassWay).tags?.name || "",
+        building: (el as OverpassWay).tags?.building || "yes",
+      },
+      geometry: { type: "Polygon", coordinates: [ring] },
+    });
+  }
+
+  return { type: "FeatureCollection", features } as Parameters<maplibregl.GeoJSONSource["setData"]>[0];
+}
+
+function computeCentroid(ring: number[][]): [number, number] {
+  const pts =
+    ring[0][0] === ring[ring.length - 1][0] && ring[0][1] === ring[ring.length - 1][1]
+      ? ring.slice(0, -1)
+      : ring;
+  const lng = pts.reduce((s, p) => s + p[0], 0) / pts.length;
+  const lat = pts.reduce((s, p) => s + p[1], 0) / pts.length;
+  return [lng, lat];
+}
+
+async function fetchBuildingsForMap(mapInstance: maplibregl.Map): Promise<void> {
+  const bounds = mapInstance.getBounds();
+  const s = bounds.getSouth().toFixed(6);
+  const w = bounds.getWest().toFixed(6);
+  const n = bounds.getNorth().toFixed(6);
+  const e = bounds.getEast().toFixed(6);
+  const query = `[out:json][timeout:25][bbox:${s},${w},${n},${e}];(way["building"];relation["building"]["type"="multipolygon"];);out body;>;out skel qt;`;
+  try {
+    const res = await fetch("https://overpass-api.de/api/interpreter", {
+      method: "POST",
+      body: new URLSearchParams({ data: query }),
+    });
+    if (!res.ok) return;
+    const data: OverpassResponse = await res.json();
+    (mapInstance.getSource("buildings") as maplibregl.GeoJSONSource | undefined)?.setData(
+      buildingsGeoJSON(data)
+    );
+  } catch { /* silent — buildings are non-critical */ }
+}
+
+// ── Component ──────────────────────────────────────────────────────────────────
+
 export default function ReportPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -55,8 +154,18 @@ export default function ReportPage() {
   const [debrisBlocking, setDebrisBlocking] = useState("");
   const [damageQuestion, setDamageQuestion] = useState(1);
   const [photos, setPhotos] = useState<File[]>([]);
+
+  // Location state
+  const [gpsLatitude, setGpsLatitude] = useState<number | null>(null);
+  const [gpsLongitude, setGpsLongitude] = useState<number | null>(null);
+  const [selectedBuildingId, setSelectedBuildingId] = useState<number | null>(null);
+  const [selectedBuildingTags, setSelectedBuildingTags] = useState<{ name: string; building: string }>({ name: "", building: "" });
   const [locationAddress, setLocationAddress] = useState("");
   const [locationLandmark, setLocationLandmark] = useState("");
+  const [locationBuildingName, setLocationBuildingName] = useState("");
+  const [manualExpanded, setManualExpanded] = useState(false);
+  const [gpsCapturing, setGpsCapturing] = useState(false);
+  const [locationMapZoom, setLocationMapZoom] = useState(2);
 
   // UI state
   const [step, setStep] = useState<"photos" | "location" | "damage" | "review">("photos");
@@ -67,7 +176,11 @@ export default function ReportPage() {
   const [crisisLoading, setCrisisLoading] = useState(true);
   const [crisisError, setCrisisError] = useState(false);
 
+  // Refs
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<maplibregl.Map | null>(null);
+  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     api.get("/api/crises/active")
@@ -82,6 +195,146 @@ export default function ReportPage() {
       .catch(() => setCrisisError(true))
       .finally(() => setCrisisLoading(false));
   }, []);
+
+  // Map initialisation — runs whenever location step becomes active
+  useEffect(() => {
+    if (step !== "location" || !mapContainerRef.current || mapRef.current) return;
+
+    const mapInstance = new maplibregl.Map({
+      container: mapContainerRef.current,
+      style: MAPTILER_KEY ? MAP_STYLE : OSM_STYLE,
+      center: [0, 20],
+      zoom: 2,
+    });
+    mapRef.current = mapInstance;
+
+    mapInstance.addControl(new maplibregl.NavigationControl(), "top-right");
+
+    mapInstance.on("load", () => {
+      // Center on device GPS or world view
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => mapInstance.flyTo({ center: [pos.coords.longitude, pos.coords.latitude], zoom: 15 }),
+          () => {},
+          { timeout: 8000 }
+        );
+      }
+
+      // Sources
+      mapInstance.addSource("buildings", {
+        type: "geojson",
+        data: EMPTY_FC as Parameters<maplibregl.GeoJSONSource["setData"]>[0],
+      });
+      mapInstance.addSource("selected-building", {
+        type: "geojson",
+        data: EMPTY_FC as Parameters<maplibregl.GeoJSONSource["setData"]>[0],
+      });
+
+      // Building layers — default style
+      mapInstance.addLayer({
+        id: "buildings-fill",
+        type: "fill",
+        source: "buildings",
+        paint: { "fill-color": "#CBD5E0", "fill-opacity": 0.5 },
+      });
+      mapInstance.addLayer({
+        id: "buildings-outline",
+        type: "line",
+        source: "buildings",
+        paint: { "line-color": "#718096", "line-width": 0.6 },
+      });
+
+      // Selected building highlight layer
+      mapInstance.addLayer({
+        id: "selected-building-fill",
+        type: "fill",
+        source: "selected-building",
+        paint: { "fill-color": "#0468B1", "fill-opacity": 0.7 },
+      });
+      mapInstance.addLayer({
+        id: "selected-building-outline",
+        type: "line",
+        source: "selected-building",
+        paint: { "line-color": "#0468B1", "line-width": 2 },
+      });
+
+      // Building click — select & compute centroid
+      mapInstance.on("click", "buildings-fill", (e) => {
+        if (!e.features?.length) return;
+        const f = e.features[0];
+        const props = f.properties as { osm_id: number; name: string; building: string };
+        const geom = f.geometry as { type: "Polygon"; coordinates: number[][][] };
+
+        const [centLng, centLat] = computeCentroid(geom.coordinates[0]);
+
+        setSelectedBuildingId(props.osm_id);
+        setSelectedBuildingTags({ name: props.name || "", building: props.building || "yes" });
+        setGpsLatitude(centLat);
+        setGpsLongitude(centLng);
+
+        (mapInstance.getSource("selected-building") as maplibregl.GeoJSONSource | undefined)?.setData({
+          type: "FeatureCollection",
+          features: [{ type: "Feature", properties: props, geometry: geom }],
+        } as Parameters<maplibregl.GeoJSONSource["setData"]>[0]);
+      });
+
+      mapInstance.on("mouseenter", "buildings-fill", () => {
+        mapInstance.getCanvas().style.cursor = "pointer";
+      });
+      mapInstance.on("mouseleave", "buildings-fill", () => {
+        mapInstance.getCanvas().style.cursor = "";
+      });
+
+      // moveend — debounced building fetch + zoom state
+      mapInstance.on("moveend", () => {
+        const zoom = mapInstance.getZoom();
+        setLocationMapZoom(zoom);
+        if (zoom >= 14) {
+          if (debounceTimer.current) clearTimeout(debounceTimer.current);
+          debounceTimer.current = setTimeout(() => fetchBuildingsForMap(mapInstance), 1000);
+        }
+      });
+
+      // Initial fetch if already zoomed in
+      const initialZoom = mapInstance.getZoom();
+      setLocationMapZoom(initialZoom);
+      if (initialZoom >= 14) fetchBuildingsForMap(mapInstance);
+    });
+
+    return () => {
+      if (debounceTimer.current) clearTimeout(debounceTimer.current);
+      mapInstance.remove();
+      mapRef.current = null;
+    };
+  }, [step]);
+
+  const handleGpsCapture = () => {
+    if (!navigator.geolocation) return;
+    setGpsCapturing(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        setGpsLatitude(lat);
+        setGpsLongitude(lng);
+        setSelectedBuildingId(null);
+        setSelectedBuildingTags({ name: "", building: "" });
+        // Clear any building highlight
+        (mapRef.current?.getSource("selected-building") as maplibregl.GeoJSONSource | undefined)
+          ?.setData(EMPTY_FC as Parameters<maplibregl.GeoJSONSource["setData"]>[0]);
+        mapRef.current?.flyTo({ center: [lng, lat], zoom: 16 });
+        setGpsCapturing(false);
+      },
+      () => setGpsCapturing(false),
+      { timeout: 10000 }
+    );
+  };
+
+  const isLocationValid = (): boolean =>
+    (gpsLatitude !== null && gpsLongitude !== null) ||
+    locationAddress.trim().length > 0 ||
+    locationLandmark.trim().length > 0 ||
+    locationBuildingName.trim().length > 0;
 
   const toggleInfraType = (value: string) => {
     setInfrastructureTypes((prev) =>
@@ -120,6 +373,14 @@ export default function ReportPage() {
     setPhotos((prev) => prev.filter((_, i) => i !== index));
   };
 
+  const buildLocationAddress = (): string | null => {
+    if (selectedBuildingId) {
+      const parts = [selectedBuildingTags.name, selectedBuildingTags.building !== "yes" ? selectedBuildingTags.building : ""].filter(Boolean);
+      return parts.length > 0 ? parts.join(" — ") : null;
+    }
+    return locationAddress || null;
+  };
+
   const handleSubmit = async () => {
     if (!damageLevel || infrastructureTypes.length === 0 || !infrastructureName.trim() || !disasterType || !debrisBlocking || photos.length === 0) {
       setError("Please complete all required fields");
@@ -140,13 +401,13 @@ export default function ReportPage() {
       platform: "web" as const,
       submitted_at: new Date().toISOString(),
       location: {
-        gps_latitude: null,
-        gps_longitude: null,
+        gps_latitude: gpsLatitude,
+        gps_longitude: gpsLongitude,
         gps_accuracy_meters: null,
-        gps_available: false,
-        location_address: locationAddress || null,
+        gps_available: gpsLatitude !== null,
+        location_address: buildLocationAddress(),
         location_landmark: locationLandmark || null,
-        location_building_name: null,
+        location_building_name: locationBuildingName || null,
       },
       reporter_id: reporterId || undefined,
       language_code: languageCode,
@@ -154,14 +415,12 @@ export default function ReportPage() {
     };
 
     if (!navigator.onLine) {
-      // Save to offline queue
       const queuedPhotos: QueuedPhoto[] = photos.map((file, index) => ({
         blob: file,
         filename: file.name,
         content_type: file.type,
         display_order: index,
       }));
-
       await addToQueue({ ...reportPayload, was_queued: true }, queuedPhotos);
       setSubmitted(true);
       setSubmitting(false);
@@ -169,17 +428,14 @@ export default function ReportPage() {
     }
 
     try {
-      // Submit report
       const response = await api.post("/api/reports", reportPayload);
       const reportId = response.data.report_id;
 
-      // Upload photos
       for (let i = 0; i < photos.length; i++) {
         const formData = new FormData();
         formData.append("report_id", reportId);
         formData.append("display_order", String(i));
         formData.append("file", photos[i]);
-
         await api.post("/api/photos", formData, {
           headers: { "Content-Type": "multipart/form-data" },
         });
@@ -206,7 +462,7 @@ export default function ReportPage() {
               ? "Your damage report has been submitted to UNDP."
               : "Your report is saved and will sync when you have internet."}
           </p>
-            <button
+          <button
             style={{
               padding: "16px 40px",
               background: "#0468B1",
@@ -242,12 +498,8 @@ export default function ReportPage() {
     return (
       <div style={styles.container}>
         <div style={styles.centeredMessage}>
-          <p style={styles.centeredError}>
-            No active crisis found. Please try again later.
-          </p>
-          <button style={styles.secondaryButton} onClick={() => navigate(-1)}>
-            Go Back
-          </button>
+          <p style={styles.centeredError}>No active crisis found. Please try again later.</p>
+          <button style={styles.secondaryButton} onClick={() => navigate(-1)}>Go Back</button>
         </div>
       </div>
     );
@@ -272,7 +524,144 @@ export default function ReportPage() {
         }} />
       </div>
 
-      <div style={styles.content}>
+      {/* Content — location step needs overflow:hidden so map can flex */}
+      <div style={{ ...styles.content, overflow: step === "location" ? "hidden" : "auto" }}>
+
+        {/* Step 1 — Photos */}
+        {step === "photos" && (
+          <div style={styles.step}>
+            <h2 style={styles.stepTitle}>{t("report.photos")} *</h2>
+            <p style={styles.photoHint}>Add up to 3 photos of the damage. At least 1 is required.</p>
+
+            <div style={styles.photoGrid}>
+              {photos.map((photo, index) => (
+                <div key={index} style={styles.photoThumb}>
+                  <img src={URL.createObjectURL(photo)} style={styles.thumbImg} alt={`Photo ${index + 1}`} />
+                  <button style={styles.removePhotoBtn} onClick={() => handlePhotoRemove(index)}>✕</button>
+                </div>
+              ))}
+              {photos.length < 3 && (
+                <button style={styles.addPhotoBtn} onClick={() => fileInputRef.current?.click()}>
+                  <span style={{ fontSize: 32 }}>📷</span>
+                  <span style={{ fontSize: 13 }}>{t("report.addPhoto")}</span>
+                </button>
+              )}
+            </div>
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/jpeg,image/png"
+              multiple
+              style={{ display: "none" }}
+              onChange={handlePhotoAdd}
+            />
+
+            <button
+              style={{ ...styles.primaryButton, opacity: photos.length > 0 ? 1 : 0.5 }}
+              disabled={photos.length === 0}
+              onClick={() => setStep("location")}
+            >
+              Next →
+            </button>
+          </div>
+        )}
+
+        {/* Step 2 — Location (map-based) */}
+        {step === "location" && (
+          <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+            {/* Map area */}
+            <div style={{ flex: 1, position: "relative", minHeight: 260 }}>
+              <div ref={mapContainerRef} style={{ position: "absolute", inset: 0 }} />
+
+              {/* Zoom hint overlay */}
+              {locationMapZoom < 14 && (
+                <div style={styles.zoomHint}>Zoom in to see and select buildings</div>
+              )}
+            </div>
+
+            {/* Bottom panel — scrollable */}
+            <div style={styles.locationPanel}>
+              <h2 style={{ ...styles.stepTitle, marginBottom: 4 }}>{t("report.location")}</h2>
+
+              {/* Selected building / GPS info card */}
+              {gpsLatitude !== null && gpsLongitude !== null && (
+                <div style={styles.selectionCard}>
+                  <div style={styles.selectionCardTitle}>
+                    {selectedBuildingId ? "Building Selected" : "GPS Location Captured"}
+                  </div>
+                  <div style={styles.selectionCardName}>
+                    {selectedBuildingId
+                      ? (selectedBuildingTags.name || "Unnamed building")
+                      : `${gpsLatitude.toFixed(6)}, ${gpsLongitude.toFixed(6)}`}
+                  </div>
+                  {selectedBuildingId && selectedBuildingTags.building && selectedBuildingTags.building !== "yes" && (
+                    <div style={styles.selectionCardMeta}>Type: {selectedBuildingTags.building}</div>
+                  )}
+                  {selectedBuildingId && (
+                    <div style={styles.selectionCardCoords}>
+                      {gpsLatitude.toFixed(6)}, {gpsLongitude.toFixed(6)}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* GPS capture button */}
+              <button
+                style={styles.gpsButton}
+                onClick={handleGpsCapture}
+                disabled={gpsCapturing}
+              >
+                📍 {gpsCapturing ? "Getting location…" : "Use My GPS Location"}
+              </button>
+
+              {/* Manual entry toggle */}
+              <button
+                style={styles.manualToggle}
+                onClick={() => setManualExpanded(!manualExpanded)}
+              >
+                {manualExpanded ? "Hide manual entry ▲" : "Enter location manually instead ▼"}
+              </button>
+
+              {manualExpanded && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  <input
+                    style={styles.input}
+                    type="text"
+                    placeholder="Address"
+                    value={locationAddress}
+                    onChange={(e) => setLocationAddress(e.target.value)}
+                  />
+                  <input
+                    style={styles.input}
+                    type="text"
+                    placeholder="Landmark (e.g. Near central market)"
+                    value={locationLandmark}
+                    onChange={(e) => setLocationLandmark(e.target.value)}
+                  />
+                  <input
+                    style={styles.input}
+                    type="text"
+                    placeholder="Building Name"
+                    value={locationBuildingName}
+                    onChange={(e) => setLocationBuildingName(e.target.value)}
+                  />
+                </div>
+              )}
+
+              <div style={styles.navButtons}>
+                <button style={styles.secondaryButton} onClick={() => setStep("photos")}>← Back</button>
+                <button
+                  style={{ ...styles.primaryButton, opacity: isLocationValid() ? 1 : 0.5 }}
+                  disabled={!isLocationValid()}
+                  onClick={() => setStep("damage")}
+                >
+                  Next →
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Step 3 — Damage Assessment */}
         {step === "damage" && (
@@ -306,7 +695,7 @@ export default function ReportPage() {
               </>
             )}
 
-            {/* Q2 — Infrastructure type (multi-select) */}
+            {/* Q2 — Infrastructure type */}
             {damageQuestion === 2 && (
               <>
                 <h2 style={styles.stepTitle}>What type of infrastructure is this? *</h2>
@@ -321,11 +710,7 @@ export default function ReportPage() {
                   { value: "public_spaces", label: "Public Spaces / Recreation Infrastructure" },
                   { value: "other", label: "Other (please specify)" },
                 ].map(({ value, label }) => (
-                  <div
-                    key={value}
-                    style={styles.checkRow}
-                    onClick={() => toggleInfraType(value)}
-                  >
+                  <div key={value} style={styles.checkRow} onClick={() => toggleInfraType(value)}>
                     <div style={{
                       ...styles.checkbox,
                       ...(infrastructureTypes.includes(value) ? styles.checkboxSelected : {}),
@@ -417,116 +802,15 @@ export default function ReportPage() {
             )}
 
             <div style={styles.navButtons}>
-              <button style={styles.secondaryButton} onClick={handleDamageBack}>
-                ← Back
-              </button>
+              <button style={styles.secondaryButton} onClick={handleDamageBack}>← Back</button>
               <button
-                style={{
-                  ...styles.primaryButton,
-                  opacity: isDamageQuestionAnswered() ? 1 : 0.5,
-                }}
+                style={{ ...styles.primaryButton, opacity: isDamageQuestionAnswered() ? 1 : 0.5 }}
                 disabled={!isDamageQuestionAnswered()}
                 onClick={handleDamageNext}
               >
                 Next →
               </button>
             </div>
-          </div>
-        )}
-
-        {/* Step 2 — Location */}
-        {step === "location" && (
-          <div style={styles.step}>
-            <h2 style={styles.stepTitle}>{t("report.location")}</h2>
-            <div style={styles.infoBox}>
-              📍 GPS location will be captured automatically when available.
-              You can also describe the location below.
-            </div>
-
-            <label style={styles.label}>{t("report.address")}</label>
-            <input
-              style={styles.input}
-              type="text"
-              placeholder="Street address or area name"
-              value={locationAddress}
-              onChange={(e) => setLocationAddress(e.target.value)}
-            />
-
-            <label style={styles.label}>{t("report.landmark")}</label>
-            <input
-              style={styles.input}
-              type="text"
-              placeholder="e.g. Near the central market"
-              value={locationLandmark}
-              onChange={(e) => setLocationLandmark(e.target.value)}
-            />
-
-            <div style={styles.navButtons}>
-              <button style={styles.secondaryButton} onClick={() => setStep("photos")}>
-                ← Back
-              </button>
-              <button style={styles.primaryButton} onClick={() => setStep("damage")}>
-                Next →
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Step 1 — Photos */}
-        {step === "photos" && (
-          <div style={styles.step}>
-            <h2 style={styles.stepTitle}>{t("report.photos")} *</h2>
-            <p style={styles.photoHint}>
-              Add up to 3 photos of the damage. At least 1 is required.
-            </p>
-
-            <div style={styles.photoGrid}>
-              {photos.map((photo, index) => (
-                <div key={index} style={styles.photoThumb}>
-                  <img
-                    src={URL.createObjectURL(photo)}
-                    style={styles.thumbImg}
-                    alt={`Photo ${index + 1}`}
-                  />
-                  <button
-                    style={styles.removePhotoBtn}
-                    onClick={() => handlePhotoRemove(index)}
-                  >
-                    ✕
-                  </button>
-                </div>
-              ))}
-
-              {photos.length < 3 && (
-                <button
-                  style={styles.addPhotoBtn}
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  <span style={{ fontSize: 32 }}>📷</span>
-                  <span style={{ fontSize: 13 }}>{t("report.addPhoto")}</span>
-                </button>
-              )}
-            </div>
-
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/jpeg,image/png"
-              multiple
-              style={{ display: "none" }}
-              onChange={handlePhotoAdd}
-            />
-
-            <button
-              style={{
-                ...styles.primaryButton,
-                opacity: photos.length > 0 ? 1 : 0.5,
-              }}
-              disabled={photos.length === 0}
-              onClick={() => setStep("location")}
-            >
-              Next →
-            </button>
           </div>
         )}
 
@@ -562,7 +846,17 @@ export default function ReportPage() {
                 <span style={styles.reviewLabel}>Photos</span>
                 <span style={styles.reviewValue}>{photos.length} photo(s)</span>
               </div>
-              {locationAddress && (
+              {gpsLatitude !== null && (
+                <div style={styles.reviewRow}>
+                  <span style={styles.reviewLabel}>Location</span>
+                  <span style={styles.reviewValue}>
+                    {selectedBuildingId
+                      ? (selectedBuildingTags.name || "Building selected")
+                      : `GPS ${gpsLatitude.toFixed(4)}, ${gpsLongitude!.toFixed(4)}`}
+                  </span>
+                </div>
+              )}
+              {!gpsLatitude && locationAddress && (
                 <div style={styles.reviewRow}>
                   <span style={styles.reviewLabel}>Address</span>
                   <span style={styles.reviewValue}>{locationAddress}</span>
@@ -583,11 +877,7 @@ export default function ReportPage() {
                 ← Back
               </button>
               <button
-                style={{
-                  ...styles.primaryButton,
-                  opacity: submitting ? 0.7 : 1,
-                  flex: 1,
-                }}
+                style={{ ...styles.primaryButton, opacity: submitting ? 0.7 : 1, flex: 1 }}
                 onClick={handleSubmit}
                 disabled={submitting}
               >
@@ -614,6 +904,7 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     alignItems: "center",
     gap: 16,
+    flexShrink: 0,
   },
   backBtn: {
     background: "transparent",
@@ -635,6 +926,7 @@ const styles: Record<string, React.CSSProperties> = {
   progressBar: {
     height: 4,
     background: "#e0e0e0",
+    flexShrink: 0,
   },
   progressFill: {
     height: "100%",
@@ -644,6 +936,8 @@ const styles: Record<string, React.CSSProperties> = {
   content: {
     flex: 1,
     overflowY: "auto",
+    display: "flex",
+    flexDirection: "column",
   },
   step: {
     padding: "24px 16px",
@@ -655,6 +949,83 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 17,
     fontWeight: 600,
     color: "#1A2B4A",
+  },
+  locationPanel: {
+    padding: "14px 16px 20px",
+    background: "#fff",
+    borderTop: "1px solid #e0e0e0",
+    display: "flex",
+    flexDirection: "column",
+    gap: 10,
+    overflowY: "auto",
+    maxHeight: 340,
+    flexShrink: 0,
+  },
+  selectionCard: {
+    background: "#E8F4FD",
+    border: "1.5px solid #0468B1",
+    borderRadius: 8,
+    padding: "10px 14px",
+  },
+  selectionCardTitle: {
+    fontSize: 12,
+    fontWeight: 600,
+    color: "#0468B1",
+    textTransform: "uppercase" as const,
+    letterSpacing: "0.04em",
+  },
+  selectionCardName: {
+    fontSize: 15,
+    fontWeight: 600,
+    color: "#1A2B4A",
+    marginTop: 2,
+  },
+  selectionCardMeta: {
+    fontSize: 12,
+    color: "#718096",
+    marginTop: 2,
+  },
+  selectionCardCoords: {
+    fontSize: 11,
+    color: "#718096",
+    marginTop: 4,
+    fontVariantNumeric: "tabular-nums",
+  },
+  gpsButton: {
+    padding: "12px 16px",
+    background: "#1A2B4A",
+    color: "#fff",
+    border: "none",
+    borderRadius: 8,
+    fontSize: 15,
+    fontWeight: 600,
+    cursor: "pointer",
+    width: "100%",
+  },
+  manualToggle: {
+    background: "none",
+    border: "none",
+    color: "#0468B1",
+    fontSize: 13,
+    cursor: "pointer",
+    textAlign: "left" as const,
+    padding: 0,
+    textDecoration: "underline",
+  },
+  zoomHint: {
+    position: "absolute",
+    bottom: 12,
+    left: "50%",
+    transform: "translateX(-50%)",
+    background: "rgba(26,43,74,0.82)",
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: 500,
+    padding: "6px 14px",
+    borderRadius: 20,
+    pointerEvents: "none",
+    whiteSpace: "nowrap",
+    zIndex: 10,
   },
   optionBtn: {
     display: "flex",
@@ -676,39 +1047,6 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 600,
     color: "#1A2B4A",
   },
-  typeGrid: {
-    display: "grid",
-    gridTemplateColumns: "1fr 1fr",
-    gap: 10,
-  },
-  typeBtn: {
-    padding: "12px",
-    borderRadius: 8,
-    border: "1.5px solid",
-    cursor: "pointer",
-    fontSize: 13,
-    fontWeight: 500,
-    transition: "all 0.15s",
-  },
-  textarea: {
-    width: "100%",
-    padding: "12px 16px",
-    borderRadius: 8,
-    border: "1px solid #e0e0e0",
-    fontSize: 15,
-    fontFamily: "inherit",
-    resize: "none",
-    outline: "none",
-    background: "#fff",
-  },
-  infoBox: {
-    background: "#E8F4FD",
-    border: "1px solid #b3d4f0",
-    borderRadius: 8,
-    padding: "12px 16px",
-    fontSize: 14,
-    color: "#0468B1",
-  },
   label: {
     fontSize: 14,
     fontWeight: 500,
@@ -722,6 +1060,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 15,
     outline: "none",
     background: "#fff",
+    boxSizing: "border-box" as const,
   },
   photoHint: {
     fontSize: 14,
@@ -772,7 +1111,7 @@ const styles: Record<string, React.CSSProperties> = {
   navButtons: {
     display: "flex",
     gap: 12,
-    marginTop: 16,
+    marginTop: 8,
   },
   primaryButton: {
     flex: 1,
