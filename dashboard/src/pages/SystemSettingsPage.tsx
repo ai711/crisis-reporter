@@ -72,6 +72,84 @@ interface MapSettings {
   building_source: string;
 }
 
+// ── Translation-management types ───────────────────────────────────────────────
+
+interface StringKeyData {
+  id: string;
+  key: string;
+  category: string;
+  english_text: string;
+  is_active: boolean;
+  translations: Record<string, string>; // language_code → status
+}
+
+interface TranslationItem {
+  id: string;        // empty string when status === "missing"
+  string_key: string;
+  english_text: string;
+  translated_text: string;
+  status: string;    // missing | draft | approved | published
+  translated_by: string;
+  reviewed_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+interface LanguagePkg {
+  id: string;
+  language_code: string;
+  version: string;
+  status: string;
+  published_at: string | null;
+  created_at: string;
+  string_count: number;
+}
+
+type FilterStatus = "all" | "missing" | "draft" | "approved" | "published";
+
+const TRANSLATION_LANGS = [
+  { code: "ar", name: "Arabic" },
+  { code: "zh", name: "Chinese" },
+  { code: "fr", name: "French" },
+  { code: "ru", name: "Russian" },
+  { code: "es", name: "Spanish" },
+];
+
+function statusBadgeStyle(st: string): React.CSSProperties {
+  const map: Record<string, [string, string, string]> = {
+    missing:   ["#f7fafc", "#a0aec0", "#e2e8f0"],
+    draft:     ["#fffbeb", "#d97706", "#fcd34d"],
+    approved:  ["#d4edda", "#155724", "#c3e6cb"],
+    published: ["#EBF5FB", BLUE,      "#bee3f8"],
+  };
+  const [bg, color, border] = map[st] ?? ["#f7fafc", "#718096", "#e2e8f0"];
+  return {
+    display: "inline-block",
+    padding: "3px 10px",
+    borderRadius: 20,
+    fontSize: 11,
+    fontWeight: 700,
+    background: bg,
+    color,
+    border: `1px solid ${border}`,
+    textTransform: "capitalize" as const,
+    whiteSpace: "nowrap" as const,
+  };
+}
+
+function categoryBadgeStyle(): React.CSSProperties {
+  return {
+    display: "inline-block",
+    padding: "2px 8px",
+    borderRadius: 4,
+    fontSize: 11,
+    fontWeight: 600,
+    background: "#f0f4f8",
+    color: "#4a5568",
+    border: "1px solid #e2e8f0",
+  };
+}
+
 // ── Toggle Switch ──────────────────────────────────────────────────────────────
 
 function ToggleSwitch({
@@ -528,96 +606,541 @@ function CountriesTab() {
   );
 }
 
-// ── TAB 2 — Languages ──────────────────────────────────────────────────────────
+// ── TAB 2 — Languages (Translation Management) ────────────────────────────────
 
 function LanguagesTab() {
   const queryClient = useQueryClient();
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [successBanner, setSuccessBanner] = useState("");
+  const { user } = useAuthStore();
+  const isAdmin = user?.role === "admin";
 
-  const { data: extraLanguages = [], isLoading } = useQuery<Language[]>({
-    queryKey: ["languages"],
+  const [selectedLang, setSelectedLang] = useState("ar");
+  const [filterTab, setFilterTab] = useState<FilterStatus>("draft");
+  const [editedTexts, setEditedTexts] = useState<Record<string, string>>({});
+  const [savingKeys, setSavingKeys] = useState<Set<string>>(new Set());
+  const [autoTranslatingLang, setAutoTranslatingLang] = useState<string | null>(null);
+  const [publishingLang, setPublishingLang] = useState<string | null>(null);
+  const [banner, setBanner] = useState<{ msg: string; ok: boolean } | null>(null);
+
+  function showBanner(msg: string, ok = true) {
+    setBanner({ msg, ok });
+    setTimeout(() => setBanner(null), 6000);
+  }
+
+  // ── Queries ──────────────────────────────────────────────────────────────
+
+  const { data: stringKeys = [], isLoading: keysLoading } = useQuery<StringKeyData[]>({
+    queryKey: ["string-keys"],
     queryFn: async () => {
-      const res = await api.get<Language[]>("/api/languages");
+      const res = await api.get<StringKeyData[]>("/api/string-keys");
       return res.data;
     },
   });
 
-  function handleSuccess() {
-    setShowAddModal(false);
-    queryClient.invalidateQueries({ queryKey: ["languages"] });
-    setSuccessBanner("Language added successfully");
-    setTimeout(() => setSuccessBanner(""), 4000);
+  const { data: translations = [], isLoading: transLoading } = useQuery<TranslationItem[]>({
+    queryKey: ["translations", selectedLang],
+    queryFn: async () => {
+      const res = await api.get<TranslationItem[]>(`/api/translations/${selectedLang}`);
+      return res.data;
+    },
+  });
+
+  const { data: packages = [] } = useQuery<LanguagePkg[]>({
+    queryKey: ["language-packages"],
+    queryFn: async () => {
+      const res = await api.get<LanguagePkg[]>("/api/language-packages");
+      return res.data;
+    },
+  });
+
+  // ── Coverage computation ─────────────────────────────────────────────────
+
+  const activeKeys = stringKeys.filter((k) => k.is_active);
+  const totalActive = activeKeys.length;
+
+  const coverageData = TRANSLATION_LANGS.map((lang) => {
+    let translated = 0, approved = 0, published = 0;
+    for (const key of activeKeys) {
+      const st = key.translations[lang.code];
+      if (st) translated++;
+      if (st === "approved" || st === "published") approved++;
+      if (st === "published") published++;
+    }
+    const coveragePct = totalActive > 0 ? Math.round((approved / totalActive) * 100) : 0;
+    return { ...lang, translated, approved, published, total: totalActive, coveragePct };
+  });
+
+  const fullyTranslated = coverageData.filter((l) => l.coveragePct === 100).length;
+
+  // ── Category lookup (from string-keys data) ──────────────────────────────
+
+  const categoryMap = Object.fromEntries(stringKeys.map((k) => [k.key, k.category]));
+
+  // ── Filter counts ────────────────────────────────────────────────────────
+
+  const counts: Record<FilterStatus, number> = {
+    all:       translations.length,
+    missing:   translations.filter((t) => t.status === "missing").length,
+    draft:     translations.filter((t) => t.status === "draft").length,
+    approved:  translations.filter((t) => t.status === "approved").length,
+    published: translations.filter((t) => t.status === "published").length,
+  };
+
+  const filtered =
+    filterTab === "all" ? translations : translations.filter((t) => t.status === filterTab);
+
+  // ── Handlers ────────────────────────────────────────────────────────────
+
+  async function handleAutoTranslate(langCode: string) {
+    setAutoTranslatingLang(langCode);
+    try {
+      const res = await api.post<{ translated: number; skipped: number; failed: number }>(
+        "/api/translations/auto-translate",
+        { language_code: langCode }
+      );
+      queryClient.invalidateQueries({ queryKey: ["translations", langCode] });
+      queryClient.invalidateQueries({ queryKey: ["string-keys"] });
+      const { translated, failed } = res.data;
+      showBanner(
+        `Auto-translated ${translated} strings for ${langCode.toUpperCase()}${failed > 0 ? `, ${failed} failed` : ""}.`
+      );
+    } catch {
+      showBanner("Auto-translate failed — check LibreTranslate configuration.", false);
+    } finally {
+      setAutoTranslatingLang(null);
+    }
   }
+
+  async function handlePublish(langCode: string) {
+    if (
+      !window.confirm(
+        `Publish all approved translations for ${langCode.toUpperCase()}? A new language package version will be created.`
+      )
+    )
+      return;
+    setPublishingLang(langCode);
+    try {
+      await api.post(`/api/language-packages/publish/${langCode}`);
+      queryClient.invalidateQueries({ queryKey: ["translations", langCode] });
+      queryClient.invalidateQueries({ queryKey: ["string-keys"] });
+      queryClient.invalidateQueries({ queryKey: ["language-packages"] });
+      showBanner(`Language package for ${langCode.toUpperCase()} published successfully.`);
+    } catch (err: unknown) {
+      const detail =
+        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ??
+        "Publish failed.";
+      showBanner(detail, false);
+    } finally {
+      setPublishingLang(null);
+    }
+  }
+
+  async function handleSave(t: TranslationItem) {
+    const editedText = editedTexts[t.string_key];
+    if (editedText === undefined) return;
+    const newText = editedText.trim();
+    if (!newText || newText === t.translated_text.trim()) {
+      setEditedTexts((p) => { const n = { ...p }; delete n[t.string_key]; return n; });
+      return;
+    }
+    setSavingKeys((p) => new Set([...p, t.string_key]));
+    try {
+      if (t.id) {
+        await api.patch(`/api/translations/${t.id}`, { translated_text: newText });
+      } else {
+        await api.post("/api/translations", {
+          string_key: t.string_key,
+          language_code: selectedLang,
+          translated_text: newText,
+        });
+      }
+      queryClient.invalidateQueries({ queryKey: ["translations", selectedLang] });
+      queryClient.invalidateQueries({ queryKey: ["string-keys"] });
+    } catch {
+      // Keep edited text so user doesn't lose work
+    } finally {
+      setSavingKeys((p) => { const n = new Set(p); n.delete(t.string_key); return n; });
+      setEditedTexts((p) => { const n = { ...p }; delete n[t.string_key]; return n; });
+    }
+  }
+
+  async function handleApprove(translationId: string) {
+    try {
+      await api.patch(`/api/translations/${translationId}/approve`);
+      queryClient.invalidateQueries({ queryKey: ["translations", selectedLang] });
+      queryClient.invalidateQueries({ queryKey: ["string-keys"] });
+    } catch {
+      showBanner("Failed to approve translation.", false);
+    }
+  }
+
+  // ── Render ───────────────────────────────────────────────────────────────
 
   return (
     <div style={s.tabContent}>
-      <div style={s.tabToolbar}>
-        <div style={{ flex: 1 }}>
-          <p style={{ margin: 0, fontSize: 13, color: "#718096" }}>
-            The 6 UN official languages are always available and cannot be removed.
-          </p>
+      {banner && (
+        <div style={{
+          ...s.successBanner,
+          background: banner.ok ? "#d4edda" : "#fff5f5",
+          color: banner.ok ? "#155724" : "#c53030",
+          border: `1px solid ${banner.ok ? "#c3e6cb" : "#fc8181"}`,
+        }}>
+          {banner.msg}
         </div>
-        <button style={s.addBtn} onClick={() => setShowAddModal(true)}>
-          + Add Language
-        </button>
-      </div>
-
-      {successBanner && <div style={s.successBanner}>{successBanner}</div>}
-
-      <div style={s.tableWrap}>
-        <table style={s.table}>
-          <thead>
-            <tr style={s.thead}>
-              <th style={s.th}>Language</th>
-              <th style={s.th}>Code</th>
-              <th style={s.th}>Availability</th>
-            </tr>
-          </thead>
-          <tbody>
-            {UN_LANGUAGES.map((lang) => (
-              <tr key={lang.code} style={s.tr}>
-                <td style={s.td}>
-                  <span style={{ fontWeight: 600, color: "#1A2B4A" }}>{lang.name}</span>
-                </td>
-                <td style={s.td}>
-                  <span style={s.codeBadge}>{lang.code}</span>
-                </td>
-                <td style={s.td}>
-                  <span style={s.alwaysAvailableBadge}>Always Available</span>
-                </td>
-              </tr>
-            ))}
-            {!isLoading && extraLanguages.map((lang) => (
-              <tr key={lang.code} style={s.tr}>
-                <td style={s.td}>
-                  <span style={{ fontWeight: 600, color: "#1A2B4A" }}>{lang.name}</span>
-                </td>
-                <td style={s.td}>
-                  <span style={s.codeBadge}>{lang.code}</span>
-                </td>
-                <td style={s.td}>
-                  <span style={{
-                    ...s.alwaysAvailableBadge,
-                    background: lang.is_active ? "#d4edda" : "#e2e8f0",
-                    color: lang.is_active ? "#155724" : "#4a5568",
-                    border: `1px solid ${lang.is_active ? "#c3e6cb" : "#cbd5e0"}`,
-                  }}>
-                    {lang.is_active ? "Active" : "Inactive"}
-                  </span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {showAddModal && (
-        <AddLanguageModal
-          onClose={() => setShowAddModal(false)}
-          onSuccess={handleSuccess}
-        />
       )}
+
+      {/* ── Section 1: Coverage Overview ────────────────────────────────── */}
+      <div style={sL.sectionCard}>
+        <div style={sL.sectionHeader}>
+          <span style={sL.sectionTitle}>Translation Coverage</span>
+          {!keysLoading && (
+            <span style={sL.sectionMeta}>
+              Total strings: <strong>{totalActive}</strong>
+              {" · "}
+              Fully translated: <strong>{fullyTranslated} / {TRANSLATION_LANGS.length}</strong>
+            </span>
+          )}
+        </div>
+        <div style={s.tableWrap}>
+          <table style={s.table}>
+            <thead>
+              <tr style={s.thead}>
+                <th style={s.th}>Language</th>
+                <th style={{ ...s.th, textAlign: "right" as const }}>Translated</th>
+                <th style={{ ...s.th, textAlign: "right" as const }}>Approved</th>
+                <th style={{ ...s.th, textAlign: "right" as const }}>Published</th>
+                <th style={{ ...s.th, textAlign: "right" as const }}>Coverage</th>
+                <th style={{ ...s.th, textAlign: "right" as const }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {keysLoading ? (
+                <tr>
+                  <td colSpan={6} style={{ ...s.td, textAlign: "center", color: "#718096" }}>
+                    Loading…
+                  </td>
+                </tr>
+              ) : (
+                coverageData.map((lang) => (
+                  <tr key={lang.code} style={s.tr}>
+                    <td style={s.td}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={s.codeBadge}>{lang.code}</span>
+                        <span style={{ fontWeight: 600, color: "#1A2B4A" }}>{lang.name}</span>
+                      </div>
+                    </td>
+                    <td style={{ ...s.td, textAlign: "right" as const, color: "#4a5568" }}>
+                      {lang.translated} / {lang.total}
+                    </td>
+                    <td style={{ ...s.td, textAlign: "right" as const, color: "#4a5568" }}>
+                      {lang.approved} / {lang.total}
+                    </td>
+                    <td style={{ ...s.td, textAlign: "right" as const, color: "#4a5568" }}>
+                      {lang.published} / {lang.total}
+                    </td>
+                    <td style={{ ...s.td, textAlign: "right" as const }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8 }}>
+                        <div style={sL.progressBar}>
+                          <div
+                            style={{
+                              ...sL.progressFill,
+                              width: `${lang.coveragePct}%`,
+                              background:
+                                lang.coveragePct === 100
+                                  ? "#22c55e"
+                                  : lang.coveragePct >= 50
+                                  ? "#d97706"
+                                  : "#e53e3e",
+                            }}
+                          />
+                        </div>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: "#1A2B4A", minWidth: 36 }}>
+                          {lang.coveragePct}%
+                        </span>
+                      </div>
+                    </td>
+                    <td style={{ ...s.td, textAlign: "right" as const }}>
+                      {isAdmin && (
+                        <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                          <button
+                            style={{
+                              ...sL.actionBtn,
+                              background: "#fffbeb",
+                              color: "#d97706",
+                              border: "1px solid #fcd34d",
+                              opacity: autoTranslatingLang === lang.code ? 0.6 : 1,
+                            }}
+                            onClick={() => handleAutoTranslate(lang.code)}
+                            disabled={autoTranslatingLang === lang.code}
+                          >
+                            {autoTranslatingLang === lang.code ? "Translating…" : "Auto-translate"}
+                          </button>
+                          <button
+                            style={{
+                              ...sL.actionBtn,
+                              background: lang.coveragePct === 100 ? "#d4edda" : "#f0f4f8",
+                              color: lang.coveragePct === 100 ? "#155724" : "#a0aec0",
+                              border: `1px solid ${lang.coveragePct === 100 ? "#c3e6cb" : "#e2e8f0"}`,
+                              opacity: publishingLang === lang.code ? 0.6 : 1,
+                              cursor: lang.coveragePct === 100 ? "pointer" : "default",
+                            }}
+                            onClick={() => lang.coveragePct === 100 && handlePublish(lang.code)}
+                            disabled={lang.coveragePct < 100 || publishingLang === lang.code}
+                          >
+                            {publishingLang === lang.code ? "Publishing…" : "Publish"}
+                          </button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* ── Section 2: Translation Review Queue ─────────────────────────── */}
+      <div style={sL.sectionCard}>
+        <div style={sL.sectionHeader}>
+          <span style={sL.sectionTitle}>Translation Review Queue</span>
+          <select
+            value={selectedLang}
+            onChange={(e) => {
+              setSelectedLang(e.target.value);
+              setFilterTab("draft");
+              setEditedTexts({});
+            }}
+            style={{ ...s.select, minWidth: 180 }}
+          >
+            {TRANSLATION_LANGS.map((l) => (
+              <option key={l.code} value={l.code}>
+                {l.name} ({l.code})
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Filter tabs */}
+        <div style={sL.filterTabBar}>
+          {(["all", "missing", "draft", "approved", "published"] as FilterStatus[]).map((tab) => (
+            <button
+              key={tab}
+              style={{
+                ...sL.filterTabBtn,
+                borderBottom: filterTab === tab ? `2px solid ${BLUE}` : "2px solid transparent",
+                color: filterTab === tab ? BLUE : "#718096",
+                fontWeight: filterTab === tab ? 700 : 500,
+              }}
+              onClick={() => setFilterTab(tab)}
+            >
+              {tab.charAt(0).toUpperCase() + tab.slice(1)}
+              <span
+                style={{
+                  ...sL.countBadge,
+                  background: filterTab === tab ? BLUE : "#e2e8f0",
+                  color: filterTab === tab ? "#fff" : "#4a5568",
+                }}
+              >
+                {counts[tab]}
+              </span>
+            </button>
+          ))}
+        </div>
+
+        <div style={s.tableWrap}>
+          <table style={{ ...s.table, tableLayout: "fixed" as const }}>
+            <colgroup>
+              <col style={{ width: "17%" }} />
+              <col style={{ width: "8%" }} />
+              <col style={{ width: "23%" }} />
+              <col style={{ width: "28%" }} />
+              <col style={{ width: "11%" }} />
+              <col style={{ width: "13%" }} />
+            </colgroup>
+            <thead>
+              <tr style={s.thead}>
+                <th style={s.th}>String Key</th>
+                <th style={s.th}>Category</th>
+                <th style={s.th}>English Text</th>
+                <th style={s.th}>Translated Text</th>
+                <th style={s.th}>Status</th>
+                <th style={{ ...s.th, textAlign: "center" as const }}>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {transLoading ? (
+                <tr>
+                  <td colSpan={6} style={{ ...s.td, textAlign: "center", color: "#718096" }}>
+                    Loading translations…
+                  </td>
+                </tr>
+              ) : filtered.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={6}
+                    style={{ ...s.td, textAlign: "center", color: "#718096", fontStyle: "italic" }}
+                  >
+                    No {filterTab === "all" ? "" : filterTab + " "}translations.
+                  </td>
+                </tr>
+              ) : (
+                filtered.map((t) => {
+                  const isSaving = savingKeys.has(t.string_key);
+                  const currentText = editedTexts[t.string_key] ?? t.translated_text;
+                  const canEdit = t.status !== "published";
+                  const canApprove = !!t.id && t.status === "draft";
+                  return (
+                    <tr key={t.string_key} style={s.tr}>
+                      <td style={s.td}>
+                        <span
+                          style={{
+                            ...s.codeBadge,
+                            fontSize: 11,
+                            wordBreak: "break-all" as const,
+                            display: "inline-block",
+                          }}
+                        >
+                          {t.string_key}
+                        </span>
+                      </td>
+                      <td style={s.td}>
+                        <span style={categoryBadgeStyle()}>
+                          {categoryMap[t.string_key] ?? "—"}
+                        </span>
+                      </td>
+                      <td
+                        style={{
+                          ...s.td,
+                          fontSize: 12,
+                          color: "#4a5568",
+                          lineHeight: 1.4,
+                          wordBreak: "break-word" as const,
+                        }}
+                      >
+                        {t.english_text}
+                      </td>
+                      <td style={s.td}>
+                        {canEdit ? (
+                          <input
+                            type="text"
+                            value={currentText}
+                            placeholder={t.status === "missing" ? "Enter translation…" : ""}
+                            onChange={(e) =>
+                              setEditedTexts((p) => ({
+                                ...p,
+                                [t.string_key]: e.target.value,
+                              }))
+                            }
+                            onBlur={() => handleSave(t)}
+                            disabled={isSaving}
+                            style={{
+                              ...s.input,
+                              width: "100%",
+                              fontSize: 12,
+                              padding: "6px 8px",
+                              opacity: isSaving ? 0.6 : 1,
+                              boxSizing: "border-box" as const,
+                            }}
+                          />
+                        ) : (
+                          <span style={{ fontSize: 12, color: "#4a5568", lineHeight: 1.4 }}>
+                            {t.translated_text}
+                          </span>
+                        )}
+                      </td>
+                      <td style={s.td}>
+                        <span style={statusBadgeStyle(t.status)}>{t.status}</span>
+                      </td>
+                      <td style={{ ...s.td, textAlign: "center" as const }}>
+                        {canApprove && (
+                          <button
+                            style={{
+                              padding: "5px 12px",
+                              background: "#d4edda",
+                              color: "#155724",
+                              border: "1px solid #c3e6cb",
+                              borderRadius: 6,
+                              fontSize: 12,
+                              fontWeight: 600,
+                              cursor: "pointer",
+                            }}
+                            onClick={() => handleApprove(t.id)}
+                          >
+                            Approve
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* ── Section 3: Publish History ───────────────────────────────────── */}
+      <div style={sL.sectionCard}>
+        <div style={sL.sectionHeader}>
+          <span style={sL.sectionTitle}>Publish History</span>
+        </div>
+        {packages.length === 0 ? (
+          <div style={{ padding: "24px 28px", color: "#718096", fontSize: 13, fontStyle: "italic" }}>
+            No language packages published yet.
+          </div>
+        ) : (
+          <div style={s.tableWrap}>
+            <table style={s.table}>
+              <thead>
+                <tr style={s.thead}>
+                  <th style={s.th}>Language</th>
+                  <th style={s.th}>Version</th>
+                  <th style={s.th}>Status</th>
+                  <th style={s.th}>Published</th>
+                  <th style={{ ...s.th, textAlign: "right" as const }}>Strings</th>
+                </tr>
+              </thead>
+              <tbody>
+                {packages.map((pkg) => (
+                  <tr key={pkg.id} style={s.tr}>
+                    <td style={s.td}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={s.codeBadge}>{pkg.language_code}</span>
+                        <span style={{ color: "#4a5568" }}>
+                          {TRANSLATION_LANGS.find((l) => l.code === pkg.language_code)?.name ??
+                            pkg.language_code}
+                        </span>
+                      </div>
+                    </td>
+                    <td style={s.td}>
+                      <span style={{ fontWeight: 600, color: "#1A2B4A" }}>v{pkg.version}</span>
+                    </td>
+                    <td style={s.td}>
+                      <span
+                        style={statusBadgeStyle(pkg.status === "archived" ? "missing" : "published")}
+                      >
+                        {pkg.status}
+                      </span>
+                    </td>
+                    <td style={{ ...s.td, color: "#718096", fontSize: 12 }}>
+                      {pkg.published_at
+                        ? new Date(pkg.published_at).toLocaleDateString("en-GB", {
+                            day: "2-digit",
+                            month: "short",
+                            year: "numeric",
+                          })
+                        : "—"}
+                    </td>
+                    <td style={{ ...s.td, textAlign: "right" as const, fontWeight: 600, color: "#1A2B4A" }}>
+                      {pkg.string_count}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -1393,5 +1916,84 @@ const s: Record<string, React.CSSProperties> = {
     fontWeight: 600,
     color: "#4a5568",
     whiteSpace: "nowrap" as const,
+  },
+};
+
+// ── Languages-tab-specific styles ─────────────────────────────────────────────
+
+const sL: Record<string, React.CSSProperties> = {
+  sectionCard: {
+    background: "#fff",
+    borderRadius: 12,
+    boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+    overflow: "hidden",
+  },
+  sectionHeader: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: "18px 24px",
+    borderBottom: "1px solid #f0f4f8",
+    gap: 16,
+    flexWrap: "wrap" as const,
+  },
+  sectionTitle: {
+    fontSize: 15,
+    fontWeight: 700,
+    color: "#1A2B4A",
+  },
+  sectionMeta: {
+    fontSize: 13,
+    color: "#718096",
+  },
+  progressBar: {
+    width: 80,
+    height: 6,
+    background: "#e2e8f0",
+    borderRadius: 3,
+    overflow: "hidden",
+    flexShrink: 0,
+  },
+  progressFill: {
+    height: "100%",
+    borderRadius: 3,
+    transition: "width 0.3s",
+  },
+  actionBtn: {
+    padding: "5px 12px",
+    borderRadius: 6,
+    fontSize: 12,
+    fontWeight: 600,
+    cursor: "pointer",
+    whiteSpace: "nowrap" as const,
+    border: "1px solid transparent",
+  },
+  filterTabBar: {
+    display: "flex",
+    gap: 0,
+    borderBottom: "1px solid #f0f4f8",
+    padding: "0 8px",
+    background: "#fafafa",
+  },
+  filterTabBtn: {
+    padding: "10px 16px",
+    border: "none",
+    background: "transparent",
+    cursor: "pointer",
+    fontSize: 13,
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    transition: "all 0.15s",
+    whiteSpace: "nowrap" as const,
+  },
+  countBadge: {
+    display: "inline-block",
+    padding: "1px 7px",
+    borderRadius: 10,
+    fontSize: 11,
+    fontWeight: 700,
+    minWidth: 20,
+    textAlign: "center" as const,
   },
 };

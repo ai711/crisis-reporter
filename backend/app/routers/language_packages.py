@@ -87,6 +87,19 @@ class LanguagePackageOut(BaseModel):
         from_attributes = True
 
 
+class LanguagePackageListOut(BaseModel):
+    id: str
+    language_code: str
+    version: str
+    status: str
+    published_at: Optional[datetime]
+    created_at: datetime
+    string_count: int
+
+    class Config:
+        from_attributes = True
+
+
 # ── /api/language-packages ────────────────────────────────────────────────────
 
 @packages_router.get("/active/{language_code}", response_model=dict[str, str])
@@ -213,6 +226,43 @@ async def publish_language_package(
         published_at=pkg.published_at,
         created_at=pkg.created_at,
     )
+
+
+@packages_router.get("", response_model=list[LanguagePackageListOut])
+async def list_language_packages(
+    db: AsyncSession = Depends(get_db),
+    _=Depends(get_current_dashboard_user),
+) -> list[LanguagePackageListOut]:
+    """Return all language packages sorted newest first.
+
+    Includes a string_count derived from current published translations for
+    the package language.  Dashboard auth required.
+    """
+    pkgs_result = await db.execute(
+        select(LanguagePackage).order_by(LanguagePackage.published_at.desc())
+    )
+    pkgs = pkgs_result.scalars().all()
+
+    # Count currently-published translations per language for the string_count column
+    counts_result = await db.execute(
+        select(Translation.language_code, func.count(Translation.id))
+        .where(Translation.status == "published")
+        .group_by(Translation.language_code)
+    )
+    lang_counts: dict[str, int] = {row[0]: row[1] for row in counts_result.all()}
+
+    return [
+        LanguagePackageListOut(
+            id=str(p.id),
+            language_code=p.language_code,
+            version=p.version,
+            status=p.status,
+            published_at=p.published_at,
+            created_at=p.created_at,
+            string_count=lang_counts.get(p.language_code, 0),
+        )
+        for p in pkgs
+    ]
 
 
 # ── /api/string-keys ─────────────────────────────────────────────────────────
@@ -494,6 +544,132 @@ async def approve_translation(
         id=str(translation.id),
         status=translation.status,
         reviewed_by=translation.reviewed_by,
+    )
+
+
+class TranslationUpdate(BaseModel):
+    translated_text: str
+
+
+class TranslationCreate(BaseModel):
+    string_key: str          # the stable machine key string (e.g. "Q1_LABEL")
+    language_code: str
+    translated_text: str
+
+
+@translations_router.patch(
+    "/{translation_id}",
+    response_model=TranslationOut,
+)
+async def update_translation(
+    translation_id: str,
+    body: TranslationUpdate,
+    db: AsyncSession = Depends(get_db),
+    _=Depends(get_current_dashboard_user),
+) -> TranslationOut:
+    """Update the translated text of an existing translation.
+
+    Resets status from approved → draft so the change goes back through review.
+    Published translations cannot be edited — unpublish the package first.
+
+    Dashboard auth required.
+    """
+    result = await db.execute(
+        select(Translation).where(Translation.id == translation_id)
+    )
+    translation = result.scalar_one_or_none()
+    if not translation:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Translation not found")
+    if translation.status == "published":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cannot edit a published translation — unpublish the package first",
+        )
+
+    translation.translated_text = body.translated_text
+    if translation.status == "approved":
+        translation.status = "draft"
+
+    await db.commit()
+
+    sk_result = await db.execute(
+        select(StringKey).where(StringKey.id == translation.string_key_id)
+    )
+    sk = sk_result.scalar_one_or_none()
+
+    return TranslationOut(
+        id=str(translation.id),
+        string_key=sk.key if sk else "",
+        english_text=sk.english_text if sk else "",
+        translated_text=translation.translated_text,
+        status=translation.status,
+        translated_by=translation.translated_by,
+        reviewed_by=translation.reviewed_by,
+        created_at=translation.created_at,
+        updated_at=translation.updated_at,
+    )
+
+
+@translations_router.post(
+    "",
+    response_model=TranslationOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_translation(
+    body: TranslationCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_dashboard_user),
+) -> TranslationOut:
+    """Create a new translation record for a string key / language pair.
+
+    Used when the dashboard user manually types a translation for a key that
+    has no translation record yet.  Stores as status="draft".
+
+    Dashboard auth required.
+    """
+    sk_result = await db.execute(
+        select(StringKey).where(StringKey.key == body.string_key)
+    )
+    sk = sk_result.scalar_one_or_none()
+    if not sk:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"String key '{body.string_key}' not found",
+        )
+
+    existing = await db.execute(
+        select(Translation).where(
+            Translation.string_key_id == sk.id,
+            Translation.language_code == body.language_code,
+        )
+    )
+    if existing.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Translation already exists — use PATCH /api/translations/{id} to update it",
+        )
+
+    t = Translation(
+        string_key_id=sk.id,
+        language_code=body.language_code,
+        translated_text=body.translated_text,
+        status="draft",
+        translated_by=str(current_user.id),
+    )
+    db.add(t)
+    await db.commit()
+    await db.refresh(t)
+
+    return TranslationOut(
+        id=str(t.id),
+        string_key=sk.key,
+        english_text=sk.english_text,
+        translated_text=t.translated_text,
+        status=t.status,
+        translated_by=t.translated_by,
+        reviewed_by=t.reviewed_by,
+        created_at=t.created_at,
+        updated_at=t.updated_at,
     )
 
 
