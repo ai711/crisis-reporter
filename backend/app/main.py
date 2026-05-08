@@ -19,6 +19,8 @@ from app.routers import (
     dashboard_reports,
     dashboard_reporters,
     dashboard_map,
+    analytics,
+    exports,
 )
 
 
@@ -65,6 +67,8 @@ app.include_router(photos.router)
 app.include_router(dashboard_reports.router)
 app.include_router(dashboard_reporters.router)
 app.include_router(dashboard_map.router)
+app.include_router(analytics.router)
+app.include_router(exports.router)
 
 
 @app.get("/api/health")
