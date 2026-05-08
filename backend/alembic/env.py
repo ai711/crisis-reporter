@@ -9,7 +9,7 @@ from alembic import context
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from app.database import Base
-from app.models import report, reporter, crisis, flag_event, dashboard_user, push_token, photo  # noqa: F401
+from app.models import report, reporter, crisis, flag_event, dashboard_user, push_token, photo, question_package  # noqa: F401
 
 config = context.config
 

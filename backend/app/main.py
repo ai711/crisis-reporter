@@ -21,7 +21,9 @@ from app.routers import (
     dashboard_map,
     analytics,
     exports,
+    question_packages,
 )
+from app.routers.question_packages import seed_initial_package
 
 
 @asynccontextmanager
@@ -29,6 +31,8 @@ async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     Path(settings.LOCAL_UPLOAD_PATH).mkdir(parents=True, exist_ok=True)
+    # Seed v1.0.0 question package if none exists
+    await seed_initial_package()
     yield
     await engine.dispose()
 
@@ -69,6 +73,7 @@ app.include_router(dashboard_reporters.router)
 app.include_router(dashboard_map.router)
 app.include_router(analytics.router)
 app.include_router(exports.router)
+app.include_router(question_packages.router)
 
 
 @app.get("/api/health")

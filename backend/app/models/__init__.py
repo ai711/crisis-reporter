@@ -5,6 +5,7 @@ from app.models.photo import Photo
 from app.models.flag_event import FlagEvent
 from app.models.dashboard_user import DashboardUser
 from app.models.push_token import PushToken
+from app.models.question_package import QuestionPackage, Question, QuestionOption
 
 __all__ = [
     "Crisis",
@@ -14,4 +15,7 @@ __all__ = [
     "FlagEvent",
     "DashboardUser",
     "PushToken",
+    "QuestionPackage",
+    "Question",
+    "QuestionOption",
 ]
