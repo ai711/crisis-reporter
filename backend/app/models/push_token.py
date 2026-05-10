@@ -30,6 +30,13 @@ class PushToken(Base):
         String(20), nullable=False
     )  # android, pwa_android, pwa_ios
 
+    # Web Push subscription fields (populated for token_type=web_push)
+    endpoint: Mapped[str | None] = mapped_column(
+        String(2048), nullable=True, unique=True, index=True
+    )
+    p256dh: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    auth_key: Mapped[str | None] = mapped_column(String(256), nullable=True)
+
     # Status
     is_active: Mapped[bool] = mapped_column(
         Boolean, default=True, nullable=False
