@@ -15,6 +15,7 @@ import ReportQueuePage from "./pages/ReportQueuePage";
 import ReviewQueuePage from "./pages/ReviewQueuePage";
 import CrisisManagementPage from "./pages/CrisisManagementPage";
 import UserManagementPage from "./pages/UserManagementPage";
+import ManageRolesPage from "./pages/ManageRolesPage";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -125,6 +126,14 @@ export default function App() {
               element={
                 <ProtectedRoute>
                   <UserManagementPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/roles"
+              element={
+                <ProtectedRoute>
+                  <ManageRolesPage />
                 </ProtectedRoute>
               }
             />

@@ -25,6 +25,7 @@ from app.routers import (
     flag_rules,
     language_packages,
     push_tokens,
+    roles,
 )
 from app.routers.question_packages import seed_initial_package
 from app.routers.language_packages import seed_string_keys
@@ -85,6 +86,7 @@ app.include_router(language_packages.packages_router)
 app.include_router(language_packages.keys_router)
 app.include_router(language_packages.translations_router)
 app.include_router(push_tokens.router)
+app.include_router(roles.router)
 
 
 @app.get("/api/health")
