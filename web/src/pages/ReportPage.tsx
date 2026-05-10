@@ -614,7 +614,7 @@ export default function ReportPage() {
           <p style={styles.successText}>
             {wasQueued
               ? "Your report has been saved and will be sent automatically when you reconnect to the internet."
-              : "Thank you for helping UNDP map crisis damage. Your report has been received and will be reviewed shortly."}
+              : "Thank you for helping UNDP map crisis damage. Your report has been received and is now part of the crisis map."}
           </p>
           <p style={styles.confirmRef}>
             {wasQueued

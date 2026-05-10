@@ -592,7 +592,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
         <Text style={styles.successText}>
           {wasQueued
             ? "Your report has been saved and will be sent automatically when you reconnect to the internet."
-            : "Thank you for helping UNDP map crisis damage. Your report has been received and will be reviewed shortly."}
+            : "Thank you for helping UNDP map crisis damage. Your report has been received and is now part of the crisis map."}
         </Text>
         <View style={styles.confirmRefBadge}>
           <Text style={styles.confirmRefText}>
