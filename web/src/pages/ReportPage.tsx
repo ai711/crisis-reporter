@@ -211,6 +211,9 @@ export default function ReportPage() {
   const [step, setStep] = useState<"photos" | "location" | "damage" | "review">("photos");
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [wasQueued, setWasQueued] = useState(false);
+  const [submittedReportId, setSubmittedReportId] = useState<string | null>(null);
+  const [showDupeWarning, setShowDupeWarning] = useState(false);
   const [error, setError] = useState("");
   const [crisisId, setCrisisId] = useState<string | null>(null);
   const [crisisLoading, setCrisisLoading] = useState(true);
@@ -371,6 +374,64 @@ export default function ReportPage() {
     return fallback;
   };
 
+  const checkDuplicate = (): boolean => {
+    if (!gpsLatitude || !gpsLongitude || !crisisId) return false;
+    try {
+      const raw = localStorage.getItem("cr_submitted_locations");
+      if (!raw) return false;
+      const locs: Array<{ lat: number; lng: number; crisis_id: string; timestamp: number }> = JSON.parse(raw);
+      const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+      return locs.some(
+        (l) =>
+          l.crisis_id === crisisId &&
+          Math.abs(l.lat - gpsLatitude) < 0.001 &&
+          Math.abs(l.lng - gpsLongitude) < 0.001 &&
+          l.timestamp > cutoff
+      );
+    } catch {
+      return false;
+    }
+  };
+
+  const saveSubmittedLocation = () => {
+    if (!gpsLatitude || !gpsLongitude || !crisisId) return;
+    try {
+      const raw = localStorage.getItem("cr_submitted_locations");
+      const locs: Array<{ lat: number; lng: number; crisis_id: string; timestamp: number }> =
+        raw ? JSON.parse(raw) : [];
+      locs.push({ lat: gpsLatitude, lng: gpsLongitude, crisis_id: crisisId, timestamp: Date.now() });
+      localStorage.setItem("cr_submitted_locations", JSON.stringify(locs));
+    } catch { /* non-critical */ }
+  };
+
+  const resetForm = () => {
+    setDamageLevel("");
+    setInfrastructureTypes([]);
+    setInfrastructureOther("");
+    setInfrastructureName("");
+    setDisasterType("");
+    setDebrisBlocking("");
+    setElectricityCondition("");
+    setHealthServicesCondition("");
+    setPressingNeeds([]);
+    setPressingNeedsOther("");
+    setDamageQuestion(1);
+    setPhotos([]);
+    setGpsLatitude(null);
+    setGpsLongitude(null);
+    setSelectedBuildingId(null);
+    setSelectedBuildingTags({ name: "", building: "" });
+    setLocationAddress("");
+    setLocationLandmark("");
+    setLocationBuildingName("");
+    setManualExpanded(false);
+    setSubmitted(false);
+    setWasQueued(false);
+    setSubmittedReportId(null);
+    setError("");
+    setStep("photos");
+  };
+
   const handleGpsCapture = () => {
     if (!navigator.geolocation) return;
     setGpsCapturing(true);
@@ -453,12 +514,8 @@ export default function ReportPage() {
     return locationAddress || null;
   };
 
-  const handleSubmit = async () => {
-    if (!damageLevel || infrastructureTypes.length === 0 || !infrastructureName.trim() || !disasterType || !debrisBlocking || !electricityCondition || !healthServicesCondition || pressingNeeds.length === 0 || photos.length === 0) {
-      setError("Please complete all required fields");
-      return;
-    }
-
+  const doSubmit = async () => {
+    setShowDupeWarning(false);
     setSubmitting(true);
     setError("");
 
@@ -499,6 +556,9 @@ export default function ReportPage() {
         display_order: index,
       }));
       await addToQueue({ ...reportPayload, was_queued: true }, queuedPhotos);
+      saveSubmittedLocation();
+      setWasQueued(true);
+      setSubmittedReportId(null);
       setSubmitted(true);
       setSubmitting(false);
       return;
@@ -518,6 +578,9 @@ export default function ReportPage() {
         });
       }
 
+      saveSubmittedLocation();
+      setSubmittedReportId(reportId as string);
+      setWasQueued(false);
       setSubmitted(true);
     } catch {
       setError(t("report.error"));
@@ -526,35 +589,46 @@ export default function ReportPage() {
     }
   };
 
+  const handleSubmit = async () => {
+    if (!damageLevel || infrastructureTypes.length === 0 || !infrastructureName.trim() || !disasterType || !debrisBlocking || !electricityCondition || !healthServicesCondition || pressingNeeds.length === 0 || photos.length === 0) {
+      setError("Please complete all required fields");
+      return;
+    }
+    if (checkDuplicate()) {
+      setShowDupeWarning(true);
+      return;
+    }
+    await doSubmit();
+  };
+
   if (submitted) {
     return (
       <div style={styles.container}>
         <div style={styles.successContainer}>
-          <div style={styles.successIcon}>✅</div>
+          <div style={styles.confirmCheckCircle}>
+            <span style={{ fontSize: 44, lineHeight: 1 }}>✓</span>
+          </div>
           <h2 style={styles.successTitle}>
-            {navigator.onLine ? t("report.success") : t("report.queued")}
+            {wasQueued ? "Report Saved" : "Report Submitted"}
           </h2>
           <p style={styles.successText}>
-            {navigator.onLine
-              ? "Your damage report has been submitted to UNDP."
-              : "Your report is saved and will sync when you have internet."}
+            {wasQueued
+              ? "Your report has been saved and will be sent automatically when you reconnect to the internet."
+              : "Thank you for helping UNDP map crisis damage. Your report has been received and will be reviewed shortly."}
           </p>
+          <p style={styles.confirmRef}>
+            {wasQueued
+              ? "Your report is queued"
+              : `Report ref: ${(submittedReportId ?? "").slice(0, 8).toUpperCase()}`}
+          </p>
+          <button style={styles.primaryButton} onClick={resetForm}>
+            Submit Another Report
+          </button>
           <button
-            style={{
-              padding: "16px 40px",
-              background: "#0468B1",
-              color: "#fff",
-              border: "none",
-              borderRadius: 8,
-              fontSize: 16,
-              fontWeight: 600,
-              cursor: "pointer",
-              width: "100%",
-              maxWidth: 300,
-            }}
+            style={{ ...styles.secondaryButton, border: "none", color: "#666", fontSize: 15 }}
             onClick={() => navigate("/")}
           >
-            Back to Home
+            Go to Home
           </button>
         </div>
       </div>
@@ -1075,6 +1149,32 @@ export default function ReportPage() {
           </div>
         )}
       </div>
+
+      {/* Duplicate submission warning modal */}
+      {showDupeWarning && (
+        <div style={styles.modalOverlay}>
+          <div style={styles.modalBox}>
+            <h3 style={styles.modalTitle}>Report already submitted for this location</h3>
+            <p style={styles.modalBody}>
+              It looks like you may have already submitted a report for this building. Submitting again could create a duplicate. Are you sure you want to continue?
+            </p>
+            <div style={{ display: "flex", gap: 12, marginTop: 8 }}>
+              <button
+                style={{ ...styles.secondaryButton, flex: 1 }}
+                onClick={() => setShowDupeWarning(false)}
+              >
+                Cancel
+              </button>
+              <button
+                style={{ ...styles.primaryButton, flex: 1 }}
+                onClick={doSubmit}
+              >
+                Submit Anyway
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1440,5 +1540,56 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 16,
     color: "#d32f2f",
     textAlign: "center",
+  },
+  confirmCheckCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: "50%",
+    background: "#22c55e",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    color: "#fff",
+    fontSize: 44,
+    flexShrink: 0,
+  },
+  confirmRef: {
+    fontSize: 14,
+    color: "#666",
+    fontVariantNumeric: "tabular-nums",
+    background: "#f4f6f9",
+    padding: "8px 20px",
+    borderRadius: 20,
+    letterSpacing: "0.05em",
+  },
+  modalOverlay: {
+    position: "fixed",
+    inset: 0,
+    background: "rgba(0,0,0,0.55)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 1000,
+    padding: "0 20px",
+  },
+  modalBox: {
+    background: "#fff",
+    borderRadius: 14,
+    padding: "28px 24px",
+    maxWidth: 380,
+    width: "100%",
+    boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
+  },
+  modalTitle: {
+    fontSize: 17,
+    fontWeight: 700,
+    color: "#1A2B4A",
+    marginBottom: 12,
+  },
+  modalBody: {
+    fontSize: 15,
+    color: "#444",
+    lineHeight: 1.55,
+    marginBottom: 4,
   },
 };

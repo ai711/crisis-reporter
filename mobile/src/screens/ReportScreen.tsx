@@ -2,9 +2,10 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useState, useRef } from "react";
 import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView,
-  TextInput, Alert, ActivityIndicator, Image,
+  TextInput, Alert, ActivityIndicator, Image, Modal,
   type NativeSyntheticEvent,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTranslation } from "react-i18next";
 import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
@@ -220,6 +221,8 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [wasQueued, setWasQueued] = useState(false);
+  const [submittedReportId, setSubmittedReportId] = useState<string | null>(null);
+  const [showDupeWarning, setShowDupeWarning] = useState(false);
   const [crisisId, setCrisisId] = useState<string | null>(null);
   const [crisisLoading, setCrisisLoading] = useState(true);
   const [crisisError, setCrisisError] = useState(false);
@@ -427,6 +430,63 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
 
   // ── Submit ────────────────────────────────────────────────────────────────────
 
+  const checkDuplicate = async (): Promise<boolean> => {
+    if (!gpsCoords || !crisisId) return false;
+    try {
+      const raw = await AsyncStorage.getItem("cr_submitted_locations");
+      if (!raw) return false;
+      const locs: Array<{ lat: number; lng: number; crisis_id: string; timestamp: number }> = JSON.parse(raw);
+      const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+      return locs.some(
+        (l) =>
+          l.crisis_id === crisisId &&
+          Math.abs(l.lat - gpsCoords.lat) < 0.001 &&
+          Math.abs(l.lng - gpsCoords.lng) < 0.001 &&
+          l.timestamp > cutoff
+      );
+    } catch {
+      return false;
+    }
+  };
+
+  const saveSubmittedLocation = async () => {
+    if (!gpsCoords || !crisisId) return;
+    try {
+      const raw = await AsyncStorage.getItem("cr_submitted_locations");
+      const locs: Array<{ lat: number; lng: number; crisis_id: string; timestamp: number }> =
+        raw ? JSON.parse(raw) : [];
+      locs.push({ lat: gpsCoords.lat, lng: gpsCoords.lng, crisis_id: crisisId, timestamp: Date.now() });
+      await AsyncStorage.setItem("cr_submitted_locations", JSON.stringify(locs));
+    } catch { /* non-critical */ }
+  };
+
+  const resetForm = () => {
+    setDamageLevel("");
+    setInfrastructureTypes([]);
+    setInfrastructureOther("");
+    setInfrastructureName("");
+    setDisasterType("");
+    setDebrisBlocking("");
+    setElectricityCondition("");
+    setHealthServicesCondition("");
+    setPressingNeeds([]);
+    setPressingNeedsOther("");
+    setDamageQuestion(1);
+    setPhotos([]);
+    setGpsCoords(null);
+    setSelectedBuilding(null);
+    setBuildingsFC(null);
+    setSelectedBuildingFC(null);
+    setLocationAddress("");
+    setLocationLandmark("");
+    setLocationBuildingName("");
+    setManualExpanded(false);
+    setSubmitted(false);
+    setWasQueued(false);
+    setSubmittedReportId(null);
+    setStep("photos");
+  };
+
   const buildLocationAddress = (): string | null => {
     if (selectedBuilding) {
       const parts = [
@@ -438,12 +498,8 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
     return locationAddress || null;
   };
 
-  const handleSubmit = async () => {
-    if (!damageLevel || infrastructureTypes.length === 0 || !infrastructureName.trim() || !disasterType || !debrisBlocking || !electricityCondition || !healthServicesCondition || pressingNeeds.length === 0 || photos.length === 0) {
-      Alert.alert("Required Fields", "Please complete all required fields.");
-      return;
-    }
-
+  const doSubmit = async () => {
+    setShowDupeWarning(false);
     setSubmitting(true);
 
     const reportPayload = {
@@ -487,9 +543,11 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
         await api.post("/api/photos", formData, { headers: { "Content-Type": "multipart/form-data" } });
       }
 
-      setSubmitted(true);
+      await saveSubmittedLocation();
+      setSubmittedReportId(reportId as string);
       setWasQueued(false);
-    } catch (error: any) {
+      setSubmitted(true);
+    } catch {
       const queuedPhotos: QueuedPhoto[] = photos.map((p, i) => ({
         uri: p.uri,
         filename: p.filename,
@@ -498,11 +556,26 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
       }));
       // ReportSubmitRequest type predates multi-type infra fields — cast to bypass
       await addToQueue({ ...reportPayload, was_queued: true } as any, queuedPhotos);
-      setSubmitted(true);
+      await saveSubmittedLocation();
+      setSubmittedReportId(null);
       setWasQueued(true);
+      setSubmitted(true);
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleSubmit = async () => {
+    if (!damageLevel || infrastructureTypes.length === 0 || !infrastructureName.trim() || !disasterType || !debrisBlocking || !electricityCondition || !healthServicesCondition || pressingNeeds.length === 0 || photos.length === 0) {
+      Alert.alert("Required Fields", "Please complete all required fields.");
+      return;
+    }
+    const isDupe = await checkDuplicate();
+    if (isDupe) {
+      setShowDupeWarning(true);
+      return;
+    }
+    await doSubmit();
   };
 
   // ── Early returns ─────────────────────────────────────────────────────────────
@@ -510,17 +583,29 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
   if (submitted) {
     return (
       <View style={styles.successContainer}>
-        <Text style={styles.successIcon}>✅</Text>
+        <View style={styles.confirmCheckCircle}>
+          <Text style={styles.confirmCheckIcon}>✓</Text>
+        </View>
         <Text style={styles.successTitle}>
-          {wasQueued ? t("report.queued") : t("report.success")}
+          {wasQueued ? "Report Saved" : "Report Submitted"}
         </Text>
         <Text style={styles.successText}>
           {wasQueued
-            ? "Your report is saved and will sync when you reconnect."
-            : "Your damage report has been submitted to UNDP."}
+            ? "Your report has been saved and will be sent automatically when you reconnect to the internet."
+            : "Thank you for helping UNDP map crisis damage. Your report has been received and will be reviewed shortly."}
         </Text>
-        <TouchableOpacity style={styles.homeButton} onPress={() => navigation.navigate("Home")}>
-          <Text style={styles.primaryButtonText}>Back to Home</Text>
+        <View style={styles.confirmRefBadge}>
+          <Text style={styles.confirmRefText}>
+            {wasQueued
+              ? "Your report is queued"
+              : `Report ref: ${(submittedReportId ?? "").slice(0, 8).toUpperCase()}`}
+          </Text>
+        </View>
+        <TouchableOpacity style={styles.homeButton} onPress={resetForm}>
+          <Text style={styles.primaryButtonText}>Submit Another Report</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => navigation.navigate("Home")}>
+          <Text style={styles.goHomeText}>Go to Home</Text>
         </TouchableOpacity>
       </View>
     );
@@ -712,6 +797,29 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
           </ScrollView>
         </View>
       )}
+
+      {/* Duplicate submission warning modal */}
+      <Modal visible={showDupeWarning} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBox}>
+            <Text style={styles.modalTitle}>Report already submitted for this location</Text>
+            <Text style={styles.modalBody}>
+              It looks like you may have already submitted a report for this building. Submitting again could create a duplicate. Are you sure you want to continue?
+            </Text>
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={styles.secondaryButton}
+                onPress={() => setShowDupeWarning(false)}
+              >
+                <Text style={styles.secondaryButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.primaryButton, { flex: 1 }]} onPress={doSubmit}>
+                <Text style={styles.primaryButtonText}>Submit Anyway</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* All other steps inside ScrollView */}
       {step !== "location" && (
@@ -1268,10 +1376,47 @@ const styles = StyleSheet.create({
     width: "100%",
     maxWidth: 300,
   },
-  successIcon: { fontSize: 72 },
   successTitle: { fontSize: 22, fontWeight: "700", color: "#1A2B4A", textAlign: "center" },
   successText: { fontSize: 16, color: "#666", textAlign: "center", lineHeight: 24 },
   errorText: { fontSize: 16, color: "#d32f2f", textAlign: "center", lineHeight: 24 },
+  confirmCheckCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: "#22c55e",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  confirmCheckIcon: { fontSize: 44, color: "#fff", lineHeight: 52 },
+  confirmRefBadge: {
+    backgroundColor: "#f4f6f9",
+    borderRadius: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+  },
+  confirmRefText: { fontSize: 14, color: "#666", letterSpacing: 0.5 },
+  goHomeText: { fontSize: 15, color: "#666", textDecorationLine: "underline" },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 20,
+  },
+  modalBox: {
+    backgroundColor: "#fff",
+    borderRadius: 14,
+    padding: 24,
+    width: "100%",
+    maxWidth: 380,
+    shadowColor: "#000",
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  modalTitle: { fontSize: 17, fontWeight: "700", color: "#1A2B4A", marginBottom: 12 },
+  modalBody: { fontSize: 15, color: "#444", lineHeight: 22, marginBottom: 20 },
+  modalButtons: { flexDirection: "row", gap: 12 },
   questionProgress: { fontSize: 13, fontWeight: "600", color: "#0468B1", textAlign: "center" },
 
   // Unused legacy keys kept to avoid StyleSheet warnings if referenced elsewhere
