@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     R2_ACCESS_KEY_ID: str = ""
     R2_SECRET_ACCESS_KEY: str = ""
     R2_BUCKET_NAME: str = ""
+    R2_PUBLIC_URL: str = ""  # e.g. https://pub-xxxx.r2.dev or custom domain
 
     # Maptiler
     MAPTILER_API_KEY: str = ""

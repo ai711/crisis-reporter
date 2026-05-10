@@ -89,8 +89,9 @@ class CloudflareR2Storage(StorageService):
         return storage_path
 
     def get_url(self, storage_path: str) -> str:
-        # R2 public URL — zero egress cost
-        return f"https://{self.bucket_name}.r2.cloudflarestorage.com/{storage_path}"
+        # Public R2 URL — set R2_PUBLIC_URL to your bucket's public domain or r2.dev subdomain
+        base = settings.R2_PUBLIC_URL.rstrip("/")
+        return f"{base}/{storage_path}"
 
     async def delete(self, storage_path: str) -> bool:
         try:
