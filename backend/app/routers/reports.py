@@ -57,7 +57,7 @@ class ReportSubmitRequest(BaseModel):
     pressing_needs: Optional[List[str]] = None
     pressing_needs_other: Optional[str] = None
     app_version: Optional[str] = None
-    question_package_version: Optional[int] = None
+    question_package_version: Optional[str] = None
     translation_version: Optional[int] = None
 
     # MCC data — Android only

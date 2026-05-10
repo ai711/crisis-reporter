@@ -102,6 +102,12 @@ async function fetchBuildingsForBounds(
   }
 }
 
+// ── Question package types ────────────────────────────────────────────────────
+
+interface ApiOption { option_text: string; option_value: string; }
+interface ApiQuestion { question_text: string; order_index: number; options: ApiOption[]; }
+interface ActivePackage { version: string; questions: ApiQuestion[]; }
+
 // ── Label maps ────────────────────────────────────────────────────────────────
 
 const DAMAGE_LABELS: Record<string, string> = {
@@ -217,20 +223,31 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
   const [crisisId, setCrisisId] = useState<string | null>(null);
   const [crisisLoading, setCrisisLoading] = useState(true);
   const [crisisError, setCrisisError] = useState(false);
+  const [questionPackage, setQuestionPackage] = useState<ActivePackage | null>(null);
 
   // Map refs
   const cameraRef = useRef<CameraRef | null>(null);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    api.get("/api/crises/active")
-      .then((res) => {
-        const list = Array.isArray(res.data) ? res.data : (res.data?.items ?? []);
+    const init = async () => {
+      try {
+        const crisisRes = await api.get("/api/crises/active");
+        const list = Array.isArray(crisisRes.data) ? crisisRes.data : (crisisRes.data?.items ?? []);
         if (list.length > 0) setCrisisId(list[0].id);
         else setCrisisError(true);
-      })
-      .catch(() => setCrisisError(true))
-      .finally(() => setCrisisLoading(false));
+      } catch {
+        setCrisisError(true);
+      }
+      try {
+        const pkgRes = await api.get<ActivePackage>("/api/question-packages/active");
+        setQuestionPackage(pkgRes.data);
+      } catch {
+        // silent — hardcoded question text and options remain active as fallback
+      }
+      setCrisisLoading(false);
+    };
+    init();
   }, []);
 
   // Cleanup debounce timer on unmount
@@ -239,6 +256,23 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
       if (debounceTimer.current) clearTimeout(debounceTimer.current);
     };
   }, []);
+
+  // ── Question package helpers ──────────────────────────────────────────────────
+
+  const qTitle = (n: number, fallback: string): string => {
+    const found = questionPackage?.questions.find((q) => q.order_index === n);
+    return found ? found.question_text : fallback;
+  };
+
+  const qOptions = (
+    n: number,
+    fallback: Array<{ value: string; label: string }>
+  ): Array<{ value: string; label: string }> => {
+    const found = questionPackage?.questions.find((q) => q.order_index === n);
+    if (found?.options?.length)
+      return found.options.map((o) => ({ value: o.option_value, label: o.option_text }));
+    return fallback;
+  };
 
   // ── Map handlers ─────────────────────────────────────────────────────────────
 
@@ -437,6 +471,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
       },
       reporter_id: reporterId || undefined,
       language_code: languageCode,
+      question_package_version: questionPackage?.version ?? null,
       was_queued: false,
     };
 
@@ -732,16 +767,16 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
 
               {damageQuestion === 1 && (
                 <>
-                  <Text style={styles.stepTitle}>How bad is the damage? *</Text>
-                  {([
-                    { value: "minimal" as DamageLevel, label: "Minimal / No damage" },
-                    { value: "partial" as DamageLevel, label: "Partially damaged" },
-                    { value: "complete" as DamageLevel, label: "Completely damaged" },
+                  <Text style={styles.stepTitle}>{qTitle(1, "How bad is the damage? *")}</Text>
+                  {qOptions(1, [
+                    { value: "minimal", label: "Minimal / No damage" },
+                    { value: "partial", label: "Partially damaged" },
+                    { value: "complete", label: "Completely damaged" },
                   ]).map(({ value, label }) => (
                     <TouchableOpacity
                       key={value}
                       style={[styles.optionBtn, damageLevel === value && styles.optionBtnSelected]}
-                      onPress={() => setDamageLevel(value)}
+                      onPress={() => setDamageLevel(value as DamageLevel)}
                     >
                       <Text style={styles.optionIcon}>
                         {value === "minimal" ? "🟢" : value === "partial" ? "🟠" : "🔴"}
@@ -754,9 +789,9 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
 
               {damageQuestion === 2 && (
                 <>
-                  <Text style={styles.stepTitle}>What type of infrastructure is this? *</Text>
+                  <Text style={styles.stepTitle}>{qTitle(2, "What type of infrastructure is this? *")}</Text>
                   <Text style={styles.hintText}>Select all that apply.</Text>
-                  {[
+                  {qOptions(2, [
                     { value: "residential", label: "Residential Infrastructure" },
                     { value: "commercial", label: "Commercial Infrastructure" },
                     { value: "government", label: "Government Building" },
@@ -765,7 +800,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                     { value: "community", label: "Community Infrastructure" },
                     { value: "public_spaces", label: "Public Spaces / Recreation Infrastructure" },
                     { value: "other", label: "Other (please specify)" },
-                  ].map(({ value, label }) => (
+                  ]).map(({ value, label }) => (
                     <TouchableOpacity key={value} style={styles.checkRow} onPress={() => toggleInfraType(value)}>
                       <View style={[styles.checkbox, infrastructureTypes.includes(value) && styles.checkboxSelected]}>
                         {infrastructureTypes.includes(value) && <Text style={styles.checkmark}>✓</Text>}
@@ -787,7 +822,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
 
               {damageQuestion === 3 && (
                 <>
-                  <Text style={styles.stepTitle}>What is the name of this infrastructure? *</Text>
+                  <Text style={styles.stepTitle}>{qTitle(3, "What is the name of this infrastructure? *")}</Text>
                   <TextInput
                     style={styles.input}
                     placeholder="e.g. Main Street Bridge"
@@ -801,8 +836,8 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
 
               {damageQuestion === 4 && (
                 <>
-                  <Text style={styles.stepTitle}>What type of disaster caused this damage? *</Text>
-                  {[
+                  <Text style={styles.stepTitle}>{qTitle(4, "What type of disaster caused this damage? *")}</Text>
+                  {qOptions(4, [
                     { value: "earthquake", label: "Earthquake" },
                     { value: "flood", label: "Flood" },
                     { value: "cyclone", label: "Cyclone / Typhoon / Hurricane" },
@@ -810,7 +845,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                     { value: "fire", label: "Fire" },
                     { value: "conflict", label: "Conflict / War" },
                     { value: "other", label: "Other" },
-                  ].map(({ value, label }) => (
+                  ]).map(({ value, label }) => (
                     <TouchableOpacity
                       key={value}
                       style={[styles.optionBtn, disasterType === value && styles.optionBtnSelected]}
@@ -824,12 +859,12 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
 
               {damageQuestion === 5 && (
                 <>
-                  <Text style={styles.stepTitle}>Is there debris blocking access? *</Text>
-                  {[
+                  <Text style={styles.stepTitle}>{qTitle(5, "Is there debris blocking access? *")}</Text>
+                  {qOptions(5, [
                     { value: "yes", label: "Yes" },
                     { value: "no", label: "No" },
                     { value: "partially", label: "Partially" },
-                  ].map(({ value, label }) => (
+                  ]).map(({ value, label }) => (
                     <TouchableOpacity
                       key={value}
                       style={[styles.optionBtn, debrisBlocking === value && styles.optionBtnSelected]}
@@ -843,15 +878,15 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
 
               {damageQuestion === 6 && (
                 <>
-                  <Text style={styles.stepTitle}>What is the current condition of electricity infrastructure in your community following the crisis? *</Text>
-                  {[
+                  <Text style={styles.stepTitle}>{qTitle(6, "What is the current condition of electricity infrastructure in your community following the crisis? *")}</Text>
+                  {qOptions(6, [
                     { value: "no_damage", label: "No damage observed" },
                     { value: "minor", label: "Minor damage — service disruptions but quickly repairable" },
                     { value: "moderate", label: "Moderate damage — partial outages requiring repairs" },
                     { value: "severe", label: "Severe damage — major infrastructure damaged, prolonged outages" },
                     { value: "destroyed", label: "Completely destroyed — no electricity infrastructure functioning" },
                     { value: "unknown", label: "Unknown / cannot be assessed" },
-                  ].map(({ value, label }) => (
+                  ]).map(({ value, label }) => (
                     <TouchableOpacity
                       key={value}
                       style={[styles.optionBtn, electricityCondition === value && styles.optionBtnSelected]}
@@ -865,14 +900,14 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
 
               {damageQuestion === 7 && (
                 <>
-                  <Text style={styles.stepTitle}>How would you rate the overall functioning of health services in your community since the event? *</Text>
-                  {[
+                  <Text style={styles.stepTitle}>{qTitle(7, "How would you rate the overall functioning of health services in your community since the event? *")}</Text>
+                  {qOptions(7, [
                     { value: "fully_functional", label: "Fully functional" },
                     { value: "partially_functional", label: "Partially functional" },
                     { value: "largely_disrupted", label: "Largely disrupted" },
                     { value: "not_functioning", label: "Not functioning at all" },
                     { value: "unknown", label: "Unknown" },
-                  ].map(({ value, label }) => (
+                  ]).map(({ value, label }) => (
                     <TouchableOpacity
                       key={value}
                       style={[styles.optionBtn, healthServicesCondition === value && styles.optionBtnSelected]}
@@ -886,9 +921,9 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
 
               {damageQuestion === 8 && (
                 <>
-                  <Text style={styles.stepTitle}>What are the most pressing needs in your community right now? *</Text>
+                  <Text style={styles.stepTitle}>{qTitle(8, "What are the most pressing needs in your community right now? *")}</Text>
                   <Text style={styles.hintText}>Select all that apply. At least one required.</Text>
-                  {[
+                  {qOptions(8, [
                     { value: "food_water", label: "Food assistance and safe drinking water" },
                     { value: "cash_financial", label: "Cash or financial assistance" },
                     { value: "healthcare", label: "Access to healthcare and essential medicines" },
@@ -899,7 +934,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                     { value: "protection", label: "Protection services and psychosocial support" },
                     { value: "local_support", label: "Support from local authorities and community organizations" },
                     { value: "other", label: "Other — please specify" },
-                  ].map(({ value, label }) => (
+                  ]).map(({ value, label }) => (
                     <TouchableOpacity key={value} style={styles.checkRow} onPress={() => togglePressingNeed(value)}>
                       <View style={[styles.checkbox, pressingNeeds.includes(value) && styles.checkboxSelected]}>
                         {pressingNeeds.includes(value) && <Text style={styles.checkmark}>✓</Text>}

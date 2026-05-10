@@ -90,6 +90,12 @@ const PRESSING_NEEDS_LABELS: Record<string, string> = {
   other: "Other — please specify",
 };
 
+// ── Question package types ─────────────────────────────────────────────────────
+
+interface ApiOption { option_text: string; option_value: string; }
+interface ApiQuestion { question_text: string; order_index: number; options: ApiOption[]; }
+interface ActivePackage { version: string; questions: ApiQuestion[]; }
+
 // ── Overpass types ─────────────────────────────────────────────────────────────
 
 interface OverpassNode { type: "node"; id: number; lat: number; lon: number; }
@@ -209,6 +215,7 @@ export default function ReportPage() {
   const [crisisId, setCrisisId] = useState<string | null>(null);
   const [crisisLoading, setCrisisLoading] = useState(true);
   const [crisisError, setCrisisError] = useState(false);
+  const [questionPackage, setQuestionPackage] = useState<ActivePackage | null>(null);
 
   // Refs
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -217,17 +224,24 @@ export default function ReportPage() {
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    api.get("/api/crises/active")
-      .then((res) => {
-        const list = Array.isArray(res.data) ? res.data : (res.data?.items ?? []);
-        if (list.length > 0) {
-          setCrisisId(list[0].id);
-        } else {
-          setCrisisError(true);
-        }
-      })
-      .catch(() => setCrisisError(true))
-      .finally(() => setCrisisLoading(false));
+    const init = async () => {
+      try {
+        const crisisRes = await api.get("/api/crises/active");
+        const list = Array.isArray(crisisRes.data) ? crisisRes.data : (crisisRes.data?.items ?? []);
+        if (list.length > 0) setCrisisId(list[0].id);
+        else setCrisisError(true);
+      } catch {
+        setCrisisError(true);
+      }
+      try {
+        const pkgRes = await api.get<ActivePackage>("/api/question-packages/active");
+        setQuestionPackage(pkgRes.data);
+      } catch {
+        // silent — hardcoded question text and options remain active as fallback
+      }
+      setCrisisLoading(false);
+    };
+    init();
   }, []);
 
   // Map initialisation — runs whenever location step becomes active
@@ -341,6 +355,21 @@ export default function ReportPage() {
       mapRef.current = null;
     };
   }, [step]);
+
+  const qTitle = (n: number, fallback: string): string => {
+    const found = questionPackage?.questions.find((q) => q.order_index === n);
+    return found ? found.question_text : fallback;
+  };
+
+  const qOptions = (
+    n: number,
+    fallback: Array<{ value: string; label: string }>
+  ): Array<{ value: string; label: string }> => {
+    const found = questionPackage?.questions.find((q) => q.order_index === n);
+    if (found?.options?.length)
+      return found.options.map((o) => ({ value: o.option_value, label: o.option_text }));
+    return fallback;
+  };
 
   const handleGpsCapture = () => {
     if (!navigator.geolocation) return;
@@ -458,6 +487,7 @@ export default function ReportPage() {
       },
       reporter_id: reporterId || undefined,
       language_code: languageCode,
+      question_package_version: questionPackage?.version ?? null,
       was_queued: false,
     };
 
@@ -718,11 +748,11 @@ export default function ReportPage() {
             {/* Q1 — Damage level */}
             {damageQuestion === 1 && (
               <>
-                <h2 style={styles.stepTitle}>How bad is the damage? *</h2>
-                {([
-                  { value: "minimal" as DamageLevel, label: "Minimal / No damage" },
-                  { value: "partial" as DamageLevel, label: "Partially damaged" },
-                  { value: "complete" as DamageLevel, label: "Completely damaged" },
+                <h2 style={styles.stepTitle}>{qTitle(1, "How bad is the damage? *")}</h2>
+                {qOptions(1, [
+                  { value: "minimal", label: "Minimal / No damage" },
+                  { value: "partial", label: "Partially damaged" },
+                  { value: "complete", label: "Completely damaged" },
                 ]).map(({ value, label }) => (
                   <button
                     key={value}
@@ -731,7 +761,7 @@ export default function ReportPage() {
                       borderColor: damageLevel === value ? "#0468B1" : "#e0e0e0",
                       background: damageLevel === value ? "#E8F4FD" : "#fff",
                     }}
-                    onClick={() => setDamageLevel(value)}
+                    onClick={() => setDamageLevel(value as DamageLevel)}
                   >
                     <span style={styles.optionIcon}>
                       {value === "minimal" ? "🟢" : value === "partial" ? "🟠" : "🔴"}
@@ -745,9 +775,9 @@ export default function ReportPage() {
             {/* Q2 — Infrastructure type */}
             {damageQuestion === 2 && (
               <>
-                <h2 style={styles.stepTitle}>What type of infrastructure is this? *</h2>
+                <h2 style={styles.stepTitle}>{qTitle(2, "What type of infrastructure is this? *")}</h2>
                 <p style={styles.photoHint}>Select all that apply.</p>
-                {[
+                {qOptions(2, [
                   { value: "residential", label: "Residential Infrastructure" },
                   { value: "commercial", label: "Commercial Infrastructure" },
                   { value: "government", label: "Government Building" },
@@ -756,7 +786,7 @@ export default function ReportPage() {
                   { value: "community", label: "Community Infrastructure" },
                   { value: "public_spaces", label: "Public Spaces / Recreation Infrastructure" },
                   { value: "other", label: "Other (please specify)" },
-                ].map(({ value, label }) => (
+                ]).map(({ value, label }) => (
                   <div key={value} style={styles.checkRow} onClick={() => toggleInfraType(value)}>
                     <div style={{
                       ...styles.checkbox,
@@ -783,7 +813,7 @@ export default function ReportPage() {
             {/* Q3 — Infrastructure name */}
             {damageQuestion === 3 && (
               <>
-                <h2 style={styles.stepTitle}>What is the name of this infrastructure? *</h2>
+                <h2 style={styles.stepTitle}>{qTitle(3, "What is the name of this infrastructure? *")}</h2>
                 <input
                   style={styles.input}
                   type="text"
@@ -799,8 +829,8 @@ export default function ReportPage() {
             {/* Q4 — Disaster type */}
             {damageQuestion === 4 && (
               <>
-                <h2 style={styles.stepTitle}>What type of disaster caused this damage? *</h2>
-                {[
+                <h2 style={styles.stepTitle}>{qTitle(4, "What type of disaster caused this damage? *")}</h2>
+                {qOptions(4, [
                   { value: "earthquake", label: "Earthquake" },
                   { value: "flood", label: "Flood" },
                   { value: "cyclone", label: "Cyclone / Typhoon / Hurricane" },
@@ -808,7 +838,7 @@ export default function ReportPage() {
                   { value: "fire", label: "Fire" },
                   { value: "conflict", label: "Conflict / War" },
                   { value: "other", label: "Other" },
-                ].map(({ value, label }) => (
+                ]).map(({ value, label }) => (
                   <button
                     key={value}
                     style={{
@@ -827,12 +857,12 @@ export default function ReportPage() {
             {/* Q5 — Debris blocking */}
             {damageQuestion === 5 && (
               <>
-                <h2 style={styles.stepTitle}>Is there debris blocking access? *</h2>
-                {[
+                <h2 style={styles.stepTitle}>{qTitle(5, "Is there debris blocking access? *")}</h2>
+                {qOptions(5, [
                   { value: "yes", label: "Yes" },
                   { value: "no", label: "No" },
                   { value: "partially", label: "Partially" },
-                ].map(({ value, label }) => (
+                ]).map(({ value, label }) => (
                   <button
                     key={value}
                     style={{
@@ -851,15 +881,15 @@ export default function ReportPage() {
             {/* Q6 — Electricity condition */}
             {damageQuestion === 6 && (
               <>
-                <h2 style={styles.stepTitle}>What is the current condition of electricity infrastructure in your community following the crisis? *</h2>
-                {[
+                <h2 style={styles.stepTitle}>{qTitle(6, "What is the current condition of electricity infrastructure in your community following the crisis? *")}</h2>
+                {qOptions(6, [
                   { value: "no_damage", label: "No damage observed" },
                   { value: "minor", label: "Minor damage — service disruptions but quickly repairable" },
                   { value: "moderate", label: "Moderate damage — partial outages requiring repairs" },
                   { value: "severe", label: "Severe damage — major infrastructure damaged, prolonged outages" },
                   { value: "destroyed", label: "Completely destroyed — no electricity infrastructure functioning" },
                   { value: "unknown", label: "Unknown / cannot be assessed" },
-                ].map(({ value, label }) => (
+                ]).map(({ value, label }) => (
                   <button
                     key={value}
                     style={{
@@ -878,14 +908,14 @@ export default function ReportPage() {
             {/* Q7 — Health services */}
             {damageQuestion === 7 && (
               <>
-                <h2 style={styles.stepTitle}>How would you rate the overall functioning of health services in your community since the event? *</h2>
-                {[
+                <h2 style={styles.stepTitle}>{qTitle(7, "How would you rate the overall functioning of health services in your community since the event? *")}</h2>
+                {qOptions(7, [
                   { value: "fully_functional", label: "Fully functional" },
                   { value: "partially_functional", label: "Partially functional" },
                   { value: "largely_disrupted", label: "Largely disrupted" },
                   { value: "not_functioning", label: "Not functioning at all" },
                   { value: "unknown", label: "Unknown" },
-                ].map(({ value, label }) => (
+                ]).map(({ value, label }) => (
                   <button
                     key={value}
                     style={{
@@ -904,9 +934,9 @@ export default function ReportPage() {
             {/* Q8 — Pressing needs (multi-select) */}
             {damageQuestion === 8 && (
               <>
-                <h2 style={styles.stepTitle}>What are the most pressing needs in your community right now? *</h2>
+                <h2 style={styles.stepTitle}>{qTitle(8, "What are the most pressing needs in your community right now? *")}</h2>
                 <p style={styles.photoHint}>Select all that apply. At least one required.</p>
-                {[
+                {qOptions(8, [
                   { value: "food_water", label: "Food assistance and safe drinking water" },
                   { value: "cash_financial", label: "Cash or financial assistance" },
                   { value: "healthcare", label: "Access to healthcare and essential medicines" },
@@ -917,7 +947,7 @@ export default function ReportPage() {
                   { value: "protection", label: "Protection services and psychosocial support" },
                   { value: "local_support", label: "Support from local authorities and community organizations" },
                   { value: "other", label: "Other — please specify" },
-                ].map(({ value, label }) => (
+                ]).map(({ value, label }) => (
                   <div key={value} style={styles.checkRow} onClick={() => togglePressingNeed(value)}>
                     <div style={{
                       ...styles.checkbox,

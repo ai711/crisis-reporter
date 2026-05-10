@@ -87,8 +87,8 @@ class Report(Base):
     )
 
     # Question package versioning
-    question_package_version: Mapped[int | None] = mapped_column(
-        Integer, nullable=True
+    question_package_version: Mapped[str | None] = mapped_column(
+        String(20), nullable=True
     )
     translation_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
