@@ -65,10 +65,22 @@ async def require_admin(
     current_user: DashboardUser = Depends(get_current_dashboard_user),
 ) -> DashboardUser:
     """Dependency — requires Admin role. Use on admin-only routes."""
-    if current_user.role != "admin":
+    if current_user.role not in ("admin", "superadmin"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin role required",
+        )
+    return current_user
+
+
+async def require_superadmin(
+    current_user: DashboardUser = Depends(get_current_dashboard_user),
+) -> DashboardUser:
+    """Dependency — requires Superadmin role. Use on superadmin-only routes."""
+    if current_user.role != "superadmin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Superadmin role required",
         )
     return current_user
 

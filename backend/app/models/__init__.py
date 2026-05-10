@@ -8,6 +8,8 @@ from app.models.push_token import PushToken
 from app.models.question_package import QuestionPackage, Question, QuestionOption
 from app.models.language_package import StringKey, Translation, LanguagePackage
 from app.models.role import Role
+from app.models.app_setting import AppSetting
+from app.models.health_incident import HealthIncident
 
 __all__ = [
     "Crisis",
@@ -24,4 +26,6 @@ __all__ = [
     "Translation",
     "LanguagePackage",
     "Role",
+    "AppSetting",
+    "HealthIncident",
 ]

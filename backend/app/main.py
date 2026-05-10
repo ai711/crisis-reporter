@@ -26,6 +26,8 @@ from app.routers import (
     language_packages,
     push_tokens,
     roles,
+    health as health_router,
+    app_settings,
 )
 from app.routers.question_packages import seed_initial_package
 from app.routers.language_packages import seed_string_keys
@@ -87,12 +89,5 @@ app.include_router(language_packages.keys_router)
 app.include_router(language_packages.translations_router)
 app.include_router(push_tokens.router)
 app.include_router(roles.router)
-
-
-@app.get("/api/health")
-async def health_check():
-    return {
-        "status": "healthy",
-        "app": settings.APP_NAME,
-        "version": settings.APP_VERSION,
-    }
+app.include_router(health_router.router)
+app.include_router(app_settings.router)

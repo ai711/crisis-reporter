@@ -3,17 +3,18 @@ import { useAuthStore } from "../stores/authStore";
 import { logout } from "../services/auth";
 
 const NAV_ITEMS = [
-  { path: "/", icon: "🗺️", label: "Map", adminOnly: false },
-  { path: "/crises", icon: "🌐", label: "Crisis Management", adminOnly: false },
-  { path: "/reports", icon: "📋", label: "Reports", adminOnly: false },
-  { path: "/report-queue", icon: "📥", label: "Report Queue", adminOnly: false },
-  { path: "/review-queue", icon: "🔍", label: "Review Queue", adminOnly: false },
-  { path: "/reporters", icon: "👥", label: "Reporters", adminOnly: false },
-  { path: "/analytics", icon: "📊", label: "Analytics", adminOnly: false },
-  { path: "/export", icon: "📤", label: "Export", adminOnly: false },
-  { path: "/users", icon: "🔑", label: "User Management", adminOnly: true },
-  { path: "/roles", icon: "🛡️", label: "Manage Roles", adminOnly: true },
-  { path: "/settings", icon: "⚙️", label: "System Settings", adminOnly: true },
+  { path: "/", icon: "🗺️", label: "Map", adminOnly: false, superadminOnly: false },
+  { path: "/crises", icon: "🌐", label: "Crisis Management", adminOnly: false, superadminOnly: false },
+  { path: "/reports", icon: "📋", label: "Reports", adminOnly: false, superadminOnly: false },
+  { path: "/report-queue", icon: "📥", label: "Report Queue", adminOnly: false, superadminOnly: false },
+  { path: "/review-queue", icon: "🔍", label: "Review Queue", adminOnly: false, superadminOnly: false },
+  { path: "/reporters", icon: "👥", label: "Reporters", adminOnly: false, superadminOnly: false },
+  { path: "/analytics", icon: "📊", label: "Analytics", adminOnly: false, superadminOnly: false },
+  { path: "/export", icon: "📤", label: "Export", adminOnly: false, superadminOnly: false },
+  { path: "/users", icon: "🔑", label: "User Management", adminOnly: true, superadminOnly: false },
+  { path: "/roles", icon: "🛡️", label: "Manage Roles", adminOnly: true, superadminOnly: false },
+  { path: "/settings", icon: "⚙️", label: "System Settings", adminOnly: true, superadminOnly: false },
+  { path: "/dashboard-settings", icon: "🛠️", label: "Dashboard Settings", adminOnly: false, superadminOnly: true },
 ];
 
 export default function Sidebar() {
@@ -40,7 +41,11 @@ export default function Sidebar() {
 
       {/* Nav items */}
       <nav style={styles.nav}>
-        {NAV_ITEMS.filter((item) => !item.adminOnly || user?.role === "admin").map((item) => {
+        {NAV_ITEMS.filter((item) => {
+          if (item.superadminOnly) return user?.role === "superadmin";
+          if (item.adminOnly) return user?.role === "admin" || user?.role === "superadmin";
+          return true;
+        }).map((item) => {
           const isActive = location.pathname === item.path;
           return (
             <button

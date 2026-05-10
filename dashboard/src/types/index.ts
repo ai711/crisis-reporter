@@ -4,7 +4,7 @@ export interface DashboardUser {
   id: string;
   email: string;
   full_name: string;
-  role: "admin" | "analyst";
+  role: "admin" | "analyst" | "superadmin";
   last_login_at: string | null;
 }
 
