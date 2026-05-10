@@ -50,7 +50,7 @@ const CORE_QUESTIONS = [
   },
 ];
 
-type Tab = "countries" | "languages" | "questions" | "map";
+type Tab = "countries" | "languages" | "questions" | "map" | "app-content";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -1443,6 +1443,644 @@ function MapSettingsTab() {
   );
 }
 
+// ── TAB 5 — App Content ───────────────────────────────────────────────────────
+
+const DISASTER_TYPES = [
+  { key: "earthquake", label: "Earthquake" },
+  { key: "flood", label: "Flood" },
+  { key: "hurricane", label: "Hurricane / Cyclone" },
+  { key: "landslide", label: "Landslide" },
+  { key: "tsunami", label: "Tsunami" },
+  { key: "fire", label: "Wildfire / Building Fire" },
+  { key: "drought", label: "Drought" },
+  { key: "conflict", label: "Conflict / Civil Unrest" },
+  { key: "epidemic", label: "Epidemic / Disease Outbreak" },
+];
+
+type AcKey = "tc" | "onboarding" | "safety-tips" | "reporting-guidelines" | "first-aid";
+
+interface SimpleContent { content: string; version: number; updated_at: string | null; }
+interface DDSlide { title: string; dos: string[]; donts: string[]; }
+interface BulletSlide { title: string; bullets: string[]; }
+interface STData { slides: DDSlide[]; version: number; updated_at: string | null; }
+interface SWData { slides: BulletSlide[]; version: number; updated_at: string | null; }
+
+// ── Accordion wrapper ─────────────────────────────────────────────────────────
+
+function AccordionSection({
+  label,
+  isOpen,
+  onToggle,
+  badge,
+  children,
+}: {
+  label: string;
+  isOpen: boolean;
+  onToggle: () => void;
+  badge?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div style={{ background: "#fff", borderRadius: 12, boxShadow: "0 2px 8px rgba(0,0,0,0.06)", overflow: "hidden" }}>
+      <button
+        onClick={onToggle}
+        style={{
+          width: "100%",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "18px 24px",
+          background: "none",
+          border: "none",
+          cursor: "pointer",
+          textAlign: "left",
+          borderBottom: isOpen ? "1px solid #f0f4f8" : "none",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <span style={{ fontSize: 15, fontWeight: 700, color: "#1A2B4A" }}>{label}</span>
+          {badge && (
+            <span style={{ fontSize: 11, fontWeight: 600, background: "#EBF5FB", color: BLUE, padding: "2px 8px", borderRadius: 10 }}>
+              {badge}
+            </span>
+          )}
+        </div>
+        <span style={{ fontSize: 14, color: "#718096" }}>{isOpen ? "▲" : "▼"}</span>
+      </button>
+      {isOpen && <div>{children}</div>}
+    </div>
+  );
+}
+
+// ── Content save bar ──────────────────────────────────────────────────────────
+
+function ContentSaveBar({
+  onSave,
+  onCancel,
+  saving,
+  saved,
+}: {
+  onSave: () => void;
+  onCancel: () => void;
+  saving: boolean;
+  saved: boolean;
+}) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 16 }}>
+      <button style={s.cancelBtn} onClick={onCancel}>Cancel</button>
+      <button
+        style={{ ...s.submitBtn, opacity: saving ? 0.7 : 1 }}
+        onClick={onSave}
+        disabled={saving}
+      >
+        {saving ? "Saving…" : "Save Changes"}
+      </button>
+      {saved && <span style={{ fontSize: 13, fontWeight: 600, color: "#22c55e" }}>✓ Saved</span>}
+    </div>
+  );
+}
+
+// ── Simple text section (T&C + Onboarding) ────────────────────────────────────
+
+function TextSection({
+  contentType,
+  tcWarning,
+  isAdmin,
+}: {
+  contentType: "tc" | "onboarding";
+  tcWarning?: boolean;
+  isAdmin: boolean;
+}) {
+  const queryClient = useQueryClient();
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  const { data, isLoading } = useQuery<SimpleContent>({
+    queryKey: ["content", contentType],
+    queryFn: async () => {
+      const res = await api.get(`/api/content/${contentType}`);
+      return res.data;
+    },
+  });
+
+  function startEdit() {
+    setDraft(data?.content ?? "");
+    setEditing(true);
+  }
+
+  function cancelEdit() {
+    setEditing(false);
+    setDraft("");
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      await api.patch(`/api/content/${contentType}`, { content: draft });
+      queryClient.invalidateQueries({ queryKey: ["content", contentType] });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+      setEditing(false);
+    } catch {
+      // keep editing state open on error
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (isLoading) {
+    return <div style={{ padding: "20px 24px", color: "#718096", fontSize: 13 }}>Loading…</div>;
+  }
+
+  return (
+    <div style={{ padding: "20px 24px" }}>
+      {tcWarning && (
+        <div style={{ ...s.warningBanner, marginBottom: 16 }}>
+          <span style={{ fontSize: 18 }}>⚠️</span>
+          <span style={{ fontSize: 13, color: "#92400e" }}>
+            Changing Terms and Conditions will require all reporters to re-accept on their next app open.
+          </span>
+        </div>
+      )}
+      <div style={{ display: "flex", gap: 16, fontSize: 12, color: "#718096", marginBottom: 14 }}>
+        <span>Version <strong style={{ color: "#1A2B4A" }}>{data?.version ?? 1}</strong></span>
+        <span>
+          Last updated:{" "}
+          <strong style={{ color: "#1A2B4A" }}>
+            {data?.updated_at ? new Date(data.updated_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "Never"}
+          </strong>
+        </span>
+      </div>
+      {editing ? (
+        <>
+          <textarea
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            rows={14}
+            style={{
+              width: "100%",
+              padding: "12px",
+              border: "1.5px solid #e2e8f0",
+              borderRadius: 8,
+              fontSize: 13,
+              fontFamily: "inherit",
+              color: "#1A2B4A",
+              resize: "vertical",
+              outline: "none",
+              boxSizing: "border-box",
+            }}
+          />
+          <ContentSaveBar onSave={handleSave} onCancel={cancelEdit} saving={saving} saved={saved} />
+        </>
+      ) : (
+        <>
+          <div style={{
+            padding: "14px 16px",
+            background: "#f7fafc",
+            borderRadius: 8,
+            border: "1px solid #e2e8f0",
+            fontSize: 13,
+            color: "#4a5568",
+            lineHeight: 1.7,
+            whiteSpace: "pre-wrap",
+            minHeight: 80,
+          }}>
+            {data?.content || <span style={{ color: "#a0aec0", fontStyle: "italic" }}>No content set yet.</span>}
+          </div>
+          {isAdmin && (
+            <button
+              onClick={startEdit}
+              style={{ ...s.editQuestionsBtn, marginTop: 14, fontSize: 13, padding: "8px 18px" }}
+            >
+              Edit
+            </button>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── Disaster type row (inside Safety Tips) ────────────────────────────────────
+
+function DisasterTypeRow({ typeKey, label, isAdmin }: { typeKey: string; label: string; isAdmin: boolean }) {
+  const queryClient = useQueryClient();
+  const [isOpen, setIsOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [draftSlides, setDraftSlides] = useState<DDSlide[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  const { data, isLoading } = useQuery<STData>({
+    queryKey: ["content", "safety-tips", typeKey],
+    queryFn: async () => {
+      const res = await api.get(`/api/content/safety-tips/${typeKey}`);
+      return res.data;
+    },
+    enabled: isOpen,
+  });
+
+  function startEdit() {
+    setDraftSlides((data?.slides ?? []).map((sl) => ({
+      title: sl.title,
+      dos: [...sl.dos],
+      donts: [...sl.donts],
+    })));
+    setEditing(true);
+  }
+
+  function cancelEdit() { setEditing(false); }
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      await api.patch(`/api/content/safety-tips/${typeKey}`, { slides: draftSlides });
+      queryClient.invalidateQueries({ queryKey: ["content", "safety-tips", typeKey] });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+      setEditing(false);
+    } catch {
+      // keep state open
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function updateSlide(idx: number, field: keyof DDSlide, value: string | string[]) {
+    setDraftSlides((prev) => {
+      const next = [...prev];
+      next[idx] = { ...next[idx], [field]: value };
+      return next;
+    });
+  }
+
+  function addSlide() {
+    setDraftSlides((prev) => [...prev, { title: "", dos: [""], donts: [""] }]);
+  }
+
+  function removeSlide(idx: number) {
+    setDraftSlides((prev) => prev.filter((_, i) => i !== idx));
+  }
+
+  return (
+    <div style={{ borderTop: "1px solid #f0f4f8" }}>
+      <button
+        onClick={() => { setIsOpen((o) => !o); if (editing) setEditing(false); }}
+        style={{
+          width: "100%",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "13px 20px",
+          background: "none",
+          border: "none",
+          cursor: "pointer",
+          textAlign: "left",
+        }}
+      >
+        <span style={{ fontSize: 14, fontWeight: 600, color: "#2d3748" }}>{label}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <span style={{ fontSize: 12, color: "#a0aec0" }}>
+            {data?.slides.length ?? 0} slide{(data?.slides.length ?? 0) !== 1 ? "s" : ""}
+          </span>
+          <span style={{ fontSize: 12, color: "#718096" }}>{isOpen ? "▲" : "▼"}</span>
+        </div>
+      </button>
+
+      {isOpen && (
+        <div style={{ padding: "0 20px 18px" }}>
+          {isLoading ? (
+            <div style={{ color: "#718096", fontSize: 13, padding: "8px 0" }}>Loading…</div>
+          ) : editing ? (
+            <div>
+              {draftSlides.map((slide, idx) => (
+                <div key={idx} style={{ background: "#f7fafc", border: "1px solid #e2e8f0", borderRadius: 10, padding: "16px", marginBottom: 12 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: "#718096", textTransform: "uppercase" }}>Slide {idx + 1}</span>
+                    {draftSlides.length > 1 && (
+                      <button
+                        onClick={() => removeSlide(idx)}
+                        style={{ fontSize: 12, color: "#c53030", background: "none", border: "1px solid #fc8181", borderRadius: 6, padding: "3px 10px", cursor: "pointer" }}
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                  <div style={{ marginBottom: 10 }}>
+                    <label style={{ fontSize: 12, fontWeight: 600, color: "#4a5568", display: "block", marginBottom: 4 }}>Title</label>
+                    <input
+                      type="text"
+                      value={slide.title}
+                      onChange={(e) => updateSlide(idx, "title", e.target.value)}
+                      style={{ ...s.input, width: "100%", fontSize: 13, boxSizing: "border-box" as const }}
+                    />
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                    <div>
+                      <label style={{ fontSize: 12, fontWeight: 600, color: "#155724", display: "block", marginBottom: 4 }}>
+                        ✓ Dos (one per line)
+                      </label>
+                      <textarea
+                        value={slide.dos.join("\n")}
+                        onChange={(e) => updateSlide(idx, "dos", e.target.value.split("\n"))}
+                        rows={4}
+                        style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #c3e6cb", borderRadius: 7, fontSize: 12, fontFamily: "inherit", resize: "vertical", outline: "none", boxSizing: "border-box" as const }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 12, fontWeight: 600, color: "#c53030", display: "block", marginBottom: 4 }}>
+                        ✕ Don'ts (one per line)
+                      </label>
+                      <textarea
+                        value={slide.donts.join("\n")}
+                        onChange={(e) => updateSlide(idx, "donts", e.target.value.split("\n"))}
+                        rows={4}
+                        style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #fc8181", borderRadius: 7, fontSize: 12, fontFamily: "inherit", resize: "vertical", outline: "none", boxSizing: "border-box" as const }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+              <button
+                onClick={addSlide}
+                style={{ padding: "8px 16px", background: "#fff", border: "1.5px dashed #cbd5e0", borderRadius: 8, fontSize: 13, color: "#4a5568", cursor: "pointer", width: "100%", marginBottom: 12 }}
+              >
+                + Add Slide
+              </button>
+              <ContentSaveBar onSave={handleSave} onCancel={cancelEdit} saving={saving} saved={saved} />
+            </div>
+          ) : (
+            <div>
+              {(data?.slides ?? []).length === 0 ? (
+                <div style={{ color: "#a0aec0", fontSize: 13, fontStyle: "italic", padding: "8px 0" }}>No slides configured.</div>
+              ) : (
+                (data?.slides ?? []).map((slide, idx) => (
+                  <div key={idx} style={{ marginBottom: 14, paddingBottom: 14, borderBottom: idx < (data?.slides.length ?? 1) - 1 ? "1px solid #f0f4f8" : "none" }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: "#1A2B4A", marginBottom: 8 }}>
+                      {slide.title || `Slide ${idx + 1}`}
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                      <div>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: "#155724", textTransform: "uppercase", marginBottom: 4 }}>Dos</div>
+                        <ul style={{ margin: 0, padding: "0 0 0 16px" }}>
+                          {slide.dos.filter(Boolean).map((d, i) => (
+                            <li key={i} style={{ fontSize: 12, color: "#4a5568", marginBottom: 2 }}>{d}</li>
+                          ))}
+                        </ul>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: "#c53030", textTransform: "uppercase", marginBottom: 4 }}>Don'ts</div>
+                        <ul style={{ margin: 0, padding: "0 0 0 16px" }}>
+                          {slide.donts.filter(Boolean).map((d, i) => (
+                            <li key={i} style={{ fontSize: 12, color: "#4a5568", marginBottom: 2 }}>{d}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+              {isAdmin && (
+                <button
+                  onClick={startEdit}
+                  style={{ ...s.editQuestionsBtn, fontSize: 13, padding: "7px 16px", marginTop: 6 }}
+                >
+                  Edit
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Slideshow section (Reporting Guidelines + First Aid) ──────────────────────
+
+function SlideshowSection({
+  contentType,
+  isAdmin,
+}: {
+  contentType: "reporting-guidelines" | "first-aid";
+  isAdmin: boolean;
+}) {
+  const queryClient = useQueryClient();
+  const [editing, setEditing] = useState(false);
+  const [draftSlides, setDraftSlides] = useState<BulletSlide[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  const { data, isLoading } = useQuery<SWData>({
+    queryKey: ["content", contentType],
+    queryFn: async () => {
+      const res = await api.get(`/api/content/${contentType}`);
+      return res.data;
+    },
+  });
+
+  function startEdit() {
+    setDraftSlides((data?.slides ?? []).map((sl) => ({ title: sl.title, bullets: [...sl.bullets] })));
+    setEditing(true);
+  }
+
+  function cancelEdit() { setEditing(false); }
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      await api.patch(`/api/content/${contentType}`, { slides: draftSlides });
+      queryClient.invalidateQueries({ queryKey: ["content", contentType] });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+      setEditing(false);
+    } catch {
+      // keep open
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function updateSlide(idx: number, field: keyof BulletSlide, value: string | string[]) {
+    setDraftSlides((prev) => {
+      const next = [...prev];
+      next[idx] = { ...next[idx], [field]: value };
+      return next;
+    });
+  }
+
+  function addSlide() {
+    setDraftSlides((prev) => [...prev, { title: "", bullets: [""] }]);
+  }
+
+  function removeSlide(idx: number) {
+    setDraftSlides((prev) => prev.filter((_, i) => i !== idx));
+  }
+
+  if (isLoading) {
+    return <div style={{ padding: "20px 24px", color: "#718096", fontSize: 13 }}>Loading…</div>;
+  }
+
+  return (
+    <div style={{ padding: "20px 24px" }}>
+      <div style={{ display: "flex", gap: 16, fontSize: 12, color: "#718096", marginBottom: 16 }}>
+        <span>Version <strong style={{ color: "#1A2B4A" }}>{data?.version ?? 1}</strong></span>
+        <span>
+          Last updated:{" "}
+          <strong style={{ color: "#1A2B4A" }}>
+            {data?.updated_at ? new Date(data.updated_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "Never"}
+          </strong>
+        </span>
+      </div>
+
+      {editing ? (
+        <div>
+          {draftSlides.map((slide, idx) => (
+            <div key={idx} style={{ background: "#f7fafc", border: "1px solid #e2e8f0", borderRadius: 10, padding: "16px", marginBottom: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: "#718096", textTransform: "uppercase" }}>Slide {idx + 1}</span>
+                {draftSlides.length > 1 && (
+                  <button
+                    onClick={() => removeSlide(idx)}
+                    style={{ fontSize: 12, color: "#c53030", background: "none", border: "1px solid #fc8181", borderRadius: 6, padding: "3px 10px", cursor: "pointer" }}
+                  >
+                    Remove Slide
+                  </button>
+                )}
+              </div>
+              <div style={{ marginBottom: 10 }}>
+                <label style={{ fontSize: 12, fontWeight: 600, color: "#4a5568", display: "block", marginBottom: 4 }}>Title</label>
+                <input
+                  type="text"
+                  value={slide.title}
+                  onChange={(e) => updateSlide(idx, "title", e.target.value)}
+                  style={{ ...s.input, width: "100%", fontSize: 13, boxSizing: "border-box" as const }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 600, color: "#4a5568", display: "block", marginBottom: 4 }}>
+                  Bullet Points (one per line)
+                </label>
+                <textarea
+                  value={slide.bullets.join("\n")}
+                  onChange={(e) => updateSlide(idx, "bullets", e.target.value.split("\n"))}
+                  rows={4}
+                  style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e2e8f0", borderRadius: 7, fontSize: 12, fontFamily: "inherit", resize: "vertical", outline: "none", boxSizing: "border-box" as const }}
+                />
+              </div>
+            </div>
+          ))}
+          <button
+            onClick={addSlide}
+            style={{ padding: "8px 16px", background: "#fff", border: "1.5px dashed #cbd5e0", borderRadius: 8, fontSize: 13, color: "#4a5568", cursor: "pointer", width: "100%", marginBottom: 12 }}
+          >
+            + Add Slide
+          </button>
+          <ContentSaveBar onSave={handleSave} onCancel={cancelEdit} saving={saving} saved={saved} />
+        </div>
+      ) : (
+        <div>
+          {(data?.slides ?? []).length === 0 ? (
+            <div style={{ color: "#a0aec0", fontSize: 13, fontStyle: "italic" }}>No slides configured.</div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {(data?.slides ?? []).map((slide, idx) => (
+                <div key={idx} style={{ background: "#f7fafc", border: "1px solid #e2e8f0", borderRadius: 10, padding: "14px 18px" }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "#1A2B4A", marginBottom: 8 }}>
+                    <span style={{ ...s.questionNum, marginRight: 10 }}>{idx + 1}</span>
+                    {slide.title || `Slide ${idx + 1}`}
+                  </div>
+                  <ul style={{ margin: 0, padding: "0 0 0 18px" }}>
+                    {slide.bullets.filter(Boolean).map((b, i) => (
+                      <li key={i} style={{ fontSize: 13, color: "#4a5568", marginBottom: 4 }}>{b}</li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          )}
+          {isAdmin && (
+            <button
+              onClick={startEdit}
+              style={{ ...s.editQuestionsBtn, fontSize: 13, padding: "8px 18px", marginTop: 16 }}
+            >
+              Edit
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Main AppContentTab ────────────────────────────────────────────────────────
+
+function AppContentTab({ isAdmin }: { isAdmin: boolean }) {
+  const [openSection, setOpenSection] = useState<AcKey | null>("tc");
+
+  function toggle(section: AcKey) {
+    setOpenSection((prev) => (prev === section ? null : section));
+  }
+
+  return (
+    <div style={{ ...s.tabContent }}>
+      {/* 1 — Terms and Conditions */}
+      <AccordionSection
+        label="Terms and Conditions"
+        isOpen={openSection === "tc"}
+        onToggle={() => toggle("tc")}
+      >
+        <TextSection contentType="tc" tcWarning isAdmin={isAdmin} />
+      </AccordionSection>
+
+      {/* 2 — Onboarding Content */}
+      <AccordionSection
+        label="Onboarding Content"
+        isOpen={openSection === "onboarding"}
+        onToggle={() => toggle("onboarding")}
+      >
+        <TextSection contentType="onboarding" isAdmin={isAdmin} />
+      </AccordionSection>
+
+      {/* 3 — Safety Tips */}
+      <AccordionSection
+        label="Safety Tips"
+        isOpen={openSection === "safety-tips"}
+        onToggle={() => toggle("safety-tips")}
+        badge={`${DISASTER_TYPES.length} disaster types`}
+      >
+        <div>
+          {DISASTER_TYPES.map((dt) => (
+            <DisasterTypeRow key={dt.key} typeKey={dt.key} label={dt.label} isAdmin={isAdmin} />
+          ))}
+        </div>
+      </AccordionSection>
+
+      {/* 4 — Reporting Guidelines */}
+      <AccordionSection
+        label="Reporting Guidelines"
+        isOpen={openSection === "reporting-guidelines"}
+        onToggle={() => toggle("reporting-guidelines")}
+        badge="5 slides"
+      >
+        <SlideshowSection contentType="reporting-guidelines" isAdmin={isAdmin} />
+      </AccordionSection>
+
+      {/* 5 — First Aid */}
+      <AccordionSection
+        label="First Aid"
+        isOpen={openSection === "first-aid"}
+        onToggle={() => toggle("first-aid")}
+        badge="6 slides"
+      >
+        <SlideshowSection contentType="first-aid" isAdmin={isAdmin} />
+      </AccordionSection>
+    </div>
+  );
+}
+
 // ── Main Page ──────────────────────────────────────────────────────────────────
 
 export default function SystemSettingsPage() {
@@ -1455,6 +2093,7 @@ export default function SystemSettingsPage() {
     { key: "languages", label: "Languages" },
     { key: "questions", label: "Questions" },
     { key: "map", label: "Map Settings" },
+    { key: "app-content", label: "App Content" },
   ];
 
   return (
@@ -1485,6 +2124,7 @@ export default function SystemSettingsPage() {
         {activeTab === "languages" && <LanguagesTab />}
         {activeTab === "questions" && <QuestionsTab isAdmin={isAdmin} />}
         {activeTab === "map" && <MapSettingsTab />}
+        {activeTab === "app-content" && <AppContentTab isAdmin={isAdmin} />}
       </div>
     </div>
   );

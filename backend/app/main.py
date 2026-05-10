@@ -28,6 +28,7 @@ from app.routers import (
     roles,
     health as health_router,
     app_settings,
+    content,
 )
 from app.routers.question_packages import seed_initial_package
 from app.routers.language_packages import seed_string_keys
@@ -91,3 +92,4 @@ app.include_router(push_tokens.router)
 app.include_router(roles.router)
 app.include_router(health_router.router)
 app.include_router(app_settings.router)
+app.include_router(content.router)
