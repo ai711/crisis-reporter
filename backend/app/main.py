@@ -29,9 +29,11 @@ from app.routers import (
     health as health_router,
     app_settings,
     content,
+    countries,
 )
 from app.routers.question_packages import seed_initial_package
 from app.routers.language_packages import seed_string_keys
+from app.routers.countries import seed_countries
 
 
 @asynccontextmanager
@@ -43,6 +45,8 @@ async def lifespan(app: FastAPI):
     await seed_initial_package()
     # Seed string keys for all 8 questions if table is empty
     await seed_string_keys()
+    # Seed countries if table is empty
+    await seed_countries()
     yield
     await engine.dispose()
 
@@ -93,3 +97,4 @@ app.include_router(roles.router)
 app.include_router(health_router.router)
 app.include_router(app_settings.router)
 app.include_router(content.router)
+app.include_router(countries.router)

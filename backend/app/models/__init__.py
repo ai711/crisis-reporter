@@ -1,4 +1,5 @@
 from app.models.crisis import Crisis
+from app.models.country import Country
 from app.models.reporter import Reporter
 from app.models.report import Report
 from app.models.photo import Photo
@@ -13,6 +14,7 @@ from app.models.health_incident import HealthIncident
 
 __all__ = [
     "Crisis",
+    "Country",
     "Reporter",
     "Report",
     "Photo",
