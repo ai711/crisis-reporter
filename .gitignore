@@ -4,6 +4,10 @@
 .env.production
 .env.*.local
 
+# Production env files for web apps are safe to commit (no secrets, only URLs and public keys)
+!web/.env
+!dashboard/.env
+
 # Python
 __pycache__/
 *.py[cod]
