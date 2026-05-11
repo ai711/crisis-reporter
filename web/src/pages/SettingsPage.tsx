@@ -363,6 +363,7 @@ const s: Record<string, React.CSSProperties> = {
     display: "flex",
     flexDirection: "column",
     maxWidth: 480,
+    width: "100%",
     margin: "0 auto",
   },
   header: {

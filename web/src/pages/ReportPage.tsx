@@ -1066,64 +1066,105 @@ export default function ReportPage() {
           <div style={styles.step}>
             <h2 style={styles.stepTitle}>Review Your Report</h2>
 
-            <div style={styles.reviewCard}>
-              <div style={styles.reviewRow}>
-                <span style={styles.reviewLabel}>Damage Level</span>
-                <span style={styles.reviewValue}>{DAMAGE_LABELS[damageLevel] ?? damageLevel}</span>
+            {/* Photo section */}
+            <div style={styles.reviewSection}>
+              <div style={styles.reviewSectionHeader}>
+                <span style={styles.reviewSectionTitle}>Photo</span>
+                <button style={styles.editLink} onClick={() => setStep("photos")}>Edit</button>
               </div>
-              <div style={styles.reviewRow}>
-                <span style={styles.reviewLabel}>Infrastructure</span>
-                <span style={styles.reviewValue}>
-                  {infrastructureTypes.map((v) => INFRA_LABELS[v] ?? v).join(", ")}
-                </span>
-              </div>
-              <div style={styles.reviewRow}>
-                <span style={styles.reviewLabel}>Infrastructure Name</span>
-                <span style={styles.reviewValue}>{infrastructureName}</span>
-              </div>
-              <div style={styles.reviewRow}>
-                <span style={styles.reviewLabel}>Disaster Type</span>
-                <span style={styles.reviewValue}>{DISASTER_LABELS[disasterType] ?? disasterType}</span>
-              </div>
-              <div style={styles.reviewRow}>
-                <span style={styles.reviewLabel}>Debris Blocking</span>
-                <span style={styles.reviewValue}>{DEBRIS_LABELS[debrisBlocking] ?? debrisBlocking}</span>
-              </div>
-              <div style={styles.reviewRow}>
-                <span style={styles.reviewLabel}>Electricity</span>
-                <span style={styles.reviewValue}>{ELECTRICITY_LABELS[electricityCondition] ?? electricityCondition}</span>
-              </div>
-              <div style={styles.reviewRow}>
-                <span style={styles.reviewLabel}>Health Services</span>
-                <span style={styles.reviewValue}>{HEALTH_LABELS[healthServicesCondition] ?? healthServicesCondition}</span>
-              </div>
-              <div style={styles.reviewRow}>
-                <span style={styles.reviewLabel}>Pressing Needs</span>
-                <span style={styles.reviewValue}>
-                  {pressingNeeds.map((v) => PRESSING_NEEDS_LABELS[v] ?? v).join(", ")}
-                  {pressingNeeds.includes("other") && pressingNeedsOther ? ` (${pressingNeedsOther})` : ""}
-                </span>
-              </div>
-              <div style={styles.reviewRow}>
-                <span style={styles.reviewLabel}>Photos</span>
-                <span style={styles.reviewValue}>{photos.length} photo(s)</span>
-              </div>
-              {gpsLatitude !== null && (
-                <div style={styles.reviewRow}>
-                  <span style={styles.reviewLabel}>Location</span>
-                  <span style={styles.reviewValue}>
-                    {selectedBuildingId
-                      ? (selectedBuildingTags.name || "Building selected")
-                      : `GPS ${gpsLatitude.toFixed(4)}, ${gpsLongitude!.toFixed(4)}`}
+              <div style={styles.reviewCard}>
+                <div style={{ padding: "12px 16px", display: "flex", alignItems: "center", gap: 12 }}>
+                  {photos.length > 0 ? (
+                    <img
+                      src={URL.createObjectURL(photos[0])}
+                      alt="Photo preview"
+                      style={styles.reviewPhotoThumb}
+                    />
+                  ) : (
+                    <div style={styles.reviewPhotoPlaceholder}>📷</div>
+                  )}
+                  <span style={{ fontSize: 14, color: "#666" }}>
+                    {photos.length} photo{photos.length !== 1 ? "s" : ""} added
                   </span>
                 </div>
-              )}
-              {!gpsLatitude && locationAddress && (
+              </div>
+            </div>
+
+            {/* Location section */}
+            <div style={styles.reviewSection}>
+              <div style={styles.reviewSectionHeader}>
+                <span style={styles.reviewSectionTitle}>Location</span>
+                <button style={styles.editLink} onClick={() => setStep("location")}>Edit</button>
+              </div>
+              <div style={styles.reviewCard}>
+                {gpsLatitude !== null ? (
+                  <div style={styles.reviewRow}>
+                    <span style={styles.reviewLabel}>Coordinates</span>
+                    <span style={styles.reviewValue}>
+                      {selectedBuildingId
+                        ? (selectedBuildingTags.name || "Building selected")
+                        : `GPS ${gpsLatitude.toFixed(4)}, ${gpsLongitude!.toFixed(4)}`}
+                    </span>
+                  </div>
+                ) : locationAddress ? (
+                  <div style={styles.reviewRow}>
+                    <span style={styles.reviewLabel}>Address</span>
+                    <span style={styles.reviewValue}>{locationAddress}</span>
+                  </div>
+                ) : (
+                  <div style={styles.reviewRow}>
+                    <span style={styles.reviewLabel}>Location</span>
+                    <span style={styles.reviewValue}>Not specified</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Questions section */}
+            <div style={styles.reviewSection}>
+              <div style={styles.reviewSectionHeader}>
+                <span style={styles.reviewSectionTitle}>Questions</span>
+                <button style={styles.editLink} onClick={() => { setDamageQuestion(1); setStep("damage"); }}>Edit</button>
+              </div>
+              <div style={styles.reviewCard}>
                 <div style={styles.reviewRow}>
-                  <span style={styles.reviewLabel}>Address</span>
-                  <span style={styles.reviewValue}>{locationAddress}</span>
+                  <span style={styles.reviewLabel}>Damage Level</span>
+                  <span style={styles.reviewValue}>{DAMAGE_LABELS[damageLevel] ?? damageLevel}</span>
                 </div>
-              )}
+                <div style={styles.reviewRow}>
+                  <span style={styles.reviewLabel}>Infrastructure</span>
+                  <span style={styles.reviewValue}>
+                    {infrastructureTypes.map((v) => INFRA_LABELS[v] ?? v).join(", ")}
+                  </span>
+                </div>
+                <div style={styles.reviewRow}>
+                  <span style={styles.reviewLabel}>Infrastructure Name</span>
+                  <span style={styles.reviewValue}>{infrastructureName}</span>
+                </div>
+                <div style={styles.reviewRow}>
+                  <span style={styles.reviewLabel}>Disaster Type</span>
+                  <span style={styles.reviewValue}>{DISASTER_LABELS[disasterType] ?? disasterType}</span>
+                </div>
+                <div style={styles.reviewRow}>
+                  <span style={styles.reviewLabel}>Debris Blocking</span>
+                  <span style={styles.reviewValue}>{DEBRIS_LABELS[debrisBlocking] ?? debrisBlocking}</span>
+                </div>
+                <div style={styles.reviewRow}>
+                  <span style={styles.reviewLabel}>Electricity</span>
+                  <span style={styles.reviewValue}>{ELECTRICITY_LABELS[electricityCondition] ?? electricityCondition}</span>
+                </div>
+                <div style={styles.reviewRow}>
+                  <span style={styles.reviewLabel}>Health Services</span>
+                  <span style={styles.reviewValue}>{HEALTH_LABELS[healthServicesCondition] ?? healthServicesCondition}</span>
+                </div>
+                <div style={styles.reviewRow}>
+                  <span style={styles.reviewLabel}>Pressing Needs</span>
+                  <span style={styles.reviewValue}>
+                    {pressingNeeds.map((v) => PRESSING_NEEDS_LABELS[v] ?? v).join(", ")}
+                    {pressingNeeds.includes("other") && pressingNeedsOther ? ` (${pressingNeedsOther})` : ""}
+                  </span>
+                </div>
+              </div>
             </div>
 
             {!navigator.onLine && (
@@ -1334,6 +1375,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 16,
     fontWeight: 600,
     color: "#1A2B4A",
+    textAlign: "left" as const,
   },
   label: {
     fontSize: 14,
@@ -1519,6 +1561,7 @@ const styles: Record<string, React.CSSProperties> = {
   checkRowText: {
     fontSize: 15,
     color: "#1A2B4A",
+    textAlign: "left" as const,
   },
   charCounter: {
     fontSize: 12,
@@ -1591,5 +1634,49 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#444",
     lineHeight: 1.55,
     marginBottom: 4,
+  },
+  reviewSection: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 6,
+  },
+  reviewSectionHeader: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  reviewSectionTitle: {
+    fontSize: 11,
+    fontWeight: 700,
+    color: "#9CA3AF",
+    textTransform: "uppercase" as const,
+    letterSpacing: "0.06em",
+  },
+  editLink: {
+    background: "transparent",
+    border: "none",
+    color: "#0468B1",
+    fontSize: 13,
+    fontWeight: 600,
+    cursor: "pointer",
+    padding: 0,
+  },
+  reviewPhotoThumb: {
+    width: 80,
+    height: 80,
+    objectFit: "cover" as const,
+    borderRadius: 8,
+    flexShrink: 0,
+  },
+  reviewPhotoPlaceholder: {
+    width: 80,
+    height: 80,
+    borderRadius: 8,
+    background: "#f0f4f8",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: 32,
+    flexShrink: 0,
   },
 };

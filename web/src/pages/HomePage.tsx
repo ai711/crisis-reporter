@@ -138,7 +138,7 @@ export default function HomePage() {
     return () => window.removeEventListener("online", handleOnline);
   }, []);
 
-  const { data: reportsData } = useQuery({
+  const { data: reportsData, isLoading: reportsLoading, isError: reportsError } = useQuery({
     queryKey: ["homeReportCount", reporterId],
     queryFn: async () => {
       const res = await api.get<ReportsListResponse>("/api/reports", {
@@ -148,6 +148,17 @@ export default function HomePage() {
     },
     enabled: !!reporterId,
   });
+
+  const [reportsTimedOut, setReportsTimedOut] = useState(false);
+
+  useEffect(() => {
+    if (!reporterId || !reportsLoading) {
+      setReportsTimedOut(false);
+      return;
+    }
+    const timer = setTimeout(() => setReportsTimedOut(true), 8000);
+    return () => clearTimeout(timer);
+  }, [reporterId, reportsLoading]);
 
   const reportCount = reportsData?.total_count ?? null;
 
@@ -206,6 +217,8 @@ export default function HomePage() {
             <p style={s.reportsText}>
               Submit your first report to get started.
             </p>
+          ) : reportsTimedOut || reportsError ? (
+            <p style={s.reportsText}>Unable to load reports</p>
           ) : reportCount === null ? (
             <p style={s.reportsText}>Loading your reports…</p>
           ) : (
