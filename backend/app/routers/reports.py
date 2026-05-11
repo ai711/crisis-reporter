@@ -32,12 +32,14 @@ class LocationData(BaseModel):
 
 class ReportSubmitRequest(BaseModel):
     # Required
-    crisis_id: str
     damage_level: str  # minimal, partial, complete
-    infrastructure_type: str
+    infrastructure_types: List[str]  # array — matches frontend field name
     platform: str  # android, pwa, web
     submitted_at: datetime
     location: LocationData
+
+    # crisis_id is optional — if omitted, the first active crisis is used
+    crisis_id: Optional[str] = None
 
     # Optional
     local_id: Optional[str] = None
@@ -46,7 +48,6 @@ class ReportSubmitRequest(BaseModel):
     building_name: Optional[str] = None
     language_code: str = "en"
     # New UNDP question fields
-    infrastructure_types: Optional[List[str]] = None
     infrastructure_other: Optional[str] = None
     infrastructure_name: Optional[str] = None
     disaster_type: Optional[str] = None
@@ -83,7 +84,7 @@ class ReportResponse(BaseModel):
     building_id: Optional[str]
     building_name: Optional[str]
     damage_level: str
-    infrastructure_type: str
+    infrastructure_type: Optional[str]
     infrastructure_types: Optional[List[str]]
     infrastructure_other: Optional[str]
     infrastructure_name: Optional[str]
@@ -130,19 +131,27 @@ async def submit_report(
     Accepts both online submissions and offline queue syncs.
     """
 
-    # Validate crisis exists and is active
-    result = await db.execute(
-        select(Crisis).where(
-            Crisis.id == request.crisis_id,
-            Crisis.is_active == True,
+    # Resolve crisis — use provided crisis_id or fall back to first active crisis
+    if request.crisis_id:
+        result = await db.execute(
+            select(Crisis).where(
+                Crisis.id == request.crisis_id,
+                Crisis.is_active == True,
+            )
         )
-    )
-    crisis = result.scalar_one_or_none()
+        crisis = result.scalar_one_or_none()
+    else:
+        result = await db.execute(
+            select(Crisis).where(Crisis.is_active == True).order_by(Crisis.created_at.desc()).limit(1)
+        )
+        crisis = result.scalar_one_or_none()
+
     if not crisis:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Crisis not found or no longer active",
         )
+    resolved_crisis_id = crisis.id
 
     # Validate damage level
     if request.damage_level not in ["minimal", "partial", "complete"]:
@@ -181,7 +190,7 @@ async def submit_report(
     # Create report with initial Grey flag
     report = Report(
         local_id=request.local_id,
-        crisis_id=request.crisis_id,
+        crisis_id=resolved_crisis_id,
         reporter_id=reporter_id,
         building_id=request.building_id,
         building_name=request.building_name,
@@ -193,7 +202,7 @@ async def submit_report(
         location_landmark=request.location.location_landmark,
         location_building_name=request.location.location_building_name,
         damage_level=request.damage_level,
-        infrastructure_type=request.infrastructure_type,
+        infrastructure_type=request.infrastructure_types[0] if request.infrastructure_types else "",
         infrastructure_types=request.infrastructure_types,
         infrastructure_other=request.infrastructure_other,
         infrastructure_name=request.infrastructure_name,
@@ -243,7 +252,7 @@ async def submit_report(
     # Notify dashboard that a new report arrived (flag still grey)
     from app.routers.dashboard_sse import publish_event
     await publish_event(
-        crisis_id=str(report.crisis_id),
+        crisis_id=str(resolved_crisis_id),
         event_type="report_confirmed",
         data={
             "report_id": str(report.id),
