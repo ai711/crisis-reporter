@@ -108,6 +108,24 @@ export default function PushNotificationSheet({
   const accept = useCallback(async () => {
     if (busy) return;
     setBusy(true);
+
+    // Non-secure contexts (not HTTPS and not localhost) cannot use PushManager.
+    // Mark accepted so the prompt doesn't re-appear; subscription will be
+    // attempted on the next load from an HTTPS origin.
+    const { protocol, hostname } = window.location;
+    const isSecure =
+      protocol === "https:" ||
+      hostname === "localhost" ||
+      hostname === "127.0.0.1" ||
+      hostname.endsWith(".localhost");
+
+    if (!isSecure) {
+      localStorage.setItem(LS_ACCEPTED, "true");
+      setVisible(false);
+      setBusy(false);
+      return;
+    }
+
     try {
       const permission = await Notification.requestPermission();
       if (permission !== "granted") {
@@ -116,8 +134,14 @@ export default function PushNotificationSheet({
         return;
       }
 
+      // navigator.serviceWorker.ready never rejects — race it against a
+      // timeout so a missing service worker doesn't freeze the modal.
+      const swTimeout = new Promise<never>((_, reject) =>
+        window.setTimeout(() => reject(new Error("sw-timeout")), 8000)
+      );
+      const reg = await Promise.race([navigator.serviceWorker.ready, swTimeout]);
+
       const vapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY;
-      const reg = await navigator.serviceWorker.ready;
       const sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlB64ToUint8Array(vapidKey),
@@ -141,7 +165,8 @@ export default function PushNotificationSheet({
       setVisible(false);
       showToast("Notifications enabled");
     } catch {
-      // Permission denied or subscription failed — treat as decline
+      // Permission denied, subscription failed, SW timeout, or API error —
+      // close silently without showing the reporter any error message.
       localStorage.setItem(LS_DECLINED, "true");
       setVisible(false);
     } finally {
