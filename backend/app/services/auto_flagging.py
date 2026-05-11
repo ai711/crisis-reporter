@@ -9,6 +9,7 @@ Thresholds are held in a module-level dict and can be updated at
 runtime via the /api/flag-rules PATCH endpoint without a restart.
 """
 
+import asyncio
 import logging
 from datetime import datetime, timezone, timedelta
 from sqlalchemy import select, func, and_
@@ -46,6 +47,10 @@ async def auto_flag_report(report_id: str) -> None:
     Called as a FastAPI BackgroundTask so it runs after the HTTP response
     has been sent to the reporter.  Opens its own database session.
     """
+    # Photos are uploaded as separate requests after the report POST returns.
+    # Wait before running any rules so the frontend has time to finish uploads.
+    await asyncio.sleep(10)
+
     from app.models.report import Report
     from app.models.flag_event import FlagEvent
     from app.models.photo import Photo
@@ -64,13 +69,27 @@ async def auto_flag_report(report_id: str) -> None:
             flag_reason: str | None = None
 
             # ── Rule 1: Photo validation ──────────────────────────────────────
-            photo_count_result = await db.execute(
-                select(func.count(Photo.id)).where(Photo.report_id == report.id)
-            )
-            photo_count = photo_count_result.scalar() or 0
-            if photo_count == 0:
-                new_flag = "red"
-                flag_reason = "No photos attached"
+            async def _photo_count() -> int:
+                r = await db.execute(
+                    select(func.count(Photo.id)).where(Photo.report_id == report.id)
+                )
+                return r.scalar() or 0
+
+            photo_count = await _photo_count()
+
+            if photo_count == 0 and not report.was_queued:
+                # Slow-connection guard: if the report is still recent, give the
+                # frontend an extra 20 seconds to finish uploading and re-check.
+                age_seconds = (
+                    datetime.now(timezone.utc) - report.created_at
+                ).total_seconds()
+                if age_seconds < 30:
+                    await asyncio.sleep(20)
+                    photo_count = await _photo_count()
+
+                if photo_count == 0:
+                    new_flag = "red"
+                    flag_reason = "No photos attached"
 
             # ── Rule 2: Location validation ───────────────────────────────────
             if new_flag == "green":
