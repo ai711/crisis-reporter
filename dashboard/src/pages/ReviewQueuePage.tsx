@@ -96,13 +96,13 @@ export default function ReviewQueuePage() {
   const fetchPage = useCallback(
     async (pageCursor?: string) => {
       const params: Record<string, string> = {
-        flag: "red",
+        flag_status: "red",
         limit: String(PAGE_SIZE),
       };
       if (activeCrisisId) params.crisis_id = activeCrisisId;
       if (pageCursor) params.cursor = pageCursor;
 
-      const res = await api.get<QueueResponse>("/api/reports", { params });
+      const res = await api.get<QueueResponse>("/api/dashboard/reports", { params });
       return res.data;
     },
     [activeCrisisId]
@@ -169,7 +169,7 @@ export default function ReviewQueuePage() {
     setItems((prev) => prev.filter((r) => r.id !== reportId));
     setTotal((t) => Math.max(0, t - 1));
     try {
-      await api.patch(`/api/reports/${reportId}/flag`, { flag });
+      await api.patch(`/api/dashboard/reports/${reportId}/flag`, { flag_status: flag });
     } catch {
       //
     } finally {

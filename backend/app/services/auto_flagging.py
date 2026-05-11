@@ -104,7 +104,11 @@ async def auto_flag_report(report_id: str) -> None:
                     new_flag = "red"
                     flag_reason = "No location provided"
 
-            # ── Rule 3: Duplicate detection ───────────────────────────────────
+            # ── Rule 3: Coordinated spam detection ───────────────────────────
+            # Flag Red when a DIFFERENT reporter submits the same GPS location
+            # within the duplicate window — suggests coordinated fake reports.
+            # Same reporter re-submitting the same location is allowed (updated
+            # damage assessment) and must NOT be flagged here.
             if (
                 new_flag == "green"
                 and report.reporter_id is not None
@@ -118,7 +122,7 @@ async def auto_flag_report(report_id: str) -> None:
                 dup_result = await db.execute(
                     select(func.count(Report.id)).where(
                         and_(
-                            Report.reporter_id == report.reporter_id,
+                            Report.reporter_id != report.reporter_id,
                             Report.crisis_id == report.crisis_id,
                             Report.id != report.id,
                             Report.created_at >= dup_window,
@@ -135,7 +139,7 @@ async def auto_flag_report(report_id: str) -> None:
                 )
                 if (dup_result.scalar() or 0) > 0:
                     new_flag = "red"
-                    flag_reason = "Possible duplicate submission"
+                    flag_reason = "Possible coordinated duplicate — different reporter, same location"
 
             # ── Rule 4: Rapid submission detection ────────────────────────────
             if new_flag == "green" and report.reporter_id is not None:
