@@ -579,6 +579,25 @@ export default function ReportPage() {
       }
 
       saveSubmittedLocation();
+
+      // Save summary to sessionStorage so My Reports works for anonymous users
+      try {
+        const summary = {
+          id: reportId as string,
+          damage_level: damageLevel,
+          infrastructure_types: infrastructureTypes,
+          location_address: buildLocationAddress(),
+          gps_latitude: gpsLatitude,
+          gps_longitude: gpsLongitude,
+          submitted_at: new Date().toISOString(),
+        };
+        const existing: unknown[] = JSON.parse(
+          sessionStorage.getItem("cr_session_reports") || "[]"
+        );
+        existing.push(summary);
+        sessionStorage.setItem("cr_session_reports", JSON.stringify(existing));
+      } catch { /* non-critical */ }
+
       setSubmittedReportId(reportId as string);
       setWasQueued(false);
       setSubmitted(true);

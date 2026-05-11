@@ -17,6 +17,16 @@ interface ReporterReport {
   first_photo_url: string | null;
 }
 
+interface SessionReport {
+  id: string;
+  damage_level: string;
+  infrastructure_types: string[];
+  location_address: string | null;
+  gps_latitude: number | null;
+  gps_longitude: number | null;
+  submitted_at: string;
+}
+
 interface ReportsResponse {
   items: ReporterReport[];
   next_cursor: string | null;
@@ -33,6 +43,21 @@ const DAMAGE_LABEL: Record<string, string> = {
   partial: "Partially Damaged",
   minimal: "Minimal / No Damage",
 };
+
+function convertSessionReport(s: SessionReport): ReporterReport {
+  return {
+    id: s.id,
+    damage_level: s.damage_level as ReporterReport["damage_level"],
+    submitted_at: s.submitted_at,
+    location: {
+      location_address: s.location_address,
+      gps_latitude: s.gps_latitude,
+      gps_longitude: s.gps_longitude,
+    },
+    photo_count: 0,
+    first_photo_url: null,
+  };
+}
 
 function formatLocation(report: ReporterReport): string {
   if (report.location?.location_address) return report.location.location_address;
@@ -57,14 +82,25 @@ export default function MyReportsPage() {
   const { reporterId } = useAuthStore();
 
   const [reports, setReports] = useState<ReporterReport[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!!reporterId);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [isSessionMode, setIsSessionMode] = useState(false);
 
   const fetchReports = useCallback(async (cursor?: string) => {
     if (!reporterId) {
+      // No logged-in reporter — try session storage
+      const raw = sessionStorage.getItem("cr_session_reports");
+      if (raw) {
+        try {
+          const parsed: SessionReport[] = JSON.parse(raw);
+          // Newest first
+          setReports([...parsed].reverse().map(convertSessionReport));
+          setIsSessionMode(true);
+        } catch { /* ignore malformed data */ }
+      }
       setLoading(false);
       return;
     }
@@ -104,6 +140,10 @@ export default function MyReportsPage() {
     fetchReports();
   }, [fetchReports]);
 
+  const emptyMessage = !reporterId
+    ? "Submit your first report to get started."
+    : "No reports submitted yet";
+
   return (
     <div style={styles.container}>
       <style>{`@keyframes cr-spin { to { transform: rotate(360deg); } }`}</style>
@@ -140,10 +180,15 @@ export default function MyReportsPage() {
         ) : reports.length === 0 ? (
           <div style={styles.centred}>
             <span style={styles.emptyIcon}>📋</span>
-            <p style={styles.emptyText}>No reports submitted yet</p>
+            <p style={styles.emptyText}>{emptyMessage}</p>
           </div>
         ) : (
           <div style={styles.list}>
+            {isSessionMode && (
+              <p style={styles.sessionNote}>
+                Showing reports from this session. Log in to see your full history.
+              </p>
+            )}
             {reports.map((report) => {
               const color = DAMAGE_COLOR[report.damage_level] ?? "#999";
               return (
@@ -264,6 +309,15 @@ const styles: Record<string, React.CSSProperties> = {
     flexDirection: "column",
     gap: 12,
     paddingTop: 8,
+  },
+  sessionNote: {
+    fontSize: 13,
+    color: "#718096",
+    textAlign: "center",
+    margin: "0 0 4px",
+    padding: "10px 14px",
+    background: "#EDF2F7",
+    borderRadius: 8,
   },
   card: {
     background: "#fff",

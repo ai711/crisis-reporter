@@ -13,6 +13,7 @@ import app.models
 from app.routers import (
     dashboard_auth,
     reporter_auth,
+    reporters,
     crises,
     reports,
     photos,
@@ -79,6 +80,7 @@ if settings.STORAGE_BACKEND == "local":
 # Register routers
 app.include_router(dashboard_auth.router)
 app.include_router(reporter_auth.router)
+app.include_router(reporters.router)
 app.include_router(crises.router)
 app.include_router(reports.router)
 app.include_router(photos.router)

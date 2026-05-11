@@ -120,10 +120,12 @@ function IconList({ active }: { active: boolean }) {
 
 export default function HomePage() {
   const navigate = useNavigate();
-  const { reporterId } = useAuthStore();
+  const { reporterId, setReporter } = useAuthStore();
 
   const [queueCount, setQueueCount] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [loginPromptOpen, setLoginPromptOpen] = useState(false);
+  const [loginPromptBusy, setLoginPromptBusy] = useState(false);
 
   useEffect(() => {
     const refreshQueue = () => getQueueCount().then(setQueueCount);
@@ -137,6 +139,46 @@ export default function HomePage() {
     window.addEventListener("online", handleOnline);
     return () => window.removeEventListener("online", handleOnline);
   }, []);
+
+  // Show login prompt once, 2s after first load, if no reporter ID assigned yet
+  useEffect(() => {
+    const alreadyPrompted = localStorage.getItem("cr_login_prompted");
+    const hasReporterId = localStorage.getItem("cr_reporter_id");
+    if (alreadyPrompted || hasReporterId) return;
+    const timer = setTimeout(() => {
+      localStorage.setItem("cr_login_prompted", "true");
+      setLoginPromptOpen(true);
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  const registerAnonymous = async () => {
+    setLoginPromptBusy(true);
+    setLoginPromptOpen(false);
+    const deviceId = crypto.randomUUID();
+    try {
+      const res = await api.post<{ reporter_id: string; platform: string }>(
+        "/api/reporters/register",
+        {
+          device_id: deviceId,
+          platform: "web",
+          country_code: localStorage.getItem("cr_country"),
+          language_code: localStorage.getItem("cr_language") || "en",
+          tc_accepted_at: localStorage.getItem("cr_tc_accepted"),
+        }
+      );
+      const { reporter_id } = res.data;
+      localStorage.setItem("cr_reporter_id", reporter_id);
+      setReporter(reporter_id, false);
+    } catch {
+      // Fallback: use a locally generated UUID so the app still works
+      const fallbackId = crypto.randomUUID();
+      localStorage.setItem("cr_reporter_id", fallbackId);
+      setReporter(fallbackId, false);
+    } finally {
+      setLoginPromptBusy(false);
+    }
+  };
 
   const { data: reportsData, isLoading: reportsLoading, isError: reportsError } = useQuery({
     queryKey: ["homeReportCount", reporterId],
@@ -256,6 +298,41 @@ export default function HomePage() {
           <span style={s.navLabel}>My Reports</span>
         </button>
       </nav>
+
+      {/* ── Login prompt bottom sheet ── */}
+      {loginPromptOpen && (
+        <div style={s.promptOverlay} onClick={() => setLoginPromptOpen(false)}>
+          <div style={s.promptSheet} onClick={(e) => e.stopPropagation()}>
+            <div style={s.promptHandle} />
+            <h2 style={s.promptTitle}>Have you used Crisis Reporter before?</h2>
+            <p style={s.promptBody}>
+              If you have an existing verified account, log in to restore your
+              reports, badges, and profile.
+            </p>
+            <div style={s.promptButtons}>
+              <button
+                style={s.promptBtnPrimary}
+                onClick={() => { setLoginPromptOpen(false); navigate("/login"); }}
+              >
+                Log In
+              </button>
+              <button
+                style={s.promptBtnOutline}
+                onClick={() => { setLoginPromptOpen(false); navigate("/profile"); }}
+              >
+                Create Account
+              </button>
+              <button
+                style={s.promptBtnSkip}
+                disabled={loginPromptBusy}
+                onClick={registerAnonymous}
+              >
+                {loginPromptBusy ? "Setting up…" : "Skip for now"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -402,5 +479,83 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: 11,
     color: "#9CA3AF",
     fontWeight: 500,
+  },
+  promptOverlay: {
+    position: "fixed",
+    inset: 0,
+    background: "rgba(0,0,0,0.48)",
+    zIndex: 1000,
+    display: "flex",
+    alignItems: "flex-end",
+  },
+  promptSheet: {
+    background: "#fff",
+    borderRadius: "16px 16px 0 0",
+    width: "100%",
+    maxWidth: 480,
+    margin: "0 auto",
+    padding: "0 20px 40px",
+    boxShadow: "0 -4px 24px rgba(0,0,0,0.12)",
+    display: "flex",
+    flexDirection: "column",
+    gap: 0,
+  },
+  promptHandle: {
+    width: 36,
+    height: 4,
+    background: "#E2E8F0",
+    borderRadius: 2,
+    margin: "12px auto 20px",
+    flexShrink: 0,
+  },
+  promptTitle: {
+    fontSize: 18,
+    fontWeight: 700,
+    color: "#1A2B4A",
+    margin: "0 0 10px",
+    lineHeight: 1.35,
+  },
+  promptBody: {
+    fontSize: 14,
+    color: "#4A5568",
+    lineHeight: 1.6,
+    margin: "0 0 24px",
+  },
+  promptButtons: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 10,
+  },
+  promptBtnPrimary: {
+    width: "100%",
+    padding: "15px",
+    background: "#0468B1",
+    color: "#fff",
+    border: "none",
+    borderRadius: 10,
+    fontSize: 16,
+    fontWeight: 700,
+    cursor: "pointer",
+  },
+  promptBtnOutline: {
+    width: "100%",
+    padding: "14px",
+    background: "#fff",
+    color: "#0468B1",
+    border: "2px solid #0468B1",
+    borderRadius: 10,
+    fontSize: 16,
+    fontWeight: 600,
+    cursor: "pointer",
+  },
+  promptBtnSkip: {
+    width: "100%",
+    padding: "12px",
+    background: "transparent",
+    color: "#9CA3AF",
+    border: "none",
+    borderRadius: 10,
+    fontSize: 15,
+    cursor: "pointer",
   },
 };

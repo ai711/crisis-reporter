@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-route
 import { Suspense, lazy } from "react";
 
 const OnboardingPage = lazy(() => import("./pages/OnboardingPage"));
+const LoginPage = lazy(() => import("./pages/LoginPage"));
 const HomePage = lazy(() => import("./pages/HomePage"));
 const ReportPage = lazy(() => import("./pages/ReportPage"));
 const MapPage = lazy(() => import("./pages/MapPage"));
@@ -74,6 +75,7 @@ export default function App() {
       <Suspense fallback={<LoadingSpinner />}>
         <Routes>
           <Route path="/onboarding" element={<OnboardingRoute />} />
+          <Route path="/login" element={<LoginPage />} />
           <Route
             path="/"
             element={
