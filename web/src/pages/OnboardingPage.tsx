@@ -12,7 +12,6 @@ import api from "../services/api";
 interface Language {
   code: string;
   name: string;
-  highlighted?: boolean;
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -28,18 +27,238 @@ const UN_LANGUAGES: Language[] = [
 
 const UN_LANGUAGE_CODES = new Set(UN_LANGUAGES.map((l) => l.code));
 
-type Step = "country" | "language" | "terms";
+type Step = "onboarding" | "terms";
 
-function getInitialStep(): Step {
-  try {
-    if (!localStorage.getItem("cr_country")) return "country";
-    if (!localStorage.getItem("cr_language")) return "language";
-    if (!localStorage.getItem("cr_tc_accepted")) return "terms";
-  } catch { /* ignore */ }
-  return "country";
+// ── Icons ─────────────────────────────────────────────────────────────────────
+
+function ShieldIcon() {
+  return (
+    <svg width="30" height="34" viewBox="0 0 30 34" fill="white" aria-hidden="true">
+      <path d="M15 0L0 5.5V16C0 24.84 6.4 33.1 15 35C23.6 33.1 30 24.84 30 16V5.5L15 0ZM12.5 24.5L6 18L7.76 16.24L12.5 20.97L22.24 11.23L24 13L12.5 24.5Z" />
+    </svg>
+  );
 }
 
-// ── Main ──────────────────────────────────────────────────────────────────────
+function CheckCircleIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="white" style={{ flexShrink: 0 }} aria-hidden="true">
+      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
+    </svg>
+  );
+}
+
+function LocationIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="#0468B1" aria-hidden="true">
+      <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
+    </svg>
+  );
+}
+
+function ChevronDownIcon({ color = "#718096" }: { color?: string }) {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill={color} style={{ flexShrink: 0 }} aria-hidden="true">
+      <path d="M7 10l5 5 5-5z" />
+    </svg>
+  );
+}
+
+function InfoIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="#A0AEC0" aria-hidden="true">
+      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z" />
+    </svg>
+  );
+}
+
+function LockIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="#A0AEC0" aria-hidden="true">
+      <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z" />
+    </svg>
+  );
+}
+
+// ── Shared header ─────────────────────────────────────────────────────────────
+
+function OnboardingHeader() {
+  return (
+    <div style={s.headerArea}>
+      <div style={s.shieldContainer}>
+        <ShieldIcon />
+      </div>
+      <p style={s.appName}>Crisis Reporter</p>
+      <p style={s.appSubtitle}>
+        Helping UNDP respond faster to crises around the world
+      </p>
+    </div>
+  );
+}
+
+// ── Country modal (bottom sheet) ──────────────────────────────────────────────
+
+function CountryModal({
+  countries,
+  search,
+  onSearch,
+  selected,
+  onSelect,
+  onClose,
+}: {
+  countries: CachedCountry[];
+  search: string;
+  onSearch: (v: string) => void;
+  selected: CachedCountry | null;
+  onSelect: (c: CachedCountry) => void;
+  onClose: () => void;
+}) {
+  return (
+    <div style={s.overlay} onClick={onClose}>
+      <div style={s.bottomSheet} onClick={(e) => e.stopPropagation()}>
+        <div style={s.sheetHandle} />
+        <div style={s.sheetHeader}>
+          <span style={s.sheetTitle}>Select country</span>
+          <button style={s.sheetClose} onClick={onClose} aria-label="Close">✕</button>
+        </div>
+        <div style={{ padding: "0 16px 12px" }}>
+          <input
+            style={s.searchInput}
+            type="text"
+            placeholder="Search countries..."
+            value={search}
+            onChange={(e) => onSearch(e.target.value)}
+            autoFocus
+          />
+        </div>
+        <div style={s.countryList}>
+          {countries.length === 0 && (
+            <p style={s.hint}>No countries match your search.</p>
+          )}
+          {countries.map((c) => (
+            <button
+              key={c.code}
+              style={{
+                ...s.countryItem,
+                background: selected?.code === c.code ? "#EBF5FB" : "#fff",
+                color: c.is_active ? "#1A2B4A" : "#A0AEC0",
+              }}
+              onClick={() => onSelect(c)}
+            >
+              <span style={{ flex: 1, textAlign: "left" }}>{c.name}</span>
+              {!c.is_active && (
+                <span style={{ fontSize: 11, color: "#A0AEC0", marginRight: 6 }}>
+                  Unavailable
+                </span>
+              )}
+              {selected?.code === c.code && (
+                <span style={{ color: "#0468B1", fontWeight: 700 }}>✓</span>
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── More languages modal ──────────────────────────────────────────────────────
+
+function MoreLangsModal({ onClose }: { onClose: () => void }) {
+  return (
+    <div style={s.overlay} onClick={onClose}>
+      <div
+        style={{ ...s.bottomSheet, maxHeight: "50vh" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div style={s.sheetHandle} />
+        <div style={s.sheetHeader}>
+          <span style={s.sheetTitle}>More languages</span>
+          <button style={s.sheetClose} onClick={onClose} aria-label="Close">✕</button>
+        </div>
+        <div style={{ padding: "8px 20px 28px" }}>
+          <p style={{ fontSize: 14, color: "#718096", lineHeight: 1.65, marginBottom: 20 }}>
+            Additional language support is coming soon. Currently, Crisis Reporter
+            supports the 6 UN official languages plus your country's official language.
+          </p>
+          <button
+            style={{
+              ...s.continueBtn,
+              background: "#0468B1",
+              color: "#fff",
+              fontWeight: 700,
+              cursor: "pointer",
+            }}
+            onClick={onClose}
+          >
+            Got it
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Terms screen ──────────────────────────────────────────────────────────────
+
+function TermsScreen({
+  tcText,
+  onAgree,
+  onDecline,
+  showDeclineMsg,
+}: {
+  tcText: string;
+  onAgree: () => void;
+  onDecline: () => void;
+  showDeclineMsg: boolean;
+}) {
+  return (
+    <div style={s.page}>
+      <div style={s.scrollArea}>
+        <OnboardingHeader />
+        <div style={s.section}>
+          <p style={s.sectionTitle}>Terms and Conditions</p>
+          <p style={{ fontSize: 14, color: "#718096" }}>
+            Please read and accept the terms below to continue.
+          </p>
+          <div style={s.tcCard}>
+            <p style={s.tcText}>{tcText}</p>
+          </div>
+          {showDeclineMsg && (
+            <div style={s.errorBox}>
+              You must accept the Terms and Conditions to use Crisis Reporter.
+              Refreshing this page will require restarting setup.
+            </div>
+          )}
+        </div>
+        <div style={{ height: 180 }} />
+      </div>
+      <div style={s.footer}>
+        <button
+          className="cr-continue-btn"
+          style={{
+            ...s.continueBtn,
+            background: "#0468B1",
+            color: "#fff",
+            fontWeight: 700,
+            cursor: "pointer",
+          }}
+          onClick={onAgree}
+        >
+          I Agree
+        </button>
+        <button style={s.declineBtn} onClick={onDecline}>
+          Decline
+        </button>
+        <div style={s.footerNote}>
+          <LockIcon />
+          <span>Your data is secured by UNDP Privacy Protocols</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
 
 export default function OnboardingPage() {
   const { t, i18n } = useTranslation();
@@ -48,37 +267,34 @@ export default function OnboardingPage() {
 
   const rawNext = searchParams.get("next");
   const nextPath = rawNext ? decodeURIComponent(rawNext) : "/";
-  const stepParam = searchParams.get("step") as Step | null;
+  const stepParam = searchParams.get("step");
 
   const { setCountry, setLanguage, setOnboarded } = useAuthStore();
 
-  const [step, setStep] = useState<Step>(() => {
-    if (stepParam && (["country", "language", "terms"] as Step[]).includes(stepParam)) {
-      return stepParam;
-    }
-    return getInitialStep();
-  });
+  const [step, setStep] = useState<Step>(
+    stepParam === "terms" ? "terms" : "onboarding"
+  );
 
-  // Country step
+  // Country
   const [countries, setCountries] = useState<CachedCountry[]>([]);
   const [countriesLoading, setCountriesLoading] = useState(true);
   const [countriesError, setCountriesError] = useState<"network" | "nocache" | null>(null);
   const [fromCachedCountries, setFromCachedCountries] = useState(false);
-  const [search, setSearch] = useState("");
+  const [countrySearch, setCountrySearch] = useState("");
   const [selectedCountry, setSelectedCountry] = useState<CachedCountry | null>(null);
+  const [countryModalOpen, setCountryModalOpen] = useState(false);
 
-  // Language step
+  // Language
   const [selectedLanguage, setSelectedLanguage] = useState("");
   const [officialLang, setOfficialLang] = useState<Language | null>(null);
-  const [langFetchDone, setLangFetchDone] = useState(false);
   const [langPackageLoading, setLangPackageLoading] = useState(false);
   const [langPackageError, setLangPackageError] = useState(false);
   const [langFromCache, setLangFromCache] = useState(false);
+  const [moreLangsModalOpen, setMoreLangsModalOpen] = useState(false);
 
-  // Terms step
+  // Terms
   const [showDeclineMsg, setShowDeclineMsg] = useState(false);
 
-  // Consume the pre-fetched country list (started in main.tsx before React mounted).
   useEffect(() => {
     getPreFetchedCountries().then((result) => {
       if (result.data && result.data.length > 0) {
@@ -92,9 +308,12 @@ export default function OnboardingPage() {
     });
   }, []);
 
-  // Fetch the country's official language when the language step becomes active.
+  // Fetch official language whenever an active country is selected.
   useEffect(() => {
-    if (step !== "language" || !selectedCountry || langFetchDone) return;
+    if (!selectedCountry || !selectedCountry.is_active) {
+      setOfficialLang(null);
+      return;
+    }
     api
       .get<{ official_language?: string; official_language_name?: string }>(
         `/api/countries/${selectedCountry.code}`
@@ -105,51 +324,39 @@ export default function OnboardingPage() {
           setOfficialLang({
             code: official_language,
             name: official_language_name ?? official_language.toUpperCase(),
-            highlighted: true,
           });
+        } else {
+          setOfficialLang(null);
         }
       })
-      .catch(() => { /* Official language is supplementary — silently ignore */ })
-      .finally(() => setLangFetchDone(true));
-  }, [step, selectedCountry, langFetchDone]);
+      .catch(() => setOfficialLang(null));
+  }, [selectedCountry]);
 
-  const filteredCountries = countries.filter((c) =>
-    c.name.toLowerCase().includes(search.toLowerCase())
-  );
-
-  const stepNumber = step === "country" ? 1 : step === "language" ? 2 : 3;
-
-  // ── Handlers ────────────────────────────────────────────────────────────────
-
-  const handleCountryNext = () => {
-    if (!selectedCountry?.is_active) return;
-    try { localStorage.setItem("cr_country", selectedCountry.code); } catch { /* ignore */ }
-    setCountry(selectedCountry.code);
-    setStep("language");
-  };
-
-  const handleBackToCountry = () => {
-    setOfficialLang(null);
-    setLangFetchDone(false);
+  const handleCountrySelect = (country: CachedCountry) => {
+    setSelectedCountry(country);
     setSelectedLanguage("");
+    setOfficialLang(null);
     setLangPackageError(false);
     setLangFromCache(false);
-    setStep("country");
+    setCountryModalOpen(false);
+    setCountrySearch("");
   };
 
-  const handleLanguageNext = async () => {
-    if (!selectedLanguage || langPackageLoading) return;
+  const handleContinue = async () => {
+    if (!selectedCountry?.is_active || !selectedLanguage || langPackageLoading) return;
     setLangPackageLoading(true);
     setLangPackageError(false);
     setLangFromCache(false);
 
-    const result = await loadLanguagePackage(selectedLanguage);
+    try { localStorage.setItem("cr_country", selectedCountry.code); } catch { /* ignore */ }
+    setCountry(selectedCountry.code);
 
+    const result = await loadLanguagePackage(selectedLanguage);
     setLangPackageLoading(false);
 
     if (!result.success) {
       setLangPackageError(true);
-      return; // Stay on language step — reporter must retry.
+      return;
     }
 
     try { localStorage.setItem("cr_language", selectedLanguage); } catch { /* ignore */ }
@@ -160,390 +367,239 @@ export default function OnboardingPage() {
     setStep("terms");
   };
 
-  // D5: handleAgree is now synchronous — Reporter ID assignment deferred to HomePage.
+  // D5: handleAgree is synchronous — Reporter ID assignment deferred to HomePage.
   const handleAgree = () => {
-    // Clear decline flag if the reporter declined earlier in this session.
     try { sessionStorage.removeItem("cr_tc_declined"); } catch { /* ignore */ }
-
     try {
       localStorage.setItem("cr_tc_accepted", new Date().toISOString());
-      // D6: Record the T&C version alongside the acceptance timestamp.
+      // D6: Record T&C version alongside the acceptance timestamp.
       localStorage.setItem("cr_tc_version", i18n.t("tc_version"));
     } catch { /* ignore */ }
-
     setOnboarded();
-
-    // Store intended destination so HomePage can navigate there after Reporter ID is assigned.
     if (nextPath !== "/") {
       try { sessionStorage.setItem("cr_post_onboarding_next", nextPath); } catch { /* ignore */ }
     }
-
     navigate("/", { replace: true });
   };
 
-  // D4: Write decline flag to sessionStorage. On page refresh, main.tsx detects
-  // this flag, clears country/language, and redirects to country selection.
+  // D4: Write decline flag to sessionStorage so main.tsx can reset state on refresh.
   const handleDecline = () => {
     try { sessionStorage.setItem("cr_tc_declined", "true"); } catch { /* ignore */ }
     setShowDeclineMsg(true);
   };
 
-  // ── Render ────────────────────────────────────────────────────────────────
-
-  return (
-    <div style={s.page}>
-      {/* Header */}
-      <div style={s.header}>
-        <span style={s.logoIcon}>🆘</span>
-        <span style={s.logoText}>Crisis Reporter</span>
-      </div>
-
-      {/* Progress indicator */}
-      <div style={s.progressRow}>
-        <div style={s.progressTrack}>
-          {([1, 2, 3] as const).map((n) => (
-            <div key={n} style={{ display: "flex", alignItems: "center" }}>
-              <div
-                style={{
-                  ...s.progressDot,
-                  width: n === stepNumber ? 12 : 8,
-                  height: n === stepNumber ? 12 : 8,
-                  background: n <= stepNumber ? "#0468B1" : "#CBD5E0",
-                }}
-              />
-              {n < 3 && (
-                <div
-                  style={{
-                    ...s.progressLine,
-                    background: n < stepNumber ? "#0468B1" : "#CBD5E0",
-                  }}
-                />
-              )}
-            </div>
-          ))}
-        </div>
-        <span style={s.progressLabel}>Step {stepNumber} of 3</span>
-      </div>
-
-      {/* Step content */}
-      <div style={s.content}>
-        {step === "country" && (
-          <CountryStep
-            countries={filteredCountries}
-            loading={countriesLoading}
-            error={countriesError}
-            fromCache={fromCachedCountries}
-            search={search}
-            onSearch={setSearch}
-            selected={selectedCountry}
-            onSelect={setSelectedCountry}
-            onNext={handleCountryNext}
-          />
-        )}
-        {step === "language" && (
-          <LanguageStep
-            selected={selectedLanguage}
-            onSelect={(code) => {
-              setSelectedLanguage(code);
-              setLangPackageError(false);
-              setLangFromCache(false);
-            }}
-            officialLang={officialLang}
-            loading={langPackageLoading}
-            hasError={langPackageError}
-            fromCache={langFromCache}
-            onNext={handleLanguageNext}
-            onBack={handleBackToCountry}
-          />
-        )}
-        {step === "terms" && (
-          <TermsStep
-            tcText={t("tc_text")}
-            onAgree={handleAgree}
-            onDecline={handleDecline}
-            showDeclineMsg={showDeclineMsg}
-            onBack={() => setStep("language")}
-          />
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ── Country step ──────────────────────────────────────────────────────────────
-
-function CountryStep({
-  countries,
-  loading,
-  error,
-  fromCache,
-  search,
-  onSearch,
-  selected,
-  onSelect,
-  onNext,
-}: {
-  countries: CachedCountry[];
-  loading: boolean;
-  error: "network" | "nocache" | null;
-  fromCache: boolean;
-  search: string;
-  onSearch: (v: string) => void;
-  selected: CachedCountry | null;
-  onSelect: (c: CachedCountry) => void;
-  onNext: () => void;
-}) {
-  const canContinue = selected?.is_active === true;
-
-  if (error === "nocache") {
+  if (step === "terms") {
     return (
-      <>
-        <h2 style={s.stepTitle}>Select your country</h2>
-        <div style={s.blockingErrorBox}>
-          <p style={{ margin: 0, fontWeight: 600 }}>No internet connection</p>
-          <p style={{ margin: "6px 0 0" }}>
-            An internet connection is required to use Crisis Reporter. Please
-            check your connection and refresh the page.
-          </p>
-          <button style={s.retryBtn} onClick={() => window.location.reload()}>
-            Refresh
-          </button>
-        </div>
-      </>
+      <TermsScreen
+        tcText={t("tc_text")}
+        onAgree={handleAgree}
+        onDecline={handleDecline}
+        showDeclineMsg={showDeclineMsg}
+      />
     );
   }
 
-  return (
-    <>
-      <h2 style={s.stepTitle}>Select your country</h2>
-      <p style={s.stepSubtitle}>
-        Choose the country where you are reporting from.
-      </p>
-
-      {/* K2: Pill-style search input */}
-      <input
-        style={s.searchInputPill}
-        type="text"
-        placeholder="Search countries..."
-        value={search}
-        onChange={(e) => onSearch(e.target.value)}
-        autoFocus
-      />
-
-      {fromCache && (
-        <p style={s.cacheNote}>
-          Showing saved country list. Some updates may not be reflected.
-        </p>
-      )}
-
-      <div style={s.listScroll}>
-        {loading && <p style={s.hint}>Loading countries...</p>}
-        {!loading && error === "network" && (
-          <p style={s.errorText}>Could not load countries. Showing saved list.</p>
-        )}
-        {!loading && !error && countries.length === 0 && (
-          <p style={s.hint}>No countries match your search.</p>
-        )}
-        {countries.map((country) => (
-          <button
-            key={country.code}
-            style={{
-              ...s.listItem,
-              background: selected?.code === country.code ? "#E8F4FD" : "#fff",
-              borderColor:
-                selected?.code === country.code ? "#0468B1" : "#E2E8F0",
-            }}
-            onClick={() => onSelect(country)}
-          >
-            <span>{country.name}</span>
-            {selected?.code === country.code && (
-              <span style={s.checkIcon}>✓</span>
-            )}
-          </button>
-        ))}
-      </div>
-
-      {selected && !selected.is_active && (
-        <div style={s.warningBox}>
-          We are unable to provide any assistance for your region at this moment.
-        </div>
-      )}
-
-      <button
-        style={{
-          ...s.primaryBtn,
-          opacity: canContinue ? 1 : 0.45,
-          cursor: canContinue ? "pointer" : "not-allowed",
-        }}
-        onClick={onNext}
-        disabled={!canContinue}
-      >
-        Next
-      </button>
-    </>
+  const filteredCountries = countries.filter((c) =>
+    c.name.toLowerCase().includes(countrySearch.toLowerCase())
   );
-}
 
-// ── Language step ─────────────────────────────────────────────────────────────
+  const canContinue = !!(selectedCountry?.is_active && selectedLanguage);
 
-function LanguageStep({
-  selected,
-  onSelect,
-  officialLang,
-  loading,
-  hasError,
-  fromCache,
-  onNext,
-  onBack,
-}: {
-  selected: string;
-  onSelect: (code: string) => void;
-  officialLang: Language | null;
-  loading: boolean;
-  hasError: boolean;
-  fromCache: boolean;
-  onNext: () => void;
-  onBack: () => void;
-}) {
+  const pillLanguages: Language[] = [
+    ...UN_LANGUAGES,
+    ...(officialLang ? [officialLang] : []),
+  ];
+
   return (
-    <>
-      <h2 style={s.stepTitle}>Select your language</h2>
-      <p style={s.stepSubtitle}>
-        Choose the language you'd like to use in the app.
-      </p>
+    <div style={s.page}>
+      <div style={s.scrollArea}>
+        <OnboardingHeader />
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {officialLang && (
-          <button
-            style={{
-              ...s.langItem,
-              gridColumn: "span 2",
-              background: selected === officialLang.code ? "#0468B1" : "#EBF4FF",
-              color: selected === officialLang.code ? "#fff" : "#0468B1",
-              borderColor: "#0468B1",
-              borderWidth: 2,
-            }}
-            onClick={() => onSelect(officialLang.code)}
-            disabled={loading}
-          >
-            <span style={s.officialBadge}>Official Language</span>
-            <span>{officialLang.name}</span>
-          </button>
-        )}
+        {/* ── Country section ── */}
+        <div style={s.section}>
+          <p style={s.sectionLabel}>SELECT YOUR COUNTRY</p>
 
-        <div style={s.langGrid}>
-          {UN_LANGUAGES.map((lang) => {
-            const isSelected = selected === lang.code;
-            return (
-              <button
-                key={lang.code}
-                style={{
-                  ...s.langItem,
-                  background: isSelected ? "#0468B1" : "#fff",
-                  color: isSelected ? "#fff" : "#1A2B4A",
-                  borderColor: isSelected ? "#0468B1" : "#E2E8F0",
-                }}
-                onClick={() => onSelect(lang.code)}
-                disabled={loading}
-              >
-                <span>{lang.name}</span>
+          {countriesError === "nocache" ? (
+            <div style={s.blockingError}>
+              <p style={{ fontWeight: 600, marginBottom: 6 }}>No internet connection</p>
+              <p style={{ fontSize: 13, lineHeight: 1.5 }}>
+                An internet connection is required. Please check your connection and refresh.
+              </p>
+              <button style={s.retryBtn} onClick={() => window.location.reload()}>
+                Refresh
               </button>
-            );
-          })}
+            </div>
+          ) : (
+            <>
+              <button
+                style={s.selectorRow}
+                onClick={() => !countriesLoading && setCountryModalOpen(true)}
+                disabled={countriesLoading}
+                aria-label="Select country"
+              >
+                {selectedCountry ? (
+                  <>
+                    <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <LocationIcon />
+                      <span style={{ fontSize: 15, color: "#1A2B4A", fontWeight: 500 }}>
+                        {selectedCountry.name}
+                      </span>
+                    </span>
+                    <ChevronDownIcon color="#0468B1" />
+                  </>
+                ) : (
+                  <>
+                    <span style={{ fontSize: 15, color: "#718096" }}>
+                      {countriesLoading ? "Loading countries…" : "Select your country"}
+                    </span>
+                    <ChevronDownIcon />
+                  </>
+                )}
+              </button>
+
+              {/* Info note — only when no country selected */}
+              {!selectedCountry && (
+                <div style={s.infoRow}>
+                  <InfoIcon />
+                  <span style={s.infoText}>
+                    Only countries with active UNDP operations are available
+                  </span>
+                </div>
+              )}
+
+              {/* Inactive country warning */}
+              {selectedCountry && !selectedCountry.is_active && (
+                <div style={s.warningBox}>
+                  We are unable to provide assistance for your region at this time.
+                </div>
+              )}
+
+              {fromCachedCountries && (
+                <p style={s.cacheNote}>
+                  Showing saved country list. Some updates may not be reflected.
+                </p>
+              )}
+            </>
+          )}
         </div>
-      </div>
 
-      {fromCache && (
-        <p style={s.cacheNote}>
-          Using saved language data. Some text may not be fully updated.
-        </p>
-      )}
+        {/* ── Language section — animates in when active country is selected ── */}
+        {selectedCountry?.is_active && (
+          <div
+            key={selectedCountry.code}
+            className="cr-lang-section-enter"
+            style={s.section}
+          >
+            <p style={s.sectionLabel}>SELECT YOUR LANGUAGE</p>
 
-      {hasError && (
-        <div style={s.errorBox}>
-          Could not load the language package. Please check your connection and
-          try again.
-        </div>
-      )}
+            <div style={s.pillGrid}>
+              {pillLanguages.map((lang) => {
+                const isSel = selectedLanguage === lang.code;
+                return (
+                  <button
+                    key={lang.code}
+                    style={{
+                      ...s.pill,
+                      background: isSel ? "#0468B1" : "#F7FAFC",
+                      color: isSel ? "#fff" : "#1A2B4A",
+                      fontWeight: isSel ? 700 : 500,
+                      border: isSel ? "2px solid #0468B1" : "2px solid #E2E8F0",
+                      boxShadow: isSel ? "0 2px 8px rgba(4,104,177,0.25)" : "none",
+                    }}
+                    onClick={() => {
+                      setSelectedLanguage(lang.code);
+                      setLangPackageError(false);
+                      setLangFromCache(false);
+                    }}
+                    disabled={langPackageLoading}
+                  >
+                    <span>{lang.name}</span>
+                    {isSel && <CheckCircleIcon />}
+                  </button>
+                );
+              })}
 
-      {/* C3/C4: Button is disabled with loading indicator while fetch runs. */}
-      <button
-        style={{
-          ...s.primaryBtn,
-          opacity: selected && !loading ? 1 : 0.45,
-          cursor: selected && !loading ? "pointer" : "not-allowed",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: 10,
-        }}
-        onClick={onNext}
-        disabled={!selected || loading}
-      >
-        {loading ? (
-          <>
-            <span style={s.spinnerInline} />
-            Loading language…
-          </>
-        ) : (
-          hasError ? "Retry" : "Next"
+              {/* + More pill */}
+              <button
+                style={{
+                  ...s.pill,
+                  background: "#F7FAFC",
+                  color: "#718096",
+                  border: "2px solid #E2E8F0",
+                  fontStyle: "italic",
+                  fontWeight: 400,
+                  justifyContent: "center",
+                }}
+                onClick={() => setMoreLangsModalOpen(true)}
+                disabled={langPackageLoading}
+              >
+                <span>+ More</span>
+              </button>
+            </div>
+
+            {langFromCache && (
+              <p style={s.cacheNote}>
+                Using saved language data. Some text may not be fully updated.
+              </p>
+            )}
+
+            {langPackageError && (
+              <div style={s.errorBox}>
+                Could not load language. Check your connection and try again.
+              </div>
+            )}
+          </div>
         )}
-      </button>
 
-      <button style={s.backBtn} onClick={onBack} disabled={loading}>
-        ← Back
-      </button>
-    </>
-  );
-}
-
-// ── Terms step ────────────────────────────────────────────────────────────────
-
-function TermsStep({
-  tcText,
-  onAgree,
-  onDecline,
-  showDeclineMsg,
-  onBack,
-}: {
-  tcText: string;
-  onAgree: () => void;
-  onDecline: () => void;
-  showDeclineMsg: boolean;
-  onBack: () => void;
-}) {
-  return (
-    <>
-      <h2 style={s.stepTitle}>Terms and Conditions</h2>
-      <p style={s.stepSubtitle}>
-        Please read and accept the terms below to continue.
-      </p>
-
-      {/* D1: T&C text comes from the language package (i18n), not a hardcoded constant. */}
-      <div style={s.tcBox}>
-        <p style={s.tcText}>{tcText}</p>
+        {/* Spacer so content clears the fixed footer */}
+        <div style={{ height: 124 }} />
       </div>
 
-      {showDeclineMsg && (
-        <div style={s.errorBox}>
-          You must accept the Terms and Conditions to use Crisis Reporter.
-          If you refresh this page, you will be asked to restart setup.
+      {/* ── Fixed footer ── */}
+      <div style={s.footer}>
+        <button
+          className="cr-continue-btn"
+          style={{
+            ...s.continueBtn,
+            background: canContinue ? "#0468B1" : "#EDF2F7",
+            color: canContinue ? "#fff" : "#A0AEC0",
+            fontWeight: canContinue ? 700 : 400,
+            cursor: canContinue ? "pointer" : "not-allowed",
+          }}
+          onClick={handleContinue}
+          disabled={!canContinue || langPackageLoading}
+        >
+          {langPackageLoading ? (
+            <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
+              <span style={s.spinner} />
+              Loading…
+            </span>
+          ) : (
+            "Continue"
+          )}
+        </button>
+        <div style={s.footerNote}>
+          <LockIcon />
+          <span>Your data is secured by UNDP Privacy Protocols</span>
         </div>
+      </div>
+
+      {/* ── Modals ── */}
+      {countryModalOpen && (
+        <CountryModal
+          countries={filteredCountries}
+          search={countrySearch}
+          onSearch={setCountrySearch}
+          selected={selectedCountry}
+          onSelect={handleCountrySelect}
+          onClose={() => { setCountryModalOpen(false); setCountrySearch(""); }}
+        />
       )}
 
-      {/* D5: I Agree no longer creates an anonymous session — that moves to HomePage. */}
-      <button style={s.primaryBtn} onClick={onAgree}>
-        I Agree
-      </button>
-
-      <button style={s.declineBtn} onClick={onDecline}>
-        Decline
-      </button>
-
-      <button style={s.backBtn} onClick={onBack}>
-        ← Back
-      </button>
-    </>
+      {moreLangsModalOpen && (
+        <MoreLangsModal onClose={() => setMoreLangsModalOpen(false)} />
+      )}
+    </div>
   );
 }
 
@@ -552,93 +608,91 @@ function TermsStep({
 const s: Record<string, React.CSSProperties> = {
   page: {
     minHeight: "100vh",
-    background: "#fff",
+    background: "#FAFBFC",
     display: "flex",
     flexDirection: "column",
     maxWidth: 480,
     margin: "0 auto",
+    position: "relative",
   },
-  header: {
-    background: "#0468B1",
-    padding: "20px 24px",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 10,
-  },
-  logoIcon: { fontSize: 26 },
-  logoText: {
-    color: "#fff",
-    fontSize: 22,
-    fontWeight: 700,
-    letterSpacing: 0.3,
-  },
-  progressRow: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 16,
-    padding: "14px 24px",
-    borderBottom: "1px solid #EDF2F7",
-    background: "#F7FAFC",
-  },
-  progressTrack: { display: "flex", alignItems: "center" },
-  progressDot: { borderRadius: "50%", transition: "all 0.2s" },
-  progressLine: {
-    width: 40,
-    height: 2,
-    margin: "0 3px",
-    transition: "background 0.2s",
-  },
-  progressLabel: { fontSize: 13, color: "#4A5568", fontWeight: 500 },
-  content: {
-    flex: 1,
-    padding: "24px 20px 40px",
-    display: "flex",
-    flexDirection: "column",
-    gap: 14,
-  },
-  stepTitle: { fontSize: 22, fontWeight: 700, color: "#1A2B4A", margin: 0 },
-  stepSubtitle: { fontSize: 14, color: "#718096", margin: 0 },
-  // K2: Pill-style search input (borderRadius: 9999px = full pill)
-  searchInputPill: {
-    width: "100%",
-    padding: "12px 20px",
-    borderRadius: "9999px",
-    border: "1px solid #D0D5DD",
-    fontSize: 15,
-    outline: "none",
-    background: "#FFFFFF",
-    boxSizing: "border-box",
-  },
-  listScroll: {
+  scrollArea: {
     flex: 1,
     overflowY: "auto",
-    maxHeight: "40vh",
+  },
+  headerArea: {
+    textAlign: "center",
+    padding: "40px 24px 28px",
+    background: "#fff",
+    borderBottom: "1px solid #EDF2F7",
+  },
+  shieldContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    background: "#0468B1",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    margin: "0 auto 14px",
+  },
+  appName: {
+    fontSize: 22,
+    fontWeight: 700,
+    color: "#1A2B4A",
+    margin: "0 0 6px",
+    letterSpacing: -0.3,
+  },
+  appSubtitle: {
+    fontSize: 13,
+    color: "#718096",
+    maxWidth: 280,
+    margin: "0 auto",
+    lineHeight: 1.55,
+  },
+  section: {
+    padding: "20px 20px 0",
     display: "flex",
     flexDirection: "column",
-    gap: 8,
+    gap: 10,
+    marginBottom: 20,
   },
-  listItem: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: "13px 16px",
-    borderRadius: 8,
-    border: "1.5px solid",
-    cursor: "pointer",
-    fontSize: 15,
-    textAlign: "left",
-    width: "100%",
-    transition: "all 0.12s",
-    background: "#fff",
-  },
-  checkIcon: { color: "#0468B1", fontWeight: 700, fontSize: 16, flexShrink: 0 },
-  cacheNote: {
-    fontSize: 12,
+  sectionLabel: {
+    fontSize: "0.65rem",
+    fontWeight: 700,
     color: "#718096",
+    letterSpacing: "0.1em",
+    textTransform: "uppercase",
     margin: 0,
-    fontStyle: "italic",
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: 700,
+    color: "#1A2B4A",
+    margin: 0,
+  },
+  selectorRow: {
+    width: "100%",
+    height: 56,
+    background: "#F7FAFC",
+    border: "1.5px solid #E2E8F0",
+    borderRadius: 8,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: "0 14px",
+    cursor: "pointer",
+    boxSizing: "border-box",
+    transition: "border-color 0.15s",
+  },
+  infoRow: {
+    display: "flex",
+    alignItems: "flex-start",
+    gap: 6,
+  },
+  infoText: {
+    fontSize: "0.75rem",
+    color: "#A0AEC0",
+    lineHeight: 1.45,
   },
   warningBox: {
     background: "#FFFBEB",
@@ -649,46 +703,39 @@ const s: Record<string, React.CSSProperties> = {
     color: "#92400E",
     lineHeight: 1.5,
   },
-  blockingErrorBox: {
+  blockingError: {
     background: "#FFF5F5",
     border: "1px solid #FC8181",
     borderRadius: 10,
-    padding: "16px",
+    padding: 16,
     fontSize: 14,
     color: "#C53030",
     lineHeight: 1.55,
   },
-  langGrid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 },
-  langItem: {
-    padding: "16px 12px",
+  cacheNote: {
+    fontSize: 12,
+    color: "#718096",
+    margin: 0,
+    fontStyle: "italic",
+  },
+  pillGrid: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: 12,
+  },
+  pill: {
+    height: 48,
     borderRadius: 8,
-    border: "1.5px solid",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: "0 14px",
     cursor: "pointer",
     fontSize: 15,
-    fontWeight: 600,
-    textAlign: "center",
-    transition: "all 0.12s",
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    gap: 4,
     width: "100%",
+    transition: "background 0.15s, border-color 0.15s, box-shadow 0.15s",
+    boxSizing: "border-box",
   },
-  officialBadge: {
-    fontSize: 10,
-    fontWeight: 700,
-    letterSpacing: 0.8,
-    opacity: 0.75,
-  },
-  tcBox: {
-    background: "#F7FAFC",
-    border: "1px solid #E2E8F0",
-    borderRadius: 8,
-    padding: "16px",
-    overflowY: "auto",
-    maxHeight: "30vh",
-  },
-  tcText: { fontSize: 15, color: "#2D3748", lineHeight: 1.65, margin: 0 },
   errorBox: {
     background: "#FFF5F5",
     border: "1px solid #FC8181",
@@ -698,39 +745,62 @@ const s: Record<string, React.CSSProperties> = {
     color: "#C53030",
     lineHeight: 1.5,
   },
-  primaryBtn: {
+  footer: {
+    position: "fixed",
+    bottom: 0,
+    left: "50%",
+    transform: "translateX(-50%)",
     width: "100%",
-    padding: "15px",
-    background: "#0468B1",
-    color: "#fff",
+    maxWidth: 480,
+    background: "rgba(255,255,255,0.85)",
+    backdropFilter: "blur(12px)",
+    padding: "16px 20px 28px",
+    display: "flex",
+    flexDirection: "column",
+    gap: 10,
+    borderTop: "1px solid rgba(226,232,240,0.6)",
+    boxSizing: "border-box",
+    zIndex: 100,
+  },
+  continueBtn: {
+    width: "100%",
+    height: 56,
+    borderRadius: 12,
     border: "none",
-    borderRadius: 8,
     fontSize: 16,
-    fontWeight: 600,
-    marginTop: 4,
-    transition: "opacity 0.15s",
-    cursor: "pointer",
+    transition: "background 0.15s, opacity 0.15s",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
   },
   declineBtn: {
     width: "100%",
-    padding: "13px",
-    background: "#fff",
-    color: "#E53E3E",
-    border: "1.5px solid #FC8181",
-    borderRadius: 8,
+    height: 48,
+    borderRadius: 12,
+    background: "transparent",
+    border: "1.5px solid #E2E8F0",
+    color: "#718096",
     fontSize: 15,
-    fontWeight: 500,
     cursor: "pointer",
   },
-  backBtn: {
-    width: "100%",
-    padding: "10px",
-    background: "transparent",
-    color: "#718096",
-    border: "none",
-    borderRadius: 8,
-    fontSize: 14,
-    cursor: "pointer",
+  footerNote: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+    fontSize: "0.7rem",
+    color: "#A0AEC0",
+  },
+  spinner: {
+    display: "inline-block",
+    width: 16,
+    height: 16,
+    border: "2px solid rgba(255,255,255,0.4)",
+    borderTop: "2px solid #fff",
+    borderRadius: "50%",
+    animation: "spin 0.8s linear infinite",
+    flexShrink: 0,
   },
   retryBtn: {
     marginTop: 12,
@@ -743,16 +813,102 @@ const s: Record<string, React.CSSProperties> = {
     fontWeight: 600,
     cursor: "pointer",
   },
-  spinnerInline: {
-    display: "inline-block",
-    width: 16,
-    height: 16,
-    border: "2px solid rgba(255,255,255,0.4)",
-    borderTop: "2px solid #fff",
-    borderRadius: "50%",
-    animation: "spin 0.8s linear infinite",
+  overlay: {
+    position: "fixed",
+    inset: 0,
+    background: "rgba(0,0,0,0.5)",
+    zIndex: 1000,
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: "flex-end",
+    alignItems: "center",
+  },
+  bottomSheet: {
+    background: "#fff",
+    borderRadius: "16px 16px 0 0",
+    maxHeight: "80vh",
+    display: "flex",
+    flexDirection: "column",
+    overflow: "hidden",
+    width: "100%",
+    maxWidth: 480,
+  },
+  sheetHandle: {
+    width: 36,
+    height: 4,
+    background: "#E2E8F0",
+    borderRadius: 2,
+    margin: "12px auto 4px",
     flexShrink: 0,
   },
-  hint: { color: "#718096", fontSize: 14, textAlign: "center", padding: "20px 0", margin: 0 },
-  errorText: { color: "#E53E3E", fontSize: 14, textAlign: "center", margin: 0 },
+  sheetHeader: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: "8px 20px 12px",
+    borderBottom: "1px solid #EDF2F7",
+    flexShrink: 0,
+  },
+  sheetTitle: {
+    fontSize: 16,
+    fontWeight: 600,
+    color: "#1A2B4A",
+  },
+  sheetClose: {
+    background: "none",
+    border: "none",
+    fontSize: 16,
+    color: "#718096",
+    cursor: "pointer",
+    padding: 4,
+    lineHeight: 1,
+  },
+  searchInput: {
+    width: "100%",
+    padding: "11px 16px",
+    borderRadius: 8,
+    border: "1.5px solid #E2E8F0",
+    fontSize: 15,
+    outline: "none",
+    background: "#F7FAFC",
+    boxSizing: "border-box",
+  },
+  countryList: {
+    flex: 1,
+    overflowY: "auto",
+    padding: "4px 8px 16px",
+  },
+  countryItem: {
+    display: "flex",
+    alignItems: "center",
+    padding: "12px",
+    borderRadius: 8,
+    border: "none",
+    cursor: "pointer",
+    fontSize: 15,
+    width: "100%",
+    transition: "background 0.1s",
+    gap: 8,
+  },
+  hint: {
+    color: "#718096",
+    fontSize: 14,
+    textAlign: "center",
+    padding: "20px 0",
+    margin: 0,
+  },
+  tcCard: {
+    background: "#F7FAFC",
+    border: "1px solid #E2E8F0",
+    borderRadius: 12,
+    padding: 16,
+    maxHeight: "50vh",
+    overflowY: "auto",
+  },
+  tcText: {
+    fontSize: "0.875rem",
+    color: "#2D3748",
+    lineHeight: 1.75,
+    margin: 0,
+  },
 };

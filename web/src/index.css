@@ -115,6 +115,19 @@ code {
   100% { transform: rotate(360deg); }
 }
 
+@keyframes cr-fade-slide-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.cr-lang-section-enter {
+  animation: cr-fade-slide-in 0.28s ease-out forwards;
+}
+
+.cr-continue-btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
 * {
   box-sizing: border-box;
   margin: 0;

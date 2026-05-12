@@ -51,30 +51,31 @@ function LoadingSpinner() {
   );
 }
 
-// Returns the first incomplete onboarding step, or null if fully onboarded.
-function getFirstMissingStep(): "country" | "language" | "terms" | null {
+// Returns the first incomplete onboarding phase, or null if fully onboarded.
+// Country and language are now one combined screen ("onboarding"), so both
+// missing states collapse to the same redirect target.
+function getFirstMissingStep(): "onboarding" | "terms" | null {
   try {
-    if (!localStorage.getItem("cr_country")) return "country";
-    if (!localStorage.getItem("cr_language")) return "language";
+    if (!localStorage.getItem("cr_country") || !localStorage.getItem("cr_language"))
+      return "onboarding";
     if (!localStorage.getItem("cr_tc_accepted")) return "terms";
   } catch {
-    return "country";
+    return "onboarding";
   }
   return null;
 }
 
-// Redirects to the first incomplete onboarding step, storing the intended URL.
+// Redirects to the first incomplete onboarding phase, storing the intended URL.
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const missingStep = getFirstMissingStep();
   if (missingStep) {
     const next = encodeURIComponent(location.pathname + location.search);
-    return (
-      <Navigate
-        to={`/onboarding?step=${missingStep}&next=${next}`}
-        replace
-      />
-    );
+    const to =
+      missingStep === "terms"
+        ? `/onboarding?step=terms&next=${next}`
+        : `/onboarding?next=${next}`;
+    return <Navigate to={to} replace />;
   }
   return <>{children}</>;
 }
