@@ -1,4 +1,6 @@
 {
+  "tc_version": "1.0",
+  "tc_text": "By using Crisis Reporter you agree to submit accurate damage reports and allow UNDP to use your submitted data for crisis response coordination. Your location and photos will be stored securely. This platform is operated by the United Nations Development Programme (UNDP). Data collected will be used solely for humanitarian response purposes and will not be shared with third parties without your consent except as required by law.",
   "app": {
     "name": "Crisis Reporter"
   },

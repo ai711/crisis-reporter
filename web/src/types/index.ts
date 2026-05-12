@@ -61,6 +61,10 @@ export interface ReportSubmitRequest {
   app_version?: string;
   was_queued: boolean;
   queued_at?: string;
+  // Anti-spam signals — captured silently client-side
+  browser_timezone?: string;
+  screen_resolution?: string;
+  viewport_dimensions?: string;
 }
 
 export interface ReportSubmitResponse {

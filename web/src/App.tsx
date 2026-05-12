@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { Suspense, lazy } from "react";
+import i18n from "./i18n";
 
 const OnboardingPage = lazy(() => import("./pages/OnboardingPage"));
 const LoginPage = lazy(() => import("./pages/LoginPage"));
@@ -13,6 +14,21 @@ const SafetyTipsPage = lazy(() => import("./pages/SafetyTipsPage"));
 const BadgesPage = lazy(() => import("./pages/BadgesPage"));
 const FAQPage = lazy(() => import("./pages/FAQPage"));
 const AboutPage = lazy(() => import("./pages/AboutPage"));
+
+// ── D6: T&C version check — runs once at module load, before any route renders.
+// If the stored acceptance version doesn't match the current bundled version,
+// clear the acceptance so the reporter must re-accept before proceeding.
+(function checkTcVersionAndClear() {
+  try {
+    const stored = localStorage.getItem("cr_tc_version");
+    if (!stored) return; // Never accepted, or acceptance predates versioning.
+    const current = i18n.t("tc_version");
+    if (current && current !== "tc_version" && stored !== current) {
+      localStorage.removeItem("cr_tc_accepted");
+      localStorage.removeItem("cr_tc_version");
+    }
+  } catch { /* localStorage unavailable */ }
+})();
 
 function LoadingSpinner() {
   return (
@@ -37,9 +53,13 @@ function LoadingSpinner() {
 
 // Returns the first incomplete onboarding step, or null if fully onboarded.
 function getFirstMissingStep(): "country" | "language" | "terms" | null {
-  if (!localStorage.getItem("cr_country")) return "country";
-  if (!localStorage.getItem("cr_language")) return "language";
-  if (!localStorage.getItem("cr_tc_accepted")) return "terms";
+  try {
+    if (!localStorage.getItem("cr_country")) return "country";
+    if (!localStorage.getItem("cr_language")) return "language";
+    if (!localStorage.getItem("cr_tc_accepted")) return "terms";
+  } catch {
+    return "country";
+  }
   return null;
 }
 
@@ -75,7 +95,15 @@ export default function App() {
       <Suspense fallback={<LoadingSpinner />}>
         <Routes>
           <Route path="/onboarding" element={<OnboardingRoute />} />
-          <Route path="/login" element={<LoginPage />} />
+          {/* E1: /login is a protected route — onboarding must be complete first. */}
+          <Route
+            path="/login"
+            element={
+              <ProtectedRoute>
+                <LoginPage />
+              </ProtectedRoute>
+            }
+          />
           <Route
             path="/"
             element={

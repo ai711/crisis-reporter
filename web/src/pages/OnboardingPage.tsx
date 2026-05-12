@@ -1,17 +1,13 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { useAuthStore } from "../stores/authStore";
-import { createAnonymousSession } from "../services/auth";
-import api from "../services/api";
 import { useTranslation } from "react-i18next";
+import { useAuthStore } from "../stores/authStore";
+import { loadLanguagePackage } from "../i18n";
+import { getPreFetchedCountries } from "../utils/countryListCache";
+import type { CachedCountry } from "../utils/countryListCache";
+import api from "../services/api";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-
-interface Country {
-  code: string;
-  name: string;
-  is_active: boolean;
-}
 
 interface Language {
   code: string;
@@ -32,22 +28,21 @@ const UN_LANGUAGES: Language[] = [
 
 const UN_LANGUAGE_CODES = new Set(UN_LANGUAGES.map((l) => l.code));
 
-const TC_TEXT =
-  "By using Crisis Reporter you agree to submit accurate damage reports and allow UNDP to use your submitted data for crisis response coordination. Your location and photos will be stored securely.";
-
 type Step = "country" | "language" | "terms";
 
 function getInitialStep(): Step {
-  if (!localStorage.getItem("cr_country")) return "country";
-  if (!localStorage.getItem("cr_language")) return "language";
-  if (!localStorage.getItem("cr_tc_accepted")) return "terms";
+  try {
+    if (!localStorage.getItem("cr_country")) return "country";
+    if (!localStorage.getItem("cr_language")) return "language";
+    if (!localStorage.getItem("cr_tc_accepted")) return "terms";
+  } catch { /* ignore */ }
   return "country";
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 export default function OnboardingPage() {
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
@@ -55,7 +50,7 @@ export default function OnboardingPage() {
   const nextPath = rawNext ? decodeURIComponent(rawNext) : "/";
   const stepParam = searchParams.get("step") as Step | null;
 
-  const { setCountry, setLanguage, setOnboarded, setReporter } = useAuthStore();
+  const { setCountry, setLanguage, setOnboarded } = useAuthStore();
 
   const [step, setStep] = useState<Step>(() => {
     if (stepParam && (["country", "language", "terms"] as Step[]).includes(stepParam)) {
@@ -65,34 +60,39 @@ export default function OnboardingPage() {
   });
 
   // Country step
-  const [countries, setCountries] = useState<Country[]>([]);
+  const [countries, setCountries] = useState<CachedCountry[]>([]);
   const [countriesLoading, setCountriesLoading] = useState(true);
-  const [countriesError, setCountriesError] = useState("");
+  const [countriesError, setCountriesError] = useState<"network" | "nocache" | null>(null);
+  const [fromCachedCountries, setFromCachedCountries] = useState(false);
   const [search, setSearch] = useState("");
-  const [selectedCountry, setSelectedCountry] = useState<Country | null>(null);
+  const [selectedCountry, setSelectedCountry] = useState<CachedCountry | null>(null);
 
   // Language step
   const [selectedLanguage, setSelectedLanguage] = useState("");
   const [officialLang, setOfficialLang] = useState<Language | null>(null);
   const [langFetchDone, setLangFetchDone] = useState(false);
+  const [langPackageLoading, setLangPackageLoading] = useState(false);
+  const [langPackageError, setLangPackageError] = useState(false);
+  const [langFromCache, setLangFromCache] = useState(false);
 
   // Terms step
   const [showDeclineMsg, setShowDeclineMsg] = useState(false);
-  const [finishing, setFinishing] = useState(false);
-  const [finishError, setFinishError] = useState("");
 
-  // Fetch countries on mount
+  // Consume the pre-fetched country list (started in main.tsx before React mounted).
   useEffect(() => {
-    api
-      .get<Country[]>("/api/countries")
-      .then((res) => setCountries(res.data))
-      .catch(() =>
-        setCountriesError("Could not load countries. Please try again.")
-      )
-      .finally(() => setCountriesLoading(false));
+    getPreFetchedCountries().then((result) => {
+      if (result.data && result.data.length > 0) {
+        setCountries(result.data);
+        setFromCachedCountries(result.fromCache);
+        setCountriesError(null);
+      } else {
+        setCountriesError("nocache");
+      }
+      setCountriesLoading(false);
+    });
   }, []);
 
-  // Fetch official language when language step activates
+  // Fetch the country's official language when the language step becomes active.
   useEffect(() => {
     if (step !== "language" || !selectedCountry || langFetchDone) return;
     api
@@ -109,9 +109,7 @@ export default function OnboardingPage() {
           });
         }
       })
-      .catch(() => {
-        // Official language is an enhancement — silently ignore errors
-      })
+      .catch(() => { /* Official language is supplementary — silently ignore */ })
       .finally(() => setLangFetchDone(true));
   }, [step, selectedCountry, langFetchDone]);
 
@@ -125,46 +123,70 @@ export default function OnboardingPage() {
 
   const handleCountryNext = () => {
     if (!selectedCountry?.is_active) return;
-    localStorage.setItem("cr_country", selectedCountry.code);
+    try { localStorage.setItem("cr_country", selectedCountry.code); } catch { /* ignore */ }
     setCountry(selectedCountry.code);
     setStep("language");
   };
 
   const handleBackToCountry = () => {
-    // Reset official lang so it re-fetches if country changes
     setOfficialLang(null);
     setLangFetchDone(false);
+    setSelectedLanguage("");
+    setLangPackageError(false);
+    setLangFromCache(false);
     setStep("country");
   };
 
-  const handleLanguageNext = () => {
-    if (!selectedLanguage) return;
-    localStorage.setItem("cr_language", selectedLanguage);
+  const handleLanguageNext = async () => {
+    if (!selectedLanguage || langPackageLoading) return;
+    setLangPackageLoading(true);
+    setLangPackageError(false);
+    setLangFromCache(false);
+
+    const result = await loadLanguagePackage(selectedLanguage);
+
+    setLangPackageLoading(false);
+
+    if (!result.success) {
+      setLangPackageError(true);
+      return; // Stay on language step — reporter must retry.
+    }
+
+    try { localStorage.setItem("cr_language", selectedLanguage); } catch { /* ignore */ }
     setLanguage(selectedLanguage);
-    i18n.changeLanguage(selectedLanguage);
+
+    if (result.fromCache) setLangFromCache(true);
+
     setStep("terms");
   };
 
-  const handleAgree = async () => {
-    localStorage.setItem("cr_tc_accepted", new Date().toISOString());
-    setFinishing(true);
-    setFinishError("");
+  // D5: handleAgree is now synchronous — Reporter ID assignment deferred to HomePage.
+  const handleAgree = () => {
+    // Clear decline flag if the reporter declined earlier in this session.
+    try { sessionStorage.removeItem("cr_tc_declined"); } catch { /* ignore */ }
+
     try {
-      const countryCode = localStorage.getItem("cr_country")!;
-      const langCode = localStorage.getItem("cr_language")!;
-      const session = await createAnonymousSession(countryCode, langCode);
-      setReporter(session.reporter_id, session.is_verified);
-      setOnboarded();
-      navigate(nextPath, { replace: true });
-    } catch {
-      setFinishError(
-        "Could not connect. Please check your internet connection."
-      );
-      setFinishing(false);
+      localStorage.setItem("cr_tc_accepted", new Date().toISOString());
+      // D6: Record the T&C version alongside the acceptance timestamp.
+      localStorage.setItem("cr_tc_version", i18n.t("tc_version"));
+    } catch { /* ignore */ }
+
+    setOnboarded();
+
+    // Store intended destination so HomePage can navigate there after Reporter ID is assigned.
+    if (nextPath !== "/") {
+      try { sessionStorage.setItem("cr_post_onboarding_next", nextPath); } catch { /* ignore */ }
     }
+
+    navigate("/", { replace: true });
   };
 
-  const handleDecline = () => setShowDeclineMsg(true);
+  // D4: Write decline flag to sessionStorage. On page refresh, main.tsx detects
+  // this flag, clears country/language, and redirects to country selection.
+  const handleDecline = () => {
+    try { sessionStorage.setItem("cr_tc_declined", "true"); } catch { /* ignore */ }
+    setShowDeclineMsg(true);
+  };
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -210,6 +232,7 @@ export default function OnboardingPage() {
             countries={filteredCountries}
             loading={countriesLoading}
             error={countriesError}
+            fromCache={fromCachedCountries}
             search={search}
             onSearch={setSearch}
             selected={selectedCountry}
@@ -220,19 +243,25 @@ export default function OnboardingPage() {
         {step === "language" && (
           <LanguageStep
             selected={selectedLanguage}
-            onSelect={setSelectedLanguage}
+            onSelect={(code) => {
+              setSelectedLanguage(code);
+              setLangPackageError(false);
+              setLangFromCache(false);
+            }}
             officialLang={officialLang}
+            loading={langPackageLoading}
+            hasError={langPackageError}
+            fromCache={langFromCache}
             onNext={handleLanguageNext}
             onBack={handleBackToCountry}
           />
         )}
         {step === "terms" && (
           <TermsStep
+            tcText={t("tc_text")}
             onAgree={handleAgree}
             onDecline={handleDecline}
             showDeclineMsg={showDeclineMsg}
-            finishing={finishing}
-            finishError={finishError}
             onBack={() => setStep("language")}
           />
         )}
@@ -247,22 +276,42 @@ function CountryStep({
   countries,
   loading,
   error,
+  fromCache,
   search,
   onSearch,
   selected,
   onSelect,
   onNext,
 }: {
-  countries: Country[];
+  countries: CachedCountry[];
   loading: boolean;
-  error: string;
+  error: "network" | "nocache" | null;
+  fromCache: boolean;
   search: string;
   onSearch: (v: string) => void;
-  selected: Country | null;
-  onSelect: (c: Country) => void;
+  selected: CachedCountry | null;
+  onSelect: (c: CachedCountry) => void;
   onNext: () => void;
 }) {
   const canContinue = selected?.is_active === true;
+
+  if (error === "nocache") {
+    return (
+      <>
+        <h2 style={s.stepTitle}>Select your country</h2>
+        <div style={s.blockingErrorBox}>
+          <p style={{ margin: 0, fontWeight: 600 }}>No internet connection</p>
+          <p style={{ margin: "6px 0 0" }}>
+            An internet connection is required to use Crisis Reporter. Please
+            check your connection and refresh the page.
+          </p>
+          <button style={s.retryBtn} onClick={() => window.location.reload()}>
+            Refresh
+          </button>
+        </div>
+      </>
+    );
+  }
 
   return (
     <>
@@ -271,8 +320,9 @@ function CountryStep({
         Choose the country where you are reporting from.
       </p>
 
+      {/* K2: Pill-style search input */}
       <input
-        style={s.searchInput}
+        style={s.searchInputPill}
         type="text"
         placeholder="Search countries..."
         value={search}
@@ -280,9 +330,17 @@ function CountryStep({
         autoFocus
       />
 
+      {fromCache && (
+        <p style={s.cacheNote}>
+          Showing saved country list. Some updates may not be reflected.
+        </p>
+      )}
+
       <div style={s.listScroll}>
         {loading && <p style={s.hint}>Loading countries...</p>}
-        {!loading && error && <p style={s.errorText}>{error}</p>}
+        {!loading && error === "network" && (
+          <p style={s.errorText}>Could not load countries. Showing saved list.</p>
+        )}
         {!loading && !error && countries.length === 0 && (
           <p style={s.hint}>No countries match your search.</p>
         )}
@@ -307,8 +365,7 @@ function CountryStep({
 
       {selected && !selected.is_active && (
         <div style={s.warningBox}>
-          We are unable to provide any assistance for your region at this
-          moment.
+          We are unable to provide any assistance for your region at this moment.
         </div>
       )}
 
@@ -333,12 +390,18 @@ function LanguageStep({
   selected,
   onSelect,
   officialLang,
+  loading,
+  hasError,
+  fromCache,
   onNext,
   onBack,
 }: {
   selected: string;
   onSelect: (code: string) => void;
   officialLang: Language | null;
+  loading: boolean;
+  hasError: boolean;
+  fromCache: boolean;
   onNext: () => void;
   onBack: () => void;
 }) {
@@ -361,6 +424,7 @@ function LanguageStep({
               borderWidth: 2,
             }}
             onClick={() => onSelect(officialLang.code)}
+            disabled={loading}
           >
             <span style={s.officialBadge}>Official Language</span>
             <span>{officialLang.name}</span>
@@ -380,6 +444,7 @@ function LanguageStep({
                   borderColor: isSelected ? "#0468B1" : "#E2E8F0",
                 }}
                 onClick={() => onSelect(lang.code)}
+                disabled={loading}
               >
                 <span>{lang.name}</span>
               </button>
@@ -388,19 +453,44 @@ function LanguageStep({
         </div>
       </div>
 
+      {fromCache && (
+        <p style={s.cacheNote}>
+          Using saved language data. Some text may not be fully updated.
+        </p>
+      )}
+
+      {hasError && (
+        <div style={s.errorBox}>
+          Could not load the language package. Please check your connection and
+          try again.
+        </div>
+      )}
+
+      {/* C3/C4: Button is disabled with loading indicator while fetch runs. */}
       <button
         style={{
           ...s.primaryBtn,
-          opacity: selected ? 1 : 0.45,
-          cursor: selected ? "pointer" : "not-allowed",
+          opacity: selected && !loading ? 1 : 0.45,
+          cursor: selected && !loading ? "pointer" : "not-allowed",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 10,
         }}
         onClick={onNext}
-        disabled={!selected}
+        disabled={!selected || loading}
       >
-        Next
+        {loading ? (
+          <>
+            <span style={s.spinnerInline} />
+            Loading language…
+          </>
+        ) : (
+          hasError ? "Retry" : "Next"
+        )}
       </button>
 
-      <button style={s.backBtn} onClick={onBack}>
+      <button style={s.backBtn} onClick={onBack} disabled={loading}>
         ← Back
       </button>
     </>
@@ -410,18 +500,16 @@ function LanguageStep({
 // ── Terms step ────────────────────────────────────────────────────────────────
 
 function TermsStep({
+  tcText,
   onAgree,
   onDecline,
   showDeclineMsg,
-  finishing,
-  finishError,
   onBack,
 }: {
+  tcText: string;
   onAgree: () => void;
   onDecline: () => void;
   showDeclineMsg: boolean;
-  finishing: boolean;
-  finishError: string;
   onBack: () => void;
 }) {
   return (
@@ -431,35 +519,28 @@ function TermsStep({
         Please read and accept the terms below to continue.
       </p>
 
+      {/* D1: T&C text comes from the language package (i18n), not a hardcoded constant. */}
       <div style={s.tcBox}>
-        <p style={s.tcText}>{TC_TEXT}</p>
+        <p style={s.tcText}>{tcText}</p>
       </div>
 
       {showDeclineMsg && (
         <div style={s.errorBox}>
           You must accept the Terms and Conditions to use Crisis Reporter.
+          If you refresh this page, you will be asked to restart setup.
         </div>
       )}
 
-      {finishError && <p style={s.errorText}>{finishError}</p>}
-
-      <button
-        style={{
-          ...s.primaryBtn,
-          opacity: finishing ? 0.7 : 1,
-          cursor: finishing ? "not-allowed" : "pointer",
-        }}
-        onClick={onAgree}
-        disabled={finishing}
-      >
-        {finishing ? "Setting up..." : "I Agree"}
+      {/* D5: I Agree no longer creates an anonymous session — that moves to HomePage. */}
+      <button style={s.primaryBtn} onClick={onAgree}>
+        I Agree
       </button>
 
-      <button style={s.declineBtn} onClick={onDecline} disabled={finishing}>
+      <button style={s.declineBtn} onClick={onDecline}>
         Decline
       </button>
 
-      <button style={s.backBtn} onClick={onBack} disabled={finishing}>
+      <button style={s.backBtn} onClick={onBack}>
         ← Back
       </button>
     </>
@@ -485,9 +566,7 @@ const s: Record<string, React.CSSProperties> = {
     justifyContent: "center",
     gap: 10,
   },
-  logoIcon: {
-    fontSize: 26,
-  },
+  logoIcon: { fontSize: 26 },
   logoText: {
     color: "#fff",
     fontSize: 22,
@@ -503,25 +582,15 @@ const s: Record<string, React.CSSProperties> = {
     borderBottom: "1px solid #EDF2F7",
     background: "#F7FAFC",
   },
-  progressTrack: {
-    display: "flex",
-    alignItems: "center",
-  },
-  progressDot: {
-    borderRadius: "50%",
-    transition: "all 0.2s",
-  },
+  progressTrack: { display: "flex", alignItems: "center" },
+  progressDot: { borderRadius: "50%", transition: "all 0.2s" },
   progressLine: {
     width: 40,
     height: 2,
     margin: "0 3px",
     transition: "background 0.2s",
   },
-  progressLabel: {
-    fontSize: 13,
-    color: "#4A5568",
-    fontWeight: 500,
-  },
+  progressLabel: { fontSize: 13, color: "#4A5568", fontWeight: 500 },
   content: {
     flex: 1,
     padding: "24px 20px 40px",
@@ -529,25 +598,17 @@ const s: Record<string, React.CSSProperties> = {
     flexDirection: "column",
     gap: 14,
   },
-  stepTitle: {
-    fontSize: 22,
-    fontWeight: 700,
-    color: "#1A2B4A",
-    margin: 0,
-  },
-  stepSubtitle: {
-    fontSize: 14,
-    color: "#718096",
-    margin: 0,
-  },
-  searchInput: {
+  stepTitle: { fontSize: 22, fontWeight: 700, color: "#1A2B4A", margin: 0 },
+  stepSubtitle: { fontSize: 14, color: "#718096", margin: 0 },
+  // K2: Pill-style search input (borderRadius: 9999px = full pill)
+  searchInputPill: {
     width: "100%",
-    padding: "12px 14px",
-    borderRadius: 8,
-    border: "1.5px solid #E2E8F0",
+    padding: "12px 20px",
+    borderRadius: "9999px",
+    border: "1px solid #D0D5DD",
     fontSize: 15,
     outline: "none",
-    background: "#F7FAFC",
+    background: "#FFFFFF",
     boxSizing: "border-box",
   },
   listScroll: {
@@ -572,11 +633,12 @@ const s: Record<string, React.CSSProperties> = {
     transition: "all 0.12s",
     background: "#fff",
   },
-  checkIcon: {
-    color: "#0468B1",
-    fontWeight: 700,
-    fontSize: 16,
-    flexShrink: 0,
+  checkIcon: { color: "#0468B1", fontWeight: 700, fontSize: 16, flexShrink: 0 },
+  cacheNote: {
+    fontSize: 12,
+    color: "#718096",
+    margin: 0,
+    fontStyle: "italic",
   },
   warningBox: {
     background: "#FFFBEB",
@@ -587,11 +649,16 @@ const s: Record<string, React.CSSProperties> = {
     color: "#92400E",
     lineHeight: 1.5,
   },
-  langGrid: {
-    display: "grid",
-    gridTemplateColumns: "1fr 1fr",
-    gap: 10,
+  blockingErrorBox: {
+    background: "#FFF5F5",
+    border: "1px solid #FC8181",
+    borderRadius: 10,
+    padding: "16px",
+    fontSize: 14,
+    color: "#C53030",
+    lineHeight: 1.55,
   },
+  langGrid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 },
   langItem: {
     padding: "16px 12px",
     borderRadius: 8,
@@ -621,12 +688,7 @@ const s: Record<string, React.CSSProperties> = {
     overflowY: "auto",
     maxHeight: "30vh",
   },
-  tcText: {
-    fontSize: 15,
-    color: "#2D3748",
-    lineHeight: 1.65,
-    margin: 0,
-  },
+  tcText: { fontSize: 15, color: "#2D3748", lineHeight: 1.65, margin: 0 },
   errorBox: {
     background: "#FFF5F5",
     border: "1px solid #FC8181",
@@ -634,6 +696,7 @@ const s: Record<string, React.CSSProperties> = {
     padding: "12px 14px",
     fontSize: 14,
     color: "#C53030",
+    lineHeight: 1.5,
   },
   primaryBtn: {
     width: "100%",
@@ -646,6 +709,7 @@ const s: Record<string, React.CSSProperties> = {
     fontWeight: 600,
     marginTop: 4,
     transition: "opacity 0.15s",
+    cursor: "pointer",
   },
   declineBtn: {
     width: "100%",
@@ -668,17 +732,27 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: 14,
     cursor: "pointer",
   },
-  hint: {
-    color: "#718096",
+  retryBtn: {
+    marginTop: 12,
+    padding: "10px 20px",
+    background: "#0468B1",
+    color: "#fff",
+    border: "none",
+    borderRadius: 8,
     fontSize: 14,
-    textAlign: "center",
-    padding: "20px 0",
-    margin: 0,
+    fontWeight: 600,
+    cursor: "pointer",
   },
-  errorText: {
-    color: "#E53E3E",
-    fontSize: 14,
-    textAlign: "center",
-    margin: 0,
+  spinnerInline: {
+    display: "inline-block",
+    width: 16,
+    height: 16,
+    border: "2px solid rgba(255,255,255,0.4)",
+    borderTop: "2px solid #fff",
+    borderRadius: "50%",
+    animation: "spin 0.8s linear infinite",
+    flexShrink: 0,
   },
+  hint: { color: "#718096", fontSize: 14, textAlign: "center", padding: "20px 0", margin: 0 },
+  errorText: { color: "#E53E3E", fontSize: 14, textAlign: "center", margin: 0 },
 };

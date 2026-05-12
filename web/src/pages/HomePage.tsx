@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useAuthStore } from "../stores/authStore";
 import { getQueueCount, syncQueue } from "../utils/offlineQueue";
+import { WEB_SESSION_ID } from "../utils/sessionId";
+import { detectPlatform } from "../services/auth";
 import api from "../services/api";
 import SideMenu from "../components/SideMenu";
 import PushNotificationSheet from "../components/PushNotificationSheet";
@@ -21,16 +23,7 @@ interface ReportsListResponse {
 
 function IconSettings() {
   return (
-    <svg
-      width={22}
-      height={22}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="#fff"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
+    <svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
       <circle cx="12" cy="12" r="3" />
       <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" />
     </svg>
@@ -39,15 +32,7 @@ function IconSettings() {
 
 function IconHamburger() {
   return (
-    <svg
-      width={22}
-      height={22}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="#fff"
-      strokeWidth={2}
-      strokeLinecap="round"
-    >
+    <svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth={2} strokeLinecap="round">
       <line x1="3" y1="6" x2="21" y2="6" />
       <line x1="3" y1="12" x2="21" y2="12" />
       <line x1="3" y1="18" x2="21" y2="18" />
@@ -58,16 +43,7 @@ function IconHamburger() {
 function IconHome({ active }: { active: boolean }) {
   const color = active ? "#0468B1" : "#9CA3AF";
   return (
-    <svg
-      width={22}
-      height={22}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke={color}
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
+    <svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
       <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
       <polyline points="9 22 9 12 15 12 15 22" />
     </svg>
@@ -77,16 +53,7 @@ function IconHome({ active }: { active: boolean }) {
 function IconMapPin({ active }: { active: boolean }) {
   const color = active ? "#0468B1" : "#9CA3AF";
   return (
-    <svg
-      width={22}
-      height={22}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke={color}
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
+    <svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
       <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" />
       <circle cx="12" cy="10" r="3" />
     </svg>
@@ -96,16 +63,7 @@ function IconMapPin({ active }: { active: boolean }) {
 function IconList({ active }: { active: boolean }) {
   const color = active ? "#0468B1" : "#9CA3AF";
   return (
-    <svg
-      width={22}
-      height={22}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke={color}
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
+    <svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
       <line x1="8" y1="6" x2="21" y2="6" />
       <line x1="8" y1="12" x2="21" y2="12" />
       <line x1="8" y1="18" x2="21" y2="18" />
@@ -114,6 +72,16 @@ function IconList({ active }: { active: boolean }) {
       <line x1="3" y1="18" x2="3.01" y2="18" />
     </svg>
   );
+}
+
+// ── Anti-spam signal helpers ───────────────────────────────────────────────────
+
+function captureAntiSpamSignals() {
+  return {
+    browser_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    screen_resolution: `${window.screen.width}x${window.screen.height}`,
+    viewport_dimensions: `${window.innerWidth}x${window.innerHeight}`,
+  };
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -127,57 +95,85 @@ export default function HomePage() {
   const [loginPromptOpen, setLoginPromptOpen] = useState(false);
   const [loginPromptBusy, setLoginPromptBusy] = useState(false);
 
+  // Sync queue on reconnect.
   useEffect(() => {
     const refreshQueue = () => getQueueCount().then(setQueueCount);
     refreshQueue();
-
     const handleOnline = async () => {
       await syncQueue(API_URL);
       await refreshQueue();
     };
-
     window.addEventListener("online", handleOnline);
     return () => window.removeEventListener("online", handleOnline);
   }, []);
 
-  // Show login prompt once, 2s after first load, if no reporter ID assigned yet
+  // H: If a Reporter ID exists and there's a stored post-onboarding destination,
+  // navigate there now. This handles the Log In / Create Account paths where the
+  // reporter returned to / via LoginPage after onboarding.
   useEffect(() => {
-    const alreadyPrompted = localStorage.getItem("cr_login_prompted");
-    const hasReporterId = localStorage.getItem("cr_reporter_id");
-    if (alreadyPrompted || hasReporterId) return;
-    const timer = setTimeout(() => {
-      localStorage.setItem("cr_login_prompted", "true");
-      setLoginPromptOpen(true);
-    }, 2000);
-    return () => clearTimeout(timer);
+    try {
+      const hasId = localStorage.getItem("cr_reporter_id");
+      if (!hasId) return;
+      const next = sessionStorage.getItem("cr_post_onboarding_next");
+      if (next) {
+        sessionStorage.removeItem("cr_post_onboarding_next");
+        navigate(next, { replace: true });
+      }
+    } catch { /* ignore */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // H: Show the login prompt once, 2s after first load, if no Reporter ID exists.
+  useEffect(() => {
+    try {
+      const alreadyPrompted = localStorage.getItem("cr_login_prompted");
+      const hasReporterId = localStorage.getItem("cr_reporter_id");
+      if (alreadyPrompted || hasReporterId) return;
+      const timer = setTimeout(() => {
+        localStorage.setItem("cr_login_prompted", "true");
+        setLoginPromptOpen(true);
+      }, 2000);
+      return () => clearTimeout(timer);
+    } catch { /* ignore */ }
+  }, []);
+
+  // H step 4: Register as anonymous reporter ("Skip for now" path).
   const registerAnonymous = async () => {
     setLoginPromptBusy(true);
     setLoginPromptOpen(false);
-    const deviceId = crypto.randomUUID();
+
+    let assignedId: string | null = null;
+
     try {
-      const res = await api.post<{ reporter_id: string; platform: string }>(
+      const res = await api.post<{ reporter_id: string }>(
         "/api/reporters/register",
         {
-          device_id: deviceId,
-          platform: "web",
-          country_code: localStorage.getItem("cr_country"),
-          language_code: localStorage.getItem("cr_language") || "en",
-          tc_accepted_at: localStorage.getItem("cr_tc_accepted"),
+          web_session_id: WEB_SESSION_ID,
+          platform: detectPlatform(),
+          country_code: (() => { try { return localStorage.getItem("cr_country"); } catch { return null; } })(),
+          language_code: (() => { try { return localStorage.getItem("cr_language") || "en"; } catch { return "en"; } })(),
+          tc_accepted_at: (() => { try { return localStorage.getItem("cr_tc_accepted"); } catch { return null; } })(),
+          ...captureAntiSpamSignals(),
         }
       );
-      const { reporter_id } = res.data;
-      localStorage.setItem("cr_reporter_id", reporter_id);
-      setReporter(reporter_id, false);
+      assignedId = res.data.reporter_id;
     } catch {
-      // Fallback: use a locally generated UUID so the app still works
-      const fallbackId = crypto.randomUUID();
-      localStorage.setItem("cr_reporter_id", fallbackId);
-      setReporter(fallbackId, false);
-    } finally {
-      setLoginPromptBusy(false);
+      // Fallback: locally generated ID so the app remains functional offline.
+      assignedId = `local_${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}`;
     }
+
+    try { localStorage.setItem("cr_reporter_id", assignedId); } catch { /* ignore */ }
+    setReporter(assignedId, false);
+    setLoginPromptBusy(false);
+
+    // Navigate to the intended destination stored during onboarding, if any.
+    try {
+      const next = sessionStorage.getItem("cr_post_onboarding_next");
+      if (next) {
+        sessionStorage.removeItem("cr_post_onboarding_next");
+        navigate(next, { replace: true });
+      }
+    } catch { /* ignore */ }
   };
 
   const { data: reportsData, isLoading: reportsLoading, isError: reportsError } = useQuery({
@@ -192,12 +188,8 @@ export default function HomePage() {
   });
 
   const [reportsTimedOut, setReportsTimedOut] = useState(false);
-
   useEffect(() => {
-    if (!reporterId || !reportsLoading) {
-      setReportsTimedOut(false);
-      return;
-    }
+    if (!reporterId || !reportsLoading) { setReportsTimedOut(false); return; }
     const timer = setTimeout(() => setReportsTimedOut(true), 8000);
     return () => clearTimeout(timer);
   }, [reporterId, reportsLoading]);
@@ -211,38 +203,27 @@ export default function HomePage() {
 
       {/* ── Header ── */}
       <header style={s.header}>
-        <button
-          style={s.settingsBtn}
-          onClick={() => setMenuOpen(true)}
-          aria-label="Open menu"
-        >
+        <button style={s.settingsBtn} onClick={() => setMenuOpen(true)} aria-label="Open menu">
           <IconHamburger />
         </button>
         <span style={s.headerTitle}>Crisis Reporter</span>
-        <button
-          style={s.settingsBtn}
-          onClick={() => navigate("/settings")}
-          aria-label="Settings"
-        >
+        <button style={s.settingsBtn} onClick={() => navigate("/settings")} aria-label="Settings">
           <IconSettings />
         </button>
       </header>
 
       {/* ── Main content ── */}
       <main style={s.main}>
-        {/* Welcome banner */}
         <div style={s.welcomeBanner}>
           <p style={s.welcomeText}>
             You are helping UNDP map crisis damage in real time. Thank you.
           </p>
         </div>
 
-        {/* Primary action */}
         <button style={s.reportBtn} onClick={() => navigate("/report")}>
           Report an Incident
         </button>
 
-        {/* Offline queue — hidden when empty */}
         {queueCount > 0 && (
           <div style={s.queueBanner}>
             <span style={s.queueDot} />
@@ -253,12 +234,9 @@ export default function HomePage() {
           </div>
         )}
 
-        {/* My Reports preview */}
         <div style={s.reportsCard}>
           {!reporterId ? (
-            <p style={s.reportsText}>
-              Submit your first report to get started.
-            </p>
+            <p style={s.reportsText}>Submit your first report to get started.</p>
           ) : reportsTimedOut || reportsError ? (
             <p style={s.reportsText}>Unable to load reports</p>
           ) : reportCount === null ? (
@@ -270,10 +248,7 @@ export default function HomePage() {
                 <strong style={s.reportsCount}>{reportCount}</strong>{" "}
                 report{reportCount !== 1 ? "s" : ""}.
               </p>
-              <button
-                style={s.viewAllBtn}
-                onClick={() => navigate("/my-reports")}
-              >
+              <button style={s.viewAllBtn} onClick={() => navigate("/my-reports")}>
                 View all →
               </button>
             </div>
@@ -285,9 +260,7 @@ export default function HomePage() {
       <nav style={s.footer}>
         <button style={s.navBtn} onClick={() => navigate("/")}>
           <IconHome active={true} />
-          <span style={{ ...s.navLabel, color: "#0468B1", fontWeight: 600 }}>
-            Home
-          </span>
+          <span style={{ ...s.navLabel, color: "#0468B1", fontWeight: 600 }}>Home</span>
         </button>
         <button style={s.navBtn} onClick={() => navigate("/map")}>
           <IconMapPin active={false} />
@@ -299,7 +272,7 @@ export default function HomePage() {
         </button>
       </nav>
 
-      {/* ── Login prompt bottom sheet ── */}
+      {/* ── G/H: Login prompt bottom sheet ── */}
       {loginPromptOpen && (
         <div style={s.promptOverlay} onClick={() => setLoginPromptOpen(false)}>
           <div style={s.promptSheet} onClick={(e) => e.stopPropagation()}>
@@ -356,12 +329,7 @@ const s: Record<string, React.CSSProperties> = {
     justifyContent: "space-between",
     flexShrink: 0,
   },
-  headerTitle: {
-    color: "#fff",
-    fontSize: 18,
-    fontWeight: 700,
-    letterSpacing: 0.2,
-  },
+  headerTitle: { color: "#fff", fontSize: 18, fontWeight: 700, letterSpacing: 0.2 },
   settingsBtn: {
     background: "transparent",
     border: "none",
@@ -379,17 +347,8 @@ const s: Record<string, React.CSSProperties> = {
     flexDirection: "column",
     gap: 16,
   },
-  welcomeBanner: {
-    background: "#E3F2FD",
-    borderRadius: 10,
-    padding: "14px 16px",
-  },
-  welcomeText: {
-    fontSize: 14,
-    color: "#1A2B4A",
-    lineHeight: 1.55,
-    margin: 0,
-  },
+  welcomeBanner: { background: "#E3F2FD", borderRadius: 10, padding: "14px 16px" },
+  welcomeText: { fontSize: 14, color: "#1A2B4A", lineHeight: 1.55, margin: 0 },
   reportBtn: {
     width: "100%",
     padding: "20px",
@@ -435,16 +394,8 @@ const s: Record<string, React.CSSProperties> = {
     justifyContent: "space-between",
     gap: 12,
   },
-  reportsText: {
-    fontSize: 14,
-    color: "#2D3748",
-    margin: 0,
-    lineHeight: 1.5,
-  },
-  reportsCount: {
-    color: "#0468B1",
-    fontWeight: 700,
-  },
+  reportsText: { fontSize: 14, color: "#2D3748", margin: 0, lineHeight: 1.5 },
+  reportsCount: { color: "#0468B1", fontWeight: 700 },
   viewAllBtn: {
     background: "transparent",
     border: "none",
@@ -475,11 +426,7 @@ const s: Record<string, React.CSSProperties> = {
     padding: "6px 20px",
     flex: 1,
   },
-  navLabel: {
-    fontSize: 11,
-    color: "#9CA3AF",
-    fontWeight: 500,
-  },
+  navLabel: { fontSize: 11, color: "#9CA3AF", fontWeight: 500 },
   promptOverlay: {
     position: "fixed",
     inset: 0,
@@ -508,24 +455,9 @@ const s: Record<string, React.CSSProperties> = {
     margin: "12px auto 20px",
     flexShrink: 0,
   },
-  promptTitle: {
-    fontSize: 18,
-    fontWeight: 700,
-    color: "#1A2B4A",
-    margin: "0 0 10px",
-    lineHeight: 1.35,
-  },
-  promptBody: {
-    fontSize: 14,
-    color: "#4A5568",
-    lineHeight: 1.6,
-    margin: "0 0 24px",
-  },
-  promptButtons: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 10,
-  },
+  promptTitle: { fontSize: 18, fontWeight: 700, color: "#1A2B4A", margin: "0 0 10px", lineHeight: 1.35 },
+  promptBody: { fontSize: 14, color: "#4A5568", lineHeight: 1.6, margin: "0 0 24px" },
+  promptButtons: { display: "flex", flexDirection: "column", gap: 10 },
   promptBtnPrimary: {
     width: "100%",
     padding: "15px",

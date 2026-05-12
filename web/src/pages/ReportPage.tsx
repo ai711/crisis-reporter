@@ -546,6 +546,10 @@ export default function ReportPage() {
       language_code: languageCode,
       question_package_version: questionPackage?.version ?? null,
       was_queued: false,
+      // I: Anti-spam signals captured silently at submission time.
+      browser_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      screen_resolution: `${window.screen.width}x${window.screen.height}`,
+      viewport_dimensions: `${window.innerWidth}x${window.innerHeight}`,
     };
 
     if (!navigator.onLine) {

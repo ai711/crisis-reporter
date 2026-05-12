@@ -1,25 +1,13 @@
+import { WEB_SESSION_ID } from "../utils/sessionId";
 import api, { tokenStorage } from "./api";
 import type { AnonymousSession, AuthTokens } from "../types";
-
-// ── Device ID ─────────────────────────────────────────────────────────────────
-
-const DEVICE_ID_KEY = "cr_device_id";
-
-export function getOrCreateDeviceId(): string {
-  let deviceId = localStorage.getItem(DEVICE_ID_KEY);
-  if (!deviceId) {
-    deviceId = `web_${crypto.randomUUID()}`;
-    localStorage.setItem(DEVICE_ID_KEY, deviceId);
-  }
-  return deviceId;
-}
 
 // ── Platform detection ────────────────────────────────────────────────────────
 
 export function detectPlatform(): "pwa" | "web" {
   const isStandalone =
     window.matchMedia("(display-mode: standalone)").matches ||
-    (window.navigator as any).standalone === true;
+    (window.navigator as unknown as { standalone?: boolean }).standalone === true;
   return isStandalone ? "pwa" : "web";
 }
 
@@ -30,16 +18,14 @@ export async function createAnonymousSession(
   languageCode: string
 ): Promise<AnonymousSession> {
   const response = await api.post("/api/reporter/auth/anonymous", {
-    device_id: getOrCreateDeviceId(),
+    web_session_id: WEB_SESSION_ID,
     platform: detectPlatform(),
     country_code: countryCode,
     language_code: languageCode,
   });
-  
-  // Store reporter ID for offline queue
+
   localStorage.setItem("cr_reporter_id", response.data.reporter_id);
-  
-  return response.data;
+  return response.data as AnonymousSession;
 }
 
 export async function registerReporter(
@@ -51,19 +37,14 @@ export async function registerReporter(
   const response = await api.post("/api/reporter/auth/register", {
     email,
     password,
-    device_id: getOrCreateDeviceId(),
+    web_session_id: WEB_SESSION_ID,
     platform: detectPlatform(),
     country_code: countryCode,
     language_code: languageCode,
   });
 
-  const tokens: AuthTokens = response.data;
-  tokenStorage.setTokens(
-    tokens.access_token,
-    tokens.refresh_token,
-    tokens.reporter_id
-  );
-
+  const tokens = response.data as AuthTokens;
+  tokenStorage.setTokens(tokens.access_token, tokens.refresh_token, tokens.reporter_id);
   return tokens;
 }
 
@@ -74,17 +55,12 @@ export async function loginReporter(
   const response = await api.post("/api/reporter/auth/login", {
     email,
     password,
-    device_id: getOrCreateDeviceId(),
+    web_session_id: WEB_SESSION_ID,
     platform: detectPlatform(),
   });
 
-  const tokens: AuthTokens = response.data;
-  tokenStorage.setTokens(
-    tokens.access_token,
-    tokens.refresh_token,
-    tokens.reporter_id
-  );
-
+  const tokens = response.data as AuthTokens;
+  tokenStorage.setTokens(tokens.access_token, tokens.refresh_token, tokens.reporter_id);
   return tokens;
 }
 

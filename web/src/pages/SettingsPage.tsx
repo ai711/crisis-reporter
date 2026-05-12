@@ -1,8 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useAuthStore } from "../stores/authStore";
 import { logoutReporter } from "../services/auth";
+import { loadLanguagePackage } from "../i18n";
 import api from "../services/api";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -86,18 +87,24 @@ function IconClose() {
 
 export default function SettingsPage() {
   const navigate = useNavigate();
-  const { i18n } = useTranslation();
+  useTranslation(); // keeps i18next react context active for language switching
   const { setCountry, setLanguage, reset } = useAuthStore();
 
   const [modal, setModal] = useState<"country" | "language" | null>(null);
 
   // Read current values from localStorage as source of truth
   const [currentCountryCode, setCurrentCountryCode] = useState(
-    () => localStorage.getItem("cr_country") ?? ""
+    () => { try { return localStorage.getItem("cr_country") ?? ""; } catch { return ""; } }
   );
   const [currentLangCode, setCurrentLangCode] = useState(
-    () => localStorage.getItem("cr_language") ?? "en"
+    () => { try { return localStorage.getItem("cr_language") ?? "en"; } catch { return "en"; } }
   );
+
+  // Language loading state for the settings modal
+  const [langLoadingCode, setLangLoadingCode] = useState<string | null>(null);
+  const [langLoadError, setLangLoadError] = useState<string | null>(null);
+  const [langCacheNote, setLangCacheNote] = useState(false);
+  const prevLangCodeRef = useRef(currentLangCode);
 
   // Country modal state
   const [countries, setCountries] = useState<Country[]>([]);
@@ -148,11 +155,32 @@ export default function SettingsPage() {
     setModal(null);
   };
 
-  const handleLanguageSelect = (code: string) => {
-    localStorage.setItem("cr_language", code);
+  const handleLanguageSelect = async (code: string) => {
+    if (code === currentLangCode) { setModal(null); return; }
+    setLangLoadingCode(code);
+    setLangLoadError(null);
+    setLangCacheNote(false);
+
+    const result = await loadLanguagePackage(code);
+    setLangLoadingCode(null);
+
+    if (!result.success) {
+      setLangLoadError(
+        "Could not load the language package. Please check your connection and try again."
+      );
+      return; // Keep modal open for retry.
+    }
+
+    // Remove the old language package from localStorage to free up space.
+    try { localStorage.removeItem(`cr_language_package_${prevLangCodeRef.current}`); } catch { /* ignore */ }
+    prevLangCodeRef.current = code;
+
+    try { localStorage.setItem("cr_language", code); } catch { /* ignore */ }
     setLanguage(code);
-    i18n.changeLanguage(code);
     setCurrentLangCode(code);
+    if (result.fromCache) setLangCacheNote(true);
+
+    // i18n.changeLanguage is called inside loadLanguagePackage — no direct call needed.
     setModal(null);
   };
 
@@ -313,23 +341,33 @@ export default function SettingsPage() {
 
       {/* ── Language modal ── */}
       {modal === "language" && (
-        <div style={s.overlay} onClick={closeModal}>
+        <div style={s.overlay} onClick={langLoadingCode ? undefined : closeModal}>
           <div style={s.sheet} onClick={(e) => e.stopPropagation()}>
             <div style={s.sheetHandle} />
             <div style={s.sheetHeader}>
               <span style={s.sheetTitle}>Select Language</span>
               <button
                 style={s.closeBtn}
-                onClick={closeModal}
+                onClick={langLoadingCode ? undefined : closeModal}
                 aria-label="Close"
+                disabled={!!langLoadingCode}
               >
                 <IconClose />
               </button>
             </div>
             <div style={{ padding: "0 20px 32px" }}>
+              {langLoadError && (
+                <div style={s.langErrorBox}>{langLoadError}</div>
+              )}
+              {langCacheNote && (
+                <p style={s.langCacheNote}>
+                  Using saved language data. Some text may not be fully updated.
+                </p>
+              )}
               <div style={s.langGrid}>
                 {UN_LANGUAGES.map((lang) => {
                   const isSelected = currentLangCode === lang.code;
+                  const isLoading = langLoadingCode === lang.code;
                   return (
                     <button
                       key={lang.code}
@@ -338,10 +376,13 @@ export default function SettingsPage() {
                         background: isSelected ? "#0468B1" : "#fff",
                         color: isSelected ? "#fff" : "#1A2B4A",
                         borderColor: isSelected ? "#0468B1" : "#E2E8F0",
+                        opacity: langLoadingCode && !isLoading ? 0.5 : 1,
+                        position: "relative",
                       }}
                       onClick={() => handleLanguageSelect(lang.code)}
+                      disabled={!!langLoadingCode}
                     >
-                      {lang.name}
+                      {isLoading ? "Loading…" : lang.name}
                     </button>
                   );
                 })}
@@ -581,5 +622,21 @@ const s: Record<string, React.CSSProperties> = {
     textAlign: "center",
     margin: 0,
     padding: "12px 0",
+  },
+  langErrorBox: {
+    background: "#FFF5F5",
+    border: "1px solid #FC8181",
+    borderRadius: 8,
+    padding: "10px 14px",
+    fontSize: 13,
+    color: "#C53030",
+    lineHeight: 1.5,
+    marginBottom: 12,
+  },
+  langCacheNote: {
+    fontSize: 12,
+    color: "#718096",
+    fontStyle: "italic",
+    margin: "0 0 10px",
   },
 };
