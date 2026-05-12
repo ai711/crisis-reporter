@@ -27,6 +27,13 @@ const OSM_STYLE: maplibregl.StyleSpecification = {
 
 const EMPTY_FC = { type: "FeatureCollection" as const, features: [] as never[] };
 
+function isMobileBrowser(): boolean {
+  return (
+    /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+    (navigator.maxTouchPoints > 1 && /MacIntel/.test(navigator.platform))
+  );
+}
+
 const DAMAGE_LABELS: Record<string, string> = {
   minimal: "Minimal / No damage",
   partial: "Partially damaged",
@@ -205,6 +212,11 @@ export default function ReportPage() {
   const [locationBuildingName, setLocationBuildingName] = useState("");
   const [manualExpanded, setManualExpanded] = useState(false);
   const [gpsCapturing, setGpsCapturing] = useState(false);
+  const [gpsDenied, setGpsDenied] = useState(false);
+  const [gpsAccuracy, setGpsAccuracy] = useState<number | null>(null);
+  const [cameraDenied, setCameraDenied] = useState(false);
+  const [cameraActive, setCameraActive] = useState(false);
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   const [locationMapZoom, setLocationMapZoom] = useState(2);
 
   // UI state
@@ -225,6 +237,9 @@ export default function ReportPage() {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const isMobile = isMobileBrowser();
 
   useEffect(() => {
     const init = async () => {
@@ -264,11 +279,16 @@ export default function ReportPage() {
     mapInstance.on("load", () => {
       // Center on device GPS or world view
       if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-          (pos) => mapInstance.flyTo({ center: [pos.coords.longitude, pos.coords.latitude], zoom: 15 }),
-          () => {},
-          { timeout: 8000 }
-        );
+        if (gpsLatitude !== null && gpsLongitude !== null) {
+          // Coordinates already captured — fly directly, no second permission request
+          mapInstance.flyTo({ center: [gpsLongitude, gpsLatitude], zoom: 16 });
+        } else {
+          navigator.geolocation.getCurrentPosition(
+            (pos) => mapInstance.flyTo({ center: [pos.coords.longitude, pos.coords.latitude], zoom: 15 }),
+            () => {},
+            { timeout: 10000 }
+          );
+        }
       }
 
       // Sources
@@ -359,6 +379,129 @@ export default function ReportPage() {
     };
   }, [step]);
 
+  const handleGeolocationDenied = () => {
+    setGpsCapturing(false);
+    setGpsDenied(true);
+    setManualExpanded(true);
+  };
+
+  const triggerGeolocation = async () => {
+    if (!navigator.geolocation) {
+      handleGeolocationDenied();
+      return;
+    }
+    let permState: PermissionState = "prompt";
+    try {
+      const result = await navigator.permissions.query({ name: "geolocation" });
+      permState = result.state;
+    } catch {
+      // Firefox / Safari — no Permissions API, let getCurrentPosition handle it
+    }
+    if (permState === "denied") {
+      handleGeolocationDenied();
+      return;
+    }
+    setGpsCapturing(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        setGpsLatitude(lat);
+        setGpsLongitude(lng);
+        setGpsAccuracy(pos.coords.accuracy);
+        setGpsDenied(false);
+        setSelectedBuildingId(null);
+        setSelectedBuildingTags({ name: "", building: "" });
+        (mapRef.current?.getSource("selected-building") as maplibregl.GeoJSONSource | undefined)
+          ?.setData(EMPTY_FC as Parameters<maplibregl.GeoJSONSource["setData"]>[0]);
+        mapRef.current?.flyTo({ center: [lng, lat], zoom: 16 });
+        setGpsCapturing(false);
+      },
+      handleGeolocationDenied,
+      { timeout: 10000, enableHighAccuracy: true }
+    );
+  };
+
+  const checkCameraPermission = async (): Promise<"granted" | "denied" | "prompt"> => {
+    try {
+      const result = await navigator.permissions.query({ name: "camera" as PermissionName });
+      return result.state;
+    } catch {
+      return "prompt"; // Firefox, Safari — no camera in Permissions API
+    }
+  };
+
+  const handleTakePhoto = async () => {
+    if (cameraDenied) return;
+    const permState = await checkCameraPermission();
+    if (permState === "denied") {
+      setCameraDenied(true);
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment" },
+      });
+      setCameraStream(stream);
+      setCameraActive(true);
+      setCameraDenied(false);
+    } catch {
+      setCameraDenied(true);
+    }
+  };
+
+  const handleCapturePhoto = () => {
+    if (!videoRef.current || !canvasRef.current || !cameraStream) return;
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext("2d")?.drawImage(video, 0, 0);
+    canvas.toBlob(
+      (blob) => {
+        if (blob) {
+          const file = new File([blob], `photo_${Date.now()}.jpg`, { type: "image/jpeg" });
+          setPhotos((prev) => [...prev, file].slice(0, 3));
+        }
+        cameraStream.getTracks().forEach((t) => t.stop());
+        setCameraStream(null);
+        setCameraActive(false);
+      },
+      "image/jpeg",
+      0.9
+    );
+  };
+
+  const handleCameraCancel = () => {
+    cameraStream?.getTracks().forEach((t) => t.stop());
+    setCameraStream(null);
+    setCameraActive(false);
+  };
+
+  // Auto-trigger GPS on first arrival at the location step.
+  // gpsLatitude check uses the closure value at the time step changes — safe,
+  // since we only want to fire when step transitions to "location".
+  useEffect(() => {
+    if (step !== "location") return;
+    if (gpsLatitude !== null) return;
+    void triggerGeolocation();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
+
+  // Stop camera stream tracks when stream reference changes or component unmounts.
+  useEffect(() => {
+    return () => {
+      cameraStream?.getTracks().forEach((t) => t.stop());
+    };
+  }, [cameraStream]);
+
+  // Wire the live stream to the <video> element once the preview is active.
+  useEffect(() => {
+    if (cameraActive && videoRef.current && cameraStream) {
+      videoRef.current.srcObject = cameraStream;
+    }
+  }, [cameraActive, cameraStream]);
+
   const qTitle = (n: number, fallback: string): string => {
     const found = questionPackage?.questions.find((q) => q.order_index === n);
     return found ? found.question_text : fallback;
@@ -419,6 +562,9 @@ export default function ReportPage() {
     setPhotos([]);
     setGpsLatitude(null);
     setGpsLongitude(null);
+    setGpsAccuracy(null);
+    setGpsDenied(false);
+    setCameraDenied(false);
     setSelectedBuildingId(null);
     setSelectedBuildingTags({ name: "", building: "" });
     setLocationAddress("");
@@ -430,28 +576,6 @@ export default function ReportPage() {
     setSubmittedReportId(null);
     setError("");
     setStep("photos");
-  };
-
-  const handleGpsCapture = () => {
-    if (!navigator.geolocation) return;
-    setGpsCapturing(true);
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const lat = pos.coords.latitude;
-        const lng = pos.coords.longitude;
-        setGpsLatitude(lat);
-        setGpsLongitude(lng);
-        setSelectedBuildingId(null);
-        setSelectedBuildingTags({ name: "", building: "" });
-        // Clear any building highlight
-        (mapRef.current?.getSource("selected-building") as maplibregl.GeoJSONSource | undefined)
-          ?.setData(EMPTY_FC as Parameters<maplibregl.GeoJSONSource["setData"]>[0]);
-        mapRef.current?.flyTo({ center: [lng, lat], zoom: 16 });
-        setGpsCapturing(false);
-      },
-      () => setGpsCapturing(false),
-      { timeout: 10000 }
-    );
   };
 
   const isLocationValid = (): boolean =>
@@ -536,7 +660,7 @@ export default function ReportPage() {
       location: {
         gps_latitude: gpsLatitude,
         gps_longitude: gpsLongitude,
-        gps_accuracy_meters: null,
+        gps_accuracy_meters: gpsAccuracy,
         gps_available: gpsLatitude !== null,
         location_address: buildLocationAddress(),
         location_landmark: locationLandmark || null,
@@ -707,20 +831,46 @@ export default function ReportPage() {
             <h2 style={styles.stepTitle}>{t("report.photos")} *</h2>
             <p style={styles.photoHint}>Add up to 3 photos of the damage. At least 1 is required.</p>
 
-            <div style={styles.photoGrid}>
-              {photos.map((photo, index) => (
-                <div key={index} style={styles.photoThumb}>
-                  <img src={URL.createObjectURL(photo)} style={styles.thumbImg} alt={`Photo ${index + 1}`} />
-                  <button style={styles.removePhotoBtn} onClick={() => handlePhotoRemove(index)}>✕</button>
-                </div>
-              ))}
-              {photos.length < 3 && (
-                <button style={styles.addPhotoBtn} onClick={() => fileInputRef.current?.click()}>
-                  <span style={{ fontSize: 32 }}>📷</span>
-                  <span style={{ fontSize: 13 }}>{t("report.addPhoto")}</span>
+            {photos.length > 0 && (
+              <div style={styles.photoGrid}>
+                {photos.map((photo, index) => (
+                  <div key={index} style={styles.photoThumb}>
+                    <img src={URL.createObjectURL(photo)} style={styles.thumbImg} alt={`Photo ${index + 1}`} />
+                    <button style={styles.removePhotoBtn} onClick={() => handlePhotoRemove(index)}>✕</button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {photos.length < 3 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {/* Mobile-only: inline note + Take a Photo via getUserMedia */}
+                {isMobile && !cameraDenied && (
+                  <p style={styles.permNote}>
+                    Crisis Reporter needs camera access to take a photo of the damage.
+                  </p>
+                )}
+                {isMobile && cameraDenied && (
+                  <div style={styles.denialBox}>
+                    <p style={styles.denialMsg}>
+                      Camera access is not available. You can enable it in your browser settings, or upload a photo from your device instead.
+                    </p>
+                    <p style={styles.denialHint}>
+                      To enable camera access, open your browser settings and allow camera access for this site.
+                    </p>
+                  </div>
+                )}
+                {isMobile && !cameraDenied && (
+                  <button style={styles.cameraBtn} onClick={() => void handleTakePhoto()}>
+                    📷 Take a Photo
+                  </button>
+                )}
+                {/* Desktop and mobile: file upload always available */}
+                <button style={styles.uploadBtn} onClick={() => fileInputRef.current?.click()}>
+                  📁 Upload a Photo
                 </button>
-              )}
-            </div>
+              </div>
+            )}
 
             <input
               ref={fileInputRef}
@@ -780,14 +930,35 @@ export default function ReportPage() {
                 </div>
               )}
 
-              {/* GPS capture button */}
-              <button
-                style={styles.gpsButton}
-                onClick={handleGpsCapture}
-                disabled={gpsCapturing}
-              >
-                📍 {gpsCapturing ? "Getting location…" : "Use My GPS Location"}
-              </button>
+              {/* Inline note — shown before GPS resolves and after denial is cleared */}
+              {gpsLatitude === null && !gpsDenied && (
+                <p style={styles.permNote}>
+                  Crisis Reporter needs your location to help identify the building you are reporting.
+                </p>
+              )}
+
+              {/* Geolocation denial / timeout message */}
+              {gpsDenied && (
+                <div style={styles.denialBox}>
+                  <p style={styles.denialMsg}>
+                    Location access is not available. You can enable it in your browser settings. You can still continue by entering your location manually below.
+                  </p>
+                  <p style={styles.denialHint}>
+                    To enable location access, open your browser settings and allow location access for this site.
+                  </p>
+                </div>
+              )}
+
+              {/* GPS capture button — hidden after denial */}
+              {!gpsDenied && (
+                <button
+                  style={styles.gpsButton}
+                  onClick={() => void triggerGeolocation()}
+                  disabled={gpsCapturing}
+                >
+                  📍 {gpsCapturing ? "Getting location…" : "Use My GPS Location"}
+                </button>
+              )}
 
               {/* Manual entry toggle */}
               <button
@@ -1213,6 +1384,28 @@ export default function ReportPage() {
           </div>
         )}
       </div>
+
+      {/* Camera preview overlay */}
+      {cameraActive && (
+        <div style={styles.cameraOverlay}>
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            muted
+            style={styles.cameraVideo}
+          />
+          <canvas ref={canvasRef} style={{ display: "none" }} />
+          <div style={styles.cameraControls}>
+            <button style={styles.cameraCaptureBtn} onClick={handleCapturePhoto}>
+              Capture
+            </button>
+            <button style={styles.cameraCancelBtn} onClick={handleCameraCancel}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Duplicate submission warning modal */}
       {showDupeWarning && (
@@ -1701,5 +1894,95 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: "center",
     fontSize: 32,
     flexShrink: 0,
+  },
+  permNote: {
+    fontSize: 13,
+    color: "#717782",
+    margin: 0,
+    lineHeight: 1.5,
+  },
+  denialBox: {
+    background: "#FFF8F0",
+    border: "1px solid #F6AD55",
+    borderRadius: 8,
+    padding: "12px 14px",
+    display: "flex",
+    flexDirection: "column" as const,
+    gap: 6,
+  },
+  denialMsg: {
+    fontSize: 14,
+    color: "#C05621",
+    margin: 0,
+    lineHeight: 1.5,
+  },
+  denialHint: {
+    fontSize: 13,
+    color: "#A0AEC0",
+    margin: 0,
+    lineHeight: 1.5,
+  },
+  cameraBtn: {
+    padding: "14px 16px",
+    background: "#1A2B4A",
+    color: "#fff",
+    border: "none",
+    borderRadius: 8,
+    fontSize: 15,
+    fontWeight: 600,
+    cursor: "pointer",
+    width: "100%",
+    textAlign: "left" as const,
+  },
+  uploadBtn: {
+    padding: "14px 16px",
+    background: "#fff",
+    color: "#1A2B4A",
+    border: "1.5px solid #e0e0e0",
+    borderRadius: 8,
+    fontSize: 15,
+    fontWeight: 500,
+    cursor: "pointer",
+    width: "100%",
+    textAlign: "left" as const,
+  },
+  cameraOverlay: {
+    position: "fixed" as const,
+    inset: 0,
+    background: "#000",
+    zIndex: 2000,
+    display: "flex",
+    flexDirection: "column" as const,
+  },
+  cameraVideo: {
+    flex: 1,
+    width: "100%",
+    objectFit: "cover" as const,
+  },
+  cameraControls: {
+    padding: "16px 20px 32px",
+    display: "flex",
+    gap: 12,
+    background: "rgba(0,0,0,0.8)",
+  },
+  cameraCaptureBtn: {
+    flex: 1,
+    padding: "16px",
+    background: "#0468B1",
+    color: "#fff",
+    border: "none",
+    borderRadius: 10,
+    fontSize: 17,
+    fontWeight: 700,
+    cursor: "pointer",
+  },
+  cameraCancelBtn: {
+    padding: "16px 20px",
+    background: "transparent",
+    color: "#fff",
+    border: "1.5px solid rgba(255,255,255,0.4)",
+    borderRadius: 10,
+    fontSize: 15,
+    cursor: "pointer",
   },
 };

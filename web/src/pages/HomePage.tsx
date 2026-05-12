@@ -7,7 +7,6 @@ import { WEB_SESSION_ID } from "../utils/sessionId";
 import { detectPlatform } from "../services/auth";
 import api from "../services/api";
 import SideMenu from "../components/SideMenu";
-import PushNotificationSheet from "../components/PushNotificationSheet";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
@@ -199,7 +198,6 @@ export default function HomePage() {
   return (
     <div style={s.page}>
       <SideMenu open={menuOpen} onClose={() => setMenuOpen(false)} />
-      <PushNotificationSheet reporterId={reporterId} />
 
       {/* ── Header ── */}
       <header style={s.header}>

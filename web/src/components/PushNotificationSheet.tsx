@@ -22,9 +22,13 @@ function urlB64ToUint8Array(base64String: string): Uint8Array {
 
 function shouldShow(): boolean {
   if (!("Notification" in window)) return false;
-  if (localStorage.getItem(LS_ACCEPTED)) return false;
-  if (localStorage.getItem(LS_DECLINED)) return false;
-  if (!localStorage.getItem(LS_TC)) return false;
+  try {
+    if (localStorage.getItem(LS_ACCEPTED)) return false;
+    if (localStorage.getItem(LS_DECLINED)) return false;
+    if (!localStorage.getItem(LS_TC)) return false;
+  } catch {
+    return false;
+  }
   return true;
 }
 
@@ -101,7 +105,7 @@ export default function PushNotificationSheet({
   }, []);
 
   const decline = useCallback(() => {
-    localStorage.setItem(LS_DECLINED, "true");
+    try { localStorage.setItem(LS_DECLINED, "true"); } catch { /* ignore */ }
     setVisible(false);
   }, []);
 
@@ -167,7 +171,7 @@ export default function PushNotificationSheet({
     } catch {
       // Permission denied, subscription failed, SW timeout, or API error —
       // close silently without showing the reporter any error message.
-      localStorage.setItem(LS_DECLINED, "true");
+      try { localStorage.setItem(LS_DECLINED, "true"); } catch { /* ignore */ }
       setVisible(false);
     } finally {
       setBusy(false);
