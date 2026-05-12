@@ -2,11 +2,11 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useAuthStore } from "../stores/authStore";
-import { getQueueCount, syncQueue } from "../utils/offlineQueue";
 import { WEB_SESSION_ID } from "../utils/sessionId";
 import { detectPlatform } from "../services/auth";
 import api from "../services/api";
 import SideMenu from "../components/SideMenu";
+import CrisisTypeModal from "../components/CrisisTypeModal";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
@@ -19,15 +19,6 @@ interface ReportsListResponse {
 }
 
 // ── Icons ─────────────────────────────────────────────────────────────────────
-
-function IconSettings() {
-  return (
-    <svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="3" />
-      <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" />
-    </svg>
-  );
-}
 
 function IconHamburger() {
   return (
@@ -89,26 +80,63 @@ export default function HomePage() {
   const navigate = useNavigate();
   const { reporterId, setReporter } = useAuthStore();
 
-  const [queueCount, setQueueCount] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [crisisModalOpen, setCrisisModalOpen] = useState(false);
   const [loginPromptOpen, setLoginPromptOpen] = useState(false);
   const [loginPromptBusy, setLoginPromptBusy] = useState(false);
 
-  // Sync queue on reconnect.
+  // B19: Welcome card — shown only if not previously dismissed
+  const [welcomeVisible, setWelcomeVisible] = useState(() => {
+    try { return localStorage.getItem("cr_welcome_dismissed") !== "true"; } catch { return true; }
+  });
+
+  // B21: Dismiss welcome card and write flag to localStorage
+  const dismissWelcome = () => {
+    setWelcomeVisible(false);
+    try { localStorage.setItem("cr_welcome_dismissed", "true"); } catch { /* ignore */ }
+  };
+
+  // C: Question package version check — once per browser session, completely silent
   useEffect(() => {
-    const refreshQueue = () => getQueueCount().then(setQueueCount);
-    refreshQueue();
-    const handleOnline = async () => {
-      await syncQueue(API_URL);
-      await refreshQueue();
+    const sessionKey = "cr_qp_version_checked";
+    if (sessionStorage.getItem(sessionKey)) return;
+    sessionStorage.setItem(sessionKey, "true"); // Lock immediately to prevent duplicate checks
+
+    const runVersionCheck = async () => {
+      try {
+        const cached = localStorage.getItem("cr_question_package");
+        const cachedVersion = cached
+          ? (JSON.parse(cached) as { version?: string }).version ?? null
+          : null;
+        const langCode = localStorage.getItem("cr_language") || "en";
+
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 8000);
+
+        const res = await fetch(
+          `${API_URL}/api/question-packages/active?lang=${langCode}`,
+          { signal: controller.signal }
+        );
+        clearTimeout(timeout);
+
+        if (!res.ok) return;
+        const data: unknown = await res.json();
+        if (typeof data !== "object" || data === null) return;
+
+        const pkg = data as { version?: string };
+        if (pkg.version === cachedVersion) return; // Already up to date
+
+        // Newer version available — write silently, no UI change
+        try { localStorage.setItem("cr_question_package", JSON.stringify(data)); } catch { /* storage full — ignore */ }
+      } catch {
+        // Network error or abort — silent fail, cached package used by the report flow
+      }
     };
-    window.addEventListener("online", handleOnline);
-    return () => window.removeEventListener("online", handleOnline);
+
+    runVersionCheck();
   }, []);
 
-  // H: If a Reporter ID exists and there's a stored post-onboarding destination,
-  // navigate there now. This handles the Log In / Create Account paths where the
-  // reporter returned to / via LoginPage after onboarding.
+  // Post-onboarding destination redirect
   useEffect(() => {
     try {
       const hasId = localStorage.getItem("cr_reporter_id");
@@ -122,7 +150,7 @@ export default function HomePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // H: Show the login prompt once, 2s after first load, if no Reporter ID exists.
+  // Login prompt — shown 2 s after first load if no Reporter ID exists
   useEffect(() => {
     try {
       const alreadyPrompted = localStorage.getItem("cr_login_prompted");
@@ -136,7 +164,13 @@ export default function HomePage() {
     } catch { /* ignore */ }
   }, []);
 
-  // H step 4: Register as anonymous reporter ("Skip for now" path).
+  // B19: Also dismiss welcome when reporter taps Report an Incident
+  const handleReportClick = () => {
+    dismissWelcome();
+    navigate("/report");
+  };
+
+  // Anonymous reporter registration ("Skip for now" path)
   const registerAnonymous = async () => {
     setLoginPromptBusy(true);
     setLoginPromptOpen(false);
@@ -157,7 +191,6 @@ export default function HomePage() {
       );
       assignedId = res.data.reporter_id;
     } catch {
-      // Fallback: locally generated ID so the app remains functional offline.
       assignedId = `local_${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}`;
     }
 
@@ -165,7 +198,6 @@ export default function HomePage() {
     setReporter(assignedId, false);
     setLoginPromptBusy(false);
 
-    // Navigate to the intended destination stored during onboarding, if any.
     try {
       const next = sessionStorage.getItem("cr_post_onboarding_next");
       if (next) {
@@ -199,38 +231,45 @@ export default function HomePage() {
     <div style={s.page}>
       <SideMenu open={menuOpen} onClose={() => setMenuOpen(false)} />
 
-      {/* ── Header ── */}
+      {/* B16: Crisis type modal — fully bundled, no network call */}
+      {crisisModalOpen && <CrisisTypeModal onClose={() => setCrisisModalOpen(false)} />}
+
+      {/* A5: Header — hamburger + wordmark only. Settings gear removed. */}
       <header style={s.header}>
-        <button style={s.settingsBtn} onClick={() => setMenuOpen(true)} aria-label="Open menu">
+        <button style={s.hamburgerBtn} onClick={() => setMenuOpen(true)} aria-label="Open menu">
           <IconHamburger />
         </button>
         <span style={s.headerTitle}>Crisis Reporter</span>
-        <button style={s.settingsBtn} onClick={() => navigate("/settings")} aria-label="Settings">
-          <IconSettings />
-        </button>
+        {/* Spacer keeps wordmark visually centred */}
+        <div style={{ width: 30 }} />
       </header>
 
       {/* ── Main content ── */}
       <main style={s.main}>
-        <div style={s.welcomeBanner}>
-          <p style={s.welcomeText}>
-            You are helping UNDP map crisis damage in real time. Thank you.
-          </p>
-        </div>
+        {/* B19–21: Dismissible welcome card — first-visit only */}
+        {welcomeVisible && (
+          <div style={s.welcomeCard}>
+            <p style={s.welcomeText}>
+              Crisis Reporter helps you document damage to buildings and
+              infrastructure after a disaster. You can report earthquakes,
+              floods, conflicts, and other crises. Your reports help UNDP get
+              help to the right places faster.
+            </p>
+            <button style={s.welcomeGotItBtn} onClick={dismissWelcome}>
+              Got it
+            </button>
+          </div>
+        )}
 
-        <button style={s.reportBtn} onClick={() => navigate("/report")}>
+        {/* B14: Primary action — full-width, dominant */}
+        <button style={s.reportBtn} onClick={handleReportClick}>
           Report an Incident
         </button>
 
-        {queueCount > 0 && (
-          <div style={s.queueBanner}>
-            <span style={s.queueDot} />
-            <span>
-              {queueCount} report{queueCount !== 1 ? "s" : ""} waiting to sync
-              — connect to internet to send
-            </span>
-          </div>
-        )}
+        {/* B15: "What can I report?" link — directly below the button */}
+        <button style={s.whatLink} onClick={() => setCrisisModalOpen(true)}>
+          What can I report?
+        </button>
 
         <div style={s.reportsCard}>
           {!reporterId ? (
@@ -270,7 +309,7 @@ export default function HomePage() {
         </button>
       </nav>
 
-      {/* ── G/H: Login prompt bottom sheet ── */}
+      {/* ── Login prompt bottom sheet ── */}
       {loginPromptOpen && (
         <div style={s.promptOverlay} onClick={() => setLoginPromptOpen(false)}>
           <div style={s.promptSheet} onClick={(e) => e.stopPropagation()}>
@@ -328,7 +367,7 @@ const s: Record<string, React.CSSProperties> = {
     flexShrink: 0,
   },
   headerTitle: { color: "#fff", fontSize: 18, fontWeight: 700, letterSpacing: 0.2 },
-  settingsBtn: {
+  hamburgerBtn: {
     background: "transparent",
     border: "none",
     cursor: "pointer",
@@ -337,6 +376,7 @@ const s: Record<string, React.CSSProperties> = {
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 6,
+    width: 30,
   },
   main: {
     flex: 1,
@@ -345,8 +385,33 @@ const s: Record<string, React.CSSProperties> = {
     flexDirection: "column",
     gap: 16,
   },
-  welcomeBanner: { background: "#E3F2FD", borderRadius: 10, padding: "14px 16px" },
-  welcomeText: { fontSize: 14, color: "#1A2B4A", lineHeight: 1.55, margin: 0 },
+  // B19: Welcome card
+  welcomeCard: {
+    background: "#F0F4FF",
+    border: "1px solid #D0E4FF",
+    borderRadius: 12,
+    padding: 16,
+    display: "flex",
+    flexDirection: "column",
+    gap: 12,
+  },
+  welcomeText: {
+    fontSize: "0.875rem",
+    color: "#1A2B4A",
+    lineHeight: 1.6,
+    margin: 0,
+  },
+  welcomeGotItBtn: {
+    alignSelf: "flex-start",
+    background: "transparent",
+    border: "1px solid #0468B1",
+    color: "#0468B1",
+    borderRadius: 8,
+    padding: "8px 16px",
+    fontSize: 14,
+    fontWeight: 600,
+    cursor: "pointer",
+  },
   reportBtn: {
     width: "100%",
     padding: "20px",
@@ -360,25 +425,18 @@ const s: Record<string, React.CSSProperties> = {
     letterSpacing: 0.2,
     boxShadow: "0 4px 16px rgba(4,104,177,0.28)",
   },
-  queueBanner: {
-    background: "#F57C00",
-    color: "#fff",
-    borderRadius: 10,
-    padding: "12px 16px",
-    fontSize: 14,
+  // B15: "What can I report?" link
+  whatLink: {
+    background: "transparent",
+    border: "none",
+    color: "#0468B1",
+    fontSize: 13,
     fontWeight: 500,
-    display: "flex",
-    alignItems: "flex-start",
-    gap: 10,
-    lineHeight: 1.45,
-  },
-  queueDot: {
-    width: 8,
-    height: 8,
-    borderRadius: "50%",
-    background: "#fff",
-    flexShrink: 0,
-    marginTop: 3,
+    cursor: "pointer",
+    textDecoration: "underline",
+    textAlign: "center",
+    padding: "4px 0",
+    marginTop: -8, // pull up closer to the button
   },
   reportsCard: {
     background: "#F7FAFC",

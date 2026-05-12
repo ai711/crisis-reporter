@@ -72,5 +72,16 @@
     "required": "This field is required",
     "networkError": "Network error. Please check your connection.",
     "unknownError": "Something went wrong. Please try again."
+  },
+  "crisis_types": {
+    "earthquake": "Structural damage to buildings and infrastructure caused by seismic activity",
+    "flood": "Water damage to properties, roads, and community areas",
+    "tsunami": "Coastal destruction caused by large ocean waves",
+    "hurricane_cyclone": "Wind and water damage from tropical storm systems",
+    "wildfire": "Fire damage to buildings, land, and surrounding areas",
+    "explosion": "Blast damage to structures and nearby properties",
+    "chemical_incident": "Damage or contamination caused by hazardous substances",
+    "conflict": "Damage to buildings and infrastructure in conflict-affected areas",
+    "civil_unrest": "Property damage resulting from civil disturbances"
   }
 }

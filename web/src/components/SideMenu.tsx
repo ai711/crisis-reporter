@@ -1,14 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useAuthStore } from "../stores/authStore";
 import api from "../services/api";
 
-// ── Constants ──────────────────────────────────────────────────────────────────
-
 const BLUE = "#0468B1";
-
-// ── Types ──────────────────────────────────────────────────────────────────────
 
 interface ReporterProfile {
   first_name: string | null;
@@ -22,8 +18,6 @@ interface SideMenuProps {
   open: boolean;
   onClose: () => void;
 }
-
-// ── Profile helpers ────────────────────────────────────────────────────────────
 
 function calcCompletion(p: ReporterProfile): number {
   let n = 0;
@@ -41,31 +35,40 @@ function displayName(p: ReporterProfile | null): string {
   return full || "Anonymous Reporter";
 }
 
-// ── Menu items ─────────────────────────────────────────────────────────────────
-
 interface MenuItem {
   icon: string;
   label: string;
-  route?: string;
-  action?: "about";
+  route: string;
+  primary?: boolean;
 }
 
+// A9 fix: "Home" removed — Home is reached via the wordmark.
+// A7 fix: "Report an Incident" added first as a primary action item.
+// A7 fix: final order matches spec exactly.
 const MENU_ITEMS: MenuItem[] = [
-  { icon: "🏠", label: "Home",                      route: "/" },
-  { icon: "🗺️",  label: "Map",                       route: "/map" },
-  { icon: "📋", label: "My Reports",                route: "/my-reports" },
-  { icon: "🛡️", label: "Safety Tips",               route: "/safety-tips" },
-  { icon: "👤", label: "Reporter Profile",          route: "/profile" },
-  { icon: "🏅", label: "Badges & Certifications",  route: "/badges" },
-  { icon: "❓", label: "FAQ",                       route: "/faq" },
-  { icon: "⚙️", label: "Settings",                  route: "/settings" },
-  { icon: "ℹ️",  label: "About Crisis Reporter",    action: "about" },
+  { icon: "🚨", label: "Report an Incident",       route: "/report",       primary: true },
+  { icon: "🗺️",  label: "Map",                      route: "/map" },
+  { icon: "📋", label: "My Reports",               route: "/my-reports" },
+  { icon: "🛡️", label: "Safety Tips",              route: "/safety-tips" },
+  { icon: "👤", label: "Reporter Profile",         route: "/profile" },
+  { icon: "🏅", label: "Badges & Certifications", route: "/badges" },
+  { icon: "❓", label: "FAQ",                      route: "/faq" },
+  { icon: "⚙️", label: "Settings",                 route: "/settings" },
+  { icon: "ℹ️",  label: "About Crisis Reporter",   route: "/about" },
 ];
 
-// ── SideMenu ───────────────────────────────────────────────────────────────────
+function IconClose() {
+  return (
+    <svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="#717782" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <line x1="18" y1="6" x2="6" y2="18" />
+      <line x1="6" y1="6" x2="18" y2="18" />
+    </svg>
+  );
+}
 
 export default function SideMenu({ open, onClose }: SideMenuProps) {
   const navigate = useNavigate();
+  const location = useLocation(); // A10: read current route for active highlighting
   const { reporterId } = useAuthStore();
   const [profile, setProfile] = useState<ReporterProfile | null>(null);
 
@@ -81,7 +84,6 @@ export default function SideMenu({ open, onClose }: SideMenuProps) {
     if (open) fetchProfile();
   }, [open, fetchProfile]);
 
-  // Block body scroll when menu is open
   useEffect(() => {
     document.body.style.overflow = open ? "hidden" : "";
     return () => { document.body.style.overflow = ""; };
@@ -92,20 +94,12 @@ export default function SideMenu({ open, onClose }: SideMenuProps) {
     navigate(route);
   }
 
-  function handleItemClick(item: MenuItem) {
-    if (item.action === "about") {
-      handleNavigate("/about");
-      return;
-    }
-    if (item.route) handleNavigate(item.route);
-  }
-
   const name = displayName(profile);
   const completion = profile ? calcCompletion(profile) : 0;
 
   const content = (
     <>
-      {/* Overlay */}
+      {/* Overlay — tap outside to close */}
       <div
         onClick={onClose}
         style={{
@@ -118,7 +112,7 @@ export default function SideMenu({ open, onClose }: SideMenuProps) {
         }}
       />
 
-      {/* Drawer */}
+      {/* Drawer panel */}
       <div
         style={{
           position: "fixed",
@@ -137,12 +131,34 @@ export default function SideMenu({ open, onClose }: SideMenuProps) {
           overflowY: "auto",
         }}
       >
+        {/* A9: Close button at top-right of the drawer */}
+        <button
+          onClick={onClose}
+          aria-label="Close menu"
+          style={{
+            position: "absolute",
+            top: 12,
+            right: 12,
+            background: "transparent",
+            border: "none",
+            cursor: "pointer",
+            padding: 4,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            borderRadius: 6,
+            zIndex: 10,
+          }}
+        >
+          <IconClose />
+        </button>
+
         {/* Profile section */}
         <button
           onClick={() => handleNavigate("/profile")}
           style={{
             background: BLUE,
-            padding: "28px 20px 20px",
+            padding: "28px 48px 20px 20px", // right padding leaves room for close btn
             border: "none",
             cursor: "pointer",
             textAlign: "left",
@@ -150,7 +166,6 @@ export default function SideMenu({ open, onClose }: SideMenuProps) {
             flexShrink: 0,
           }}
         >
-          {/* Avatar circle */}
           <div
             style={{
               width: 54,
@@ -172,30 +187,14 @@ export default function SideMenu({ open, onClose }: SideMenuProps) {
               : "👤"}
           </div>
 
-          <p
-            style={{
-              color: "#fff",
-              fontSize: 15,
-              fontWeight: 700,
-              margin: "0 0 4px",
-              lineHeight: 1.3,
-            }}
-          >
+          <p style={{ color: "#fff", fontSize: 15, fontWeight: 700, margin: "0 0 4px", lineHeight: 1.3 }}>
             {name}
           </p>
           <p style={{ color: "rgba(255,255,255,0.75)", fontSize: 12, margin: "0 0 12px" }}>
             Profile {completion}% complete
           </p>
 
-          {/* Completion bar */}
-          <div
-            style={{
-              height: 5,
-              background: "rgba(255,255,255,0.25)",
-              borderRadius: 3,
-              overflow: "hidden",
-            }}
-          >
+          <div style={{ height: 5, background: "rgba(255,255,255,0.25)", borderRadius: 3, overflow: "hidden" }}>
             <div
               style={{
                 height: "100%",
@@ -213,36 +212,72 @@ export default function SideMenu({ open, onClose }: SideMenuProps) {
 
         {/* Menu items */}
         <nav style={{ flex: 1, padding: "8px 0" }}>
-          {MENU_ITEMS.map((item) => (
-            <button
-              key={item.label}
-              onClick={() => handleItemClick(item)}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 14,
-                width: "100%",
-                padding: "13px 20px",
-                background: "transparent",
-                border: "none",
-                cursor: "pointer",
-                textAlign: "left",
-              }}
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLButtonElement).style.background = "#f7fafc";
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLButtonElement).style.background = "transparent";
-              }}
-            >
-              <span style={{ fontSize: 20, flexShrink: 0, width: 26, textAlign: "center" }}>
-                {item.icon}
-              </span>
-              <span style={{ fontSize: 14, color: "#2d3748", fontWeight: 500 }}>
-                {item.label}
-              </span>
-            </button>
-          ))}
+          {MENU_ITEMS.map((item) => {
+            // A10: "Report an Incident" never carries an active state.
+            const isActive = !item.primary && location.pathname === item.route;
+
+            if (item.primary) {
+              return (
+                <button
+                  key={item.label}
+                  onClick={() => handleNavigate(item.route)}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 14,
+                    width: "100%",
+                    padding: "14px 20px",
+                    background: BLUE,
+                    border: "none",
+                    borderLeft: "3px solid transparent",
+                    cursor: "pointer",
+                    textAlign: "left",
+                    margin: "6px 0",
+                  }}
+                >
+                  <span style={{ fontSize: 20, flexShrink: 0, width: 26, textAlign: "center" }}>
+                    {item.icon}
+                  </span>
+                  <span style={{ fontSize: 14, color: "#fff", fontWeight: 700 }}>
+                    {item.label}
+                  </span>
+                </button>
+              );
+            }
+
+            return (
+              <button
+                key={item.label}
+                onClick={() => handleNavigate(item.route)}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 14,
+                  width: "100%",
+                  padding: "13px 20px",
+                  // A10: active route: left border + blue bg + blue bold text
+                  background: isActive ? "#F0F4FF" : "transparent",
+                  border: "none",
+                  borderLeft: isActive ? `3px solid ${BLUE}` : "3px solid transparent",
+                  cursor: "pointer",
+                  textAlign: "left",
+                }}
+                onMouseEnter={(e) => {
+                  if (!isActive) (e.currentTarget as HTMLButtonElement).style.background = "#f7fafc";
+                }}
+                onMouseLeave={(e) => {
+                  if (!isActive) (e.currentTarget as HTMLButtonElement).style.background = "transparent";
+                }}
+              >
+                <span style={{ fontSize: 20, flexShrink: 0, width: 26, textAlign: "center" }}>
+                  {item.icon}
+                </span>
+                <span style={{ fontSize: 14, color: isActive ? BLUE : "#2d3748", fontWeight: isActive ? 700 : 500 }}>
+                  {item.label}
+                </span>
+              </button>
+            );
+          })}
         </nav>
 
         {/* Divider */}
@@ -258,7 +293,6 @@ export default function SideMenu({ open, onClose }: SideMenuProps) {
           </p>
         </div>
       </div>
-
     </>
   );
 
