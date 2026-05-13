@@ -3,6 +3,9 @@ import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
+// B2 — Geocoding search bar (styles are embedded in the Lit web component — no CSS import needed)
+// Requires VITE_MAPTILER_KEY to be set in .env for search to function
+import { GeocodingControl } from "@maptiler/geocoding-control/maplibregl";
 import { useAuthStore } from "../stores/authStore";
 import api from "../services/api";
 import { addToQueue } from "../utils/offlineQueue";
@@ -204,7 +207,7 @@ export default function ReportPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { reporterId, countryCode, languageCode } = useAuthStore();
-  const isMobile = isMobileBrowser();
+  const isMobile = isMobileBrowser() || window.innerWidth <= 768;
 
   // Captured once at component mount — the moment the reporter tapped "Report an Incident"
   const [submissionStartTime] = useState<string>(() => new Date().toISOString());
@@ -231,22 +234,60 @@ export default function ReportPage() {
   const [viewingPhoto, setViewingPhoto] = useState<File | null>(null);
   const [replaceIndex, setReplaceIndex] = useState<number | null>(null);
 
-  // Location state
+  // Location state — GPS (actual device coordinates, never overwritten by building centroid)
   const [gpsLatitude, setGpsLatitude] = useState<number | null>(null);
   const [gpsLongitude, setGpsLongitude] = useState<number | null>(null);
-  const [selectedBuildingId, setSelectedBuildingId] = useState<number | null>(null);
-  const [selectedBuildingTags, setSelectedBuildingTags] = useState<{ name: string; building: string }>({ name: "", building: "" });
+  const [gpsAccuracy, setGpsAccuracy] = useState<number | null>(null);
+  const [gpsCapturing, setGpsCapturing] = useState(false);
+  const [gpsDenied, setGpsDenied] = useState(false);
+
+  // Location state — building selection (G5: centroid kept separate from device GPS)
+  const [selectedBuildingId, setSelectedBuildingId] = useState<string | null>(null);
+  const [selectedBuildingName, setSelectedBuildingName] = useState("");
+  const [buildingNameOsm, setBuildingNameOsm] = useState(""); // immutable OSM name captured at confirm
+  const [selectedBuildingType, setSelectedBuildingType] = useState("");
+  const [buildingCentroidLat, setBuildingCentroidLat] = useState<number | null>(null);
+  const [buildingCentroidLng, setBuildingCentroidLng] = useState<number | null>(null);
+
+  // Location state — confirmation popup (B3)
+  const [pendingBuilding, setPendingBuilding] = useState<{
+    id: string;
+    name: string;
+    type: string;
+    lat: number;
+    lng: number;
+  } | null>(null);
+
+  // Location state — pin drop (B6)
+  const [pinDropCoords, setPinDropCoords] = useState<{ lat: number; lng: number } | null>(null);
+
+  // Location state — manual text entry
   const [locationAddress, setLocationAddress] = useState("");
   const [locationLandmark, setLocationLandmark] = useState("");
   const [locationBuildingName, setLocationBuildingName] = useState("");
   const [manualExpanded, setManualExpanded] = useState(false);
-  const [gpsCapturing, setGpsCapturing] = useState(false);
-  const [gpsDenied, setGpsDenied] = useState(false);
-  const [gpsAccuracy, setGpsAccuracy] = useState<number | null>(null);
+
+  // Location state — optional note (B7)
+  const [locationNote, setLocationNote] = useState("");
+
+  // Location state — inline duplicate warning (B10)
+  const [showDuplicateInlineWarning, setShowDuplicateInlineWarning] = useState(false);
+
+  // Location state — metadata flags (G7/G9/G11)
+  const [locationEntryMethod, setLocationEntryMethod] = useState<
+    "map_selection" | "pin_drop" | "manual_text" | null
+  >(null);
+  const [locationInternetAvailable, setLocationInternetAvailable] = useState<boolean>(
+    navigator.onLine
+  );
+
+  // Map state
+  const [locationMapZoom, setLocationMapZoom] = useState(2);
+
+  // Camera state
   const [cameraDenied, setCameraDenied] = useState(false);
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
-  const [locationMapZoom, setLocationMapZoom] = useState(2);
 
   // UI state
   const [step, setStep] = useState<"photos" | "location" | "damage" | "review">("photos");
@@ -271,6 +312,8 @@ export default function ReportPage() {
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const gpsMarkerRef = useRef<maplibregl.Marker | null>(null); // B9
+  const pinMarkerRef = useRef<maplibregl.Marker | null>(null); // B6
 
   useEffect(() => {
     const init = async () => {
@@ -300,23 +343,59 @@ export default function ReportPage() {
     const mapInstance = new maplibregl.Map({
       container: mapContainerRef.current,
       style: MAPTILER_KEY ? MAP_STYLE : OSM_STYLE,
-      center: [0, 20],
+      center: [20, 10],
       zoom: 2,
     });
     mapRef.current = mapInstance;
 
     mapInstance.addControl(new maplibregl.NavigationControl(), "top-right");
 
+    // B2 — Geocoding search bar via Maptiler control (requires VITE_MAPTILER_KEY)
+    if (MAPTILER_KEY) {
+      const gc = new GeocodingControl({
+        apiKey: MAPTILER_KEY,
+        language: languageCode || "en",
+        country: countryCode || undefined,
+        flyTo: true,
+      });
+      mapInstance.addControl(gc, "top-left");
+    }
+
     mapInstance.on("load", () => {
-      if (navigator.geolocation) {
-        if (gpsLatitude !== null && gpsLongitude !== null) {
-          mapInstance.flyTo({ center: [gpsLongitude, gpsLatitude], zoom: 16 });
-        } else {
-          navigator.geolocation.getCurrentPosition(
-            (pos) => mapInstance.flyTo({ center: [pos.coords.longitude, pos.coords.latitude], zoom: 15 }),
-            () => {},
-            { timeout: 10000 }
-          );
+      // B9/C3 — Centre on GPS if already captured, otherwise fit to reporter's country
+      if (gpsLatitude !== null && gpsLongitude !== null) {
+        mapInstance.flyTo({ center: [gpsLongitude, gpsLatitude], zoom: 16 });
+        // Re-add blue dot for GPS already captured before this map mount
+        if (gpsMarkerRef.current) gpsMarkerRef.current.remove();
+        const el = document.createElement("div");
+        el.style.cssText =
+          "width:16px;height:16px;background:#0468B1;border:3px solid white;border-radius:50%;box-shadow:0 0 0 4px rgba(4,104,177,0.2);";
+        gpsMarkerRef.current = new maplibregl.Marker({ element: el })
+          .setLngLat([gpsLongitude, gpsLatitude])
+          .addTo(mapInstance);
+      } else {
+        // C3 — Fit to reporter's country bounding box; silent fallback to world view
+        const cc = countryCode || localStorage.getItem("cr_country") || "";
+        if (cc && MAPTILER_KEY) {
+          fetch(
+            `https://api.maptiler.com/geocoding/${encodeURIComponent(cc)}.json?key=${MAPTILER_KEY}&types=country`,
+            { signal: AbortSignal.timeout(5000) }
+          )
+            .then((r) => (r.ok ? r.json() : null))
+            .then((data: { features?: Array<{ bbox?: number[]; center?: [number, number] }> } | null) => {
+              const feature = data?.features?.[0];
+              if (!feature) return;
+              const bbox = feature.bbox;
+              if (bbox && bbox.length === 4) {
+                mapInstance.fitBounds(
+                  [[bbox[0], bbox[1]], [bbox[2], bbox[3]]],
+                  { padding: 40, duration: 800, maxZoom: 10 }
+                );
+              } else if (feature.center) {
+                mapInstance.flyTo({ center: feature.center, zoom: 6, duration: 800 });
+              }
+            })
+            .catch(() => { /* silent — map stays at world view */ });
         }
       }
 
@@ -354,20 +433,62 @@ export default function ReportPage() {
         paint: { "line-color": "#0468B1", "line-width": 2 },
       });
 
+      // B3 — Building tap: set pending (shows confirmation popup), do NOT commit yet
       mapInstance.on("click", "buildings-fill", (e) => {
         if (!e.features?.length) return;
         const f = e.features[0];
         const props = f.properties as { osm_id: number; name: string; building: string };
         const geom = f.geometry as { type: "Polygon"; coordinates: number[][][] };
         const [centLng, centLat] = computeCentroid(geom.coordinates[0]);
-        setSelectedBuildingId(props.osm_id);
-        setSelectedBuildingTags({ name: props.name || "", building: props.building || "yes" });
-        setGpsLatitude(centLat);
-        setGpsLongitude(centLng);
+
+        // Highlight on map immediately as visual feedback
         (mapInstance.getSource("selected-building") as maplibregl.GeoJSONSource | undefined)?.setData({
           type: "FeatureCollection",
           features: [{ type: "Feature", properties: props, geometry: geom }],
         } as Parameters<maplibregl.GeoJSONSource["setData"]>[0]);
+
+        setPendingBuilding({
+          id: String(props.osm_id),
+          name: props.name || "",
+          type: props.building || "yes",
+          lat: centLat,
+          lng: centLng,
+        });
+      });
+
+      // B6 — Click on blank area: drop a draggable pin
+      mapInstance.on("click", (e) => {
+        const features = mapInstance.queryRenderedFeatures(e.point, { layers: ["buildings-fill"] });
+        if (features && features.length > 0) return; // building click handled above
+
+        if (pinMarkerRef.current) pinMarkerRef.current.remove();
+
+        const marker = new maplibregl.Marker({ draggable: true, color: "#0468B1" })
+          .setLngLat([e.lngLat.lng, e.lngLat.lat])
+          .addTo(mapInstance);
+
+        pinMarkerRef.current = marker;
+
+        const coords = { lat: e.lngLat.lat, lng: e.lngLat.lng };
+        setPinDropCoords(coords);
+        setLocationEntryMethod("pin_drop");
+
+        marker.on("dragend", () => {
+          const lngLat = marker.getLngLat();
+          setPinDropCoords({ lat: lngLat.lat, lng: lngLat.lng });
+        });
+
+        // Clear any building selection
+        setSelectedBuildingId(null);
+        setBuildingCentroidLat(null);
+        setBuildingCentroidLng(null);
+        setBuildingNameOsm("");
+        setSelectedBuildingName("");
+        setSelectedBuildingType("");
+        setPendingBuilding(null);
+        setShowDuplicateInlineWarning(false);
+        (mapInstance.getSource("selected-building") as maplibregl.GeoJSONSource | undefined)
+          ?.setData(EMPTY_FC as Parameters<maplibregl.GeoJSONSource["setData"]>[0]);
       });
 
       mapInstance.on("mouseenter", "buildings-fill", () => {
@@ -393,10 +514,12 @@ export default function ReportPage() {
 
     return () => {
       if (debounceTimer.current) clearTimeout(debounceTimer.current);
+      gpsMarkerRef.current?.remove();
+      pinMarkerRef.current?.remove();
       mapInstance.remove();
       mapRef.current = null;
     };
-  }, [step]);
+  }, [step]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleGeolocationDenied = () => {
     setGpsCapturing(false);
@@ -427,16 +550,96 @@ export default function ReportPage() {
         setGpsLongitude(lng);
         setGpsAccuracy(pos.coords.accuracy);
         setGpsDenied(false);
+
+        // GPS button clears building/pin selection — reporter is re-anchoring to their device position
         setSelectedBuildingId(null);
-        setSelectedBuildingTags({ name: "", building: "" });
+        setBuildingCentroidLat(null);
+        setBuildingCentroidLng(null);
+        setBuildingNameOsm("");
+        setSelectedBuildingName("");
+        setSelectedBuildingType("");
+        setPendingBuilding(null);
+        setPinDropCoords(null);
+        setShowDuplicateInlineWarning(false);
+        setLocationEntryMethod(null);
+
+        if (pinMarkerRef.current) {
+          pinMarkerRef.current.remove();
+          pinMarkerRef.current = null;
+        }
+
         (mapRef.current?.getSource("selected-building") as maplibregl.GeoJSONSource | undefined)
           ?.setData(EMPTY_FC as Parameters<maplibregl.GeoJSONSource["setData"]>[0]);
         mapRef.current?.flyTo({ center: [lng, lat], zoom: 16 });
+
+        // B9 — Blue GPS dot marker
+        if (mapRef.current) {
+          if (gpsMarkerRef.current) gpsMarkerRef.current.remove();
+          const el = document.createElement("div");
+          el.style.cssText =
+            "width:16px;height:16px;background:#0468B1;border:3px solid white;border-radius:50%;box-shadow:0 0 0 4px rgba(4,104,177,0.2);";
+          gpsMarkerRef.current = new maplibregl.Marker({ element: el })
+            .setLngLat([lng, lat])
+            .addTo(mapRef.current);
+        }
+
         setGpsCapturing(false);
       },
       handleGeolocationDenied,
       { timeout: 10000, enableHighAccuracy: true }
     );
+  };
+
+  // B3 — Confirm building selection from popup
+  const handleBuildingConfirm = () => {
+    if (!pendingBuilding) return;
+    setSelectedBuildingId(pendingBuilding.id);
+    setBuildingCentroidLat(pendingBuilding.lat);
+    setBuildingCentroidLng(pendingBuilding.lng);
+    setBuildingNameOsm(pendingBuilding.name); // immutable OSM name
+    setSelectedBuildingName(pendingBuilding.name); // pre-fills editable field
+    setSelectedBuildingType(pendingBuilding.type);
+    setLocationEntryMethod("map_selection");
+
+    // Clear pin drop if one was placed
+    setPinDropCoords(null);
+    if (pinMarkerRef.current) {
+      pinMarkerRef.current.remove();
+      pinMarkerRef.current = null;
+    }
+
+    setPendingBuilding(null);
+    setShowDuplicateInlineWarning(false);
+    checkDuplicateOnSelection(pendingBuilding.lat, pendingBuilding.lng, pendingBuilding.id);
+  };
+
+  // B3 — Cancel building selection from popup
+  const handleBuildingCancel = () => {
+    setPendingBuilding(null);
+    // Restore previous confirmed selection highlight (or clear if none)
+    if (!selectedBuildingId) {
+      (mapRef.current?.getSource("selected-building") as maplibregl.GeoJSONSource | undefined)
+        ?.setData(EMPTY_FC as Parameters<maplibregl.GeoJSONSource["setData"]>[0]);
+    }
+  };
+
+  // B10 — Inline duplicate check on building selection (non-blocking)
+  const checkDuplicateOnSelection = (lat: number, lng: number, buildingId: string) => {
+    try {
+      const raw = localStorage.getItem("cr_submitted_locations");
+      if (!raw || !crisisId) return;
+      const locs: Array<{ lat: number; lng: number; crisis_id: string; timestamp: number; building_id?: string }> =
+        JSON.parse(raw);
+      const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+      const isDupe = locs.some(
+        (l) =>
+          l.crisis_id === crisisId &&
+          (l.building_id === buildingId ||
+            (Math.abs(l.lat - lat) < 0.001 && Math.abs(l.lng - lng) < 0.001)) &&
+          l.timestamp > cutoff
+      );
+      if (isDupe) setShowDuplicateInlineWarning(true);
+    } catch { /* non-critical */ }
   };
 
   const checkCameraPermission = async (): Promise<"granted" | "denied" | "prompt"> => {
@@ -495,8 +698,10 @@ export default function ReportPage() {
     setCameraActive(false);
   };
 
+  // G9 — Record internet availability on step arrival; auto-trigger GPS
   useEffect(() => {
     if (step !== "location") return;
+    setLocationInternetAvailable(navigator.onLine);
     if (gpsLatitude !== null) return;
     void triggerGeolocation();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -540,7 +745,6 @@ export default function ReportPage() {
   };
 
   const validateAndReplacePhoto = async (file: File, index: number) => {
-    // Build existingPhotos excluding the slot being replaced so duplicate check works correctly
     const othersExcludingSlot = photos.filter((_, i) => i !== index);
     const result = await validatePhoto(file, othersExcludingSlot);
     if (result.ok) {
@@ -566,7 +770,6 @@ export default function ReportPage() {
       setTimeout(() => setDropExtraMessage(""), 4000);
     }
     toProcess.forEach((f) => void validateAndAddPhoto(f));
-    // Reset input value so same file can be re-selected after remove
     e.target.value = "";
   };
 
@@ -637,18 +840,22 @@ export default function ReportPage() {
 
   // ── Duplicate / submit helpers ────────────────────────────────────────────────
 
+  // G5 — Use centroid/pin/GPS in order of priority for duplicate checks
   const checkDuplicate = (): boolean => {
-    if (!gpsLatitude || !gpsLongitude || !crisisId) return false;
+    const lat = buildingCentroidLat ?? pinDropCoords?.lat ?? gpsLatitude;
+    const lng = buildingCentroidLng ?? pinDropCoords?.lng ?? gpsLongitude;
+    if (!lat || !lng || !crisisId) return false;
     try {
       const raw = localStorage.getItem("cr_submitted_locations");
       if (!raw) return false;
-      const locs: Array<{ lat: number; lng: number; crisis_id: string; timestamp: number }> = JSON.parse(raw);
+      const locs: Array<{ lat: number; lng: number; crisis_id: string; timestamp: number }> =
+        JSON.parse(raw);
       const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
       return locs.some(
         (l) =>
           l.crisis_id === crisisId &&
-          Math.abs(l.lat - gpsLatitude) < 0.001 &&
-          Math.abs(l.lng - gpsLongitude) < 0.001 &&
+          Math.abs(l.lat - lat) < 0.001 &&
+          Math.abs(l.lng - lng) < 0.001 &&
           l.timestamp > cutoff
       );
     } catch {
@@ -657,12 +864,25 @@ export default function ReportPage() {
   };
 
   const saveSubmittedLocation = () => {
-    if (!gpsLatitude || !gpsLongitude || !crisisId) return;
+    const lat = buildingCentroidLat ?? pinDropCoords?.lat ?? gpsLatitude;
+    const lng = buildingCentroidLng ?? pinDropCoords?.lng ?? gpsLongitude;
+    if (!lat || !lng || !crisisId) return;
     try {
       const raw = localStorage.getItem("cr_submitted_locations");
-      const locs: Array<{ lat: number; lng: number; crisis_id: string; timestamp: number }> =
-        raw ? JSON.parse(raw) : [];
-      locs.push({ lat: gpsLatitude, lng: gpsLongitude, crisis_id: crisisId, timestamp: Date.now() });
+      const locs: Array<{
+        lat: number;
+        lng: number;
+        crisis_id: string;
+        timestamp: number;
+        building_id?: string;
+      }> = raw ? JSON.parse(raw) : [];
+      locs.push({
+        lat,
+        lng,
+        crisis_id: crisisId,
+        timestamp: Date.now(),
+        ...(selectedBuildingId ? { building_id: selectedBuildingId } : {}),
+      });
       localStorage.setItem("cr_submitted_locations", JSON.stringify(locs));
     } catch { /* non-critical */ }
   };
@@ -692,10 +912,22 @@ export default function ReportPage() {
     setGpsDenied(false);
     setCameraDenied(false);
     setSelectedBuildingId(null);
-    setSelectedBuildingTags({ name: "", building: "" });
+    setSelectedBuildingName("");
+    setBuildingNameOsm("");
+    setSelectedBuildingType("");
+    setBuildingCentroidLat(null);
+    setBuildingCentroidLng(null);
+    setPendingBuilding(null);
+    setPinDropCoords(null);
+    if (pinMarkerRef.current) { pinMarkerRef.current.remove(); pinMarkerRef.current = null; }
+    if (gpsMarkerRef.current) { gpsMarkerRef.current.remove(); gpsMarkerRef.current = null; }
     setLocationAddress("");
     setLocationLandmark("");
     setLocationBuildingName("");
+    setLocationNote("");
+    setShowDuplicateInlineWarning(false);
+    setLocationEntryMethod(null);
+    setLocationInternetAvailable(navigator.onLine);
     setManualExpanded(false);
     setSubmitted(false);
     setWasQueued(false);
@@ -704,8 +936,11 @@ export default function ReportPage() {
     setStep("photos");
   };
 
+  // G5 — Valid if any usable coordinate or text field is filled
   const isLocationValid = (): boolean =>
     (gpsLatitude !== null && gpsLongitude !== null) ||
+    buildingCentroidLat !== null ||
+    pinDropCoords !== null ||
     locationAddress.trim().length > 0 ||
     locationLandmark.trim().length > 0 ||
     locationBuildingName.trim().length > 0;
@@ -748,7 +983,10 @@ export default function ReportPage() {
 
   const buildLocationAddress = (): string | null => {
     if (selectedBuildingId) {
-      const parts = [selectedBuildingTags.name, selectedBuildingTags.building !== "yes" ? selectedBuildingTags.building : ""].filter(Boolean);
+      const parts = [
+        selectedBuildingName,
+        selectedBuildingType && selectedBuildingType !== "yes" ? selectedBuildingType : "",
+      ].filter(Boolean);
       return parts.length > 0 ? parts.join(" — ") : null;
     }
     return locationAddress || null;
@@ -771,7 +1009,6 @@ export default function ReportPage() {
         original_size_kb: r.original_size_kb,
         compressed_size_kb: r.compressed_size_kb,
       }));
-      // Extract EXIF from originals — canvas-exported JPEGs strip EXIF tags
       exifResults = await Promise.all(photos.map(extractExif)) as Array<Record<string, unknown>>;
     } finally {
       setPreparingPhotos(false);
@@ -800,13 +1037,30 @@ export default function ReportPage() {
       photo_metadata: JSON.stringify(photoMetadata),
       photo_exif_data: JSON.stringify(exifResults),
       location: {
+        // G5 — Actual device GPS (never overwritten by building centroid)
         gps_latitude: gpsLatitude,
         gps_longitude: gpsLongitude,
         gps_accuracy_meters: gpsAccuracy,
         gps_available: gpsLatitude !== null,
+        // G5 — Building footprint centroid (separate from device GPS)
+        building_centroid_lat: buildingCentroidLat,
+        building_centroid_lng: buildingCentroidLng,
+        building_id: selectedBuildingId,
+        building_name_osm: buildingNameOsm || null,
+        building_name_reporter: selectedBuildingName || null,
+        building_type: selectedBuildingType || null,
+        // B6 — Pin drop coordinates
+        pin_drop_lat: pinDropCoords?.lat ?? null,
+        pin_drop_lng: pinDropCoords?.lng ?? null,
+        // Manual text entry
         location_address: buildLocationAddress(),
         location_landmark: locationLandmark || null,
         location_building_name: locationBuildingName || null,
+        // B7 — Optional location note
+        location_note: locationNote || null,
+        // G7/G9/G11 — Metadata flags
+        location_entry_method: locationEntryMethod,
+        location_internet_available: locationInternetAvailable,
       },
       reporter_id: reporterId || undefined,
       language_code: languageCode,
@@ -967,7 +1221,6 @@ export default function ReportPage() {
           onClick={() => setSelectedPhotoIndex(selectedPhotoIndex === index ? null : index)}
         >
           <img src={URL.createObjectURL(photo)} style={styles.thumbImg} alt={`Photo ${index + 1}`} />
-          {/* Popover action bar */}
           {selectedPhotoIndex === index && (
             <div style={styles.thumbPopover} onClick={(e) => e.stopPropagation()}>
               <button
@@ -1101,7 +1354,6 @@ export default function ReportPage() {
           <div style={styles.step}>
             <h2 style={styles.stepTitle}>{t("report.photos")} *</h2>
 
-            {/* Photo guidelines */}
             <ul style={styles.guidelineList}>
               {GUIDELINES.map((text, i) => (
                 <li key={i} style={styles.guidelineItem}>
@@ -1113,10 +1365,8 @@ export default function ReportPage() {
               ))}
             </ul>
 
-            {/* Photo thumbnails (when photos exist) */}
             {photos.length > 0 && renderPhotoThumbnails()}
 
-            {/* Upload zone / add button */}
             {photos.length === 0 && (
               isMobile ? renderMobileButtons() : renderDesktopDropZone()
             )}
@@ -1125,17 +1375,14 @@ export default function ReportPage() {
               <p style={{ fontSize: 13, color: "#717782", margin: 0 }}>Maximum 3 photos added.</p>
             )}
 
-            {/* Drag-and-drop extra files note */}
             {dropExtraMessage && (
               <p style={{ fontSize: 13, color: "#717782", margin: 0 }}>{dropExtraMessage}</p>
             )}
 
-            {/* Validation error */}
             {photoError && (
               <p style={{ fontSize: "0.85rem", color: "#E53E3E", margin: 0 }}>{photoError}</p>
             )}
 
-            {/* Hidden file inputs */}
             <input
               ref={fileInputRef}
               type="file"
@@ -1165,34 +1412,151 @@ export default function ReportPage() {
         {/* Step 2 — Location */}
         {step === "location" && (
           <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+
+            {/* Map area */}
             <div style={{ flex: 1, position: "relative", minHeight: 260 }}>
               <div ref={mapContainerRef} style={{ position: "absolute", inset: 0 }} />
               {locationMapZoom < 14 && (
                 <div style={styles.zoomHint}>Zoom in to see and select buildings</div>
               )}
+
+              {/* B3/B11 — Desktop: floating confirmation card */}
+              {pendingBuilding && !isMobile && (
+                <div style={styles.confirmCardDesktop}>
+                  <div style={styles.confirmBuildingName}>
+                    {pendingBuilding.name || "Unnamed Building"}
+                  </div>
+                  <div style={styles.confirmBuildingType}>
+                    {pendingBuilding.type !== "yes"
+                      ? pendingBuilding.type.replace(/_/g, " ")
+                      : "Building"}
+                  </div>
+                  <div style={styles.confirmBuildingCoords}>
+                    {Math.abs(pendingBuilding.lat).toFixed(4)}°{pendingBuilding.lat >= 0 ? "N" : "S"},{" "}
+                    {Math.abs(pendingBuilding.lng).toFixed(4)}°{pendingBuilding.lng >= 0 ? "E" : "W"}
+                  </div>
+                  <hr style={{ margin: "12px 0", border: "none", borderTop: "1px solid #E2E8F0" }} />
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button style={styles.confirmCancelBtn} onClick={handleBuildingCancel}>Cancel</button>
+                    <button style={styles.confirmConfirmBtn} onClick={handleBuildingConfirm}>Confirm</button>
+                  </div>
+                </div>
+              )}
             </div>
 
+            {/* B3/B12 — Mobile: bottom sheet confirmation */}
+            {pendingBuilding && isMobile && (
+              <div style={styles.bottomSheet}>
+                <div style={styles.bottomSheetHandle} />
+                <div style={styles.confirmBuildingName}>
+                  {pendingBuilding.name || "Unnamed Building"}
+                </div>
+                <div style={styles.confirmBuildingType}>
+                  {pendingBuilding.type !== "yes"
+                    ? pendingBuilding.type.replace(/_/g, " ")
+                    : "Building"}
+                </div>
+                <div style={styles.confirmBuildingCoords}>
+                  {Math.abs(pendingBuilding.lat).toFixed(4)}°{pendingBuilding.lat >= 0 ? "N" : "S"},{" "}
+                  {Math.abs(pendingBuilding.lng).toFixed(4)}°{pendingBuilding.lng >= 0 ? "E" : "W"}
+                </div>
+                <hr style={{ margin: "12px 0", border: "none", borderTop: "1px solid #E2E8F0" }} />
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button style={styles.confirmCancelBtn} onClick={handleBuildingCancel}>Cancel</button>
+                  <button style={styles.confirmConfirmBtn} onClick={handleBuildingConfirm}>Confirm</button>
+                </div>
+              </div>
+            )}
+
+            {/* Bottom panel */}
             <div style={styles.locationPanel}>
               <h2 style={{ ...styles.stepTitle, marginBottom: 4 }}>{t("report.location")}</h2>
 
-              {gpsLatitude !== null && gpsLongitude !== null && (
+              {/* Selection state card */}
+              {selectedBuildingId && (
                 <div style={styles.selectionCard}>
-                  <div style={styles.selectionCardTitle}>
-                    {selectedBuildingId ? "Building Selected" : "GPS Location Captured"}
-                  </div>
+                  <div style={styles.selectionCardTitle}>Building Selected</div>
                   <div style={styles.selectionCardName}>
-                    {selectedBuildingId
-                      ? (selectedBuildingTags.name || "Unnamed building")
-                      : `${gpsLatitude.toFixed(6)}, ${gpsLongitude.toFixed(6)}`}
+                    {selectedBuildingName || "Unnamed building"}
                   </div>
-                  {selectedBuildingId && selectedBuildingTags.building && selectedBuildingTags.building !== "yes" && (
-                    <div style={styles.selectionCardMeta}>Type: {selectedBuildingTags.building}</div>
-                  )}
-                  {selectedBuildingId && (
-                    <div style={styles.selectionCardCoords}>
-                      {gpsLatitude.toFixed(6)}, {gpsLongitude.toFixed(6)}
+                  {selectedBuildingType && selectedBuildingType !== "yes" && (
+                    <div style={styles.selectionCardMeta}>
+                      Type: {selectedBuildingType.replace(/_/g, " ")}
                     </div>
                   )}
+                  {buildingCentroidLat !== null && buildingCentroidLng !== null && (
+                    <div style={styles.selectionCardCoords}>
+                      {buildingCentroidLat.toFixed(6)}, {buildingCentroidLng.toFixed(6)}
+                    </div>
+                  )}
+                </div>
+              )}
+              {!selectedBuildingId && pinDropCoords && (
+                <div style={styles.selectionCard}>
+                  <div style={styles.selectionCardTitle}>Pin Dropped</div>
+                  <div style={styles.selectionCardCoords}>
+                    {pinDropCoords.lat.toFixed(6)}, {pinDropCoords.lng.toFixed(6)}
+                  </div>
+                </div>
+              )}
+              {!selectedBuildingId && !pinDropCoords && gpsLatitude !== null && gpsLongitude !== null && (
+                <div style={styles.selectionCard}>
+                  <div style={styles.selectionCardTitle}>GPS Location Captured</div>
+                  <div style={styles.selectionCardCoords}>
+                    {gpsLatitude.toFixed(6)}, {gpsLongitude.toFixed(6)}
+                  </div>
+                </div>
+              )}
+
+              {/* B10 — Inline duplicate warning (dismissible, non-blocking) */}
+              {showDuplicateInlineWarning && (
+                <div style={styles.inlineDupeWarning}>
+                  <span>
+                    A report for this location may already exist from this device. You can still
+                    submit if this is a different incident.
+                  </span>
+                  <button
+                    style={styles.inlineDupeDismiss}
+                    onClick={() => setShowDuplicateInlineWarning(false)}
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+
+              {/* B5 — Editable building name (after building confirmed or pin dropped) */}
+              {(selectedBuildingId || pinDropCoords) && (
+                <div>
+                  <label style={styles.fieldLabel}>BUILDING NAME</label>
+                  <input
+                    style={styles.input}
+                    type="text"
+                    placeholder="Building name (optional)"
+                    value={selectedBuildingName}
+                    onChange={(e) => setSelectedBuildingName(e.target.value)}
+                  />
+                </div>
+              )}
+
+              {/* B7/B8 — Optional location note (after building confirmed or pin dropped) */}
+              {(selectedBuildingId || pinDropCoords) && (
+                <div>
+                  <label style={styles.fieldLabel}>
+                    ADD A LOCATION NOTE (OPTIONAL){" "}
+                    <span
+                      title="Add the name you know this building by, or any detail that helps identify the exact spot."
+                      style={{ cursor: "help", color: "#A0AEC0" }}
+                    >
+                      ⓘ
+                    </span>
+                  </label>
+                  <textarea
+                    style={styles.noteTextarea}
+                    rows={2}
+                    placeholder="e.g. Blue gate on the left, next to the pharmacy"
+                    value={locationNote}
+                    onChange={(e) => setLocationNote(e.target.value)}
+                  />
                 </div>
               )}
 
@@ -1205,7 +1569,8 @@ export default function ReportPage() {
               {gpsDenied && (
                 <div style={styles.denialBox}>
                   <p style={styles.denialMsg}>
-                    Location access is not available. You can enable it in your browser settings. You can still continue by entering your location manually below.
+                    Location access is not available. You can enable it in your browser settings.
+                    You can still continue by entering your location manually below.
                   </p>
                   <p style={styles.denialHint}>
                     To enable location access, open your browser settings and allow location access for this site.
@@ -1237,21 +1602,30 @@ export default function ReportPage() {
                     type="text"
                     placeholder="Address"
                     value={locationAddress}
-                    onChange={(e) => setLocationAddress(e.target.value)}
+                    onChange={(e) => {
+                      setLocationAddress(e.target.value);
+                      if (!selectedBuildingId && !pinDropCoords) setLocationEntryMethod("manual_text");
+                    }}
                   />
                   <input
                     style={styles.input}
                     type="text"
                     placeholder="Landmark (e.g. Near central market)"
                     value={locationLandmark}
-                    onChange={(e) => setLocationLandmark(e.target.value)}
+                    onChange={(e) => {
+                      setLocationLandmark(e.target.value);
+                      if (!selectedBuildingId && !pinDropCoords) setLocationEntryMethod("manual_text");
+                    }}
                   />
                   <input
                     style={styles.input}
                     type="text"
                     placeholder="Building Name"
                     value={locationBuildingName}
-                    onChange={(e) => setLocationBuildingName(e.target.value)}
+                    onChange={(e) => {
+                      setLocationBuildingName(e.target.value);
+                      if (!selectedBuildingId && !pinDropCoords) setLocationEntryMethod("manual_text");
+                    }}
                   />
                 </div>
               )}
@@ -1537,13 +1911,23 @@ export default function ReportPage() {
                 <button style={styles.editLink} onClick={() => setStep("location")}>Edit</button>
               </div>
               <div style={styles.reviewCard}>
-                {gpsLatitude !== null ? (
+                {selectedBuildingId ? (
                   <div style={styles.reviewRow}>
-                    <span style={styles.reviewLabel}>Coordinates</span>
+                    <span style={styles.reviewLabel}>Building</span>
+                    <span style={styles.reviewValue}>{selectedBuildingName || "Building selected"}</span>
+                  </div>
+                ) : pinDropCoords ? (
+                  <div style={styles.reviewRow}>
+                    <span style={styles.reviewLabel}>Pin Location</span>
                     <span style={styles.reviewValue}>
-                      {selectedBuildingId
-                        ? (selectedBuildingTags.name || "Building selected")
-                        : `GPS ${gpsLatitude.toFixed(4)}, ${gpsLongitude!.toFixed(4)}`}
+                      {pinDropCoords.lat.toFixed(4)}, {pinDropCoords.lng.toFixed(4)}
+                    </span>
+                  </div>
+                ) : gpsLatitude !== null ? (
+                  <div style={styles.reviewRow}>
+                    <span style={styles.reviewLabel}>GPS</span>
+                    <span style={styles.reviewValue}>
+                      {gpsLatitude.toFixed(4)}, {gpsLongitude!.toFixed(4)}
                     </span>
                   </div>
                 ) : locationAddress ? (
@@ -1661,7 +2045,7 @@ export default function ReportPage() {
         </div>
       )}
 
-      {/* Duplicate submission warning */}
+      {/* Duplicate submission warning modal (submit-time) */}
       {showDupeWarning && (
         <div style={styles.modalOverlay}>
           <div style={styles.modalBox}>
@@ -1772,7 +2156,7 @@ const styles: Record<string, React.CSSProperties> = {
     flexDirection: "column",
     gap: 10,
     overflowY: "auto",
-    maxHeight: 340,
+    maxHeight: 380,
     flexShrink: 0,
   },
   selectionCard: {
@@ -1804,6 +2188,122 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#718096",
     marginTop: 4,
     fontVariantNumeric: "tabular-nums",
+  },
+  // B3/B11 — Desktop floating confirmation card
+  confirmCardDesktop: {
+    position: "absolute" as const,
+    bottom: 80,
+    left: "50%",
+    transform: "translateX(-50%)",
+    zIndex: 10,
+    background: "#fff",
+    borderRadius: 12,
+    boxShadow: "0 4px 20px rgba(0,0,0,0.15)",
+    padding: 20,
+    minWidth: 280,
+  },
+  // B3/B12 — Mobile bottom sheet
+  bottomSheet: {
+    position: "fixed" as const,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    zIndex: 20,
+    background: "#fff",
+    borderRadius: "16px 16px 0 0",
+    padding: "20px 20px 32px",
+    boxShadow: "0 -4px 24px rgba(0,0,0,0.15)",
+  },
+  bottomSheetHandle: {
+    width: 40,
+    height: 4,
+    background: "#E2E8F0",
+    borderRadius: 2,
+    margin: "0 auto 16px",
+  },
+  confirmBuildingName: {
+    fontSize: 17,
+    fontWeight: 700,
+    color: "#1A2B4A",
+    marginBottom: 4,
+  },
+  confirmBuildingType: {
+    fontSize: 13,
+    color: "#717782",
+    textTransform: "capitalize" as const,
+    marginBottom: 2,
+  },
+  confirmBuildingCoords: {
+    fontSize: 12,
+    color: "#717782",
+    fontVariantNumeric: "tabular-nums",
+  },
+  confirmCancelBtn: {
+    flex: 1,
+    padding: "10px 20px",
+    border: "1px solid #E2E8F0",
+    borderRadius: 8,
+    background: "#fff",
+    color: "#717782",
+    fontSize: 14,
+    fontWeight: 500,
+    cursor: "pointer",
+  },
+  confirmConfirmBtn: {
+    flex: 1,
+    padding: "10px 20px",
+    border: "none",
+    borderRadius: 8,
+    background: "#0468B1",
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: 600,
+    cursor: "pointer",
+  },
+  // B10 — Inline duplicate warning
+  inlineDupeWarning: {
+    background: "#FFF8E1",
+    border: "1px solid #FFD54F",
+    borderRadius: 8,
+    padding: "10px 14px",
+    fontSize: 13,
+    color: "#795548",
+    display: "flex",
+    alignItems: "flex-start",
+    gap: 8,
+    justifyContent: "space-between",
+  },
+  inlineDupeDismiss: {
+    background: "none",
+    border: "none",
+    color: "#795548",
+    cursor: "pointer",
+    fontSize: 14,
+    padding: 0,
+    flexShrink: 0,
+  },
+  // B5 — Field label
+  fieldLabel: {
+    fontSize: 11,
+    fontWeight: 700,
+    color: "#717782",
+    letterSpacing: "0.06em",
+    display: "block",
+    marginBottom: 4,
+  },
+  // B7 — Location note textarea
+  noteTextarea: {
+    width: "100%",
+    padding: "12px 16px",
+    borderRadius: 8,
+    border: "1px solid #E2E8F0",
+    fontSize: 15,
+    outline: "none",
+    background: "#fff",
+    boxSizing: "border-box" as const,
+    resize: "vertical" as const,
+    fontFamily: "inherit",
+    lineHeight: 1.5,
   },
   gpsButton: {
     padding: "12px 16px",
