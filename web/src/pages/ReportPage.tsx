@@ -7,6 +7,8 @@ import { useAuthStore } from "../stores/authStore";
 import api from "../services/api";
 import { addToQueue } from "../utils/offlineQueue";
 import { validatePhoto } from "../utils/photoValidation";
+import { compressPhoto } from "../utils/photoCompression";
+import { extractExif } from "../utils/exifExtraction";
 import SubmissionStepper, { type StepperStep } from "../components/SubmissionStepper";
 import type { DamageLevel, QueuedPhoto } from "../types";
 
@@ -204,6 +206,9 @@ export default function ReportPage() {
   const { reporterId, countryCode, languageCode } = useAuthStore();
   const isMobile = isMobileBrowser();
 
+  // Captured once at component mount — the moment the reporter tapped "Report an Incident"
+  const [submissionStartTime] = useState<string>(() => new Date().toISOString());
+
   // Form state
   const [damageLevel, setDamageLevel] = useState<DamageLevel | "">("");
   const [infrastructureTypes, setInfrastructureTypes] = useState<string[]>([]);
@@ -245,6 +250,7 @@ export default function ReportPage() {
 
   // UI state
   const [step, setStep] = useState<"photos" | "location" | "damage" | "review">("photos");
+  const [preparingPhotos, setPreparingPhotos] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [wasQueued, setWasQueued] = useState(false);
@@ -257,6 +263,7 @@ export default function ReportPage() {
   const [questionPackage, setQuestionPackage] = useState<ActivePackage | null>(null);
 
   // Refs
+  const isSubmittedRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const replaceInputRef = useRef<HTMLInputElement>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -507,6 +514,19 @@ export default function ReportPage() {
     }
   }, [cameraActive, cameraStream]);
 
+  // beforeunload fires on browser back, tab close, URL change, and external link clicks.
+  // It does NOT fire on React router navigate() calls — those are client-side.
+  // The App.tsx route guard handles in-app navigation guards separately if needed.
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isSubmittedRef.current) return;
+      e.preventDefault();
+      e.returnValue = ""; // Required for Chrome — triggers the browser's generic prompt
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, []);
+
   // ── Photo validation wiring ──────────────────────────────────────────────────
 
   const validateAndAddPhoto = async (file: File) => {
@@ -736,8 +756,31 @@ export default function ReportPage() {
 
   const doSubmit = async () => {
     setShowDupeWarning(false);
-    setSubmitting(true);
     setError("");
+
+    // Phase 1 — compress photos and extract EXIF (both run before the network call)
+    setPreparingPhotos(true);
+    let compressedPhotos: File[];
+    let photoMetadata: Array<{ compressed: boolean; original_size_kb: number; compressed_size_kb: number }>;
+    let exifResults: Array<Record<string, unknown>>;
+    try {
+      const compressionResults = await Promise.all(photos.map(compressPhoto));
+      compressedPhotos = compressionResults.map((r) => r.file);
+      photoMetadata = compressionResults.map((r) => ({
+        compressed: r.compressed,
+        original_size_kb: r.original_size_kb,
+        compressed_size_kb: r.compressed_size_kb,
+      }));
+      // Extract EXIF from originals — canvas-exported JPEGs strip EXIF tags
+      exifResults = await Promise.all(photos.map(extractExif)) as Array<Record<string, unknown>>;
+    } finally {
+      setPreparingPhotos(false);
+    }
+
+    // Phase 2 — transmit
+    setSubmitting(true);
+
+    const submissionSubmittedAt = new Date().toISOString();
 
     const reportPayload = {
       crisis_id: crisisId!,
@@ -752,7 +795,10 @@ export default function ReportPage() {
       pressing_needs: pressingNeeds,
       ...(pressingNeeds.includes("other") && { pressing_needs_other: pressingNeedsOther }),
       platform: "web" as const,
-      submitted_at: new Date().toISOString(),
+      submission_started_at: submissionStartTime,
+      submission_submitted_at: submissionSubmittedAt,
+      photo_metadata: JSON.stringify(photoMetadata),
+      photo_exif_data: JSON.stringify(exifResults),
       location: {
         gps_latitude: gpsLatitude,
         gps_longitude: gpsLongitude,
@@ -772,7 +818,7 @@ export default function ReportPage() {
     };
 
     if (!navigator.onLine) {
-      const queuedPhotos: QueuedPhoto[] = photos.map((file, index) => ({
+      const queuedPhotos: QueuedPhoto[] = compressedPhotos.map((file, index) => ({
         blob: file,
         filename: file.name,
         content_type: file.type,
@@ -782,6 +828,7 @@ export default function ReportPage() {
       saveSubmittedLocation();
       setWasQueued(true);
       setSubmittedReportId(null);
+      isSubmittedRef.current = true;
       setSubmitted(true);
       setSubmitting(false);
       return;
@@ -791,11 +838,11 @@ export default function ReportPage() {
       const response = await api.post("/api/reports", reportPayload);
       const reportId = response.data.report_id;
 
-      for (let i = 0; i < photos.length; i++) {
+      for (let i = 0; i < compressedPhotos.length; i++) {
         const formData = new FormData();
         formData.append("report_id", reportId);
         formData.append("display_order", String(i));
-        formData.append("file", photos[i]);
+        formData.append("file", compressedPhotos[i]);
         await api.post("/api/photos", formData, {
           headers: { "Content-Type": "multipart/form-data" },
         });
@@ -811,7 +858,7 @@ export default function ReportPage() {
           location_address: buildLocationAddress(),
           gps_latitude: gpsLatitude,
           gps_longitude: gpsLongitude,
-          submitted_at: new Date().toISOString(),
+          submitted_at: submissionSubmittedAt,
         };
         const existing: unknown[] = JSON.parse(
           sessionStorage.getItem("cr_session_reports") || "[]"
@@ -822,6 +869,7 @@ export default function ReportPage() {
 
       setSubmittedReportId(reportId as string);
       setWasQueued(false);
+      isSubmittedRef.current = true;
       setSubmitted(true);
     } catch {
       setError(t("report.error"));
@@ -1569,11 +1617,11 @@ export default function ReportPage() {
                 ← Back
               </button>
               <button
-                style={{ ...styles.primaryButton, opacity: submitting ? 0.7 : 1, flex: 1 }}
+                style={{ ...styles.primaryButton, opacity: (preparingPhotos || submitting) ? 0.7 : 1, flex: 1 }}
                 onClick={handleSubmit}
-                disabled={submitting}
+                disabled={preparingPhotos || submitting}
               >
-                {submitting ? t("report.submitting") : t("report.submit")}
+                {preparingPhotos ? "Preparing photos…" : submitting ? t("report.submitting") : t("report.submit")}
               </button>
             </div>
           </div>
