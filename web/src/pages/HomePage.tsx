@@ -5,7 +5,6 @@ import { useAuthStore } from "../stores/authStore";
 import { WEB_SESSION_ID } from "../utils/sessionId";
 import { detectPlatform } from "../services/auth";
 import api from "../services/api";
-import SideMenu from "../components/SideMenu";
 import CrisisTypeModal from "../components/CrisisTypeModal";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
@@ -16,52 +15,6 @@ interface ReportsListResponse {
   reports: unknown[];
   total_count: number;
   next_cursor: string | null;
-}
-
-// ── Icons ─────────────────────────────────────────────────────────────────────
-
-function IconHamburger() {
-  return (
-    <svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth={2} strokeLinecap="round">
-      <line x1="3" y1="6" x2="21" y2="6" />
-      <line x1="3" y1="12" x2="21" y2="12" />
-      <line x1="3" y1="18" x2="21" y2="18" />
-    </svg>
-  );
-}
-
-function IconHome({ active }: { active: boolean }) {
-  const color = active ? "#0468B1" : "#9CA3AF";
-  return (
-    <svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
-      <polyline points="9 22 9 12 15 12 15 22" />
-    </svg>
-  );
-}
-
-function IconMapPin({ active }: { active: boolean }) {
-  const color = active ? "#0468B1" : "#9CA3AF";
-  return (
-    <svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" />
-      <circle cx="12" cy="10" r="3" />
-    </svg>
-  );
-}
-
-function IconList({ active }: { active: boolean }) {
-  const color = active ? "#0468B1" : "#9CA3AF";
-  return (
-    <svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-      <line x1="8" y1="6" x2="21" y2="6" />
-      <line x1="8" y1="12" x2="21" y2="12" />
-      <line x1="8" y1="18" x2="21" y2="18" />
-      <line x1="3" y1="6" x2="3.01" y2="6" />
-      <line x1="3" y1="12" x2="3.01" y2="12" />
-      <line x1="3" y1="18" x2="3.01" y2="18" />
-    </svg>
-  );
 }
 
 // ── Anti-spam signal helpers ───────────────────────────────────────────────────
@@ -80,7 +33,6 @@ export default function HomePage() {
   const navigate = useNavigate();
   const { reporterId, setReporter } = useAuthStore();
 
-  const [menuOpen, setMenuOpen] = useState(false);
   const [crisisModalOpen, setCrisisModalOpen] = useState(false);
   const [loginPromptOpen, setLoginPromptOpen] = useState(false);
   const [loginPromptBusy, setLoginPromptBusy] = useState(false);
@@ -229,20 +181,8 @@ export default function HomePage() {
 
   return (
     <div style={s.page}>
-      <SideMenu open={menuOpen} onClose={() => setMenuOpen(false)} />
-
       {/* B16: Crisis type modal — fully bundled, no network call */}
       {crisisModalOpen && <CrisisTypeModal onClose={() => setCrisisModalOpen(false)} />}
-
-      {/* A5: Header — hamburger + wordmark only. Settings gear removed. */}
-      <header style={s.header}>
-        <button style={s.hamburgerBtn} onClick={() => setMenuOpen(true)} aria-label="Open menu">
-          <IconHamburger />
-        </button>
-        <span style={s.headerTitle}>Crisis Reporter</span>
-        {/* Spacer keeps wordmark visually centred */}
-        <div style={{ width: 30 }} />
-      </header>
 
       {/* ── Main content ── */}
       <main style={s.main}>
@@ -293,22 +233,6 @@ export default function HomePage() {
         </div>
       </main>
 
-      {/* ── Footer navigation ── */}
-      <nav style={s.footer}>
-        <button style={s.navBtn} onClick={() => navigate("/")}>
-          <IconHome active={true} />
-          <span style={{ ...s.navLabel, color: "#0468B1", fontWeight: 600 }}>Home</span>
-        </button>
-        <button style={s.navBtn} onClick={() => navigate("/map")}>
-          <IconMapPin active={false} />
-          <span style={s.navLabel}>Map</span>
-        </button>
-        <button style={s.navBtn} onClick={() => navigate("/my-reports")}>
-          <IconList active={false} />
-          <span style={s.navLabel}>My Reports</span>
-        </button>
-      </nav>
-
       {/* ── Login prompt bottom sheet ── */}
       {loginPromptOpen && (
         <div style={s.promptOverlay} onClick={() => setLoginPromptOpen(false)}>
@@ -351,32 +275,10 @@ export default function HomePage() {
 
 const s: Record<string, React.CSSProperties> = {
   page: {
-    minHeight: "100vh",
+    flex: 1,
     background: "#fff",
     display: "flex",
     flexDirection: "column",
-    maxWidth: 480,
-    margin: "0 auto",
-  },
-  header: {
-    background: "#0468B1",
-    padding: "16px 20px",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    flexShrink: 0,
-  },
-  headerTitle: { color: "#fff", fontSize: 18, fontWeight: 700, letterSpacing: 0.2 },
-  hamburgerBtn: {
-    background: "transparent",
-    border: "none",
-    cursor: "pointer",
-    padding: 4,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 6,
-    width: 30,
   },
   main: {
     flex: 1,
@@ -463,26 +365,6 @@ const s: Record<string, React.CSSProperties> = {
     whiteSpace: "nowrap",
     flexShrink: 0,
   },
-  footer: {
-    background: "#fff",
-    borderTop: "1px solid #E2E8F0",
-    display: "flex",
-    justifyContent: "space-around",
-    padding: "8px 0 12px",
-    flexShrink: 0,
-  },
-  navBtn: {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    gap: 4,
-    background: "transparent",
-    border: "none",
-    cursor: "pointer",
-    padding: "6px 20px",
-    flex: 1,
-  },
-  navLabel: { fontSize: 11, color: "#9CA3AF", fontWeight: 500 },
   promptOverlay: {
     position: "fixed",
     inset: 0,

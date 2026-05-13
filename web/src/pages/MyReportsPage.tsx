@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useAuthStore } from "../stores/authStore";
 import api from "../services/api";
-import SideMenu from "../components/SideMenu";
 
 interface ReporterReport {
   id: string;
@@ -86,7 +85,6 @@ export default function MyReportsPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
-  const [menuOpen, setMenuOpen] = useState(false);
   const [isSessionMode, setIsSessionMode] = useState(false);
 
   const fetchReports = useCallback(async (cursor?: string) => {
@@ -147,20 +145,7 @@ export default function MyReportsPage() {
   return (
     <div style={styles.container}>
       <style>{`@keyframes cr-spin { to { transform: rotate(360deg); } }`}</style>
-      <SideMenu open={menuOpen} onClose={() => setMenuOpen(false)} />
-
       <div style={styles.header}>
-        <button
-          style={styles.hamburgerBtn}
-          onClick={() => setMenuOpen(true)}
-          aria-label="Open menu"
-        >
-          <svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth={2} strokeLinecap="round">
-            <line x1="3" y1="6" x2="21" y2="6" />
-            <line x1="3" y1="12" x2="21" y2="12" />
-            <line x1="3" y1="18" x2="21" y2="18" />
-          </svg>
-        </button>
         <h1 style={styles.title}>{t("home.myReports")}</h1>
       </div>
 
@@ -252,17 +237,6 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     alignItems: "center",
     gap: 16,
-  },
-  hamburgerBtn: {
-    background: "transparent",
-    border: "none",
-    cursor: "pointer",
-    padding: 4,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 6,
-    flexShrink: 0,
   },
   title: { color: "#fff", fontSize: 18, fontWeight: 700, margin: 0 },
   content: {

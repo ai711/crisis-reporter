@@ -1,10 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useAuthStore } from "../stores/authStore";
 import api from "../services/api";
-import SideMenu from "../components/SideMenu";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -208,16 +206,6 @@ async function fetchBuildings(mapInstance: maplibregl.Map): Promise<void> {
 
 // ── Icons ─────────────────────────────────────────────────────────────────────
 
-function IconHamburger() {
-  return (
-    <svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth={2} strokeLinecap="round">
-      <line x1="3" y1="6" x2="21" y2="6" />
-      <line x1="3" y1="12" x2="21" y2="12" />
-      <line x1="3" y1="18" x2="21" y2="18" />
-    </svg>
-  );
-}
-
 function IconGPS() {
   return (
     <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#0468B1" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
@@ -237,44 +225,9 @@ function IconClose() {
   );
 }
 
-function IconHome({ active }: { active: boolean }) {
-  const color = active ? "#0468B1" : "#9CA3AF";
-  return (
-    <svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
-      <polyline points="9 22 9 12 15 12 15 22" />
-    </svg>
-  );
-}
-
-function IconMapPin({ active }: { active: boolean }) {
-  const color = active ? "#0468B1" : "#9CA3AF";
-  return (
-    <svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" />
-      <circle cx="12" cy="10" r="3" />
-    </svg>
-  );
-}
-
-function IconList({ active }: { active: boolean }) {
-  const color = active ? "#0468B1" : "#9CA3AF";
-  return (
-    <svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-      <line x1="8" y1="6" x2="21" y2="6" />
-      <line x1="8" y1="12" x2="21" y2="12" />
-      <line x1="8" y1="18" x2="21" y2="18" />
-      <line x1="3" y1="6" x2="3.01" y2="6" />
-      <line x1="3" y1="12" x2="3.01" y2="12" />
-      <line x1="3" y1="18" x2="3.01" y2="18" />
-    </svg>
-  );
-}
-
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function MapPage() {
-  const navigate = useNavigate();
   const { countryCode } = useAuthStore();
 
   const mapContainer = useRef<HTMLDivElement>(null);
@@ -283,7 +236,6 @@ export default function MapPage() {
   const countryCodeAtMount = useRef(countryCode);
 
   const [showZoomHint, setShowZoomHint] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
   const [selectedPin, setSelectedPin] = useState<PinDetail | null>(null);
 
   // D30: Offline detection
@@ -451,16 +403,6 @@ export default function MapPage() {
 
   return (
     <div style={s.page}>
-      <SideMenu open={menuOpen} onClose={() => setMenuOpen(false)} />
-
-      <header style={s.header}>
-        <button style={s.hamburgerBtn} onClick={() => setMenuOpen(true)} aria-label="Open menu">
-          <IconHamburger />
-        </button>
-        <span style={s.headerTitle}>Crisis Map</span>
-        <div style={{ width: 30 }} />
-      </header>
-
       {/* D30–31: Offline state — suppress map entirely */}
       {!isOnline ? (
         <div style={s.offlineContainer}>
@@ -543,57 +485,19 @@ export default function MapPage() {
         </>
       )}
 
-      <nav style={s.footer}>
-        <button style={s.navBtn} onClick={() => navigate("/")}>
-          <IconHome active={false} />
-          <span style={s.navLabel}>Home</span>
-        </button>
-        <button style={s.navBtn} onClick={() => navigate("/map")}>
-          <IconMapPin active={true} />
-          <span style={{ ...s.navLabel, color: "#0468B1", fontWeight: 600 }}>Map</span>
-        </button>
-        <button style={s.navBtn} onClick={() => navigate("/my-reports")}>
-          <IconList active={false} />
-          <span style={s.navLabel}>My Reports</span>
-        </button>
-      </nav>
     </div>
   );
 }
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
-const NAV_BAR_HEIGHT = 54; // approximate header height in px
-
 const s: Record<string, React.CSSProperties> = {
   page: {
-    height: "100vh",
+    flex: 1,
     display: "flex",
     flexDirection: "column",
-    maxWidth: 480,
-    margin: "0 auto",
     background: "#fff",
     position: "relative",
-  },
-  header: {
-    background: "#0468B1",
-    padding: "16px 20px",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    flexShrink: 0,
-  },
-  headerTitle: { color: "#fff", fontSize: 18, fontWeight: 700 },
-  hamburgerBtn: {
-    background: "transparent",
-    border: "none",
-    cursor: "pointer",
-    padding: 4,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 6,
-    width: 30,
   },
   // D30–31: Offline state
   offlineContainer: {
@@ -678,7 +582,7 @@ const s: Record<string, React.CSSProperties> = {
   // Desktop: right side panel
   rightPanel: {
     position: "fixed",
-    top: NAV_BAR_HEIGHT,
+    top: 64, // AppLayout desktop nav height
     right: 0,
     bottom: 0,
     width: 360,
@@ -761,26 +665,4 @@ const s: Record<string, React.CSSProperties> = {
     margin: 0,
     fontFamily: "monospace",
   },
-  // Footer nav
-  footer: {
-    background: "#fff",
-    borderTop: "1px solid #E2E8F0",
-    display: "flex",
-    justifyContent: "space-around",
-    padding: "8px 0 12px",
-    flexShrink: 0,
-    zIndex: 300, // above panel overlay
-  },
-  navBtn: {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    gap: 4,
-    background: "transparent",
-    border: "none",
-    cursor: "pointer",
-    padding: "6px 20px",
-    flex: 1,
-  },
-  navLabel: { fontSize: 11, color: "#9CA3AF", fontWeight: 500 },
 };

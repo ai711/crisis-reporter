@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { Suspense, lazy } from "react";
+import AppLayout from "./components/AppLayout";
 import i18n from "./i18n";
 
 const OnboardingPage = lazy(() => import("./pages/OnboardingPage"));
@@ -101,7 +102,7 @@ export default function App() {
             path="/login"
             element={
               <ProtectedRoute>
-                <LoginPage />
+                <AppLayout><LoginPage /></AppLayout>
               </ProtectedRoute>
             }
           />
@@ -109,7 +110,7 @@ export default function App() {
             path="/"
             element={
               <ProtectedRoute>
-                <HomePage />
+                <AppLayout><HomePage /></AppLayout>
               </ProtectedRoute>
             }
           />
@@ -117,7 +118,7 @@ export default function App() {
             path="/report"
             element={
               <ProtectedRoute>
-                <ReportPage />
+                <AppLayout><ReportPage /></AppLayout>
               </ProtectedRoute>
             }
           />
@@ -125,7 +126,7 @@ export default function App() {
             path="/map"
             element={
               <ProtectedRoute>
-                <MapPage />
+                <AppLayout><MapPage /></AppLayout>
               </ProtectedRoute>
             }
           />
@@ -133,7 +134,7 @@ export default function App() {
             path="/settings"
             element={
               <ProtectedRoute>
-                <SettingsPage />
+                <AppLayout><SettingsPage /></AppLayout>
               </ProtectedRoute>
             }
           />
@@ -141,7 +142,7 @@ export default function App() {
             path="/my-reports"
             element={
               <ProtectedRoute>
-                <MyReportsPage />
+                <AppLayout><MyReportsPage /></AppLayout>
               </ProtectedRoute>
             }
           />
@@ -149,7 +150,7 @@ export default function App() {
             path="/profile"
             element={
               <ProtectedRoute>
-                <ProfilePage />
+                <AppLayout><ProfilePage /></AppLayout>
               </ProtectedRoute>
             }
           />
@@ -157,7 +158,7 @@ export default function App() {
             path="/safety-tips"
             element={
               <ProtectedRoute>
-                <SafetyTipsPage />
+                <AppLayout><SafetyTipsPage /></AppLayout>
               </ProtectedRoute>
             }
           />
@@ -165,7 +166,7 @@ export default function App() {
             path="/badges"
             element={
               <ProtectedRoute>
-                <BadgesPage />
+                <AppLayout><BadgesPage /></AppLayout>
               </ProtectedRoute>
             }
           />
@@ -173,7 +174,7 @@ export default function App() {
             path="/faq"
             element={
               <ProtectedRoute>
-                <FAQPage />
+                <AppLayout><FAQPage /></AppLayout>
               </ProtectedRoute>
             }
           />
@@ -181,7 +182,7 @@ export default function App() {
             path="/about"
             element={
               <ProtectedRoute>
-                <AboutPage />
+                <AppLayout><AboutPage /></AppLayout>
               </ProtectedRoute>
             }
           />
