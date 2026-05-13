@@ -12,6 +12,7 @@
   "dependencies": {
     "@tanstack/react-query": "^5.28.0",
     "axios": "^1.15.2",
+    "heic2any": "^0.0.4",
     "i18next": "^26.0.8",
     "maplibre-gl": "^5.24.0",
     "react": "^18.3.1",

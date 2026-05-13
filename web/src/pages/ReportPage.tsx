@@ -6,6 +6,8 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import { useAuthStore } from "../stores/authStore";
 import api from "../services/api";
 import { addToQueue } from "../utils/offlineQueue";
+import { validatePhoto } from "../utils/photoValidation";
+import SubmissionStepper, { type StepperStep } from "../components/SubmissionStepper";
 import type { DamageLevel, QueuedPhoto } from "../types";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
@@ -181,12 +183,26 @@ async function fetchBuildingsForMap(mapInstance: maplibregl.Map): Promise<void> 
   } catch { /* silent — buildings are non-critical */ }
 }
 
+function getStepperStep(
+  step: "photos" | "location" | "damage" | "review",
+  submitting: boolean
+): StepperStep {
+  if (submitting) return "submit";
+  switch (step) {
+    case "photos": return "photo";
+    case "location": return "location";
+    case "damage": return "questions";
+    case "review": return "review";
+  }
+}
+
 // ── Component ──────────────────────────────────────────────────────────────────
 
 export default function ReportPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { reporterId, countryCode, languageCode } = useAuthStore();
+  const isMobile = isMobileBrowser();
 
   // Form state
   const [damageLevel, setDamageLevel] = useState<DamageLevel | "">("");
@@ -201,6 +217,14 @@ export default function ReportPage() {
   const [pressingNeedsOther, setPressingNeedsOther] = useState("");
   const [damageQuestion, setDamageQuestion] = useState(1);
   const [photos, setPhotos] = useState<File[]>([]);
+
+  // Photo UI state
+  const [photoError, setPhotoError] = useState("");
+  const [isDragging, setIsDragging] = useState(false);
+  const [dropExtraMessage, setDropExtraMessage] = useState("");
+  const [selectedPhotoIndex, setSelectedPhotoIndex] = useState<number | null>(null);
+  const [viewingPhoto, setViewingPhoto] = useState<File | null>(null);
+  const [replaceIndex, setReplaceIndex] = useState<number | null>(null);
 
   // Location state
   const [gpsLatitude, setGpsLatitude] = useState<number | null>(null);
@@ -234,12 +258,12 @@ export default function ReportPage() {
 
   // Refs
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const replaceInputRef = useRef<HTMLInputElement>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const isMobile = isMobileBrowser();
 
   useEffect(() => {
     const init = async () => {
@@ -277,10 +301,8 @@ export default function ReportPage() {
     mapInstance.addControl(new maplibregl.NavigationControl(), "top-right");
 
     mapInstance.on("load", () => {
-      // Center on device GPS or world view
       if (navigator.geolocation) {
         if (gpsLatitude !== null && gpsLongitude !== null) {
-          // Coordinates already captured — fly directly, no second permission request
           mapInstance.flyTo({ center: [gpsLongitude, gpsLatitude], zoom: 16 });
         } else {
           navigator.geolocation.getCurrentPosition(
@@ -291,7 +313,6 @@ export default function ReportPage() {
         }
       }
 
-      // Sources
       mapInstance.addSource("buildings", {
         type: "geojson",
         data: EMPTY_FC as Parameters<maplibregl.GeoJSONSource["setData"]>[0],
@@ -301,7 +322,6 @@ export default function ReportPage() {
         data: EMPTY_FC as Parameters<maplibregl.GeoJSONSource["setData"]>[0],
       });
 
-      // Building layers — default style
       mapInstance.addLayer({
         id: "buildings-fill",
         type: "fill",
@@ -314,8 +334,6 @@ export default function ReportPage() {
         source: "buildings",
         paint: { "line-color": "#718096", "line-width": 0.6 },
       });
-
-      // Selected building highlight layer
       mapInstance.addLayer({
         id: "selected-building-fill",
         type: "fill",
@@ -329,20 +347,16 @@ export default function ReportPage() {
         paint: { "line-color": "#0468B1", "line-width": 2 },
       });
 
-      // Building click — select & compute centroid
       mapInstance.on("click", "buildings-fill", (e) => {
         if (!e.features?.length) return;
         const f = e.features[0];
         const props = f.properties as { osm_id: number; name: string; building: string };
         const geom = f.geometry as { type: "Polygon"; coordinates: number[][][] };
-
         const [centLng, centLat] = computeCentroid(geom.coordinates[0]);
-
         setSelectedBuildingId(props.osm_id);
         setSelectedBuildingTags({ name: props.name || "", building: props.building || "yes" });
         setGpsLatitude(centLat);
         setGpsLongitude(centLng);
-
         (mapInstance.getSource("selected-building") as maplibregl.GeoJSONSource | undefined)?.setData({
           type: "FeatureCollection",
           features: [{ type: "Feature", properties: props, geometry: geom }],
@@ -356,7 +370,6 @@ export default function ReportPage() {
         mapInstance.getCanvas().style.cursor = "";
       });
 
-      // moveend — debounced building fetch + zoom state
       mapInstance.on("moveend", () => {
         const zoom = mapInstance.getZoom();
         setLocationMapZoom(zoom);
@@ -366,7 +379,6 @@ export default function ReportPage() {
         }
       });
 
-      // Initial fetch if already zoomed in
       const initialZoom = mapInstance.getZoom();
       setLocationMapZoom(initialZoom);
       if (initialZoom >= 14) fetchBuildingsForMap(mapInstance);
@@ -394,9 +406,7 @@ export default function ReportPage() {
     try {
       const result = await navigator.permissions.query({ name: "geolocation" });
       permState = result.state;
-    } catch {
-      // Firefox / Safari — no Permissions API, let getCurrentPosition handle it
-    }
+    } catch { /* Firefox / Safari */ }
     if (permState === "denied") {
       handleGeolocationDenied();
       return;
@@ -427,7 +437,7 @@ export default function ReportPage() {
       const result = await navigator.permissions.query({ name: "camera" as PermissionName });
       return result.state;
     } catch {
-      return "prompt"; // Firefox, Safari — no camera in Permissions API
+      return "prompt";
     }
   };
 
@@ -461,7 +471,7 @@ export default function ReportPage() {
       (blob) => {
         if (blob) {
           const file = new File([blob], `photo_${Date.now()}.jpg`, { type: "image/jpeg" });
-          setPhotos((prev) => [...prev, file].slice(0, 3));
+          void validateAndAddPhoto(file);
         }
         cameraStream.getTracks().forEach((t) => t.stop());
         setCameraStream(null);
@@ -478,9 +488,6 @@ export default function ReportPage() {
     setCameraActive(false);
   };
 
-  // Auto-trigger GPS on first arrival at the location step.
-  // gpsLatitude check uses the closure value at the time step changes — safe,
-  // since we only want to fire when step transitions to "location".
   useEffect(() => {
     if (step !== "location") return;
     if (gpsLatitude !== null) return;
@@ -488,19 +495,110 @@ export default function ReportPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step]);
 
-  // Stop camera stream tracks when stream reference changes or component unmounts.
   useEffect(() => {
     return () => {
       cameraStream?.getTracks().forEach((t) => t.stop());
     };
   }, [cameraStream]);
 
-  // Wire the live stream to the <video> element once the preview is active.
   useEffect(() => {
     if (cameraActive && videoRef.current && cameraStream) {
       videoRef.current.srcObject = cameraStream;
     }
   }, [cameraActive, cameraStream]);
+
+  // ── Photo validation wiring ──────────────────────────────────────────────────
+
+  const validateAndAddPhoto = async (file: File) => {
+    const result = await validatePhoto(file, photos);
+    if (result.ok) {
+      setPhotos((prev) => [...prev, result.file].slice(0, 3));
+      setPhotoError("");
+    } else {
+      setPhotoError(result.reason);
+    }
+  };
+
+  const validateAndReplacePhoto = async (file: File, index: number) => {
+    // Build existingPhotos excluding the slot being replaced so duplicate check works correctly
+    const othersExcludingSlot = photos.filter((_, i) => i !== index);
+    const result = await validatePhoto(file, othersExcludingSlot);
+    if (result.ok) {
+      setPhotos((prev) => {
+        const next = [...prev];
+        next[index] = result.file;
+        return next;
+      });
+      setPhotoError("");
+    } else {
+      setPhotoError(result.reason);
+    }
+  };
+
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    const remaining = 3 - photos.length;
+    const toProcess = files.slice(0, remaining);
+    if (files.length > remaining) {
+      setDropExtraMessage(
+        `Only ${remaining} photo${remaining !== 1 ? "s" : ""} accepted — extras were not added.`
+      );
+      setTimeout(() => setDropExtraMessage(""), 4000);
+    }
+    toProcess.forEach((f) => void validateAndAddPhoto(f));
+    // Reset input value so same file can be re-selected after remove
+    e.target.value = "";
+  };
+
+  const handleReplaceInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && replaceIndex !== null) {
+      void validateAndReplacePhoto(file, replaceIndex);
+    }
+    setReplaceIndex(null);
+    setSelectedPhotoIndex(null);
+    e.target.value = "";
+  };
+
+  const handlePhotoRemove = (index: number) => {
+    setPhotos((prev) => prev.filter((_, i) => i !== index));
+    setSelectedPhotoIndex(null);
+    setPhotoError("");
+  };
+
+  // ── Drag-and-drop handlers (desktop only) ────────────────────────────────────
+
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    const droppedFiles = Array.from(e.dataTransfer.files);
+    const remainingSlots = 3 - photos.length;
+    const filesToProcess = droppedFiles.slice(0, remainingSlots);
+    if (droppedFiles.length > remainingSlots) {
+      setDropExtraMessage(
+        `Only ${remainingSlots} photo${remainingSlots !== 1 ? "s" : ""} accepted — extras were not added.`
+      );
+      setTimeout(() => setDropExtraMessage(""), 4000);
+    }
+    filesToProcess.forEach((file) => void validateAndAddPhoto(file));
+  };
+
+  // ── Question helpers ──────────────────────────────────────────────────────────
 
   const qTitle = (n: number, fallback: string): string => {
     const found = questionPackage?.questions.find((q) => q.order_index === n);
@@ -516,6 +614,8 @@ export default function ReportPage() {
       return found.options.map((o) => ({ value: o.option_value, label: o.option_text }));
     return fallback;
   };
+
+  // ── Duplicate / submit helpers ────────────────────────────────────────────────
 
   const checkDuplicate = (): boolean => {
     if (!gpsLatitude || !gpsLongitude || !crisisId) return false;
@@ -560,6 +660,12 @@ export default function ReportPage() {
     setPressingNeedsOther("");
     setDamageQuestion(1);
     setPhotos([]);
+    setPhotoError("");
+    setIsDragging(false);
+    setDropExtraMessage("");
+    setSelectedPhotoIndex(null);
+    setViewingPhoto(null);
+    setReplaceIndex(null);
     setGpsLatitude(null);
     setGpsLongitude(null);
     setGpsAccuracy(null);
@@ -620,16 +726,6 @@ export default function ReportPage() {
     else setStep("review");
   };
 
-  const handlePhotoAdd = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    const remaining = 3 - photos.length;
-    setPhotos((prev) => [...prev, ...files.slice(0, remaining)]);
-  };
-
-  const handlePhotoRemove = (index: number) => {
-    setPhotos((prev) => prev.filter((_, i) => i !== index));
-  };
-
   const buildLocationAddress = (): string | null => {
     if (selectedBuildingId) {
       const parts = [selectedBuildingTags.name, selectedBuildingTags.building !== "yes" ? selectedBuildingTags.building : ""].filter(Boolean);
@@ -670,7 +766,6 @@ export default function ReportPage() {
       language_code: languageCode,
       question_package_version: questionPackage?.version ?? null,
       was_queued: false,
-      // I: Anti-spam signals captured silently at submission time.
       browser_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       screen_resolution: `${window.screen.width}x${window.screen.height}`,
       viewport_dimensions: `${window.innerWidth}x${window.innerHeight}`,
@@ -708,7 +803,6 @@ export default function ReportPage() {
 
       saveSubmittedLocation();
 
-      // Save summary to sessionStorage so My Reports works for anonymous users
       try {
         const summary = {
           id: reportId as string,
@@ -747,6 +841,8 @@ export default function ReportPage() {
     }
     await doSubmit();
   };
+
+  // ── Success screen ────────────────────────────────────────────────────────────
 
   if (submitted) {
     return (
@@ -803,82 +899,209 @@ export default function ReportPage() {
     );
   }
 
+  // ── Guidelines state ──────────────────────────────────────────────────────────
+  const guidelinesPass = photos.length > 0;
+  const GUIDELINES = [
+    t("photo_guidelines.guideline_1"),
+    t("photo_guidelines.guideline_2"),
+    t("photo_guidelines.guideline_3"),
+    t("photo_guidelines.guideline_4"),
+  ];
+
+  // ── Photo step sub-components ─────────────────────────────────────────────────
+
+  const renderPhotoThumbnails = () => (
+    <div style={styles.photoGrid}>
+      {photos.map((photo, index) => (
+        <div
+          key={index}
+          style={{ ...styles.photoThumb, cursor: "pointer" }}
+          onClick={() => setSelectedPhotoIndex(selectedPhotoIndex === index ? null : index)}
+        >
+          <img src={URL.createObjectURL(photo)} style={styles.thumbImg} alt={`Photo ${index + 1}`} />
+          {/* Popover action bar */}
+          {selectedPhotoIndex === index && (
+            <div style={styles.thumbPopover} onClick={(e) => e.stopPropagation()}>
+              <button
+                style={styles.thumbAction}
+                onClick={() => {
+                  setViewingPhoto(photo);
+                  setSelectedPhotoIndex(null);
+                }}
+              >
+                View
+              </button>
+              <button
+                style={styles.thumbAction}
+                onClick={() => {
+                  setReplaceIndex(index);
+                  setSelectedPhotoIndex(null);
+                  replaceInputRef.current?.click();
+                }}
+              >
+                Replace
+              </button>
+              <button
+                style={{ ...styles.thumbAction, color: "#E53E3E" }}
+                onClick={() => handlePhotoRemove(index)}
+              >
+                Remove
+              </button>
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+
+  const renderAddAnotherButton = () => {
+    if (isMobile) {
+      return (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 4 }}>
+          {!cameraDenied && (
+            <button
+              style={styles.addAnotherBtn}
+              onClick={() => void handleTakePhoto()}
+            >
+              + Take Another Photo
+            </button>
+          )}
+          <button style={styles.addAnotherBtn} onClick={() => fileInputRef.current?.click()}>
+            + Upload Another Photo
+          </button>
+        </div>
+      );
+    }
+    return (
+      <button style={styles.addAnotherBtn} onClick={() => fileInputRef.current?.click()}>
+        + Add another photo
+      </button>
+    );
+  };
+
+  const renderDesktopDropZone = () => (
+    <div
+      style={{
+        ...styles.dropZone,
+        border: isDragging ? "2px dashed #0468B1" : "2px dashed #E2E8F0",
+        background: isDragging ? "#F0F4FF" : "transparent",
+      }}
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+    >
+      {isDragging ? (
+        <span style={{ color: "#0468B1", fontWeight: 600, fontSize: 15 }}>Drop your photo here</span>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+          <span style={{ fontSize: 13, color: "#717782" }}>Drag a photo here, or</span>
+          <button style={styles.uploadBtn} onClick={() => fileInputRef.current?.click()}>
+            📁 Upload a Photo
+          </button>
+        </div>
+      )}
+    </div>
+  );
+
+  const renderMobileButtons = () => (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      {!cameraDenied && (
+        <p style={styles.permNote}>
+          Crisis Reporter needs camera access to take a photo of the damage.
+        </p>
+      )}
+      {cameraDenied && (
+        <div style={styles.denialBox}>
+          <p style={styles.denialMsg}>
+            Camera access is not available. You can enable it in your browser settings, or upload a photo from your device instead.
+          </p>
+          <p style={styles.denialHint}>
+            To enable camera access, open your browser settings and allow camera access for this site.
+          </p>
+        </div>
+      )}
+      {!cameraDenied && (
+        <button style={styles.cameraBtn} onClick={() => void handleTakePhoto()}>
+          📷 Take a Photo
+        </button>
+      )}
+      <button style={styles.uploadBtn} onClick={() => fileInputRef.current?.click()}>
+        📁 Upload a Photo
+      </button>
+    </div>
+  );
+
+  // ── Main render ───────────────────────────────────────────────────────────────
+
   return (
     <div style={styles.container}>
       {/* Header */}
       <div style={styles.header}>
         <button style={styles.backBtn} onClick={() => navigate(-1)}>←</button>
         <h1 style={styles.title}>{t("report.title")}</h1>
-        <span style={styles.stepIndicator}>
-          {step === "photos" ? "1/4" : step === "location" ? "2/4" : step === "damage" ? "3/4" : "4/4"}
-        </span>
       </div>
 
-      {/* Progress bar */}
-      <div style={styles.progressBar}>
-        <div style={{
-          ...styles.progressFill,
-          width: step === "photos" ? "25%" : step === "location" ? "50%" : step === "damage" ? "75%" : "100%",
-        }} />
-      </div>
+      {/* 5-step labeled stepper */}
+      <SubmissionStepper currentStep={getStepperStep(step, submitting)} />
 
-      {/* Content — location step needs overflow:hidden so map can flex */}
+      {/* Content */}
       <div style={{ ...styles.content, overflow: step === "location" ? "hidden" : "auto" }}>
 
         {/* Step 1 — Photos */}
         {step === "photos" && (
           <div style={styles.step}>
             <h2 style={styles.stepTitle}>{t("report.photos")} *</h2>
-            <p style={styles.photoHint}>Add up to 3 photos of the damage. At least 1 is required.</p>
 
-            {photos.length > 0 && (
-              <div style={styles.photoGrid}>
-                {photos.map((photo, index) => (
-                  <div key={index} style={styles.photoThumb}>
-                    <img src={URL.createObjectURL(photo)} style={styles.thumbImg} alt={`Photo ${index + 1}`} />
-                    <button style={styles.removePhotoBtn} onClick={() => handlePhotoRemove(index)}>✕</button>
-                  </div>
-                ))}
-              </div>
+            {/* Photo guidelines */}
+            <ul style={styles.guidelineList}>
+              {GUIDELINES.map((text, i) => (
+                <li key={i} style={styles.guidelineItem}>
+                  <span style={{ color: guidelinesPass ? "#38A169" : "#CBD5E0", fontSize: 14, flexShrink: 0 }}>
+                    {guidelinesPass ? "✓" : "●"}
+                  </span>
+                  <span style={{ color: "#717782", fontSize: "0.8rem" }}>{text}</span>
+                </li>
+              ))}
+            </ul>
+
+            {/* Photo thumbnails (when photos exist) */}
+            {photos.length > 0 && renderPhotoThumbnails()}
+
+            {/* Upload zone / add button */}
+            {photos.length === 0 && (
+              isMobile ? renderMobileButtons() : renderDesktopDropZone()
+            )}
+            {photos.length > 0 && photos.length < 3 && renderAddAnotherButton()}
+            {photos.length === 3 && (
+              <p style={{ fontSize: 13, color: "#717782", margin: 0 }}>Maximum 3 photos added.</p>
             )}
 
-            {photos.length < 3 && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {/* Mobile-only: inline note + Take a Photo via getUserMedia */}
-                {isMobile && !cameraDenied && (
-                  <p style={styles.permNote}>
-                    Crisis Reporter needs camera access to take a photo of the damage.
-                  </p>
-                )}
-                {isMobile && cameraDenied && (
-                  <div style={styles.denialBox}>
-                    <p style={styles.denialMsg}>
-                      Camera access is not available. You can enable it in your browser settings, or upload a photo from your device instead.
-                    </p>
-                    <p style={styles.denialHint}>
-                      To enable camera access, open your browser settings and allow camera access for this site.
-                    </p>
-                  </div>
-                )}
-                {isMobile && !cameraDenied && (
-                  <button style={styles.cameraBtn} onClick={() => void handleTakePhoto()}>
-                    📷 Take a Photo
-                  </button>
-                )}
-                {/* Desktop and mobile: file upload always available */}
-                <button style={styles.uploadBtn} onClick={() => fileInputRef.current?.click()}>
-                  📁 Upload a Photo
-                </button>
-              </div>
+            {/* Drag-and-drop extra files note */}
+            {dropExtraMessage && (
+              <p style={{ fontSize: 13, color: "#717782", margin: 0 }}>{dropExtraMessage}</p>
             )}
 
+            {/* Validation error */}
+            {photoError && (
+              <p style={{ fontSize: "0.85rem", color: "#E53E3E", margin: 0 }}>{photoError}</p>
+            )}
+
+            {/* Hidden file inputs */}
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/jpeg,image/png"
+              accept="image/jpeg,image/png,image/webp,image/heic,image/heif,image/bmp,image/tiff"
               multiple
               style={{ display: "none" }}
-              onChange={handlePhotoAdd}
+              onChange={handleFileInputChange}
+            />
+            <input
+              ref={replaceInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/heic,image/heif,image/bmp,image/tiff"
+              style={{ display: "none" }}
+              onChange={handleReplaceInputChange}
             />
 
             <button
@@ -891,24 +1114,19 @@ export default function ReportPage() {
           </div>
         )}
 
-        {/* Step 2 — Location (map-based) */}
+        {/* Step 2 — Location */}
         {step === "location" && (
           <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
-            {/* Map area */}
             <div style={{ flex: 1, position: "relative", minHeight: 260 }}>
               <div ref={mapContainerRef} style={{ position: "absolute", inset: 0 }} />
-
-              {/* Zoom hint overlay */}
               {locationMapZoom < 14 && (
                 <div style={styles.zoomHint}>Zoom in to see and select buildings</div>
               )}
             </div>
 
-            {/* Bottom panel — scrollable */}
             <div style={styles.locationPanel}>
               <h2 style={{ ...styles.stepTitle, marginBottom: 4 }}>{t("report.location")}</h2>
 
-              {/* Selected building / GPS info card */}
               {gpsLatitude !== null && gpsLongitude !== null && (
                 <div style={styles.selectionCard}>
                   <div style={styles.selectionCardTitle}>
@@ -930,14 +1148,12 @@ export default function ReportPage() {
                 </div>
               )}
 
-              {/* Inline note — shown before GPS resolves and after denial is cleared */}
               {gpsLatitude === null && !gpsDenied && (
                 <p style={styles.permNote}>
                   Crisis Reporter needs your location to help identify the building you are reporting.
                 </p>
               )}
 
-              {/* Geolocation denial / timeout message */}
               {gpsDenied && (
                 <div style={styles.denialBox}>
                   <p style={styles.denialMsg}>
@@ -949,7 +1165,6 @@ export default function ReportPage() {
                 </div>
               )}
 
-              {/* GPS capture button — hidden after denial */}
               {!gpsDenied && (
                 <button
                   style={styles.gpsButton}
@@ -960,7 +1175,6 @@ export default function ReportPage() {
                 </button>
               )}
 
-              {/* Manual entry toggle */}
               <button
                 style={styles.manualToggle}
                 onClick={() => setManualExpanded(!manualExpanded)}
@@ -1013,7 +1227,6 @@ export default function ReportPage() {
           <div style={styles.step}>
             <div style={styles.questionProgress}>Question {damageQuestion} of 8</div>
 
-            {/* Q1 — Damage level */}
             {damageQuestion === 1 && (
               <>
                 <h2 style={styles.stepTitle}>{qTitle(1, "How bad is the damage? *")}</h2>
@@ -1040,7 +1253,6 @@ export default function ReportPage() {
               </>
             )}
 
-            {/* Q2 — Infrastructure type */}
             {damageQuestion === 2 && (
               <>
                 <h2 style={styles.stepTitle}>{qTitle(2, "What type of infrastructure is this? *")}</h2>
@@ -1056,10 +1268,7 @@ export default function ReportPage() {
                   { value: "other", label: "Other (please specify)" },
                 ]).map(({ value, label }) => (
                   <div key={value} style={styles.checkRow} onClick={() => toggleInfraType(value)}>
-                    <div style={{
-                      ...styles.checkbox,
-                      ...(infrastructureTypes.includes(value) ? styles.checkboxSelected : {}),
-                    }}>
+                    <div style={{ ...styles.checkbox, ...(infrastructureTypes.includes(value) ? styles.checkboxSelected : {}) }}>
                       {infrastructureTypes.includes(value) && <span style={styles.checkmark}>✓</span>}
                     </div>
                     <span style={styles.checkRowText}>{label}</span>
@@ -1078,7 +1287,6 @@ export default function ReportPage() {
               </>
             )}
 
-            {/* Q3 — Infrastructure name */}
             {damageQuestion === 3 && (
               <>
                 <h2 style={styles.stepTitle}>{qTitle(3, "What is the name of this infrastructure? *")}</h2>
@@ -1094,7 +1302,6 @@ export default function ReportPage() {
               </>
             )}
 
-            {/* Q4 — Disaster type */}
             {damageQuestion === 4 && (
               <>
                 <h2 style={styles.stepTitle}>{qTitle(4, "What type of disaster caused this damage? *")}</h2>
@@ -1122,7 +1329,6 @@ export default function ReportPage() {
               </>
             )}
 
-            {/* Q5 — Debris blocking */}
             {damageQuestion === 5 && (
               <>
                 <h2 style={styles.stepTitle}>{qTitle(5, "Is there debris blocking access? *")}</h2>
@@ -1146,7 +1352,6 @@ export default function ReportPage() {
               </>
             )}
 
-            {/* Q6 — Electricity condition */}
             {damageQuestion === 6 && (
               <>
                 <h2 style={styles.stepTitle}>{qTitle(6, "What is the current condition of electricity infrastructure in your community following the crisis? *")}</h2>
@@ -1173,7 +1378,6 @@ export default function ReportPage() {
               </>
             )}
 
-            {/* Q7 — Health services */}
             {damageQuestion === 7 && (
               <>
                 <h2 style={styles.stepTitle}>{qTitle(7, "How would you rate the overall functioning of health services in your community since the event? *")}</h2>
@@ -1199,7 +1403,6 @@ export default function ReportPage() {
               </>
             )}
 
-            {/* Q8 — Pressing needs (multi-select) */}
             {damageQuestion === 8 && (
               <>
                 <h2 style={styles.stepTitle}>{qTitle(8, "What are the most pressing needs in your community right now? *")}</h2>
@@ -1217,10 +1420,7 @@ export default function ReportPage() {
                   { value: "other", label: "Other — please specify" },
                 ]).map(({ value, label }) => (
                   <div key={value} style={styles.checkRow} onClick={() => togglePressingNeed(value)}>
-                    <div style={{
-                      ...styles.checkbox,
-                      ...(pressingNeeds.includes(value) ? styles.checkboxSelected : {}),
-                    }}>
+                    <div style={{ ...styles.checkbox, ...(pressingNeeds.includes(value) ? styles.checkboxSelected : {}) }}>
                       {pressingNeeds.includes(value) && <span style={styles.checkmark}>✓</span>}
                     </div>
                     <span style={styles.checkRowText}>{label}</span>
@@ -1260,7 +1460,6 @@ export default function ReportPage() {
           <div style={styles.step}>
             <h2 style={styles.stepTitle}>Review Your Report</h2>
 
-            {/* Photo section */}
             <div style={styles.reviewSection}>
               <div style={styles.reviewSectionHeader}>
                 <span style={styles.reviewSectionTitle}>Photo</span>
@@ -1284,7 +1483,6 @@ export default function ReportPage() {
               </div>
             </div>
 
-            {/* Location section */}
             <div style={styles.reviewSection}>
               <div style={styles.reviewSectionHeader}>
                 <span style={styles.reviewSectionTitle}>Location</span>
@@ -1314,7 +1512,6 @@ export default function ReportPage() {
               </div>
             </div>
 
-            {/* Questions section */}
             <div style={styles.reviewSection}>
               <div style={styles.reviewSectionHeader}>
                 <span style={styles.reviewSectionTitle}>Questions</span>
@@ -1327,9 +1524,7 @@ export default function ReportPage() {
                 </div>
                 <div style={styles.reviewRow}>
                   <span style={styles.reviewLabel}>Infrastructure</span>
-                  <span style={styles.reviewValue}>
-                    {infrastructureTypes.map((v) => INFRA_LABELS[v] ?? v).join(", ")}
-                  </span>
+                  <span style={styles.reviewValue}>{infrastructureTypes.map((v) => INFRA_LABELS[v] ?? v).join(", ")}</span>
                 </div>
                 <div style={styles.reviewRow}>
                   <span style={styles.reviewLabel}>Infrastructure Name</span>
@@ -1388,26 +1583,37 @@ export default function ReportPage() {
       {/* Camera preview overlay */}
       {cameraActive && (
         <div style={styles.cameraOverlay}>
-          <video
-            ref={videoRef}
-            autoPlay
-            playsInline
-            muted
-            style={styles.cameraVideo}
-          />
+          <video ref={videoRef} autoPlay playsInline muted style={styles.cameraVideo} />
           <canvas ref={canvasRef} style={{ display: "none" }} />
           <div style={styles.cameraControls}>
-            <button style={styles.cameraCaptureBtn} onClick={handleCapturePhoto}>
-              Capture
-            </button>
-            <button style={styles.cameraCancelBtn} onClick={handleCameraCancel}>
-              Cancel
-            </button>
+            <button style={styles.cameraCaptureBtn} onClick={handleCapturePhoto}>Capture</button>
+            <button style={styles.cameraCancelBtn} onClick={handleCameraCancel}>Cancel</button>
           </div>
         </div>
       )}
 
-      {/* Duplicate submission warning modal */}
+      {/* Photo full-screen viewer overlay */}
+      {viewingPhoto && (
+        <div
+          style={styles.viewerOverlay}
+          onClick={() => setViewingPhoto(null)}
+        >
+          <button
+            style={styles.viewerClose}
+            onClick={(e) => { e.stopPropagation(); setViewingPhoto(null); }}
+          >
+            ×
+          </button>
+          <img
+            src={URL.createObjectURL(viewingPhoto)}
+            alt="Full size photo"
+            style={styles.viewerImage}
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
+
+      {/* Duplicate submission warning */}
       {showDupeWarning && (
         <div style={styles.modalOverlay}>
           <div style={styles.modalBox}>
@@ -1416,16 +1622,10 @@ export default function ReportPage() {
               It looks like you may have already submitted a report for this building. Submitting again could create a duplicate. Are you sure you want to continue?
             </p>
             <div style={{ display: "flex", gap: 12, marginTop: 8 }}>
-              <button
-                style={{ ...styles.secondaryButton, flex: 1 }}
-                onClick={() => setShowDupeWarning(false)}
-              >
+              <button style={{ ...styles.secondaryButton, flex: 1 }} onClick={() => setShowDupeWarning(false)}>
                 Cancel
               </button>
-              <button
-                style={{ ...styles.primaryButton, flex: 1 }}
-                onClick={doSubmit}
-              >
+              <button style={{ ...styles.primaryButton, flex: 1 }} onClick={doSubmit}>
                 Submit Anyway
               </button>
             </div>
@@ -1435,6 +1635,8 @@ export default function ReportPage() {
     </div>
   );
 }
+
+// ── Styles ─────────────────────────────────────────────────────────────────────
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
@@ -1464,20 +1666,6 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 700,
     flex: 1,
   },
-  stepIndicator: {
-    color: "#A0B4CC",
-    fontSize: 14,
-  },
-  progressBar: {
-    height: 4,
-    background: "#e0e0e0",
-    flexShrink: 0,
-  },
-  progressFill: {
-    height: "100%",
-    background: "#0468B1",
-    transition: "width 0.3s ease",
-  },
   content: {
     flex: 1,
     overflowY: "auto",
@@ -1494,6 +1682,39 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 17,
     fontWeight: 600,
     color: "#1A2B4A",
+  },
+  guidelineList: {
+    listStyle: "none",
+    margin: 0,
+    padding: 0,
+    display: "flex",
+    flexDirection: "column",
+    gap: 6,
+  },
+  guidelineItem: {
+    display: "flex",
+    alignItems: "flex-start",
+    gap: 8,
+  },
+  dropZone: {
+    borderRadius: 10,
+    padding: "28px 20px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    transition: "border-color 0.15s, background 0.15s",
+    minHeight: 110,
+  },
+  addAnotherBtn: {
+    padding: "8px 16px",
+    border: "1px solid #0468B1",
+    borderRadius: 8,
+    color: "#0468B1",
+    background: "transparent",
+    fontSize: 14,
+    fontWeight: 500,
+    cursor: "pointer",
+    alignSelf: "flex-start",
   },
   locationPanel: {
     padding: "14px 16px 20px",
@@ -1593,11 +1814,6 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#1A2B4A",
     textAlign: "left" as const,
   },
-  label: {
-    fontSize: 14,
-    fontWeight: 500,
-    color: "#666",
-  },
   input: {
     width: "100%",
     padding: "12px 16px",
@@ -1621,38 +1837,40 @@ const styles: Record<string, React.CSSProperties> = {
     position: "relative",
     aspectRatio: "1",
     borderRadius: 8,
-    overflow: "hidden",
+    overflow: "visible",
   },
   thumbImg: {
     width: "100%",
     height: "100%",
     objectFit: "cover",
-  },
-  removePhotoBtn: {
-    position: "absolute",
-    top: 4,
-    right: 4,
-    background: "rgba(0,0,0,0.6)",
-    color: "#fff",
-    border: "none",
-    borderRadius: "50%",
-    width: 24,
-    height: 24,
-    cursor: "pointer",
-    fontSize: 12,
-  },
-  addPhotoBtn: {
-    aspectRatio: "1",
     borderRadius: 8,
-    border: "2px dashed #ccc",
+    display: "block",
+  },
+  thumbPopover: {
+    position: "absolute",
+    bottom: "calc(100% + 6px)",
+    left: "50%",
+    transform: "translateX(-50%)",
     background: "#fff",
+    border: "1px solid #e0e0e0",
+    borderRadius: 8,
+    boxShadow: "0 4px 16px rgba(0,0,0,0.14)",
     display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
+    flexDirection: "column" as const,
+    zIndex: 100,
+    overflow: "hidden",
+    minWidth: 100,
+  },
+  thumbAction: {
+    padding: "10px 16px",
+    background: "transparent",
+    border: "none",
+    borderBottom: "1px solid #f0f0f0",
+    fontSize: 14,
+    fontWeight: 500,
     cursor: "pointer",
-    color: "#666",
+    textAlign: "left" as const,
+    color: "#1A2B4A",
   },
   navButtons: {
     display: "flex",
@@ -1721,9 +1939,6 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 20,
     textAlign: "center",
     minHeight: "100vh",
-  },
-  successIcon: {
-    fontSize: 72,
   },
   successTitle: {
     fontSize: 22,
@@ -1984,5 +2199,37 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 10,
     fontSize: 15,
     cursor: "pointer",
+  },
+  viewerOverlay: {
+    position: "fixed" as const,
+    inset: 0,
+    background: "rgba(0,0,0,0.92)",
+    zIndex: 3000,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  viewerClose: {
+    position: "absolute" as const,
+    top: 16,
+    right: 16,
+    background: "rgba(255,255,255,0.15)",
+    border: "none",
+    color: "#fff",
+    fontSize: 28,
+    width: 44,
+    height: 44,
+    borderRadius: "50%",
+    cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    lineHeight: 1,
+  },
+  viewerImage: {
+    maxWidth: "90vw",
+    maxHeight: "90vh",
+    objectFit: "contain" as const,
+    borderRadius: 8,
   },
 };

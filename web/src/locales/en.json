@@ -68,6 +68,19 @@
     "banner": "You are offline. Reports will be saved and sent when you reconnect.",
     "syncing": "Syncing your reports..."
   },
+  "stepper": {
+    "step_photo": "Photo",
+    "step_location": "Location",
+    "step_questions": "Questions",
+    "step_review": "Review",
+    "step_submit": "Submit"
+  },
+  "photo_guidelines": {
+    "guideline_1": "Make sure the damage is clearly visible in the photo",
+    "guideline_2": "Avoid photos that are too dark or blurry",
+    "guideline_3": "Take the photo from a safe distance — do not put yourself at risk",
+    "guideline_4": "Include the full structure in the frame where possible"
+  },
   "errors": {
     "required": "This field is required",
     "networkError": "Network error. Please check your connection.",
