@@ -81,6 +81,13 @@
     "guideline_3": "Take the photo from a safe distance — do not put yourself at risk",
     "guideline_4": "Include the full structure in the frame where possible"
   },
+  "location": {
+    "offline_banner": "No internet connection. Please enter your location details below.",
+    "offline_gps_captured": "Your GPS location has been recorded and will be attached to this report.",
+    "offline_no_gps": "GPS is not available. Your manual location details will be used to identify this report.",
+    "connection_lost": "Connection lost. You can still select a building from the area already loaded, or enter your location manually below.",
+    "gps_unavailable_inline": "Your location could not be detected. You can still select a building on the map or use the search bar to find your location."
+  },
   "errors": {
     "required": "This field is required",
     "networkError": "Network error. Please check your connection.",

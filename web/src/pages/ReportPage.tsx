@@ -280,6 +280,12 @@ export default function ReportPage() {
   const [locationInternetAvailable, setLocationInternetAvailable] = useState<boolean>(
     navigator.onLine
   );
+  // D1/F2 — true when offline on arrival; stays true for the rest of the step
+  const [locationOffline, setLocationOffline] = useState(false);
+  // F2/F3 — true only when connection drops after the map was already loaded
+  const [connectionLostMidSession, setConnectionLostMidSession] = useState(false);
+  // C5 — explicit GPS availability flag (null = not yet determined)
+  const [gpsAvailable, setGpsAvailable] = useState<boolean | null>(null);
 
   // Map state
   const [locationMapZoom, setLocationMapZoom] = useState(2);
@@ -338,7 +344,8 @@ export default function ReportPage() {
 
   // Map initialisation — runs whenever location step becomes active
   useEffect(() => {
-    if (step !== "location" || !mapContainerRef.current || mapRef.current) return;
+    // D1 — do not create a map instance when the reporter arrived offline
+    if (step !== "location" || (locationOffline && !connectionLostMidSession) || !mapContainerRef.current || mapRef.current) return;
 
     const mapInstance = new maplibregl.Map({
       container: mapContainerRef.current,
@@ -524,6 +531,7 @@ export default function ReportPage() {
   const handleGeolocationDenied = () => {
     setGpsCapturing(false);
     setGpsDenied(true);
+    setGpsAvailable(false);
     setManualExpanded(true);
   };
 
@@ -550,6 +558,7 @@ export default function ReportPage() {
         setGpsLongitude(lng);
         setGpsAccuracy(pos.coords.accuracy);
         setGpsDenied(false);
+        setGpsAvailable(true);
 
         // GPS button clears building/pin selection — reporter is re-anchoring to their device position
         setSelectedBuildingId(null);
@@ -698,13 +707,41 @@ export default function ReportPage() {
     setCameraActive(false);
   };
 
-  // G9 — Record internet availability on step arrival; auto-trigger GPS
+  // A1/G9 — Record internet state on step arrival; gate offline scenario; auto-trigger GPS
   useEffect(() => {
     if (step !== "location") return;
-    setLocationInternetAvailable(navigator.onLine);
-    if (gpsLatitude !== null) return;
-    void triggerGeolocation();
+    const online = navigator.onLine;
+    setLocationInternetAvailable(online);
+    if (!online) {
+      // Offline on arrival — suppress map, show amber banner, auto-expand manual fields
+      setLocationOffline(true);
+      setManualExpanded(true);
+    }
+    if (gpsLatitude === null) {
+      void triggerGeolocation();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
+
+  // F2/F3 — Detect mid-session connection drops while on the location step
+  useEffect(() => {
+    if (step !== "location") return;
+    const handleOffline = () => {
+      setLocationOffline(true);
+      setManualExpanded(true);
+      setConnectionLostMidSession(true);
+    };
+    const handleOnline = () => {
+      // Do not re-show map — reporter may have already entered manual data.
+      // Just clear the "connection lost" inline message.
+      setConnectionLostMidSession(false);
+    };
+    window.addEventListener("offline", handleOffline);
+    window.addEventListener("online", handleOnline);
+    return () => {
+      window.removeEventListener("offline", handleOffline);
+      window.removeEventListener("online", handleOnline);
+    };
   }, [step]);
 
   useEffect(() => {
@@ -928,6 +965,9 @@ export default function ReportPage() {
     setShowDuplicateInlineWarning(false);
     setLocationEntryMethod(null);
     setLocationInternetAvailable(navigator.onLine);
+    setLocationOffline(false);
+    setConnectionLostMidSession(false);
+    setGpsAvailable(null);
     setManualExpanded(false);
     setSubmitted(false);
     setWasQueued(false);
@@ -1041,7 +1081,9 @@ export default function ReportPage() {
         gps_latitude: gpsLatitude,
         gps_longitude: gpsLongitude,
         gps_accuracy_meters: gpsAccuracy,
-        gps_available: gpsLatitude !== null,
+        // C5 — explicit flags: gps_available set in success callback, gps_denied in denial callback
+        gps_available: gpsAvailable,
+        gps_denied: gpsDenied,
         // G5 — Building footprint centroid (separate from device GPS)
         building_centroid_lat: buildingCentroidLat,
         building_centroid_lng: buildingCentroidLng,
@@ -1413,7 +1455,28 @@ export default function ReportPage() {
         {step === "location" && (
           <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
 
-            {/* Map area */}
+            {/* D2/E1 — Amber banner: offline on arrival OR mid-session drop */}
+            {locationOffline && (
+              <div style={{
+                background: "#FEF3C7",
+                border: "1px solid #F5A623",
+                borderRadius: 8,
+                padding: "12px 16px",
+                margin: "8px 12px 0",
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                flexShrink: 0,
+              }}>
+                <span style={{ color: "#F5A623", fontSize: 20 }}>⚠</span>
+                <span style={{ color: "#92400E", fontSize: "0.875rem", fontWeight: 500 }}>
+                  {t("location.offline_banner")}
+                </span>
+              </div>
+            )}
+
+            {/* D1 — Map area: suppressed when offline on arrival; kept when mid-session drop */}
+            {(!locationOffline || connectionLostMidSession) && (
             <div style={{ flex: 1, position: "relative", minHeight: 260 }}>
               <div ref={mapContainerRef} style={{ position: "absolute", inset: 0 }} />
               {locationMapZoom < 14 && (
@@ -1443,6 +1506,7 @@ export default function ReportPage() {
                 </div>
               )}
             </div>
+            )} {/* end map area gate */}
 
             {/* B3/B12 — Mobile: bottom sheet confirmation */}
             {pendingBuilding && isMobile && (
@@ -1471,6 +1535,34 @@ export default function ReportPage() {
             {/* Bottom panel */}
             <div style={styles.locationPanel}>
               <h2 style={{ ...styles.stepTitle, marginBottom: 4 }}>{t("report.location")}</h2>
+
+              {/* F2/F3 — Connection lost mid-session (map still visible above) */}
+              {connectionLostMidSession && (
+                <div style={{
+                  background: "#FEF3C7",
+                  border: "1px solid #F5A623",
+                  borderRadius: 8,
+                  padding: "10px 14px",
+                  color: "#92400E",
+                  fontSize: "0.875rem",
+                }}>
+                  {t("location.connection_lost")}
+                </div>
+              )}
+
+              {/* D4 — GPS captured while offline */}
+              {locationOffline && gpsLatitude !== null && (
+                <p style={{ color: "#065F46", fontSize: "0.8rem", margin: "0 0 4px" }}>
+                  {t("location.offline_gps_captured")}
+                </p>
+              )}
+
+              {/* E3 — No internet and no GPS */}
+              {locationOffline && gpsLatitude === null && (
+                <p style={{ color: "#717782", fontSize: "0.8rem", margin: "0 0 4px" }}>
+                  {t("location.offline_no_gps")}
+                </p>
+              )}
 
               {/* Selection state card */}
               {selectedBuildingId && (
@@ -1560,22 +1652,18 @@ export default function ReportPage() {
                 </div>
               )}
 
-              {gpsLatitude === null && !gpsDenied && (
+              {/* Online, GPS not yet captured, not denied — asking for permission */}
+              {!locationOffline && gpsLatitude === null && !gpsDenied && (
                 <p style={styles.permNote}>
                   Crisis Reporter needs your location to help identify the building you are reporting.
                 </p>
               )}
 
-              {gpsDenied && (
-                <div style={styles.denialBox}>
-                  <p style={styles.denialMsg}>
-                    Location access is not available. You can enable it in your browser settings.
-                    You can still continue by entering your location manually below.
-                  </p>
-                  <p style={styles.denialHint}>
-                    To enable location access, open your browser settings and allow location access for this site.
-                  </p>
-                </div>
+              {/* C4 — Online but GPS denied: quiet inline note instead of full denial box */}
+              {!locationOffline && gpsDenied && (
+                <p style={{ color: "#717782", fontSize: "0.8rem", margin: "8px 0", padding: "0 4px" }}>
+                  {t("location.gps_unavailable_inline")}
+                </p>
               )}
 
               {!gpsDenied && (
@@ -1630,7 +1718,20 @@ export default function ReportPage() {
                 </div>
               )}
 
-              <div style={styles.navButtons}>
+              {/* H4 — Sticky on desktop so Next is always visible regardless of panel content height */}
+              <div style={{
+                display: "flex",
+                gap: 12,
+                marginTop: 8,
+                ...(window.innerWidth > 768 ? {
+                  position: "sticky" as const,
+                  bottom: 0,
+                  background: "#FFFFFF",
+                  padding: "12px 0",
+                  borderTop: "1px solid #E2E8F0",
+                  zIndex: 5,
+                } : {}),
+              }}>
                 <button style={styles.secondaryButton} onClick={() => setStep("photos")}>← Back</button>
                 <button
                   style={{ ...styles.primaryButton, opacity: isLocationValid() ? 1 : 0.5 }}
