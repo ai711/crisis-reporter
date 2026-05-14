@@ -93,6 +93,20 @@
     "networkError": "Network error. Please check your connection.",
     "unknownError": "Something went wrong. Please try again."
   },
+  "questions": {
+    "please_select": "Please select an answer to continue."
+  },
+  "disaster_types": {
+    "earthquake": "Earthquake",
+    "flood": "Flood",
+    "tsunami": "Tsunami",
+    "hurricane_cyclone": "Hurricane or Cyclone",
+    "wildfire": "Wildfire",
+    "explosion": "Explosion",
+    "chemical_incident": "Chemical Incident",
+    "conflict": "Conflict",
+    "civil_unrest": "Civil Unrest"
+  },
   "crisis_types": {
     "earthquake": "Structural damage to buildings and infrastructure caused by seismic activity",
     "flood": "Water damage to properties, roads, and community areas",

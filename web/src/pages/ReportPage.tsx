@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import maplibregl from "maplibre-gl";
@@ -61,18 +61,46 @@ const INFRA_LABELS: Record<string, string> = {
 const DISASTER_LABELS: Record<string, string> = {
   earthquake: "Earthquake",
   flood: "Flood",
-  cyclone: "Cyclone / Typhoon / Hurricane",
-  landslide: "Landslide",
-  fire: "Fire",
-  conflict: "Conflict / War",
-  other: "Other",
+  tsunami: "Tsunami",
+  hurricane_cyclone: "Hurricane or Cyclone",
+  wildfire: "Wildfire",
+  explosion: "Explosion",
+  chemical_incident: "Chemical Incident",
+  conflict: "Conflict",
+  civil_unrest: "Civil Unrest",
 };
 
 const DEBRIS_LABELS: Record<string, string> = {
   yes: "Yes",
   no: "No",
-  partially: "Partially",
 };
+
+const Q4_OPTIONS = [
+  {
+    category: "Natural Hazards",
+    options: [
+      { value: "earthquake", label: "Earthquake" },
+      { value: "flood", label: "Flood" },
+      { value: "tsunami", label: "Tsunami" },
+      { value: "hurricane_cyclone", label: "Hurricane or Cyclone" },
+      { value: "wildfire", label: "Wildfire" },
+    ],
+  },
+  {
+    category: "Technological or Industrial Hazards",
+    options: [
+      { value: "explosion", label: "Explosion" },
+      { value: "chemical_incident", label: "Chemical Incident" },
+    ],
+  },
+  {
+    category: "Human-Made Crises",
+    options: [
+      { value: "conflict", label: "Conflict" },
+      { value: "civil_unrest", label: "Civil Unrest" },
+    ],
+  },
+];
 
 const ELECTRICITY_LABELS: Record<string, string> = {
   no_damage: "No damage observed",
@@ -107,8 +135,21 @@ const PRESSING_NEEDS_LABELS: Record<string, string> = {
 // ── Question package types ─────────────────────────────────────────────────────
 
 interface ApiOption { option_text: string; option_value: string; }
-interface ApiQuestion { question_text: string; order_index: number; options: ApiOption[]; }
-interface ActivePackage { version: string; questions: ApiQuestion[]; }
+interface ApiQuestion {
+  question_text: string;
+  order_index: number;
+  options: ApiOption[];
+  is_additional?: boolean;
+  country_codes?: string[];
+  conditional_on_q4?: string[];
+  question_type?: "single" | "multi";
+}
+interface ActivePackage {
+  version: string;
+  content_version?: string;
+  translation_version?: string;
+  questions: ApiQuestion[];
+}
 
 // ── Overpass types ─────────────────────────────────────────────────────────────
 
@@ -308,6 +349,9 @@ export default function ReportPage() {
   const [crisisLoading, setCrisisLoading] = useState(true);
   const [crisisError, setCrisisError] = useState(false);
   const [questionPackage, setQuestionPackage] = useState<ActivePackage | null>(null);
+  const [showAnswerPrompt, setShowAnswerPrompt] = useState(false);
+  const [editingFromReview, setEditingFromReview] = useState(false);
+  const [additionalAnswers, setAdditionalAnswers] = useState<Record<number, string | string[]>>({});
 
   // Refs
   const isSubmittedRef = useRef(false);
@@ -331,16 +375,42 @@ export default function ReportPage() {
       } catch {
         setCrisisError(true);
       }
-      try {
-        const pkgRes = await api.get<ActivePackage>("/api/question-packages/active");
-        setQuestionPackage(pkgRes.data);
-      } catch {
-        // silent — hardcoded question text and options remain active as fallback
-      }
       setCrisisLoading(false);
     };
     init();
   }, []);
+
+  // Load question package from localStorage first; fall back to network on first visit
+  useEffect(() => {
+    if (step !== "damage") return;
+    const loadPackage = async () => {
+      try {
+        const cached = localStorage.getItem("cr_question_package");
+        if (cached) {
+          const parsed = JSON.parse(cached) as ActivePackage;
+          setQuestionPackage(parsed);
+          return;
+        }
+      } catch { /* corrupted cache — fall through to network */ }
+      try {
+        const res = await api.get<ActivePackage>("/api/question-packages/active");
+        setQuestionPackage(res.data);
+        try {
+          localStorage.setItem("cr_question_package", JSON.stringify(res.data));
+        } catch { /* localStorage full — silent */ }
+      } catch {
+        // silent — bundled hardcoded questions remain as fallback
+      }
+    };
+    loadPackage();
+  }, [step]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Pre-fill Q3 infrastructure name with OSM building name captured at location step
+  useEffect(() => {
+    if (step === "damage" && buildingNameOsm && !infrastructureName) {
+      setInfrastructureName(buildingNameOsm);
+    }
+  }, [step, buildingNameOsm]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Map initialisation — runs whenever location step becomes active
   useEffect(() => {
@@ -973,6 +1043,9 @@ export default function ReportPage() {
     setWasQueued(false);
     setSubmittedReportId(null);
     setError("");
+    setShowAnswerPrompt(false);
+    setEditingFromReview(false);
+    setAdditionalAnswers({});
     setStep("photos");
   };
 
@@ -997,6 +1070,17 @@ export default function ReportPage() {
     );
   };
 
+  const additionalQuestions = useMemo(() => {
+    if (!questionPackage) return [];
+    const reporterCountry = localStorage.getItem("cr_country") || countryCode || "";
+    return (questionPackage.questions || [])
+      .filter((q) => q.is_additional)
+      .filter((q) => !q.country_codes || q.country_codes.includes(reporterCountry))
+      .filter((q) => !q.conditional_on_q4 || q.conditional_on_q4.includes(disasterType || ""));
+  }, [questionPackage, disasterType, countryCode]);
+
+  const totalQuestions = 8 + additionalQuestions.length;
+
   const isDamageQuestionAnswered = (): boolean => {
     switch (damageQuestion) {
       case 1: return !!damageLevel;
@@ -1007,7 +1091,14 @@ export default function ReportPage() {
       case 6: return !!electricityCondition;
       case 7: return !!healthServicesCondition;
       case 8: return pressingNeeds.length > 0;
-      default: return false;
+      default: {
+        const aq = additionalQuestions[damageQuestion - 9];
+        if (!aq) return true;
+        const ans = additionalAnswers[damageQuestion];
+        return aq.question_type === "multi"
+          ? Array.isArray(ans) && (ans as string[]).length > 0
+          : typeof ans === "string" && ans.length > 0;
+      }
     }
   };
 
@@ -1017,7 +1108,17 @@ export default function ReportPage() {
   };
 
   const handleDamageNext = () => {
-    if (damageQuestion < 8) setDamageQuestion((q) => q + 1);
+    if (!isDamageQuestionAnswered()) {
+      setShowAnswerPrompt(true);
+      return;
+    }
+    setShowAnswerPrompt(false);
+    if (editingFromReview && damageQuestion === totalQuestions) {
+      setEditingFromReview(false);
+      setStep("review");
+      return;
+    }
+    if (damageQuestion < totalQuestions) setDamageQuestion((q) => q + 1);
     else setStep("review");
   };
 
@@ -1107,6 +1208,34 @@ export default function ReportPage() {
       reporter_id: reporterId || undefined,
       language_code: languageCode,
       question_package_version: questionPackage?.version ?? null,
+      question_package_content_version: questionPackage?.content_version ?? questionPackage?.version ?? null,
+      question_package_translation_version: questionPackage?.translation_version ?? null,
+      question_answers: (() => {
+        const getQ4Label = (v: string) => {
+          for (const g of Q4_OPTIONS) {
+            const o = g.options.find((x) => x.value === v);
+            if (o) return o.label;
+          }
+          return v;
+        };
+        const rows: Array<Record<string, unknown>> = [
+          { question_order: 1, option_value: damageLevel, option_text: DAMAGE_LABELS[damageLevel] ?? damageLevel },
+          { question_order: 2, option_values: infrastructureTypes, option_texts: infrastructureTypes.map((v) => INFRA_LABELS[v] ?? v), other_text: infrastructureOther || null },
+          { question_order: 3, free_text: infrastructureName },
+          { question_order: 4, option_value: disasterType, option_text: getQ4Label(disasterType) },
+          { question_order: 5, option_value: debrisBlocking, option_text: DEBRIS_LABELS[debrisBlocking] ?? debrisBlocking },
+          { question_order: 6, option_value: electricityCondition, option_text: ELECTRICITY_LABELS[electricityCondition] ?? electricityCondition },
+          { question_order: 7, option_value: healthServicesCondition, option_text: HEALTH_LABELS[healthServicesCondition] ?? healthServicesCondition },
+          { question_order: 8, option_values: pressingNeeds, option_texts: pressingNeeds.map((v) => PRESSING_NEEDS_LABELS[v] ?? v), other_text: pressingNeedsOther || null },
+          ...additionalQuestions.map((q, i) => {
+            const ans = additionalAnswers[9 + i];
+            return Array.isArray(ans)
+              ? { question_order: 9 + i, question_text: q.question_text, option_values: ans }
+              : { question_order: 9 + i, question_text: q.question_text, option_value: ans };
+          }),
+        ];
+        return rows.filter((a) => a.option_value || (Array.isArray(a.option_values) && (a.option_values as string[]).length > 0) || a.free_text);
+      })(),
       was_queued: false,
       browser_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       screen_resolution: `${window.screen.width}x${window.screen.height}`,
@@ -1748,7 +1877,7 @@ export default function ReportPage() {
         {/* Step 3 — Damage Assessment */}
         {step === "damage" && (
           <div style={styles.step}>
-            <div style={styles.questionProgress}>Question {damageQuestion} of 8</div>
+            <div style={styles.questionProgress}>Question {damageQuestion} of {totalQuestions}</div>
 
             {damageQuestion === 1 && (
               <>
@@ -1758,20 +1887,21 @@ export default function ReportPage() {
                   { value: "partial", label: "Partially damaged" },
                   { value: "complete", label: "Completely damaged" },
                 ]).map(({ value, label }) => (
-                  <button
+                  <div
                     key={value}
                     style={{
-                      ...styles.optionBtn,
-                      borderColor: damageLevel === value ? "#0468B1" : "#e0e0e0",
-                      background: damageLevel === value ? "#E8F4FD" : "#fff",
+                      ...styles.radioOption,
+                      borderColor: damageLevel === value ? "#0468B1" : "#E2E8F0",
+                      background: damageLevel === value ? "#F0F4FF" : "#fff",
                     }}
-                    onClick={() => setDamageLevel(value as DamageLevel)}
+                    onClick={() => { setDamageLevel(value as DamageLevel); setShowAnswerPrompt(false); }}
                   >
-                    <span style={styles.optionIcon}>
-                      {value === "minimal" ? "🟢" : value === "partial" ? "🟠" : "🔴"}
-                    </span>
-                    <span style={styles.optionTitle}>{label}</span>
-                  </button>
+                    <div style={{
+                      ...styles.radioCircle,
+                      border: damageLevel === value ? "6px solid #0468B1" : "2px solid #CBD5E0",
+                    }} />
+                    <span style={styles.radioLabel}>{label}</span>
+                  </div>
                 ))}
               </>
             )}
@@ -1790,7 +1920,11 @@ export default function ReportPage() {
                   { value: "public_spaces", label: "Public Spaces / Recreation Infrastructure" },
                   { value: "other", label: "Other (please specify)" },
                 ]).map(({ value, label }) => (
-                  <div key={value} style={styles.checkRow} onClick={() => toggleInfraType(value)}>
+                  <div
+                    key={value}
+                    style={styles.checkRow}
+                    onClick={() => { toggleInfraType(value); setShowAnswerPrompt(false); }}
+                  >
                     <div style={{ ...styles.checkbox, ...(infrastructureTypes.includes(value) ? styles.checkboxSelected : {}) }}>
                       {infrastructureTypes.includes(value) && <span style={styles.checkmark}>✓</span>}
                     </div>
@@ -1798,14 +1932,17 @@ export default function ReportPage() {
                   </div>
                 ))}
                 {infrastructureTypes.includes("other") && (
-                  <input
-                    style={{ ...styles.input, marginTop: 8 }}
-                    type="text"
-                    maxLength={100}
-                    placeholder="Please specify (max 100 characters)"
-                    value={infrastructureOther}
-                    onChange={(e) => setInfrastructureOther(e.target.value)}
-                  />
+                  <div>
+                    <textarea
+                      autoFocus
+                      style={{ ...styles.input, marginTop: 8, resize: "vertical" as const, minHeight: 72 }}
+                      maxLength={100}
+                      placeholder="Please specify..."
+                      value={infrastructureOther}
+                      onChange={(e) => setInfrastructureOther(e.target.value)}
+                    />
+                    <div style={styles.charCounter}>{infrastructureOther.length} / 100</div>
+                  </div>
                 )}
               </>
             )}
@@ -1814,12 +1951,13 @@ export default function ReportPage() {
               <>
                 <h2 style={styles.stepTitle}>{qTitle(3, "What is the name of this infrastructure? *")}</h2>
                 <input
+                  autoFocus={damageQuestion === 3}
                   style={styles.input}
                   type="text"
                   maxLength={200}
                   placeholder="e.g. Main Street Bridge"
                   value={infrastructureName}
-                  onChange={(e) => setInfrastructureName(e.target.value)}
+                  onChange={(e) => { setInfrastructureName(e.target.value); setShowAnswerPrompt(false); }}
                 />
                 <div style={styles.charCounter}>{infrastructureName.length} / 200</div>
               </>
@@ -1828,26 +1966,27 @@ export default function ReportPage() {
             {damageQuestion === 4 && (
               <>
                 <h2 style={styles.stepTitle}>{qTitle(4, "What type of disaster caused this damage? *")}</h2>
-                {qOptions(4, [
-                  { value: "earthquake", label: "Earthquake" },
-                  { value: "flood", label: "Flood" },
-                  { value: "cyclone", label: "Cyclone / Typhoon / Hurricane" },
-                  { value: "landslide", label: "Landslide" },
-                  { value: "fire", label: "Fire" },
-                  { value: "conflict", label: "Conflict / War" },
-                  { value: "other", label: "Other" },
-                ]).map(({ value, label }) => (
-                  <button
-                    key={value}
-                    style={{
-                      ...styles.optionBtn,
-                      borderColor: disasterType === value ? "#0468B1" : "#e0e0e0",
-                      background: disasterType === value ? "#E8F4FD" : "#fff",
-                    }}
-                    onClick={() => setDisasterType(value)}
-                  >
-                    <span style={styles.optionTitle}>{label}</span>
-                  </button>
+                {Q4_OPTIONS.map(({ category, options }) => (
+                  <div key={category}>
+                    <div style={styles.categoryHeading}>{category}</div>
+                    {options.map(({ value, label }) => (
+                      <div
+                        key={value}
+                        style={{
+                          ...styles.radioOption,
+                          borderColor: disasterType === value ? "#0468B1" : "#E2E8F0",
+                          background: disasterType === value ? "#F0F4FF" : "#fff",
+                        }}
+                        onClick={() => { setDisasterType(value); setShowAnswerPrompt(false); }}
+                      >
+                        <div style={{
+                          ...styles.radioCircle,
+                          border: disasterType === value ? "6px solid #0468B1" : "2px solid #CBD5E0",
+                        }} />
+                        <span style={styles.radioLabel}>{label}</span>
+                      </div>
+                    ))}
+                  </div>
                 ))}
               </>
             )}
@@ -1858,19 +1997,22 @@ export default function ReportPage() {
                 {qOptions(5, [
                   { value: "yes", label: "Yes" },
                   { value: "no", label: "No" },
-                  { value: "partially", label: "Partially" },
                 ]).map(({ value, label }) => (
-                  <button
+                  <div
                     key={value}
                     style={{
-                      ...styles.optionBtn,
-                      borderColor: debrisBlocking === value ? "#0468B1" : "#e0e0e0",
-                      background: debrisBlocking === value ? "#E8F4FD" : "#fff",
+                      ...styles.radioOption,
+                      borderColor: debrisBlocking === value ? "#0468B1" : "#E2E8F0",
+                      background: debrisBlocking === value ? "#F0F4FF" : "#fff",
                     }}
-                    onClick={() => setDebrisBlocking(value)}
+                    onClick={() => { setDebrisBlocking(value); setShowAnswerPrompt(false); }}
                   >
-                    <span style={styles.optionTitle}>{label}</span>
-                  </button>
+                    <div style={{
+                      ...styles.radioCircle,
+                      border: debrisBlocking === value ? "6px solid #0468B1" : "2px solid #CBD5E0",
+                    }} />
+                    <span style={styles.radioLabel}>{label}</span>
+                  </div>
                 ))}
               </>
             )}
@@ -1886,17 +2028,21 @@ export default function ReportPage() {
                   { value: "destroyed", label: "Completely destroyed — no electricity infrastructure functioning" },
                   { value: "unknown", label: "Unknown / cannot be assessed" },
                 ]).map(({ value, label }) => (
-                  <button
+                  <div
                     key={value}
                     style={{
-                      ...styles.optionBtn,
-                      borderColor: electricityCondition === value ? "#0468B1" : "#e0e0e0",
-                      background: electricityCondition === value ? "#E8F4FD" : "#fff",
+                      ...styles.radioOption,
+                      borderColor: electricityCondition === value ? "#0468B1" : "#E2E8F0",
+                      background: electricityCondition === value ? "#F0F4FF" : "#fff",
                     }}
-                    onClick={() => setElectricityCondition(value)}
+                    onClick={() => { setElectricityCondition(value); setShowAnswerPrompt(false); }}
                   >
-                    <span style={styles.optionTitle}>{label}</span>
-                  </button>
+                    <div style={{
+                      ...styles.radioCircle,
+                      border: electricityCondition === value ? "6px solid #0468B1" : "2px solid #CBD5E0",
+                    }} />
+                    <span style={styles.radioLabel}>{label}</span>
+                  </div>
                 ))}
               </>
             )}
@@ -1911,17 +2057,21 @@ export default function ReportPage() {
                   { value: "not_functioning", label: "Not functioning at all" },
                   { value: "unknown", label: "Unknown" },
                 ]).map(({ value, label }) => (
-                  <button
+                  <div
                     key={value}
                     style={{
-                      ...styles.optionBtn,
-                      borderColor: healthServicesCondition === value ? "#0468B1" : "#e0e0e0",
-                      background: healthServicesCondition === value ? "#E8F4FD" : "#fff",
+                      ...styles.radioOption,
+                      borderColor: healthServicesCondition === value ? "#0468B1" : "#E2E8F0",
+                      background: healthServicesCondition === value ? "#F0F4FF" : "#fff",
                     }}
-                    onClick={() => setHealthServicesCondition(value)}
+                    onClick={() => { setHealthServicesCondition(value); setShowAnswerPrompt(false); }}
                   >
-                    <span style={styles.optionTitle}>{label}</span>
-                  </button>
+                    <div style={{
+                      ...styles.radioCircle,
+                      border: healthServicesCondition === value ? "6px solid #0468B1" : "2px solid #CBD5E0",
+                    }} />
+                    <span style={styles.radioLabel}>{label}</span>
+                  </div>
                 ))}
               </>
             )}
@@ -1942,7 +2092,11 @@ export default function ReportPage() {
                   { value: "local_support", label: "Support from local authorities and community organizations" },
                   { value: "other", label: "Other — please specify" },
                 ]).map(({ value, label }) => (
-                  <div key={value} style={styles.checkRow} onClick={() => togglePressingNeed(value)}>
+                  <div
+                    key={value}
+                    style={styles.checkRow}
+                    onClick={() => { togglePressingNeed(value); setShowAnswerPrompt(false); }}
+                  >
                     <div style={{ ...styles.checkbox, ...(pressingNeeds.includes(value) ? styles.checkboxSelected : {}) }}>
                       {pressingNeeds.includes(value) && <span style={styles.checkmark}>✓</span>}
                     </div>
@@ -1951,9 +2105,9 @@ export default function ReportPage() {
                 ))}
                 {pressingNeeds.includes("other") && (
                   <div>
-                    <input
-                      style={{ ...styles.input, marginTop: 8 }}
-                      type="text"
+                    <textarea
+                      autoFocus
+                      style={{ ...styles.input, marginTop: 8, resize: "vertical" as const, minHeight: 72 }}
                       maxLength={100}
                       placeholder="Please specify (max 100 characters)"
                       value={pressingNeedsOther}
@@ -1965,16 +2119,91 @@ export default function ReportPage() {
               </>
             )}
 
-            <div style={styles.navButtons}>
+            {/* Additional questions from question package (beyond Q8) */}
+            {damageQuestion >= 9 && (() => {
+              const aq = additionalQuestions[damageQuestion - 9];
+              if (!aq) return null;
+              const isMulti = aq.question_type === "multi";
+              const currentVal = additionalAnswers[damageQuestion];
+              const selectedValues: string[] = Array.isArray(currentVal) ? currentVal : [];
+              const selectedValue: string = typeof currentVal === "string" ? currentVal : "";
+              return (
+                <>
+                  <h2 style={styles.stepTitle}>{aq.question_text} *</h2>
+                  {isMulti && <p style={styles.photoHint}>Select all that apply.</p>}
+                  {aq.options.map((opt) => {
+                    const isSelected = isMulti ? selectedValues.includes(opt.option_value) : selectedValue === opt.option_value;
+                    return isMulti ? (
+                      <div
+                        key={opt.option_value}
+                        style={styles.checkRow}
+                        onClick={() => {
+                          setShowAnswerPrompt(false);
+                          setAdditionalAnswers((prev) => {
+                            const cur: string[] = Array.isArray(prev[damageQuestion]) ? prev[damageQuestion] as string[] : [];
+                            return {
+                              ...prev,
+                              [damageQuestion]: cur.includes(opt.option_value)
+                                ? cur.filter((v) => v !== opt.option_value)
+                                : [...cur, opt.option_value],
+                            };
+                          });
+                        }}
+                      >
+                        <div style={{ ...styles.checkbox, ...(isSelected ? styles.checkboxSelected : {}) }}>
+                          {isSelected && <span style={styles.checkmark}>✓</span>}
+                        </div>
+                        <span style={styles.checkRowText}>{opt.option_text}</span>
+                      </div>
+                    ) : (
+                      <div
+                        key={opt.option_value}
+                        style={{
+                          ...styles.radioOption,
+                          borderColor: isSelected ? "#0468B1" : "#E2E8F0",
+                          background: isSelected ? "#F0F4FF" : "#fff",
+                        }}
+                        onClick={() => {
+                          setShowAnswerPrompt(false);
+                          setAdditionalAnswers((prev) => ({ ...prev, [damageQuestion]: opt.option_value }));
+                        }}
+                      >
+                        <div style={{
+                          ...styles.radioCircle,
+                          border: isSelected ? "6px solid #0468B1" : "2px solid #CBD5E0",
+                        }} />
+                        <span style={styles.radioLabel}>{opt.option_text}</span>
+                      </div>
+                    );
+                  })}
+                </>
+              );
+            })()}
+
+            {showAnswerPrompt && (
+              <p style={{ color: "#E53E3E", fontSize: "0.85rem", margin: "4px 0 0" }}>
+                Please select an answer to continue.
+              </p>
+            )}
+
+            <div style={styles.navButtonsSticky}>
               <button style={styles.secondaryButton} onClick={handleDamageBack}>← Back</button>
               <button
-                style={{ ...styles.primaryButton, opacity: isDamageQuestionAnswered() ? 1 : 0.5 }}
-                disabled={!isDamageQuestionAnswered()}
+                style={{ ...styles.primaryButton, opacity: 1 }}
                 onClick={handleDamageNext}
               >
                 Next →
               </button>
             </div>
+
+            {editingFromReview && (
+              <button
+                style={{ color: "#0468B1", fontSize: "0.85rem", textDecoration: "underline", background: "none", border: "none", cursor: "pointer", marginTop: 4, alignSelf: "flex-start" }}
+                onClick={() => { setEditingFromReview(false); setStep("review"); }}
+              >
+                Back to Review without changes
+              </button>
+            )}
           </div>
         )}
 
@@ -2048,7 +2277,7 @@ export default function ReportPage() {
             <div style={styles.reviewSection}>
               <div style={styles.reviewSectionHeader}>
                 <span style={styles.reviewSectionTitle}>Questions</span>
-                <button style={styles.editLink} onClick={() => { setDamageQuestion(1); setStep("damage"); }}>Edit</button>
+                <button style={styles.editLink} onClick={() => { setEditingFromReview(true); setDamageQuestion(1); setStep("damage"); }}>Edit</button>
               </div>
               <div style={styles.reviewCard}>
                 <div style={styles.reviewRow}>
@@ -2611,13 +2840,62 @@ const styles: Record<string, React.CSSProperties> = {
     textAlign: "center" as const,
     marginBottom: 4,
   },
+  radioOption: {
+    display: "flex",
+    alignItems: "center",
+    gap: 12,
+    padding: "10px 16px",
+    minHeight: 44,
+    borderRadius: 8,
+    border: "1px solid #E2E8F0",
+    marginBottom: 8,
+    cursor: "pointer",
+    transition: "border-color 0.12s, background 0.12s",
+    boxSizing: "border-box" as const,
+  },
+  radioCircle: {
+    width: 20,
+    height: 20,
+    borderRadius: "50%",
+    flexShrink: 0,
+    boxSizing: "border-box" as const,
+    transition: "border 0.12s",
+  },
+  radioLabel: {
+    fontSize: "0.9rem",
+    color: "#1A2B4A",
+    lineHeight: 1.4,
+    textAlign: "left" as const,
+  },
+  categoryHeading: {
+    fontSize: "0.7rem",
+    fontWeight: 700,
+    color: "#717782",
+    letterSpacing: "0.08em",
+    textTransform: "uppercase" as const,
+    marginTop: 12,
+    marginBottom: 6,
+  },
+  navButtonsSticky: {
+    display: "flex",
+    gap: 12,
+    marginTop: 16,
+    position: "sticky" as const,
+    bottom: 0,
+    background: "#FFFFFF",
+    padding: "12px 0",
+    borderTop: "1px solid #E2E8F0",
+    zIndex: 5,
+  },
   checkRow: {
     display: "flex",
     alignItems: "center",
     gap: 12,
     padding: "10px 4px",
+    minHeight: 44,
     borderBottom: "1px solid #f0f0f0",
     cursor: "pointer",
+    boxSizing: "border-box" as const,
   },
   checkbox: {
     width: 22,
