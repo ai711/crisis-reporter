@@ -88,6 +88,9 @@
     "connection_lost": "Connection lost. You can still select a building from the area already loaded, or enter your location manually below.",
     "gps_unavailable_inline": "Your location could not be detected. You can still select a building on the map or use the search bar to find your location."
   },
+  "confirmation": {
+    "success_message": "Your report has been submitted. Thank you for helping crisis response teams get to the right places faster."
+  },
   "errors": {
     "required": "This field is required",
     "networkError": "Network error. Please check your connection.",

@@ -13,7 +13,7 @@ import { validatePhoto } from "../utils/photoValidation";
 import { compressPhoto } from "../utils/photoCompression";
 import { extractExif } from "../utils/exifExtraction";
 import SubmissionStepper, { type StepperStep } from "../components/SubmissionStepper";
-import type { DamageLevel, QueuedPhoto } from "../types";
+import type { DamageLevel } from "../types";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 const MAPTILER_KEY = import.meta.env.VITE_MAPTILER_KEY || "";
@@ -352,6 +352,25 @@ export default function ReportPage() {
   const [showAnswerPrompt, setShowAnswerPrompt] = useState(false);
   const [editingFromReview, setEditingFromReview] = useState(false);
   const [additionalAnswers, setAdditionalAnswers] = useState<Record<number, string | string[]>>({});
+
+  // F38 — local temp report ID generated at mount; refreshed on each new submission
+  const [localReportId, setLocalReportId] = useState<string>(
+    () => `CR-WEB-TMP-${crypto.randomUUID()}`
+  );
+
+  // C22 — submission timestamp captured at exact tap moment, stored in state so modal can reuse it
+  const [submissionSubmittedAt, setSubmissionSubmittedAt] = useState<string>("");
+
+  // A5/A6/A7 — review step photo interactions
+  const [reviewPhotoIndex, setReviewPhotoIndex] = useState<number | null>(null);
+  const [reviewPhotoError, setReviewPhotoError] = useState<string>("");
+
+  // B21 — cascading Q3 flag when location/building changes during review edit
+  const [locationChangedFlag, setLocationChangedFlag] = useState(false);
+  const [prevBuildingId, setPrevBuildingId] = useState<string>("");
+
+  // E32/E34/E35 — submit error type (no offline queue on web)
+  const [submitError, setSubmitError] = useState<"no_internet" | "timeout" | "server_error" | null>(null);
 
   // Refs
   const isSubmittedRef = useRef(false);
@@ -887,6 +906,7 @@ export default function ReportPage() {
     }
     setReplaceIndex(null);
     setSelectedPhotoIndex(null);
+    setReviewPhotoIndex(null);
     e.target.value = "";
   };
 
@@ -947,26 +967,39 @@ export default function ReportPage() {
 
   // ── Duplicate / submit helpers ────────────────────────────────────────────────
 
-  // G5 — Use centroid/pin/GPS in order of priority for duplicate checks
-  const checkDuplicate = (): boolean => {
+  // D26/D27 — backend query for logged-in; sessionStorage for anonymous (current session only)
+  const checkDuplicate = async (): Promise<boolean> => {
     const lat = buildingCentroidLat ?? pinDropCoords?.lat ?? gpsLatitude;
     const lng = buildingCentroidLng ?? pinDropCoords?.lng ?? gpsLongitude;
     if (!lat || !lng || !crisisId) return false;
-    try {
-      const raw = localStorage.getItem("cr_submitted_locations");
-      if (!raw) return false;
-      const locs: Array<{ lat: number; lng: number; crisis_id: string; timestamp: number }> =
-        JSON.parse(raw);
-      const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
-      return locs.some(
-        (l) =>
-          l.crisis_id === crisisId &&
-          Math.abs(l.lat - lat) < 0.001 &&
-          Math.abs(l.lng - lng) < 0.001 &&
-          l.timestamp > cutoff
-      );
-    } catch {
-      return false;
+
+    if (reporterId) {
+      // Logged-in reporter: query backend
+      try {
+        const res = await api.get<{ is_duplicate?: boolean }>("/api/reports/duplicate-check", {
+          params: { lat, lng, building_id: selectedBuildingId, crisis_id: crisisId },
+        });
+        return !!res.data.is_duplicate;
+      } catch {
+        return false; // silent — proceed on error
+      }
+    } else {
+      // Anonymous: check sessionStorage for current session only
+      try {
+        const sessionReports: Array<{
+          building_id: string | null;
+          lat: number | null;
+          lng: number | null;
+        }> = JSON.parse(sessionStorage.getItem("cr_session_reports") || "[]");
+        return sessionReports.some(
+          (r) =>
+            (selectedBuildingId && r.building_id === selectedBuildingId) ||
+            (r.lat !== null && Math.abs(r.lat - lat) < 0.0001 &&
+             r.lng !== null && Math.abs(r.lng - lng) < 0.0001)
+        );
+      } catch {
+        return false;
+      }
     }
   };
 
@@ -1046,6 +1079,13 @@ export default function ReportPage() {
     setShowAnswerPrompt(false);
     setEditingFromReview(false);
     setAdditionalAnswers({});
+    setLocalReportId(`CR-WEB-TMP-${crypto.randomUUID()}`);
+    setSubmissionSubmittedAt("");
+    setReviewPhotoIndex(null);
+    setReviewPhotoError("");
+    setLocationChangedFlag(false);
+    setPrevBuildingId("");
+    setSubmitError(null);
     setStep("photos");
   };
 
@@ -1113,6 +1153,16 @@ export default function ReportPage() {
       return;
     }
     setShowAnswerPrompt(false);
+
+    // B21 — locationChangedFlag was set when building changed during review edit of location;
+    // Q3 was forced — once confirmed, clear flag and return directly to review
+    if (damageQuestion === 3 && locationChangedFlag) {
+      setLocationChangedFlag(false);
+      setEditingFromReview(false);
+      setStep("review");
+      return;
+    }
+
     if (editingFromReview && damageQuestion === totalQuestions) {
       setEditingFromReview(false);
       setStep("review");
@@ -1133,8 +1183,10 @@ export default function ReportPage() {
     return locationAddress || null;
   };
 
-  const doSubmit = async () => {
+  // C22 — submitTapTime is captured at the exact moment the reporter taps Submit in handleSubmit
+  const doSubmit = async (submitTapTime: string) => {
     setShowDupeWarning(false);
+    setSubmitError(null);
     setError("");
 
     // Phase 1 — compress photos and extract EXIF (both run before the network call)
@@ -1155,13 +1207,19 @@ export default function ReportPage() {
       setPreparingPhotos(false);
     }
 
+    // E32 — Live connectivity check immediately before transmission (web is Tier 1 only)
+    if (!navigator.onLine) {
+      setSubmitError("no_internet");
+      setSubmitting(false);
+      return;
+    }
+
     // Phase 2 — transmit
     setSubmitting(true);
 
-    const submissionSubmittedAt = new Date().toISOString();
-
     const reportPayload = {
       crisis_id: crisisId!,
+      local_report_id: localReportId,
       damage_level: damageLevel as DamageLevel,
       infrastructure_types: infrastructureTypes,
       ...(infrastructureTypes.includes("other") && { infrastructure_other: infrastructureOther }),
@@ -1174,7 +1232,7 @@ export default function ReportPage() {
       ...(pressingNeeds.includes("other") && { pressing_needs_other: pressingNeedsOther }),
       platform: "web" as const,
       submission_started_at: submissionStartTime,
-      submission_submitted_at: submissionSubmittedAt,
+      submission_submitted_at: submitTapTime,
       photo_metadata: JSON.stringify(photoMetadata),
       photo_exif_data: JSON.stringify(exifResults),
       location: {
@@ -1182,7 +1240,7 @@ export default function ReportPage() {
         gps_latitude: gpsLatitude,
         gps_longitude: gpsLongitude,
         gps_accuracy_meters: gpsAccuracy,
-        // C5 — explicit flags: gps_available set in success callback, gps_denied in denial callback
+        // C5 — explicit flags
         gps_available: gpsAvailable,
         gps_denied: gpsDenied,
         // G5 — Building footprint centroid (separate from device GPS)
@@ -1242,26 +1300,17 @@ export default function ReportPage() {
       viewport_dimensions: `${window.innerWidth}x${window.innerHeight}`,
     };
 
-    if (!navigator.onLine) {
-      const queuedPhotos: QueuedPhoto[] = compressedPhotos.map((file, index) => ({
-        blob: file,
-        filename: file.name,
-        content_type: file.type,
-        display_order: index,
-      }));
-      await addToQueue({ ...reportPayload, was_queued: true }, queuedPhotos);
-      saveSubmittedLocation();
-      setWasQueued(true);
-      setSubmittedReportId(null);
-      isSubmittedRef.current = true;
-      setSubmitted(true);
-      setSubmitting(false);
-      return;
-    }
+    // E34 — 30-second hard timeout on the report creation request
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
 
     try {
-      const response = await api.post("/api/reports", reportPayload);
-      const reportId = response.data.report_id;
+      const response = await api.post("/api/reports", reportPayload, {
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+
+      const reportId = response.data.report_id as string;
 
       for (let i = 0; i < compressedPhotos.length; i++) {
         const formData = new FormData();
@@ -1275,44 +1324,55 @@ export default function ReportPage() {
 
       saveSubmittedLocation();
 
+      // D27 — write to sessionStorage so anonymous duplicate check works within session
       try {
-        const summary = {
-          id: reportId as string,
-          damage_level: damageLevel,
-          infrastructure_types: infrastructureTypes,
-          location_address: buildLocationAddress(),
-          gps_latitude: gpsLatitude,
-          gps_longitude: gpsLongitude,
-          submitted_at: submissionSubmittedAt,
-        };
-        const existing: unknown[] = JSON.parse(
+        const sessionReports: Array<Record<string, unknown>> = JSON.parse(
           sessionStorage.getItem("cr_session_reports") || "[]"
         );
-        existing.push(summary);
-        sessionStorage.setItem("cr_session_reports", JSON.stringify(existing));
+        sessionReports.push({
+          id: reportId,
+          building_id: selectedBuildingId || null,
+          lat: buildingCentroidLat ?? pinDropCoords?.lat ?? gpsLatitude,
+          lng: buildingCentroidLng ?? pinDropCoords?.lng ?? gpsLongitude,
+          submitted_at: submitTapTime,
+        });
+        sessionStorage.setItem("cr_session_reports", JSON.stringify(sessionReports));
       } catch { /* non-critical */ }
 
-      setSubmittedReportId(reportId as string);
-      setWasQueued(false);
+      setSubmittedReportId(reportId);
       isSubmittedRef.current = true;
       setSubmitted(true);
-    } catch {
-      setError(t("report.error"));
+    } catch (err: unknown) {
+      clearTimeout(timeoutId);
+      const isAbort = err instanceof Error && err.name === "AbortError";
+      const isTimeout = isAbort || (err instanceof Error && (err as { code?: string }).code === "ECONNABORTED");
+      if (isTimeout) {
+        setSubmitError("timeout");
+      } else {
+        setSubmitError("server_error");
+        setError(t("report.error"));
+      }
     } finally {
       setSubmitting(false);
     }
   };
 
   const handleSubmit = async () => {
+    // C22 — Timestamp 2: captured at the exact moment the reporter taps Submit
+    const submitTapTime = new Date().toISOString();
+    setSubmissionSubmittedAt(submitTapTime);
+
     if (!damageLevel || infrastructureTypes.length === 0 || !infrastructureName.trim() || !disasterType || !debrisBlocking || !electricityCondition || !healthServicesCondition || pressingNeeds.length === 0 || photos.length === 0) {
       setError("Please complete all required fields");
       return;
     }
-    if (checkDuplicate()) {
+    // D26/D27 — async duplicate check (backend for logged-in, sessionStorage for anonymous)
+    const isDupe = await checkDuplicate();
+    if (isDupe) {
       setShowDupeWarning(true);
       return;
     }
-    await doSubmit();
+    await doSubmit(submitTapTime);
   };
 
   // ── Success screen ────────────────────────────────────────────────────────────
@@ -1324,18 +1384,9 @@ export default function ReportPage() {
           <div style={styles.confirmCheckCircle}>
             <span style={{ fontSize: 44, lineHeight: 1 }}>✓</span>
           </div>
-          <h2 style={styles.successTitle}>
-            {wasQueued ? "Report Saved" : "Report Submitted"}
-          </h2>
+          <h2 style={styles.successTitle}>Report Submitted</h2>
           <p style={styles.successText}>
-            {wasQueued
-              ? "Your report has been saved and will be sent automatically when you reconnect to the internet."
-              : "Thank you for helping UNDP map crisis damage. Your report has been received and is now part of the crisis map."}
-          </p>
-          <p style={styles.confirmRef}>
-            {wasQueued
-              ? "Your report is queued"
-              : `Report ref: ${(submittedReportId ?? "").slice(0, 8).toUpperCase()}`}
+            {t("confirmation.success_message")}
           </p>
           <button style={styles.primaryButton} onClick={resetForm}>
             Submit Another Report
@@ -1561,13 +1612,6 @@ export default function ReportPage() {
               multiple
               style={{ display: "none" }}
               onChange={handleFileInputChange}
-            />
-            <input
-              ref={replaceInputRef}
-              type="file"
-              accept="image/jpeg,image/png,image/webp,image/heic,image/heif,image/bmp,image/tiff"
-              style={{ display: "none" }}
-              onChange={handleReplaceInputChange}
             />
 
             <button
@@ -1865,7 +1909,21 @@ export default function ReportPage() {
                 <button
                   style={{ ...styles.primaryButton, opacity: isLocationValid() ? 1 : 0.5 }}
                   disabled={!isLocationValid()}
-                  onClick={() => setStep("damage")}
+                  onClick={() => {
+                    if (editingFromReview) {
+                      // B21 — check if building changed; if so force Q3 re-confirmation
+                      if (selectedBuildingId !== prevBuildingId) {
+                        setLocationChangedFlag(true);
+                        setDamageQuestion(3);
+                        setStep("damage");
+                      } else {
+                        setEditingFromReview(false);
+                        setStep("review");
+                      }
+                    } else {
+                      setStep("damage");
+                    }
+                  }}
                 >
                   Next →
                 </button>
@@ -1950,6 +2008,11 @@ export default function ReportPage() {
             {damageQuestion === 3 && (
               <>
                 <h2 style={styles.stepTitle}>{qTitle(3, "What is the name of this infrastructure? *")}</h2>
+                {locationChangedFlag && (
+                  <p style={{ color: "#F57C00", fontSize: "0.85rem", margin: "0 0 8px", lineHeight: 1.5 }}>
+                    Your location has changed. Please confirm or update the infrastructure name.
+                  </p>
+                )}
                 <input
                   autoFocus={damageQuestion === 3}
                   style={styles.input}
@@ -2196,7 +2259,7 @@ export default function ReportPage() {
               </button>
             </div>
 
-            {editingFromReview && (
+            {editingFromReview && !locationChangedFlag && (
               <button
                 style={{ color: "#0468B1", fontSize: "0.85rem", textDecoration: "underline", background: "none", border: "none", cursor: "pointer", marginTop: 4, alignSelf: "flex-start" }}
                 onClick={() => { setEditingFromReview(false); setStep("review"); }}
@@ -2208,139 +2271,333 @@ export default function ReportPage() {
         )}
 
         {/* Step 4 — Review and Submit */}
-        {step === "review" && (
-          <div style={styles.step}>
-            <h2 style={styles.stepTitle}>Review Your Report</h2>
+        {step === "review" && (() => {
+          // A8 — static map URL helper for map preview
+          const reviewMapLat = buildingCentroidLat ?? pinDropCoords?.lat ?? null;
+          const reviewMapLng = buildingCentroidLng ?? pinDropCoords?.lng ?? null;
+          const staticMapUrl = (lat: number, lng: number) =>
+            `https://api.maptiler.com/maps/streets-v2/static/${lng},${lat},15/300x160.png?key=${MAPTILER_KEY}&markers=${lng},${lat}`;
 
-            <div style={styles.reviewSection}>
-              <div style={styles.reviewSectionHeader}>
-                <span style={styles.reviewSectionTitle}>Photo</span>
-                <button style={styles.editLink} onClick={() => setStep("photos")}>Edit</button>
+          return (
+            <div style={{ maxWidth: 720, margin: "0 auto", padding: "24px 16px 100px", width: "100%", boxSizing: "border-box" as const }}>
+              <h2 style={styles.stepTitle}>Review Your Report</h2>
+
+              {/* ── Photos section ── */}
+              <div style={styles.reviewSection}>
+                <div style={styles.reviewSectionHeader}>
+                  <span style={styles.reviewSectionTitle}>Photos</span>
+                  <button style={styles.editLink} onClick={() => setStep("photos")}>Edit</button>
+                </div>
+                <div style={styles.reviewCard}>
+                  <div style={{ padding: "12px 16px" }}>
+                    {photos.length === 0 ? (
+                      <div style={styles.reviewPhotoPlaceholder}>📷</div>
+                    ) : (
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" as const }}>
+                        {photos.map((photo, idx) => (
+                          <div
+                            key={idx}
+                            onClick={() => setReviewPhotoIndex(reviewPhotoIndex === idx ? null : idx)}
+                            style={{
+                              position: "relative" as const,
+                              width: 72,
+                              height: 72,
+                              borderRadius: 8,
+                              overflow: "visible" as const,
+                              cursor: "pointer",
+                              border: "2px solid #E2E8F0",
+                              flexShrink: 0,
+                            }}
+                          >
+                            <img
+                              src={URL.createObjectURL(photo)}
+                              alt={`Photo ${idx + 1}`}
+                              style={{ width: "100%", height: "100%", objectFit: "cover" as const, borderRadius: 6, display: "block" }}
+                            />
+                            {reviewPhotoIndex === idx && (
+                              <div style={styles.thumbPopover} onClick={(e) => e.stopPropagation()}>
+                                <button
+                                  style={styles.thumbAction}
+                                  onClick={() => { setViewingPhoto(photo); setReviewPhotoIndex(null); }}
+                                >View</button>
+                                <button
+                                  style={styles.thumbAction}
+                                  onClick={() => {
+                                    setReplaceIndex(idx);
+                                    setReviewPhotoIndex(null);
+                                    replaceInputRef.current?.click();
+                                  }}
+                                >Replace</button>
+                                <button
+                                  style={{ ...styles.thumbAction, color: "#E53E3E" }}
+                                  onClick={() => {
+                                    if (photos.length <= 1) {
+                                      setReviewPhotoError("At least one photo is required. Please add a photo before submitting.");
+                                      setReviewPhotoIndex(null);
+                                      return;
+                                    }
+                                    handlePhotoRemove(idx);
+                                    setReviewPhotoIndex(null);
+                                    setReviewPhotoError("");
+                                  }}
+                                >Remove</button>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {reviewPhotoError && (
+                      <p style={{ color: "#E53E3E", fontSize: "0.85rem", margin: "8px 0 0" }}>{reviewPhotoError}</p>
+                    )}
+                  </div>
+                </div>
               </div>
-              <div style={styles.reviewCard}>
-                <div style={{ padding: "12px 16px", display: "flex", alignItems: "center", gap: 12 }}>
-                  {photos.length > 0 ? (
+
+              {/* ── Location section ── */}
+              <div style={styles.reviewSection}>
+                <div style={styles.reviewSectionHeader}>
+                  <span style={styles.reviewSectionTitle}>Location</span>
+                  <button
+                    style={styles.editLink}
+                    onClick={() => {
+                      setPrevBuildingId(selectedBuildingId || "");
+                      setEditingFromReview(true);
+                      setStep("location");
+                    }}
+                  >Edit</button>
+                </div>
+                <div style={styles.reviewCard}>
+                  {/* A8 — static map preview for map_selection or pin_drop */}
+                  {(locationEntryMethod === "map_selection" || locationEntryMethod === "pin_drop") &&
+                    reviewMapLat !== null && reviewMapLng !== null && MAPTILER_KEY && (
                     <img
-                      src={URL.createObjectURL(photos[0])}
-                      alt="Photo preview"
-                      style={styles.reviewPhotoThumb}
+                      src={staticMapUrl(reviewMapLat, reviewMapLng)}
+                      alt="Selected location"
+                      style={{ width: "100%", height: 140, objectFit: "cover" as const, borderRadius: "8px 8px 0 0", display: "block", borderBottom: "1px solid #E2E8F0" }}
+                      onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
                     />
-                  ) : (
-                    <div style={styles.reviewPhotoPlaceholder}>📷</div>
                   )}
-                  <span style={{ fontSize: 14, color: "#666" }}>
-                    {photos.length} photo{photos.length !== 1 ? "s" : ""} added
-                  </span>
-                </div>
-              </div>
-            </div>
 
-            <div style={styles.reviewSection}>
-              <div style={styles.reviewSectionHeader}>
-                <span style={styles.reviewSectionTitle}>Location</span>
-                <button style={styles.editLink} onClick={() => setStep("location")}>Edit</button>
-              </div>
-              <div style={styles.reviewCard}>
-                {selectedBuildingId ? (
-                  <div style={styles.reviewRow}>
-                    <span style={styles.reviewLabel}>Building</span>
-                    <span style={styles.reviewValue}>{selectedBuildingName || "Building selected"}</span>
-                  </div>
-                ) : pinDropCoords ? (
-                  <div style={styles.reviewRow}>
-                    <span style={styles.reviewLabel}>Pin Location</span>
-                    <span style={styles.reviewValue}>
-                      {pinDropCoords.lat.toFixed(4)}, {pinDropCoords.lng.toFixed(4)}
-                    </span>
-                  </div>
-                ) : gpsLatitude !== null ? (
-                  <div style={styles.reviewRow}>
+                  {/* A9 — building name, type, footprint ID, location note */}
+                  {selectedBuildingId ? (
+                    <>
+                      <div style={styles.reviewRow}>
+                        <span style={styles.reviewLabel}>Building</span>
+                        <span style={styles.reviewValue}>{selectedBuildingName || "Building selected"}</span>
+                      </div>
+                      {selectedBuildingType && selectedBuildingType !== "yes" && (
+                        <div style={styles.reviewRow}>
+                          <span style={styles.reviewLabel}>Type</span>
+                          <span style={styles.reviewValue}>{selectedBuildingType.replace(/_/g, " ")}</span>
+                        </div>
+                      )}
+                      <div style={styles.reviewRow}>
+                        <span style={styles.reviewLabel}>Footprint ID</span>
+                        <span style={styles.reviewValue}>{selectedBuildingId}</span>
+                      </div>
+                    </>
+                  ) : pinDropCoords ? (
+                    <div style={styles.reviewRow}>
+                      <span style={styles.reviewLabel}>Pin Location</span>
+                      <span style={styles.reviewValue}>
+                        {pinDropCoords.lat.toFixed(5)}, {pinDropCoords.lng.toFixed(5)}
+                      </span>
+                    </div>
+                  ) : locationEntryMethod === "manual_text" ? (
+                    <>
+                      {locationAddress && (
+                        <div style={styles.reviewRow}>
+                          <span style={styles.reviewLabel}>Address</span>
+                          <span style={styles.reviewValue}>{locationAddress}</span>
+                        </div>
+                      )}
+                      {locationLandmark && (
+                        <div style={styles.reviewRow}>
+                          <span style={styles.reviewLabel}>Landmark</span>
+                          <span style={styles.reviewValue}>{locationLandmark}</span>
+                        </div>
+                      )}
+                      {locationBuildingName && (
+                        <div style={styles.reviewRow}>
+                          <span style={styles.reviewLabel}>Building name</span>
+                          <span style={styles.reviewValue}>{locationBuildingName}</span>
+                        </div>
+                      )}
+                      {!locationAddress && !locationLandmark && !locationBuildingName && (
+                        <div style={styles.reviewRow}>
+                          <span style={styles.reviewValue}>No location details entered</span>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div style={styles.reviewRow}>
+                      <span style={styles.reviewLabel}>Location</span>
+                      <span style={styles.reviewValue}>Not specified</span>
+                    </div>
+                  )}
+
+                  {/* A9 — location note */}
+                  {locationNote && (
+                    <div style={styles.reviewRow}>
+                      <span style={styles.reviewLabel}>Location note</span>
+                      <span style={styles.reviewValue}>{locationNote}</span>
+                    </div>
+                  )}
+
+                  {/* A10 — GPS captured / unavailable indicator */}
+                  <div style={{ ...styles.reviewRow, borderBottom: "none" }}>
                     <span style={styles.reviewLabel}>GPS</span>
-                    <span style={styles.reviewValue}>
-                      {gpsLatitude.toFixed(4)}, {gpsLongitude!.toFixed(4)}
+                    <span style={{ ...styles.reviewValue, color: gpsLatitude !== null ? "#38A169" : "#9CA3AF" }}>
+                      {gpsLatitude !== null
+                        ? `${gpsLatitude.toFixed(5)}, ${gpsLongitude?.toFixed(5)} ✓`
+                        : "Not available"}
                     </span>
                   </div>
-                ) : locationAddress ? (
+                </div>
+              </div>
+
+              {/* ── Questions section ── */}
+              <div style={styles.reviewSection}>
+                <div style={styles.reviewSectionHeader}>
+                  <span style={styles.reviewSectionTitle}>Questions</span>
+                  <button style={styles.editLink} onClick={() => { setEditingFromReview(true); setDamageQuestion(1); setStep("damage"); }}>Edit</button>
+                </div>
+                <div style={styles.reviewCard}>
                   <div style={styles.reviewRow}>
-                    <span style={styles.reviewLabel}>Address</span>
-                    <span style={styles.reviewValue}>{locationAddress}</span>
+                    <span style={styles.reviewLabel}>Q1 — Damage Level</span>
+                    <span style={styles.reviewValue}>{DAMAGE_LABELS[damageLevel] ?? damageLevel}</span>
                   </div>
-                ) : (
                   <div style={styles.reviewRow}>
-                    <span style={styles.reviewLabel}>Location</span>
-                    <span style={styles.reviewValue}>Not specified</span>
+                    <span style={styles.reviewLabel}>Q2 — Infrastructure</span>
+                    <span style={styles.reviewValue}>{infrastructureTypes.map((v) => INFRA_LABELS[v] ?? v).join(", ")}</span>
                   </div>
-                )}
+                  {infrastructureOther && (
+                    <div style={styles.reviewRow}>
+                      <span style={styles.reviewLabel}>Q2 — Other (specify)</span>
+                      <span style={styles.reviewValue}>{infrastructureOther}</span>
+                    </div>
+                  )}
+                  <div style={styles.reviewRow}>
+                    <span style={styles.reviewLabel}>Q3 — Infrastructure Name</span>
+                    <span style={styles.reviewValue}>{infrastructureName}</span>
+                  </div>
+                  <div style={styles.reviewRow}>
+                    <span style={styles.reviewLabel}>Q4 — Disaster Type</span>
+                    <span style={styles.reviewValue}>{DISASTER_LABELS[disasterType] ?? disasterType}</span>
+                  </div>
+                  <div style={styles.reviewRow}>
+                    <span style={styles.reviewLabel}>Q5 — Debris Blocking</span>
+                    <span style={styles.reviewValue}>{DEBRIS_LABELS[debrisBlocking] ?? debrisBlocking}</span>
+                  </div>
+                  <div style={styles.reviewRow}>
+                    <span style={styles.reviewLabel}>Q6 — Electricity</span>
+                    <span style={styles.reviewValue}>{ELECTRICITY_LABELS[electricityCondition] ?? electricityCondition}</span>
+                  </div>
+                  <div style={styles.reviewRow}>
+                    <span style={styles.reviewLabel}>Q7 — Health Services</span>
+                    <span style={styles.reviewValue}>{HEALTH_LABELS[healthServicesCondition] ?? healthServicesCondition}</span>
+                  </div>
+                  <div style={styles.reviewRow}>
+                    <span style={styles.reviewLabel}>Q8 — Pressing Needs</span>
+                    <span style={styles.reviewValue}>{pressingNeeds.map((v) => PRESSING_NEEDS_LABELS[v] ?? v).join(", ")}</span>
+                  </div>
+                  {pressingNeedsOther && (
+                    <div style={styles.reviewRow}>
+                      <span style={styles.reviewLabel}>Q8 — Other (specify)</span>
+                      <span style={styles.reviewValue}>{pressingNeedsOther}</span>
+                    </div>
+                  )}
+                  {/* A13 — additional questions from package */}
+                  {Object.entries(additionalAnswers).map(([orderIdxStr, answer]) => {
+                    const idx = parseInt(orderIdxStr) - 9;
+                    const q = additionalQuestions[idx];
+                    if (!q) return null;
+                    return (
+                      <div key={orderIdxStr} style={styles.reviewRow}>
+                        <span style={styles.reviewLabel}>{q.question_text}</span>
+                        <span style={styles.reviewValue}>
+                          {Array.isArray(answer) ? answer.join(", ") : answer}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
+
+              {/* E32 — No internet error */}
+              {submitError === "no_internet" && (
+                <div style={{ color: "#E53E3E", fontSize: "0.875rem", margin: "8px 0", textAlign: "center" as const }}>
+                  <p style={{ margin: "0 0 4px" }}>No internet connection. Please check your connection and try again.</p>
+                  <p style={{ margin: "0 0 8px", color: "#717782", fontSize: "0.8rem" }}>
+                    Do not close this tab — your report data will be lost.
+                  </p>
+                  <button
+                    style={{ color: "#0468B1", background: "none", border: "none", textDecoration: "underline", cursor: "pointer", fontSize: "0.875rem" }}
+                    onClick={() => void handleSubmit()}
+                  >Retry</button>
+                </div>
+              )}
+
+              {/* E35 — Timeout error */}
+              {submitError === "timeout" && (
+                <div style={{ color: "#E53E3E", fontSize: "0.875rem", margin: "8px 0", textAlign: "center" as const }}>
+                  <p style={{ margin: "0 0 8px" }}>This is taking longer than expected. Please try again.</p>
+                  <button
+                    style={{ color: "#0468B1", background: "none", border: "none", textDecoration: "underline", cursor: "pointer", fontSize: "0.875rem" }}
+                    onClick={() => void handleSubmit()}
+                  >Retry</button>
+                </div>
+              )}
+
+              {submitError === "server_error" && error && (
+                <p style={styles.error}>{error}</p>
+              )}
             </div>
-
-            <div style={styles.reviewSection}>
-              <div style={styles.reviewSectionHeader}>
-                <span style={styles.reviewSectionTitle}>Questions</span>
-                <button style={styles.editLink} onClick={() => { setEditingFromReview(true); setDamageQuestion(1); setStep("damage"); }}>Edit</button>
-              </div>
-              <div style={styles.reviewCard}>
-                <div style={styles.reviewRow}>
-                  <span style={styles.reviewLabel}>Damage Level</span>
-                  <span style={styles.reviewValue}>{DAMAGE_LABELS[damageLevel] ?? damageLevel}</span>
-                </div>
-                <div style={styles.reviewRow}>
-                  <span style={styles.reviewLabel}>Infrastructure</span>
-                  <span style={styles.reviewValue}>{infrastructureTypes.map((v) => INFRA_LABELS[v] ?? v).join(", ")}</span>
-                </div>
-                <div style={styles.reviewRow}>
-                  <span style={styles.reviewLabel}>Infrastructure Name</span>
-                  <span style={styles.reviewValue}>{infrastructureName}</span>
-                </div>
-                <div style={styles.reviewRow}>
-                  <span style={styles.reviewLabel}>Disaster Type</span>
-                  <span style={styles.reviewValue}>{DISASTER_LABELS[disasterType] ?? disasterType}</span>
-                </div>
-                <div style={styles.reviewRow}>
-                  <span style={styles.reviewLabel}>Debris Blocking</span>
-                  <span style={styles.reviewValue}>{DEBRIS_LABELS[debrisBlocking] ?? debrisBlocking}</span>
-                </div>
-                <div style={styles.reviewRow}>
-                  <span style={styles.reviewLabel}>Electricity</span>
-                  <span style={styles.reviewValue}>{ELECTRICITY_LABELS[electricityCondition] ?? electricityCondition}</span>
-                </div>
-                <div style={styles.reviewRow}>
-                  <span style={styles.reviewLabel}>Health Services</span>
-                  <span style={styles.reviewValue}>{HEALTH_LABELS[healthServicesCondition] ?? healthServicesCondition}</span>
-                </div>
-                <div style={styles.reviewRow}>
-                  <span style={styles.reviewLabel}>Pressing Needs</span>
-                  <span style={styles.reviewValue}>
-                    {pressingNeeds.map((v) => PRESSING_NEEDS_LABELS[v] ?? v).join(", ")}
-                    {pressingNeeds.includes("other") && pressingNeedsOther ? ` (${pressingNeedsOther})` : ""}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {!navigator.onLine && (
-              <div style={styles.offlineNotice}>
-                📵 You are offline. This report will be saved and submitted when you reconnect.
-              </div>
-            )}
-
-            {error && <p style={styles.error}>{error}</p>}
-
-            <div style={styles.navButtons}>
-              <button style={styles.secondaryButton} onClick={() => { setDamageQuestion(8); setStep("damage"); }}>
-                ← Back
-              </button>
-              <button
-                style={{ ...styles.primaryButton, opacity: (preparingPhotos || submitting) ? 0.7 : 1, flex: 1 }}
-                onClick={handleSubmit}
-                disabled={preparingPhotos || submitting}
-              >
-                {preparingPhotos ? "Preparing photos…" : submitting ? t("report.submitting") : t("report.submit")}
-              </button>
-            </div>
-          </div>
-        )}
+          );
+        })()}
       </div>
+
+      {/* A3/I54 — Fixed submit bar: only shown on review step, always visible regardless of scroll */}
+      {step === "review" && (
+        <div style={{
+          position: "fixed" as const,
+          bottom: 0,
+          left: 0,
+          right: 0,
+          background: "#FFFFFF",
+          borderTop: "1px solid #E2E8F0",
+          padding: `12px 24px env(safe-area-inset-bottom, 12px)`,
+          display: "flex",
+          gap: 12,
+          zIndex: 10,
+        }}>
+          <button
+            style={styles.secondaryButton}
+            onClick={() => { setDamageQuestion(8); setStep("damage"); }}
+          >← Back</button>
+          <button
+            style={{
+              ...styles.primaryButton,
+              opacity: (preparingPhotos || submitting || photos.length === 0) ? 0.7 : 1,
+              flex: 1,
+            }}
+            onClick={() => void handleSubmit()}
+            disabled={preparingPhotos || submitting || photos.length === 0}
+          >
+            {preparingPhotos ? "Preparing photos…" : submitting ? t("report.submitting") : t("report.submit")}
+          </button>
+        </div>
+      )}
+
+      {/* Always-rendered replace file input — used from both photo step and review step */}
+      <input
+        ref={replaceInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp,image/heic,image/heif,image/bmp,image/tiff"
+        style={{ display: "none" }}
+        onChange={handleReplaceInputChange}
+      />
 
       {/* Camera preview overlay */}
       {cameraActive && (
@@ -2379,16 +2636,16 @@ export default function ReportPage() {
       {showDupeWarning && (
         <div style={styles.modalOverlay}>
           <div style={styles.modalBox}>
-            <h3 style={styles.modalTitle}>Report already submitted for this location</h3>
+            <h3 style={styles.modalTitle}>Possible duplicate report</h3>
             <p style={styles.modalBody}>
-              It looks like you may have already submitted a report for this building. Submitting again could create a duplicate. Are you sure you want to continue?
+              It looks like you have already submitted a report for this location. Are you sure you want to submit another?
             </p>
             <div style={{ display: "flex", gap: 12, marginTop: 8 }}>
               <button style={{ ...styles.secondaryButton, flex: 1 }} onClick={() => setShowDupeWarning(false)}>
-                Cancel
+                Go back
               </button>
-              <button style={{ ...styles.primaryButton, flex: 1 }} onClick={doSubmit}>
-                Submit Anyway
+              <button style={{ ...styles.primaryButton, flex: 1 }} onClick={() => void doSubmit(submissionSubmittedAt)}>
+                Submit anyway
               </button>
             </div>
           </div>
@@ -2402,7 +2659,7 @@ export default function ReportPage() {
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
-    minHeight: "100vh",
+    minHeight: "100dvh",
     background: "#f4f6f9",
     display: "flex",
     flexDirection: "column",
@@ -2816,7 +3073,7 @@ const styles: Record<string, React.CSSProperties> = {
     padding: "40px 24px",
     gap: 20,
     textAlign: "center",
-    minHeight: "100vh",
+    minHeight: "100dvh",
   },
   successTitle: {
     fontSize: 22,
@@ -2935,7 +3192,7 @@ const styles: Record<string, React.CSSProperties> = {
     padding: "40px 24px",
     gap: 20,
     textAlign: "center",
-    minHeight: "100vh",
+    minHeight: "100dvh",
   },
   centeredError: {
     fontSize: 16,
