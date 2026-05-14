@@ -19,6 +19,10 @@ type SaveStatus = "idle" | "success" | "error";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+function isMobileBrowser(): boolean {
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+}
+
 function calcCompletion(
   firstName: string,
   lastName: string,
@@ -93,6 +97,11 @@ export default function ProfilePage() {
   const [phone, setPhone] = useState("");
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
 
+  // C5/C6: Photo upload state
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+
   // UI state
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -129,13 +138,13 @@ export default function ProfilePage() {
     };
   }, []);
 
-  const completion = calcCompletion(firstName, lastName, email, phone, photoUrl);
+  const displayPhoto = photoPreview ?? photoUrl;
+  const completion = calcCompletion(firstName, lastName, email, phone, displayPhoto);
   const initials = getInitials(firstName, lastName);
 
   // ── Handlers ────────────────────────────────────────────────────────────────
 
   const handlePhoneChange = (value: string) => {
-    // Allow digits, spaces, +, -, (, )
     setPhone(value.replace(/[^\d\s+\-()]/g, ""));
   };
 
@@ -144,6 +153,17 @@ export default function ProfilePage() {
     if (emailError && (value === "" || EMAIL_RE.test(value))) {
       setEmailError("");
     }
+  };
+
+  // C5/C6: Photo file selection handler
+  const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const objectUrl = URL.createObjectURL(file);
+    setPhotoPreview(objectUrl);
+    setPhotoFile(file);
+    // Reset input so the same file can be re-selected
+    e.target.value = "";
   };
 
   const handleSave = async () => {
@@ -158,6 +178,20 @@ export default function ProfilePage() {
     setSaveStatus("idle");
 
     try {
+      // C5/C6: Upload photo first if a new one was selected
+      if (photoFile) {
+        const formData = new FormData();
+        formData.append("photo", photoFile);
+        const photoRes = await api.post<{ profile_photo_url: string }>(
+          `/api/reporters/${reporterId}/photo`,
+          formData,
+          { headers: { "Content-Type": "multipart/form-data" } }
+        );
+        setPhotoUrl(photoRes.data.profile_photo_url);
+        setPhotoFile(null);
+        setPhotoPreview(null);
+      }
+
       await api.patch(`/api/reporters/${reporterId}`, {
         first_name: firstName.trim() || null,
         last_name: lastName.trim() || null,
@@ -174,7 +208,45 @@ export default function ProfilePage() {
     }
   };
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  // ── C8: Anonymous reporter gate — shown after all hooks ───────────────────
+
+  if (!reporterId) {
+    return (
+      <div style={s.page}>
+        <header style={s.header}>
+          <button style={s.backBtn} onClick={() => navigate("/")} aria-label="Back">
+            <IconBack />
+          </button>
+          <span style={s.headerTitle}>My Profile</span>
+          <div style={{ width: 36 }} />
+        </header>
+        <div style={s.anonGate}>
+          <p style={s.anonGateHeading}>
+            Create a free account to save your profile and earn badges.
+          </p>
+          <p style={s.anonGateSubtext}>
+            You can still submit reports anonymously without an account.
+          </p>
+          <div style={s.anonGateBtns}>
+            <button
+              onClick={() => navigate("/login")}
+              style={s.loginBtn}
+            >
+              Log In
+            </button>
+            <button
+              onClick={() => navigate("/login?mode=register")}
+              style={s.registerBtn}
+            >
+              Create Account
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Loading spinner ────────────────────────────────────────────────────────
 
   if (loading) {
     return (
@@ -192,6 +264,8 @@ export default function ProfilePage() {
       </div>
     );
   }
+
+  // ── Full profile form ──────────────────────────────────────────────────────
 
   return (
     <div style={s.page}>
@@ -222,20 +296,29 @@ export default function ProfilePage() {
         {/* ── Avatar ── */}
         <div style={s.avatarSection}>
           <div style={s.avatarCircle}>
-            {photoUrl ? (
-              <img src={photoUrl} alt="Profile" style={s.avatarImg} />
+            {displayPhoto ? (
+              <img src={displayPhoto} alt="Profile" style={s.avatarImg} />
             ) : initials ? (
               <span style={s.avatarInitials}>{initials}</span>
             ) : (
               <IconPerson />
             )}
           </div>
+          {/* C5/C6: Real photo upload — file picker on desktop, camera on mobile */}
           <button
             style={s.editPhotoBtn}
-            onClick={() => alert("Photo upload coming soon")}
+            onClick={() => photoInputRef.current?.click()}
           >
             Edit photo
           </button>
+          <input
+            ref={photoInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            capture={isMobileBrowser() ? "environment" : undefined}
+            style={{ display: "none" }}
+            onChange={handlePhotoSelect}
+          />
         </div>
 
         {/* ── Profile fields ── */}
@@ -371,6 +454,55 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: 18,
     fontWeight: 700,
   },
+  // C8: Anonymous gate styles
+  anonGate: {
+    flex: 1,
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    textAlign: "center",
+    padding: "40px 24px",
+  },
+  anonGateHeading: {
+    color: "#1A2B4A",
+    fontSize: "1rem",
+    fontWeight: 600,
+    margin: "0 0 8px",
+    lineHeight: 1.4,
+  },
+  anonGateSubtext: {
+    color: "#718096",
+    fontSize: "0.875rem",
+    margin: "0 0 24px",
+    lineHeight: 1.5,
+  },
+  anonGateBtns: {
+    display: "flex",
+    gap: 12,
+    justifyContent: "center",
+    flexWrap: "wrap",
+  },
+  loginBtn: {
+    background: "#0468B1",
+    color: "#fff",
+    border: "none",
+    borderRadius: 8,
+    padding: "12px 24px",
+    fontWeight: 700,
+    cursor: "pointer",
+    fontSize: 15,
+  },
+  registerBtn: {
+    background: "transparent",
+    color: "#0468B1",
+    border: "1px solid #0468B1",
+    borderRadius: 8,
+    padding: "12px 24px",
+    fontWeight: 600,
+    cursor: "pointer",
+    fontSize: 15,
+  },
   loadingWrap: {
     flex: 1,
     display: "flex",
@@ -392,7 +524,6 @@ const s: Record<string, React.CSSProperties> = {
     flexDirection: "column",
     gap: 20,
   },
-  // Completion bar
   completionWrap: {
     display: "flex",
     flexDirection: "column",
@@ -415,7 +546,6 @@ const s: Record<string, React.CSSProperties> = {
     background: "#0468B1",
     borderRadius: 4,
   },
-  // Avatar
   avatarSection: {
     display: "flex",
     flexDirection: "column",
@@ -455,7 +585,6 @@ const s: Record<string, React.CSSProperties> = {
     textDecoration: "underline",
     textUnderlineOffset: 3,
   },
-  // Form card
   card: {
     background: "#fff",
     borderRadius: 12,
@@ -496,7 +625,6 @@ const s: Record<string, React.CSSProperties> = {
     background: "#F0F4F8",
     marginLeft: 16,
   },
-  // Save
   saveBtn: {
     width: "100%",
     padding: "15px",

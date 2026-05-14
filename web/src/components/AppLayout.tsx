@@ -190,6 +190,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 {([
                   { label: "Reporter Profile", path: "/profile" },
                   { label: "Badges and Certifications", path: "/badges" },
+                  { label: "About Crisis Reporter", path: "/about" },
                   { label: "Settings", path: "/settings" },
                 ] as { label: string; path: string }[]).map(({ label, path }) => (
                   <button

@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import api from "../services/api";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -197,12 +198,19 @@ function lsKey(part: Part, id?: string): string {
   return "cr_safety_partC";
 }
 
+// B8: Use localStorage for logged-in reporters, sessionStorage for anonymous.
+function getStorage(): Storage {
+  return localStorage.getItem("cr_reporter_id") ? localStorage : sessionStorage;
+}
+
+// B8: Check both storages so progress is visible regardless of login state at time of completion.
 function isComplete(part: Part, id?: string): boolean {
-  return localStorage.getItem(lsKey(part, id)) === "1";
+  const key = lsKey(part, id);
+  return localStorage.getItem(key) === "1" || sessionStorage.getItem(key) === "1";
 }
 
 function markComplete(part: Part, id?: string) {
-  localStorage.setItem(lsKey(part, id), "1");
+  getStorage().setItem(lsKey(part, id), "1");
 }
 
 function isAllComplete(): boolean {
@@ -229,10 +237,24 @@ function SlideViewer({ slides, totalLabel, completionKey, onComplete, onBack, ti
   const isLast = current === total - 1;
   const isDo = slide.title.startsWith("Do:");
 
-  function handleComplete() {
+  // B7: Backend write for logged-in reporters; localStorage/sessionStorage write for all.
+  async function handleComplete() {
     markComplete(completionKey.part, completionKey.id);
     setDone(true);
     onComplete();
+
+    const reporterId = localStorage.getItem("cr_reporter_id");
+    if (reporterId) {
+      const partKey = completionKey.id
+        ? `${completionKey.part}_${completionKey.id}`
+        : completionKey.part;
+      try {
+        await api.post(`/api/reporters/${reporterId}/safety-progress`, {
+          part_completed: partKey,
+          completed_at: new Date().toISOString(),
+        });
+      } catch { /* silent fail — storage write already succeeded */ }
+    }
   }
 
   return (
@@ -403,14 +425,12 @@ export default function SafetyTipsPage() {
   if (activePart === "B") {
     return (
       <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: "#fff", maxWidth: 480, margin: "0 auto" }}>
-        {/* Header */}
         <div style={{ background: BLUE, padding: "14px 16px", display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
           <button onClick={() => navigate("/")} style={{ background: "none", border: "none", cursor: "pointer", padding: 4, display: "flex" }}>
             <IconBack />
           </button>
           <span style={{ color: "#fff", fontWeight: 700, fontSize: 18, flex: 1 }}>Safety Tips</span>
         </div>
-        {/* Tabs */}
         <div style={{ display: "flex", background: "#fff", borderBottom: "1px solid #e2e8f0", flexShrink: 0 }}>
           {tabs.map((tab) => (
             <button
@@ -451,14 +471,12 @@ export default function SafetyTipsPage() {
   if (activePart === "C") {
     return (
       <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: "#fff", maxWidth: 480, margin: "0 auto" }}>
-        {/* Header */}
         <div style={{ background: BLUE, padding: "14px 16px", display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
           <button onClick={() => navigate("/")} style={{ background: "none", border: "none", cursor: "pointer", padding: 4, display: "flex" }}>
             <IconBack />
           </button>
           <span style={{ color: "#fff", fontWeight: 700, fontSize: 18, flex: 1 }}>Safety Tips</span>
         </div>
-        {/* Tabs */}
         <div style={{ display: "flex", background: "#fff", borderBottom: "1px solid #e2e8f0", flexShrink: 0 }}>
           {tabs.map((tab) => (
             <button
@@ -497,6 +515,9 @@ export default function SafetyTipsPage() {
 
   // Part A — disaster list
   const partADone = DISASTERS.filter((d) => isComplete("A", d.id)).length;
+
+  // completionRevision is read here to ensure re-render after markComplete
+  void completionRevision;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: "#f7fafc", maxWidth: 480, margin: "0 auto" }}>
@@ -604,3 +625,6 @@ export default function SafetyTipsPage() {
     </div>
   );
 }
+
+// Suppress unused import warning — BLUE_DARK is kept for potential use in future slide themes
+void BLUE_DARK;

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "../stores/authStore";
 import api from "../services/api";
 
@@ -14,6 +15,11 @@ interface ReporterReport {
   } | null;
   photo_count: number;
   first_photo_url: string | null;
+  status?: string;
+  flag_status?: string;
+  disaster_type?: string;
+  infrastructure_name?: string;
+  building_name?: string;
 }
 
 interface SessionReport {
@@ -55,6 +61,7 @@ function convertSessionReport(s: SessionReport): ReporterReport {
     },
     photo_count: 0,
     first_photo_url: null,
+    status: "submitted",
   };
 }
 
@@ -74,11 +81,34 @@ function formatDate(dateStr: string): string {
   });
 }
 
+function formatDateTime(dateStr: string): string {
+  return new Date(dateStr).toLocaleString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function useWindowWidth(): number {
+  const [width, setWidth] = useState(window.innerWidth);
+  useEffect(() => {
+    const handler = () => setWidth(window.innerWidth);
+    window.addEventListener("resize", handler);
+    return () => window.removeEventListener("resize", handler);
+  }, []);
+  return width;
+}
+
 const PAGE_SIZE = 20;
 
 export default function MyReportsPage() {
   const { t } = useTranslation();
   const { reporterId } = useAuthStore();
+  const navigate = useNavigate();
+  const width = useWindowWidth();
+  const isDesktop = width > 768;
 
   const [reports, setReports] = useState<ReporterReport[]>([]);
   const [loading, setLoading] = useState(!!reporterId);
@@ -86,15 +116,14 @@ export default function MyReportsPage() {
   const [error, setError] = useState<string | null>(null);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [isSessionMode, setIsSessionMode] = useState(false);
+  const [selectedReport, setSelectedReport] = useState<ReporterReport | null>(null);
 
   const fetchReports = useCallback(async (cursor?: string) => {
     if (!reporterId) {
-      // No logged-in reporter — try session storage
       const raw = sessionStorage.getItem("cr_session_reports");
       if (raw) {
         try {
           const parsed: SessionReport[] = JSON.parse(raw);
-          // Newest first
           setReports([...parsed].reverse().map(convertSessionReport));
           setIsSessionMode(true);
         } catch { /* ignore malformed data */ }
@@ -142,6 +171,40 @@ export default function MyReportsPage() {
     ? "Submit your first report to get started."
     : "No reports submitted yet";
 
+  const statusText = (report: ReporterReport) =>
+    report.status === "submitted" ? "✓ Submitted" : (report.status ?? "Submitted");
+
+  const renderDetailFields = (report: ReporterReport) => (
+    <div style={styles.detailFields}>
+      <p style={styles.detailField}><strong>Location:</strong> {formatLocation(report)}</p>
+      <p style={styles.detailField}><strong>Damage Level:</strong> {DAMAGE_LABEL[report.damage_level] ?? report.damage_level}</p>
+      {report.disaster_type && <p style={styles.detailField}><strong>Disaster Type:</strong> {report.disaster_type}</p>}
+      <p style={styles.detailField}><strong>Date:</strong> {formatDateTime(report.submitted_at)}</p>
+      <p style={styles.detailField}><strong>Status:</strong> {statusText(report)}</p>
+      {report.infrastructure_name && <p style={styles.detailField}><strong>Infrastructure:</strong> {report.infrastructure_name}</p>}
+      {report.building_name && <p style={styles.detailField}><strong>Building:</strong> {report.building_name}</p>}
+    </div>
+  );
+
+  // A6: Mobile full-screen detail view
+  if (!isDesktop && selectedReport) {
+    return (
+      <div style={styles.container}>
+        <style>{`@keyframes cr-spin { to { transform: rotate(360deg); } }`}</style>
+        <div style={styles.header}>
+          <h1 style={styles.title}>{t("home.myReports")}</h1>
+        </div>
+        <div style={{ flex: 1, padding: "0 16px 32px" }}>
+          <button onClick={() => setSelectedReport(null)} style={styles.backBtn}>
+            ← Back to My Reports
+          </button>
+          <h3 style={styles.detailTitle}>Report Details</h3>
+          {renderDetailFields(selectedReport)}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={styles.container}>
       <style>{`@keyframes cr-spin { to { transform: rotate(360deg); } }`}</style>
@@ -150,6 +213,23 @@ export default function MyReportsPage() {
       </div>
 
       <div style={styles.content}>
+        {/* A3: Login prompt for anonymous reporters — always shown when not logged in */}
+        {!reporterId && (
+          <div style={styles.loginPrompt}>
+            <p style={styles.loginPromptText}>
+              Log in to see all your reports across sessions and devices.
+            </p>
+            <div style={styles.loginPromptBtns}>
+              <button onClick={() => navigate("/login")} style={styles.loginBtn}>
+                Log In
+              </button>
+              <button onClick={() => navigate("/login?mode=register")} style={styles.registerBtn}>
+                Create Account
+              </button>
+            </div>
+          </div>
+        )}
+
         {loading ? (
           <div style={styles.centred}>
             <div style={styles.spinner} />
@@ -174,31 +254,63 @@ export default function MyReportsPage() {
                 Showing reports from this session. Log in to see your full history.
               </p>
             )}
+
+            {/* A5: Desktop column headers */}
+            {isDesktop && (
+              <div style={styles.columnHeaders}>
+                <span>Location</span>
+                <span>Damage Level</span>
+                <span>Date</span>
+                <span>Status</span>
+              </div>
+            )}
+
             {reports.map((report) => {
               const color = DAMAGE_COLOR[report.damage_level] ?? "#999";
+              const label = DAMAGE_LABEL[report.damage_level] ?? report.damage_level;
+              const st = statusText(report);
+
+              if (isDesktop) {
+                return (
+                  <div
+                    key={report.id}
+                    style={styles.desktopRow}
+                    onClick={() => setSelectedReport(report)}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.background = "#F7FAFC"; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = "#fff"; }}
+                  >
+                    <span style={styles.desktopCell}>{formatLocation(report)}</span>
+                    <span>
+                      <span style={{ ...styles.damageBadge, background: color + "22", color }}>
+                        {label}
+                      </span>
+                    </span>
+                    <span style={styles.desktopCell}>{formatDate(report.submitted_at)}</span>
+                    <span style={{ ...styles.desktopCell, color: "#388e3c" }}>{st}</span>
+                  </div>
+                );
+              }
+
               return (
-                <div key={report.id} style={styles.card}>
+                <div
+                  key={report.id}
+                  style={styles.card}
+                  onClick={() => setSelectedReport(report)}
+                >
                   {report.first_photo_url ? (
-                    <img
-                      src={report.first_photo_url}
-                      alt="Report photo"
-                      style={styles.thumbnail}
-                    />
+                    <img src={report.first_photo_url} alt="Report photo" style={styles.thumbnail} />
                   ) : (
                     <div style={styles.thumbnailPlaceholder}>
                       <span style={{ fontSize: 28 }}>📷</span>
                     </div>
                   )}
                   <div style={styles.cardBody}>
-                    <span style={{
-                      ...styles.damageBadge,
-                      background: color + "22",
-                      color,
-                    }}>
-                      {DAMAGE_LABEL[report.damage_level] ?? report.damage_level}
+                    <span style={{ ...styles.damageBadge, background: color + "22", color }}>
+                      {label}
                     </span>
                     <p style={styles.cardDate}>{formatDate(report.submitted_at)}</p>
                     <p style={styles.cardLocation}>📍 {formatLocation(report)}</p>
+                    <span style={styles.cardStatus}>{st}</span>
                   </div>
                 </div>
               );
@@ -220,6 +332,15 @@ export default function MyReportsPage() {
           </div>
         )}
       </div>
+
+      {/* A5: Desktop right-side detail panel */}
+      {isDesktop && selectedReport && (
+        <div style={styles.detailPanel}>
+          <button onClick={() => setSelectedReport(null)} style={styles.detailClose}>×</button>
+          <h3 style={styles.detailTitle}>Report Details</h3>
+          {renderDetailFields(selectedReport)}
+        </div>
+      )}
     </div>
   );
 }
@@ -246,6 +367,45 @@ const styles: Record<string, React.CSSProperties> = {
     margin: "0 auto",
     width: "100%",
     boxSizing: "border-box",
+  },
+  loginPrompt: {
+    background: "#F0F4FF",
+    border: "1px solid #D0E4FF",
+    borderRadius: 12,
+    padding: "16px 20px",
+    marginBottom: 20,
+    textAlign: "center",
+  },
+  loginPromptText: {
+    color: "#1A2B4A",
+    fontSize: "0.9rem",
+    margin: "0 0 12px",
+  },
+  loginPromptBtns: {
+    display: "flex",
+    gap: 8,
+    justifyContent: "center",
+    flexWrap: "wrap",
+  },
+  loginBtn: {
+    background: "#0468B1",
+    color: "#fff",
+    border: "none",
+    borderRadius: 8,
+    padding: "10px 20px",
+    fontWeight: 700,
+    cursor: "pointer",
+    fontSize: 14,
+  },
+  registerBtn: {
+    background: "transparent",
+    color: "#0468B1",
+    border: "1px solid #0468B1",
+    borderRadius: 8,
+    padding: "10px 20px",
+    fontWeight: 600,
+    cursor: "pointer",
+    fontSize: 14,
   },
   centred: {
     display: "flex",
@@ -293,12 +453,39 @@ const styles: Record<string, React.CSSProperties> = {
     background: "#EDF2F7",
     borderRadius: 8,
   },
+  columnHeaders: {
+    display: "grid",
+    gridTemplateColumns: "2fr 1fr 1fr 1fr",
+    padding: "8px 16px",
+    borderBottom: "1px solid #E2E8F0",
+    color: "#717782",
+    fontSize: "0.75rem",
+    fontWeight: 700,
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+  },
+  desktopRow: {
+    display: "grid",
+    gridTemplateColumns: "2fr 1fr 1fr 1fr",
+    padding: "12px 16px",
+    background: "#fff",
+    borderRadius: 8,
+    cursor: "pointer",
+    alignItems: "center",
+    boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
+    transition: "background 0.15s",
+  },
+  desktopCell: {
+    fontSize: 13,
+    color: "#1A2B4A",
+  },
   card: {
     background: "#fff",
     borderRadius: 12,
     display: "flex",
     overflow: "hidden",
     boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+    cursor: "pointer",
   },
   thumbnail: {
     width: 88,
@@ -325,6 +512,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   damageBadge: {
     alignSelf: "flex-start",
+    display: "inline-block",
     padding: "3px 10px",
     borderRadius: 20,
     fontSize: 12,
@@ -332,6 +520,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   cardDate: { fontSize: 13, color: "#888", margin: 0 },
   cardLocation: { fontSize: 13, color: "#1A2B4A", margin: 0 },
+  cardStatus: { fontSize: 12, color: "#717782" },
   loadMoreBtn: {
     marginTop: 4,
     background: "#fff",
@@ -342,5 +531,55 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 600,
     color: "#0468B1",
     width: "100%",
+  },
+  detailPanel: {
+    position: "fixed",
+    top: 64,
+    right: 0,
+    width: 380,
+    height: "calc(100dvh - 64px)",
+    background: "#fff",
+    borderLeft: "1px solid #E2E8F0",
+    overflowY: "auto",
+    padding: 24,
+    zIndex: 20,
+    boxShadow: "-4px 0 16px rgba(0,0,0,0.08)",
+  },
+  detailClose: {
+    position: "absolute",
+    top: 16,
+    right: 16,
+    background: "none",
+    border: "none",
+    fontSize: 20,
+    cursor: "pointer",
+    color: "#717782",
+    lineHeight: 1,
+  },
+  detailTitle: {
+    color: "#1A2B4A",
+    margin: "0 0 16px",
+    fontSize: 17,
+    fontWeight: 700,
+  },
+  detailFields: {
+    fontSize: "0.9rem",
+    color: "#1A2B4A",
+    lineHeight: 1.6,
+  },
+  detailField: {
+    margin: "0 0 10px",
+  },
+  backBtn: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    background: "none",
+    border: "none",
+    color: "#0468B1",
+    fontSize: "0.9rem",
+    cursor: "pointer",
+    padding: "16px 0",
+    fontWeight: 600,
   },
 };

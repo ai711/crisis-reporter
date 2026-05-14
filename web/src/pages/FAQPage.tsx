@@ -197,6 +197,23 @@ export default function FAQPage() {
             </div>
           );
         })}
+
+        {/* E3: Contact Support link */}
+        <div style={{
+          borderTop: "1px solid #E2E8F0",
+          textAlign: "center",
+          padding: "24px 20px 40px",
+        }}>
+          <p style={{ color: "#718096", fontSize: "0.875rem", margin: "0 0 8px" }}>
+            Can't find what you're looking for?
+          </p>
+          <a
+            href="mailto:support@crisisreporter.org"
+            style={{ color: "#0468B1", fontWeight: 600, fontSize: "0.9rem", textDecoration: "underline" }}
+          >
+            Contact Support
+          </a>
+        </div>
       </div>
     </div>
   );

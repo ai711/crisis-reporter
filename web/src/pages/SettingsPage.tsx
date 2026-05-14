@@ -143,7 +143,7 @@ export default function SettingsPage() {
     setModal("country");
   };
 
-  const handleCountrySelect = (country: Country) => {
+  const handleCountrySelect = async (country: Country) => {
     if (!country.is_active) {
       setInactiveCountry(country);
       return;
@@ -153,6 +153,23 @@ export default function SettingsPage() {
     setCurrentCountryCode(country.code);
     setInactiveCountry(null);
     setModal(null);
+
+    // F3: Silent question package version check for the newly selected country.
+    try {
+      const cachedPkg = localStorage.getItem("cr_question_package");
+      const cachedVersion = cachedPkg ? JSON.parse(cachedPkg).version : null;
+      const langCode = localStorage.getItem("cr_language") || "en";
+
+      const res = await api.get<{ version: string; [key: string]: unknown }>(
+        "/api/question-packages/active",
+        { params: { lang: langCode, country: country.code } }
+      );
+      const data = res.data;
+
+      if (data.version !== cachedVersion) {
+        try { localStorage.setItem("cr_question_package", JSON.stringify(data)); } catch { /* storage full — silent */ }
+      }
+    } catch { /* network unavailable — silent, existing package remains */ }
   };
 
   const handleLanguageSelect = async (code: string) => {
