@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import Optional, List
 
 from app.database import get_db
@@ -31,6 +31,8 @@ class LocationData(BaseModel):
 
 
 class ReportSubmitRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     # Required
     damage_level: str  # minimal, partial, complete
     infrastructure_types: List[str]  # array — matches frontend field name
@@ -41,9 +43,15 @@ class ReportSubmitRequest(BaseModel):
     # crisis_id is optional — if omitted, the first active crisis is used
     crisis_id: Optional[str] = None
 
-    # Optional
+    # Both field names accepted: online web path sends local_report_id,
+    # offline queue sends local_id — resolved to the same DB column
+    local_report_id: Optional[str] = None
     local_id: Optional[str] = None
     reporter_id: Optional[str] = None
+
+    @property
+    def resolved_local_id(self) -> Optional[str]:
+        return self.local_report_id or self.local_id
     building_id: Optional[str] = None
     building_name: Optional[str] = None
     language_code: str = "en"
@@ -175,12 +183,27 @@ async def submit_report(
     if reporter:
         reporter_id = reporter.id
     elif request.reporter_id:
-        result = await db.execute(
-            select(Reporter).where(Reporter.id == request.reporter_id)
-        )
-        reporter = result.scalar_one_or_none()
-        if reporter:
-            reporter_id = reporter.id
+        # Try integer display_id first (new sessions), then UUID (old sessions)
+        matched = None
+        try:
+            display_id_int = int(request.reporter_id)
+            r = await db.execute(
+                select(Reporter).where(Reporter.display_id == display_id_int)
+            )
+            matched = r.scalar_one_or_none()
+        except (ValueError, TypeError):
+            pass
+        if matched is None:
+            try:
+                r = await db.execute(
+                    select(Reporter).where(Reporter.id == request.reporter_id)
+                )
+                matched = r.scalar_one_or_none()
+            except Exception:
+                pass
+        if matched:
+            reporter = matched
+            reporter_id = matched.id
 
 # Encrypt IP address
     import base64
@@ -189,7 +212,7 @@ async def submit_report(
 
     # Create report with initial Grey flag
     report = Report(
-        local_id=request.local_id,
+        local_id=request.resolved_local_id,
         crisis_id=resolved_crisis_id,
         reporter_id=reporter_id,
         building_id=request.building_id,

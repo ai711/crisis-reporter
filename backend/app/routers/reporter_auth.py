@@ -2,7 +2,7 @@ import hashlib
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, text
 from pydantic import BaseModel
 
 from app.database import get_db
@@ -29,7 +29,7 @@ class AnonymousSessionRequest(BaseModel):
 
 
 class AnonymousSessionResponse(BaseModel):
-    reporter_id: str
+    reporter_id: int
     is_verified: bool = False
 
 
@@ -54,7 +54,7 @@ class TokenResponse(BaseModel):
     refresh_token: str
     token_type: str
     expires_in: int
-    reporter_id: str
+    reporter_id: int
     is_verified: bool
 
 
@@ -87,7 +87,7 @@ async def create_anonymous_session(
         reporter.last_active_at = datetime.now(timezone.utc)
         await db.commit()
         return AnonymousSessionResponse(
-            reporter_id=str(reporter.id),
+            reporter_id=reporter.display_id,
             is_verified=reporter.is_verified,
         )
 
@@ -102,11 +102,14 @@ async def create_anonymous_session(
         last_active_at=datetime.now(timezone.utc),
     )
     db.add(reporter)
+    await db.flush()
+    seq_result = await db.execute(text("SELECT nextval('reporter_display_id_seq')"))
+    reporter.display_id = seq_result.scalar()
     await db.commit()
     await db.refresh(reporter)
 
     return AnonymousSessionResponse(
-        reporter_id=str(reporter.id),
+        reporter_id=reporter.display_id,
         is_verified=False,
     )
 
@@ -165,6 +168,9 @@ async def register(
             last_active_at=datetime.now(timezone.utc),
         )
         db.add(reporter)
+        await db.flush()
+        seq_result = await db.execute(text("SELECT nextval('reporter_display_id_seq')"))
+        reporter.display_id = seq_result.scalar()
         await db.commit()
         await db.refresh(reporter)
 
@@ -176,7 +182,7 @@ async def register(
 
     return TokenResponse(
         **tokens,
-        reporter_id=str(reporter.id),
+        reporter_id=reporter.display_id,
         is_verified=True,
     )
 
@@ -223,7 +229,7 @@ async def login(
 
     return TokenResponse(
         **tokens,
-        reporter_id=str(reporter.id),
+        reporter_id=reporter.display_id,
         is_verified=True,
     )
 
@@ -276,6 +282,6 @@ async def refresh_token(
 
     return {
         **tokens,
-        "reporter_id": str(reporter.id),
+        "reporter_id": reporter.display_id,
         "is_verified": reporter.is_verified,
     }

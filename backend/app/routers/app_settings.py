@@ -11,6 +11,14 @@ from app.services.dependencies import get_current_dashboard_user, require_supera
 
 router = APIRouter(prefix="/api/settings", tags=["Settings"])
 
+
+@router.get("/public")
+async def get_public_settings(db: AsyncSession = Depends(get_db)):
+    """Returns non-sensitive settings readable without authentication."""
+    setting = await _get_setting(db, "general")
+    support_email = setting.get("support_email", "") if isinstance(setting, dict) else ""
+    return {"support_email": support_email}
+
 # ── Default values ────────────────────────────────────────────────────────────
 
 DEFAULTS: dict[str, Any] = {

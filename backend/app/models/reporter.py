@@ -13,6 +13,11 @@ class Reporter(Base):
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
 
+    # Human-readable sequential display ID (e.g. 1, 2, 3) — assigned via DB sequence
+    display_id: Mapped[int | None] = mapped_column(
+        Integer, nullable=True, unique=True, index=True
+    )
+
     # Device identity
     device_id_encrypted: Mapped[bytes | None] = mapped_column(
         LargeBinary, nullable=True

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 
 const BLUE = "#0468B1";
@@ -7,49 +7,6 @@ interface FAQItem {
   q: string;
   a: string;
 }
-
-const FAQS: FAQItem[] = [
-  {
-    q: "How do I submit a report?",
-    a: 'Tap "Report an Incident" on the Home screen. You will be guided through 4 steps — take or upload a photo, confirm your location, answer damage assessment questions, then review and submit. At least one photo is required.',
-  },
-  {
-    q: "Do I need an internet connection to submit a report?",
-    a: "No. If you are offline your report will be saved to a queue on your device and sent automatically when internet returns. You can see queued reports in My Reports.",
-  },
-  {
-    q: "How do I enable GPS on my device?",
-    a: "On most devices go to Settings, then Location or Privacy, and enable Location Services. In your browser you may need to allow location access when prompted. GPS helps us pinpoint the exact building affected.",
-  },
-  {
-    q: "Can I submit a report anonymously?",
-    a: "Yes. You do not need to create an account or fill in any profile details to submit a report. Adding your email or phone number is optional and links your reports to your profile.",
-  },
-  {
-    q: "What happens to my report after I submit it?",
-    a: "Your report is received by UNDP staff who review it for accuracy. Verified reports are used to coordinate crisis response and damage assessment. Your identity is never shared publicly.",
-  },
-  {
-    q: "How do I earn a Safety Training badge?",
-    a: "Complete all three parts of Safety Tips — Part A covers all 9 disaster types, Part B covers reporting guidelines, Part C covers first aid. Then add an email or phone number to your profile. The badge is awarded automatically.",
-  },
-  {
-    q: "What if my country is not in the list?",
-    a: "Crisis Reporter is currently operational in countries where UNDP is actively responding to a crisis. If your country is not listed it means UNDP has not yet activated it. Check back during an active crisis event.",
-  },
-  {
-    q: "How do I contact support?",
-    a: "Email us at support@crisisreporter.org — we will respond within 48 hours.",
-  },
-  {
-    q: "Can I edit or delete a report after submitting?",
-    a: "Reports cannot be edited after submission. If you submitted a report in error please contact support with the date and location of the report.",
-  },
-  {
-    q: "Is my data secure?",
-    a: "Yes. All data is transmitted over encrypted connections and stored securely. Photos are anonymised before storage. Your personal details are never shared with third parties.",
-  },
-];
 
 function IconBack() {
   return (
@@ -93,6 +50,59 @@ function IconChevron({ expanded }: { expanded: boolean }) {
 export default function FAQPage() {
   const navigate = useNavigate();
   const [openIndex, setOpenIndex] = useState<number | null>(null);
+  const [supportEmail, setSupportEmail] = useState("support@crisisreporter.org");
+
+  useEffect(() => {
+    fetch("/api/settings/public")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data?.support_email) setSupportEmail(data.support_email);
+      })
+      .catch(() => {});
+  }, []);
+
+  const FAQS: FAQItem[] = [
+    {
+      q: "How do I submit a report?",
+      a: 'Tap "Report an Incident" on the Home screen. You will be guided through 4 steps — take or upload a photo, confirm your location, answer damage assessment questions, then review and submit. At least one photo is required.',
+    },
+    {
+      q: "Do I need an internet connection to submit a report?",
+      a: "No. If you are offline your report will be saved to a queue on your device and sent automatically when internet returns. You can see queued reports in My Reports.",
+    },
+    {
+      q: "How do I enable GPS on my device?",
+      a: "On most devices go to Settings, then Location or Privacy, and enable Location Services. In your browser you may need to allow location access when prompted. GPS helps us pinpoint the exact building affected.",
+    },
+    {
+      q: "Can I submit a report anonymously?",
+      a: "Yes. You do not need to create an account or fill in any profile details to submit a report. Adding your email or phone number is optional and links your reports to your profile.",
+    },
+    {
+      q: "What happens to my report after I submit it?",
+      a: "Your report is received by UNDP staff who review it for accuracy. Verified reports are used to coordinate crisis response and damage assessment. Your identity is never shared publicly.",
+    },
+    {
+      q: "How do I earn a Safety Training badge?",
+      a: "Complete all three parts of Safety Tips — Part A covers all 9 disaster types, Part B covers reporting guidelines, Part C covers first aid. Then add an email or phone number to your profile. The badge is awarded automatically.",
+    },
+    {
+      q: "What if my country is not in the list?",
+      a: "Crisis Reporter is currently operational in countries where UNDP is actively responding to a crisis. If your country is not listed it means UNDP has not yet activated it. Check back during an active crisis event.",
+    },
+    {
+      q: "How do I contact support?",
+      a: `Email us at ${supportEmail} — we will respond within 48 hours.`,
+    },
+    {
+      q: "Can I edit or delete a report after submitting?",
+      a: "Reports cannot be edited after submission. If you submitted a report in error please contact support with the date and location of the report.",
+    },
+    {
+      q: "Is my data secure?",
+      a: "Yes. All data is transmitted over encrypted connections and stored securely. Photos are anonymised before storage. Your personal details are never shared with third parties.",
+    },
+  ];
 
   function toggle(i: number) {
     setOpenIndex((prev) => (prev === i ? null : i));
@@ -208,7 +218,7 @@ export default function FAQPage() {
             Can't find what you're looking for?
           </p>
           <a
-            href="mailto:support@crisisreporter.org"
+            href={`mailto:${supportEmail}`}
             style={{ color: "#0468B1", fontWeight: 600, fontSize: "0.9rem", textDecoration: "underline" }}
           >
             Contact Support

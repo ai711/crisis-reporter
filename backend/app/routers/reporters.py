@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, text
 from pydantic import BaseModel
 
 from app.database import get_db
@@ -23,7 +23,7 @@ class RegisterRequest(BaseModel):
 
 
 class RegisterResponse(BaseModel):
-    reporter_id: str
+    reporter_id: int
     platform: str
 
 
@@ -37,7 +37,7 @@ class LoginResponse(BaseModel):
     refresh_token: str
     token_type: str
     expires_in: int
-    reporter_id: str
+    reporter_id: int
     is_verified: bool
 
 
@@ -63,7 +63,7 @@ async def register_anonymous(
         existing.last_active_at = datetime.now(timezone.utc)
         await db.commit()
         return RegisterResponse(
-            reporter_id=str(existing.id),
+            reporter_id=existing.display_id,
             platform=existing.platform,
         )
 
@@ -77,11 +77,14 @@ async def register_anonymous(
         last_active_at=datetime.now(timezone.utc),
     )
     db.add(reporter)
+    await db.flush()
+    seq_result = await db.execute(text("SELECT nextval('reporter_display_id_seq')"))
+    reporter.display_id = seq_result.scalar()
     await db.commit()
     await db.refresh(reporter)
 
     return RegisterResponse(
-        reporter_id=str(reporter.id),
+        reporter_id=reporter.display_id,
         platform=reporter.platform,
     )
 
@@ -129,6 +132,6 @@ async def login(
 
     return LoginResponse(
         **tokens,
-        reporter_id=str(reporter.id),
+        reporter_id=reporter.display_id,
         is_verified=True,
     )
