@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from sqlalchemy import (
     String, DateTime, Text, Integer, Float,
-    Boolean, ForeignKey, Index
+    Boolean, ForeignKey, Index, JSON
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID, ARRAY
@@ -45,6 +45,16 @@ class Report(Base):
     location_address: Mapped[str | None] = mapped_column(Text, nullable=True)
     location_landmark: Mapped[str | None] = mapped_column(Text, nullable=True)
     location_building_name: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # BE-03 — Chapter 5 extended location fields
+    building_centroid_lat: Mapped[float | None] = mapped_column(Float, nullable=True)
+    building_centroid_lng: Mapped[float | None] = mapped_column(Float, nullable=True)
+    building_name_osm: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    building_name_reporter: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    location_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    location_entry_method: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    location_internet_available: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    gps_denied: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
 
     # Damage assessment
     damage_level: Mapped[str] = mapped_column(
@@ -92,6 +102,15 @@ class Report(Base):
     )
     translation_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
+    # BE-05 — Chapter 6 structured question answers and precise version fields
+    question_answers: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    question_package_content_version: Mapped[str | None] = mapped_column(
+        String(50), nullable=True
+    )
+    question_package_translation_version: Mapped[str | None] = mapped_column(
+        String(50), nullable=True
+    )
+
     # MCC data — Android only
     mcc: Mapped[str | None] = mapped_column(String(10), nullable=True)
     mnc: Mapped[str | None] = mapped_column(String(10), nullable=True)
@@ -101,6 +120,16 @@ class Report(Base):
     ip_address_encrypted: Mapped[bytes | None] = mapped_column(
         String(500), nullable=True
     )
+
+    # BE-02 — Chapter 4 submission timing and photo metadata
+    submission_started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    submission_submitted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    photo_metadata: Mapped[str | None] = mapped_column(Text, nullable=True)
+    photo_exif_data: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Offline submission tracking
     was_queued: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

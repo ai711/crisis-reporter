@@ -1,13 +1,18 @@
+import uuid
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, text
 from pydantic import BaseModel
+from typing import Optional
 
 from app.database import get_db
 from app.models.reporter import Reporter
+from app.models.safety_progress import SafetyProgress
 from app.services.auth import verify_password, create_token_pair
 from app.services.encryption import encrypt_field, hash_field
+from app.services.dependencies import get_current_reporter
+from app.services.storage import storage_service
 
 router = APIRouter(prefix="/api/reporters", tags=["Reporters"])
 
@@ -39,6 +44,32 @@ class LoginResponse(BaseModel):
     expires_in: int
     reporter_id: int
     is_verified: bool
+
+
+class SafetyProgressRequest(BaseModel):
+    part_completed: str   # "A", "B", or "C"
+    completed_at: str     # ISO datetime string
+
+
+async def _get_reporter_by_id(reporter_id: str, db: AsyncSession) -> Optional[Reporter]:
+    """Look up reporter by display_id (integer) or UUID (backward compat)."""
+    try:
+        display_id_int = int(reporter_id)
+        result = await db.execute(
+            select(Reporter).where(Reporter.display_id == display_id_int)
+        )
+        reporter = result.scalar_one_or_none()
+        if reporter:
+            return reporter
+    except (ValueError, TypeError):
+        pass
+    try:
+        result = await db.execute(
+            select(Reporter).where(Reporter.id == reporter_id)
+        )
+        return result.scalar_one_or_none()
+    except Exception:
+        return None
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
@@ -135,3 +166,107 @@ async def login(
         reporter_id=reporter.display_id,
         is_verified=True,
     )
+
+
+# ── Safety progress ───────────────────────────────────────────────────────────
+
+@router.post("/{reporter_id}/safety-progress")
+async def record_safety_progress(
+    reporter_id: str,
+    body: SafetyProgressRequest,
+    db: AsyncSession = Depends(get_db),
+    current_reporter: Reporter = Depends(get_current_reporter),
+):
+    """Record completion of one Safety Tips part (A, B, or C).
+    Upserts — re-completing a part updates the timestamp."""
+    reporter = await _get_reporter_by_id(reporter_id, db)
+    if not reporter or reporter.id != current_reporter.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+
+    try:
+        completed_at = datetime.fromisoformat(body.completed_at.replace("Z", "+00:00"))
+    except ValueError:
+        completed_at = datetime.now(timezone.utc)
+
+    result = await db.execute(
+        select(SafetyProgress).where(
+            SafetyProgress.reporter_id == reporter.id,
+            SafetyProgress.part_completed == body.part_completed,
+        )
+    )
+    existing = result.scalar_one_or_none()
+
+    if existing:
+        existing.completed_at = completed_at
+    else:
+        db.add(SafetyProgress(
+            reporter_id=reporter.id,
+            part_completed=body.part_completed,
+            completed_at=completed_at,
+        ))
+
+    await db.commit()
+    return {"success": True}
+
+
+@router.get("/{reporter_id}/safety-progress")
+async def get_safety_progress(
+    reporter_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_reporter: Reporter = Depends(get_current_reporter),
+):
+    """Return which Safety Tips parts the reporter has completed."""
+    reporter = await _get_reporter_by_id(reporter_id, db)
+    if not reporter or reporter.id != current_reporter.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+
+    result = await db.execute(
+        select(SafetyProgress).where(SafetyProgress.reporter_id == reporter.id)
+    )
+    records = result.scalars().all()
+    return {"parts_completed": [r.part_completed for r in records]}
+
+
+# ── Profile photo upload ──────────────────────────────────────────────────────
+
+ALLOWED_PHOTO_TYPES = {"image/jpeg", "image/jpg", "image/png", "image/webp"}
+
+
+@router.post("/{reporter_id}/photo")
+async def upload_reporter_photo(
+    reporter_id: str,
+    photo: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_reporter: Reporter = Depends(get_current_reporter),
+):
+    """Upload or replace the reporter's profile photo."""
+    reporter = await _get_reporter_by_id(reporter_id, db)
+    if not reporter or reporter.id != current_reporter.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+
+    if photo.content_type not in ALLOWED_PHOTO_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Invalid file type. Accepted: JPEG, PNG, WebP",
+        )
+
+    contents = await photo.read()
+    if len(contents) > 5 * 1024 * 1024:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="Profile photo must be under 5 MB",
+        )
+
+    ext = (photo.filename or "photo.jpg").rsplit(".", 1)[-1].lower()
+    filename = f"reporter-photo-{reporter.id}.{ext}"
+    storage_path = await storage_service.save(
+        file_data=contents,
+        filename=filename,
+        content_type=photo.content_type or "image/jpeg",
+    )
+    photo_url = storage_service.get_url(storage_path)
+
+    reporter.photo_url = photo_url
+    await db.commit()
+
+    return {"photo_url": photo_url}

@@ -61,6 +61,9 @@ class Reporter(Base):
         DateTime(timezone=True), nullable=True
     )
 
+    # Profile photo
+    photo_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
     # Activity
     report_count: Mapped[int] = mapped_column(
         Integer, default=0, nullable=False, index=True
@@ -87,6 +90,9 @@ class Reporter(Base):
     )
     push_tokens: Mapped[list["PushToken"]] = relationship(
         "PushToken", back_populates="reporter", lazy="select"
+    )
+    safety_progress: Mapped[list["SafetyProgress"]] = relationship(
+        "SafetyProgress", back_populates="reporter", lazy="select"
     )
 
     def __repr__(self) -> str:

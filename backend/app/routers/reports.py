@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime, timezone
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status, Request, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from pydantic import BaseModel, ConfigDict
@@ -11,7 +11,7 @@ from app.models.report import Report
 from app.models.reporter import Reporter
 from app.models.crisis import Crisis
 from app.models.flag_event import FlagEvent
-from app.services.dependencies import get_optional_reporter
+from app.services.dependencies import get_optional_reporter, get_current_reporter
 from app.services.encryption import encrypt_field
 from app.services.auto_flagging import auto_flag_report
 
@@ -25,9 +25,18 @@ class LocationData(BaseModel):
     gps_longitude: Optional[float] = None
     gps_accuracy_meters: Optional[float] = None
     gps_available: bool = True
+    gps_denied: Optional[bool] = None
     location_address: Optional[str] = None
     location_landmark: Optional[str] = None
     location_building_name: Optional[str] = None
+    # BE-03 — Chapter 5 extended location fields
+    building_centroid_lat: Optional[float] = None
+    building_centroid_lng: Optional[float] = None
+    building_name_osm: Optional[str] = None
+    building_name_reporter: Optional[str] = None
+    location_note: Optional[str] = None
+    location_entry_method: Optional[str] = None
+    location_internet_available: Optional[bool] = None
 
 
 class ReportSubmitRequest(BaseModel):
@@ -52,10 +61,18 @@ class ReportSubmitRequest(BaseModel):
     @property
     def resolved_local_id(self) -> Optional[str]:
         return self.local_report_id or self.local_id
+
     building_id: Optional[str] = None
     building_name: Optional[str] = None
     language_code: str = "en"
-    # New UNDP question fields
+
+    # BE-02 — Chapter 4 submission timing and photo metadata
+    submission_started_at: Optional[str] = None
+    submission_submitted_at: Optional[str] = None
+    photo_metadata: Optional[str] = None
+    photo_exif_data: Optional[str] = None
+
+    # UNDP question fields
     infrastructure_other: Optional[str] = None
     infrastructure_name: Optional[str] = None
     disaster_type: Optional[str] = None
@@ -68,6 +85,11 @@ class ReportSubmitRequest(BaseModel):
     app_version: Optional[str] = None
     question_package_version: Optional[str] = None
     translation_version: Optional[int] = None
+
+    # BE-05 — Chapter 6 structured answers and precise version fields
+    question_answers: Optional[list] = None
+    question_package_content_version: Optional[str] = None
+    question_package_translation_version: Optional[str] = None
 
     # MCC data — Android only
     mcc: Optional[str] = None
@@ -210,6 +232,25 @@ async def submit_report(
     client_ip = http_request.client.host if http_request.client else None
     ip_encrypted = base64.b64encode(encrypt_field(client_ip)).decode() if client_ip else None
 
+    # Parse optional ISO datetime strings from BE-02 fields
+    submission_started_at = None
+    if request.submission_started_at:
+        try:
+            submission_started_at = datetime.fromisoformat(
+                request.submission_started_at.replace("Z", "+00:00")
+            )
+        except ValueError:
+            pass
+
+    submission_submitted_at = None
+    if request.submission_submitted_at:
+        try:
+            submission_submitted_at = datetime.fromisoformat(
+                request.submission_submitted_at.replace("Z", "+00:00")
+            )
+        except ValueError:
+            pass
+
     # Create report with initial Grey flag
     report = Report(
         local_id=request.resolved_local_id,
@@ -217,13 +258,25 @@ async def submit_report(
         reporter_id=reporter_id,
         building_id=request.building_id,
         building_name=request.building_name,
+        # GPS
         gps_latitude=request.location.gps_latitude,
         gps_longitude=request.location.gps_longitude,
         gps_accuracy_meters=request.location.gps_accuracy_meters,
         gps_available=request.location.gps_available,
+        gps_denied=request.location.gps_denied,
+        # Location text
         location_address=request.location.location_address,
         location_landmark=request.location.location_landmark,
         location_building_name=request.location.location_building_name,
+        # BE-03 — extended location
+        building_centroid_lat=request.location.building_centroid_lat,
+        building_centroid_lng=request.location.building_centroid_lng,
+        building_name_osm=request.location.building_name_osm,
+        building_name_reporter=request.location.building_name_reporter,
+        location_note=request.location.location_note,
+        location_entry_method=request.location.location_entry_method,
+        location_internet_available=request.location.location_internet_available,
+        # Damage
         damage_level=request.damage_level,
         infrastructure_type=request.infrastructure_types[0] if request.infrastructure_types else "",
         infrastructure_types=request.infrastructure_types,
@@ -240,8 +293,19 @@ async def submit_report(
         platform=request.platform,
         app_version=request.app_version,
         language_code=request.language_code,
+        # Versioning (existing + new precise fields)
         question_package_version=request.question_package_version,
         translation_version=request.translation_version,
+        question_package_content_version=request.question_package_content_version,
+        question_package_translation_version=request.question_package_translation_version,
+        # BE-05 — structured answers
+        question_answers=request.question_answers,
+        # BE-02 — submission timing + photo metadata
+        submission_started_at=submission_started_at,
+        submission_submitted_at=submission_submitted_at,
+        photo_metadata=request.photo_metadata,
+        photo_exif_data=request.photo_exif_data,
+        # Cellular
         mcc=request.mcc,
         mnc=request.mnc,
         carrier_name=request.carrier_name,
@@ -295,6 +359,48 @@ async def submit_report(
         flag_status="grey",
         message="Report received — verification in progress",
     )
+
+@router.get("/duplicate-check")
+async def check_duplicate_report(
+    lat: Optional[float] = Query(None),
+    lng: Optional[float] = Query(None),
+    building_id: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db),
+    current_reporter: Reporter = Depends(get_current_reporter),
+):
+    """Check whether the authenticated reporter already has a report for this
+    location within the last 24 hours. Anonymous reporters are handled
+    client-side via sessionStorage."""
+    from datetime import timedelta
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+
+    # Check by building footprint ID — most precise match
+    if building_id:
+        result = await db.execute(
+            select(Report).where(
+                Report.reporter_id == current_reporter.id,
+                Report.building_id == building_id,
+                Report.created_at >= cutoff,
+            )
+        )
+        if result.scalar_one_or_none():
+            return {"is_duplicate": True}
+
+    # Check by GPS proximity (~10 metres ≈ 0.0001 degrees)
+    if lat is not None and lng is not None:
+        result = await db.execute(
+            select(Report).where(
+                Report.reporter_id == current_reporter.id,
+                Report.created_at >= cutoff,
+                func.abs(Report.gps_latitude - lat) < 0.0001,
+                func.abs(Report.gps_longitude - lng) < 0.0001,
+            )
+        )
+        if result.scalar_one_or_none():
+            return {"is_duplicate": True}
+
+    return {"is_duplicate": False}
+
 
 @router.get("/{report_id}", response_model=ReportResponse)
 async def get_report(

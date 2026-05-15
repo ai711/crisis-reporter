@@ -11,6 +11,7 @@ from app.models.language_package import StringKey, Translation, LanguagePackage
 from app.models.role import Role
 from app.models.app_setting import AppSetting
 from app.models.health_incident import HealthIncident
+from app.models.safety_progress import SafetyProgress
 
 __all__ = [
     "Crisis",
@@ -30,4 +31,5 @@ __all__ = [
     "Role",
     "AppSetting",
     "HealthIncident",
+    "SafetyProgress",
 ]
