@@ -46,9 +46,12 @@ export interface ReportListItem {
   id: string;
   crisis_id: string;
   reporter_id: string | null;
+  reporter_display_id: number | null;
+  country: string | null;
   building_id: string | null;
-  damage_level: DamageLevel;
+  damage_level: string;
   infrastructure_type: string;
+  disaster_type: string | null;
   flag_status: FlagStatus;
   platform: Platform;
   gps_latitude: number | null;
@@ -63,6 +66,7 @@ export interface PhotoSummary {
   url: string;
   display_order: number;
   was_compressed: boolean;
+  created_at: string;
 }
 
 export interface FlagEvent {
@@ -71,10 +75,29 @@ export interface FlagEvent {
   flag_to: string;
   changed_by: string;
   reason: string | null;
+  metadata: Record<string, unknown> | null;
+  dashboard_user_id: string | null;
   created_at: string;
 }
 
+export interface VersionHistoryItem {
+  id: string;
+  submitted_at: string;
+  damage_level: string;
+  flag_status: string;
+  infrastructure_type: string;
+}
+
+export interface QuestionAnswer {
+  question: string;
+  answer: unknown;
+}
+
 export interface ReportDetail extends ReportListItem {
+  reporter_platform: string | null;
+  reporter_country_code: string | null;
+  reporter_is_verified: boolean | null;
+  reporter_is_blocked: boolean | null;
   building_name: string | null;
   description: string | null;
   description_translated: string | null;
@@ -85,8 +108,12 @@ export interface ReportDetail extends ReportListItem {
   was_queued: boolean;
   mcc: string | null;
   carrier_name: string | null;
+  submission_started_at: string | null;
+  submission_submitted_at: string | null;
+  question_answers: QuestionAnswer[] | null;
   photos: PhotoSummary[];
   flag_events: FlagEvent[];
+  versions: VersionHistoryItem[];
 }
 
 export interface ReportListResponse {
@@ -132,7 +159,6 @@ export interface MapPin {
   damage_level: DamageLevel;
   report_count: number;
   flag_status: FlagStatus;
-  // Panel fields — populated in Chapter 4 when backend support is added
   property_id?: string | null;
   property_name?: string | null;
   address?: string | null;
@@ -158,7 +184,15 @@ export interface DashboardStats {
 // ── SSE Events ────────────────────────────────────────────────────────────────
 
 export interface SSEEvent {
-  type: "connected" | "heartbeat" | "report_confirmed" | "flag_changed" | "reporter_status_changed" | "review_queue_updated" | "error";
+  type:
+    | "connected"
+    | "heartbeat"
+    | "report_confirmed"
+    | "flag_changed"
+    | "reporter_status_changed"
+    | "review_queue_updated"
+    | "stuck_report"
+    | "error";
   crisis_id?: string;
   report_id?: string;
   flag_status?: FlagStatus;
@@ -168,6 +202,7 @@ export interface SSEEvent {
   longitude?: number;
   damage_level?: DamageLevel;
   platform?: Platform;
+  minutes_stuck?: number;
   ts?: string;
   message?: string;
 }

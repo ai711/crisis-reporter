@@ -43,6 +43,9 @@ class Photo(Base):
     exif_device_make: Mapped[str | None] = mapped_column(String(100), nullable=True)
     exif_device_model: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
+    # SHA-256 hash of final (post-compression) image bytes for duplicate detection
+    photo_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+
     # Order within report
     display_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 

@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import String, DateTime, Text, ForeignKey
+from sqlalchemy import String, DateTime, Text, ForeignKey, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID
 from app.database import Base
@@ -30,6 +30,8 @@ class FlagEvent(Base):
         String(20), nullable=False
     )  # auto, manual
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Structured context for auto-flag reasons (IP details, device lists, etc.)
+    metadata: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     # Timestamp
     created_at: Mapped[datetime] = mapped_column(

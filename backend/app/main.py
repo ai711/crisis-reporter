@@ -1,3 +1,4 @@
+import asyncio
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -37,18 +38,26 @@ from app.routers.language_packages import seed_string_keys
 from app.routers.countries import seed_countries
 
 
+async def _stuck_report_loop() -> None:
+    """Run stuck-grey-report monitor every 5 minutes."""
+    from app.services.auto_flagging import monitor_stuck_grey_reports
+    while True:
+        await asyncio.sleep(300)  # 5 minutes
+        await monitor_stuck_grey_reports()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     Path(settings.LOCAL_UPLOAD_PATH).mkdir(parents=True, exist_ok=True)
-    # Seed v1.0.0 question package if none exists
     await seed_initial_package()
-    # Seed string keys for all 8 questions if table is empty
     await seed_string_keys()
-    # Seed countries if table is empty
     await seed_countries()
+    # Start stuck-report background monitor
+    task = asyncio.create_task(_stuck_report_loop())
     yield
+    task.cancel()
     await engine.dispose()
 
 

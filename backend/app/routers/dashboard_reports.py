@@ -1,18 +1,24 @@
 import uuid
-from datetime import datetime, timezone
+import os
+from datetime import datetime, timezone, timedelta
+from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_
+from sqlalchemy import select, func, and_, or_
+from sqlalchemy.orm import joinedload
 from pydantic import BaseModel
 from typing import Optional
 
 from app.database import get_db
 from app.models.report import Report
+from app.models.reporter import Reporter
 from app.models.photo import Photo
 from app.models.flag_event import FlagEvent
 from app.models.dashboard_user import DashboardUser
 from app.services.dependencies import get_current_dashboard_user
 from app.services.storage import storage_service
+from app.config import settings
 
 router = APIRouter(prefix="/api/dashboard/reports", tags=["Dashboard Reports"])
 
@@ -24,6 +30,7 @@ class PhotoSummary(BaseModel):
     url: str
     display_order: int
     was_compressed: bool
+    created_at: datetime
 
 
 class FlagEventSummary(BaseModel):
@@ -32,17 +39,33 @@ class FlagEventSummary(BaseModel):
     flag_to: str
     changed_by: str
     reason: Optional[str]
+    metadata: Optional[dict]
+    dashboard_user_id: Optional[str]
     created_at: datetime
+
+
+class VersionHistoryItem(BaseModel):
+    id: str
+    submitted_at: datetime
+    damage_level: str
+    flag_status: str
+    infrastructure_type: str
 
 
 class ReportDetail(BaseModel):
     id: str
     crisis_id: str
     reporter_id: Optional[str]
+    reporter_display_id: Optional[int]
+    reporter_platform: Optional[str]
+    reporter_country_code: Optional[str]
+    reporter_is_verified: Optional[bool]
+    reporter_is_blocked: Optional[bool]
     building_id: Optional[str]
     building_name: Optional[str]
     damage_level: str
     infrastructure_type: str
+    disaster_type: Optional[str]
     description: Optional[str]
     description_translated: Optional[str]
     flag_status: str
@@ -57,18 +80,25 @@ class ReportDetail(BaseModel):
     mcc: Optional[str]
     carrier_name: Optional[str]
     submitted_at: datetime
+    submission_started_at: Optional[datetime]
+    submission_submitted_at: Optional[datetime]
     created_at: datetime
+    question_answers: Optional[list]
     photos: list[PhotoSummary]
     flag_events: list[FlagEventSummary]
+    versions: list[VersionHistoryItem]
 
 
 class ReportListItem(BaseModel):
     id: str
     crisis_id: str
     reporter_id: Optional[str]
+    reporter_display_id: Optional[int]
+    country: Optional[str]
     building_id: Optional[str]
     damage_level: str
     infrastructure_type: str
+    disaster_type: Optional[str]
     flag_status: str
     platform: str
     gps_latitude: Optional[float]
@@ -86,7 +116,7 @@ class ReportListResponse(BaseModel):
 
 
 class FlagUpdateRequest(BaseModel):
-    flag_status: str  # grey, green, orange, red
+    flag_status: str
     reason: Optional[str] = None
 
 
@@ -102,15 +132,16 @@ async def list_reports(
     flag_status: Optional[str] = Query(None),
     platform: Optional[str] = Query(None),
     damage_level: Optional[str] = Query(None),
+    country: Optional[str] = Query(None),
+    date_from: Optional[str] = Query(None),
+    date_to: Optional[str] = Query(None),
     cursor: Optional[str] = Query(None),
-    limit: int = Query(default=50, le=100),
+    limit: int = Query(default=100, le=500),
     db: AsyncSession = Depends(get_db),
     current_user: DashboardUser = Depends(get_current_dashboard_user),
 ):
-    """List reports with filtering and cursor-based pagination.
-    Cursor-based pagination only — never offset pagination."""
+    """List reports with filtering and cursor-based pagination."""
 
-    # Build base query
     conditions = []
 
     if crisis_id:
@@ -122,32 +153,49 @@ async def list_reports(
     if damage_level:
         conditions.append(Report.damage_level == damage_level)
 
-    # Cursor pagination — anchor on created_at + id
+    # Date range filters
+    if date_from:
+        try:
+            dt_from = datetime.fromisoformat(date_from.replace("Z", "+00:00"))
+            conditions.append(Report.submitted_at >= dt_from)
+        except ValueError:
+            pass
+    if date_to:
+        try:
+            dt_to = datetime.fromisoformat(date_to.replace("Z", "+00:00"))
+            conditions.append(Report.submitted_at <= dt_to)
+        except ValueError:
+            pass
+
+    # Cursor pagination
     if cursor:
         try:
-            cursor_ts, cursor_id = cursor.split("_")
+            cursor_ts, cursor_id = cursor.split("_", 1)
             cursor_datetime = datetime.fromisoformat(cursor_ts)
-            conditions.append(
-                Report.created_at < cursor_datetime
-            )
+            conditions.append(Report.created_at < cursor_datetime)
         except Exception:
             pass
 
     query = (
         select(Report)
+        .options(joinedload(Report.reporter))
         .where(and_(*conditions) if conditions else True)
         .order_by(Report.created_at.desc())
         .limit(limit + 1)
     )
 
+    # Country filter requires join with reporter
+    if country:
+        query = query.where(Reporter.country_code == country)
+
     result = await db.execute(query)
-    reports = result.scalars().all()
+    reports = result.scalars().unique().all()
 
     has_more = len(reports) > limit
     if has_more:
-        reports = reports[:limit]
+        reports = list(reports[:limit])
 
-    # Get photo counts
+    # Build list items
     items = []
     for report in reports:
         photo_result = await db.execute(
@@ -155,13 +203,19 @@ async def list_reports(
         )
         photo_count = photo_result.scalar() or 0
 
+        reporter = report.reporter
+        country_code = reporter.country_code if reporter else None
+
         items.append(ReportListItem(
             id=str(report.id),
             crisis_id=str(report.crisis_id),
             reporter_id=str(report.reporter_id) if report.reporter_id else None,
+            reporter_display_id=reporter.display_id if reporter else None,
+            country=country_code,
             building_id=report.building_id,
             damage_level=report.damage_level,
             infrastructure_type=report.infrastructure_type,
+            disaster_type=report.disaster_type,
             flag_status=report.flag_status,
             platform=report.platform,
             gps_latitude=report.gps_latitude,
@@ -171,13 +225,11 @@ async def list_reports(
             photo_count=photo_count,
         ))
 
-    # Build next cursor
     next_cursor = None
     if has_more and reports:
         last = reports[-1]
         next_cursor = f"{last.created_at.isoformat()}_{str(last.id)}"
 
-    # Get total count
     count_query = select(func.count(Report.id)).where(
         and_(*conditions) if conditions else True
     )
@@ -198,42 +250,106 @@ async def get_report_detail(
     db: AsyncSession = Depends(get_db),
     current_user: DashboardUser = Depends(get_current_dashboard_user),
 ):
-    """Get full report detail including photos and flag history."""
+    """Get full report detail including photos, flag history, and version history."""
 
     result = await db.execute(
-        select(Report).where(Report.id == report_id)
+        select(Report)
+        .options(joinedload(Report.reporter))
+        .where(Report.id == report_id)
     )
     report = result.scalar_one_or_none()
     if not report:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Report not found",
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report not found")
 
-    # Get photos
     photo_result = await db.execute(
-        select(Photo)
-        .where(Photo.report_id == report_id)
-        .order_by(Photo.display_order)
+        select(Photo).where(Photo.report_id == report_id).order_by(Photo.display_order)
     )
     photos = photo_result.scalars().all()
 
-    # Get flag events
     flag_result = await db.execute(
-        select(FlagEvent)
+        select(FlagEvent, DashboardUser)
+        .outerjoin(DashboardUser, FlagEvent.dashboard_user_id == DashboardUser.id)
         .where(FlagEvent.report_id == report_id)
         .order_by(FlagEvent.created_at)
     )
-    flag_events = flag_result.scalars().all()
+    flag_rows = flag_result.all()
+
+    # Version history: same reporter + same building (or GPS proximity), exclude self
+    versions: list[VersionHistoryItem] = []
+    if report.reporter_id:
+        version_conditions = [
+            Report.reporter_id == report.reporter_id,
+            Report.id != report.id,
+        ]
+        if report.building_id:
+            version_conditions.append(Report.building_id == report.building_id)
+        elif report.gps_latitude and report.gps_longitude:
+            radius = 0.001
+            version_conditions += [
+                Report.gps_latitude.between(report.gps_latitude - radius, report.gps_latitude + radius),
+                Report.gps_longitude.between(report.gps_longitude - radius, report.gps_longitude + radius),
+            ]
+        v_result = await db.execute(
+            select(Report)
+            .where(and_(*version_conditions))
+            .order_by(Report.created_at.desc())
+        )
+        for v in v_result.scalars().all():
+            versions.append(VersionHistoryItem(
+                id=str(v.id),
+                submitted_at=v.submitted_at,
+                damage_level=v.damage_level,
+                flag_status=v.flag_status,
+                infrastructure_type=v.infrastructure_type,
+            ))
+
+    reporter = report.reporter
+
+    # Build URL for authenticated photo serving (relative path)
+    photo_list = [
+        PhotoSummary(
+            id=str(p.id),
+            url=f"/api/dashboard/reports/{report_id}/photos/{p.id}",
+            display_order=p.display_order,
+            was_compressed=p.was_compressed,
+            created_at=p.created_at,
+        )
+        for p in photos
+    ]
+
+    flag_event_list = [
+        FlagEventSummary(
+            id=str(f.id),
+            flag_from=f.flag_from,
+            flag_to=f.flag_to,
+            changed_by=f.changed_by,
+            reason=f.reason,
+            metadata=f.metadata,
+            dashboard_user_id=str(f.dashboard_user_id) if f.dashboard_user_id else None,
+            created_at=f.created_at,
+        )
+        for f, _ in flag_rows
+    ]
+
+    # Normalise question_answers — stored as list or dict in JSON column
+    qa = report.question_answers
+    if isinstance(qa, dict):
+        qa = [{"question": k, "answer": v} for k, v in qa.items()]
 
     return ReportDetail(
         id=str(report.id),
         crisis_id=str(report.crisis_id),
         reporter_id=str(report.reporter_id) if report.reporter_id else None,
+        reporter_display_id=reporter.display_id if reporter else None,
+        reporter_platform=reporter.platform if reporter else None,
+        reporter_country_code=reporter.country_code if reporter else None,
+        reporter_is_verified=reporter.is_verified if reporter else None,
+        reporter_is_blocked=reporter.is_blocked if reporter else None,
         building_id=report.building_id,
         building_name=report.building_name,
         damage_level=report.damage_level,
         infrastructure_type=report.infrastructure_type,
+        disaster_type=report.disaster_type,
         description=report.description,
         description_translated=report.description_translated,
         flag_status=report.flag_status,
@@ -248,28 +364,62 @@ async def get_report_detail(
         mcc=report.mcc,
         carrier_name=report.carrier_name,
         submitted_at=report.submitted_at,
+        submission_started_at=report.submission_started_at,
+        submission_submitted_at=report.submission_submitted_at,
         created_at=report.created_at,
-        photos=[
-            PhotoSummary(
-                id=str(p.id),
-                url=storage_service.get_url(p.storage_path),
-                display_order=p.display_order,
-                was_compressed=p.was_compressed,
-            )
-            for p in photos
-        ],
-        flag_events=[
-            FlagEventSummary(
-                id=str(f.id),
-                flag_from=f.flag_from,
-                flag_to=f.flag_to,
-                changed_by=f.changed_by,
-                reason=f.reason,
-                created_at=f.created_at,
-            )
-            for f in flag_events
-        ],
+        question_answers=qa,
+        photos=photo_list,
+        flag_events=flag_event_list,
+        versions=versions,
     )
+
+
+@router.get("/{report_id}/photos/{photo_id}")
+async def serve_photo(
+    report_id: str,
+    photo_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: DashboardUser = Depends(get_current_dashboard_user),
+):
+    """Serve a report photo — authenticated. JWT required; photos are not public."""
+
+    result = await db.execute(
+        select(Photo).where(Photo.id == photo_id, Photo.report_id == report_id)
+    )
+    photo = result.scalar_one_or_none()
+    if not photo:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Photo not found")
+
+    if settings.STORAGE_BACKEND == "r2":
+        # For R2, generate a presigned URL and redirect
+        import boto3
+        from botocore.client import Config as BotoConfig
+        s3 = boto3.client(
+            "s3",
+            endpoint_url=f"https://{settings.R2_ACCOUNT_ID}.r2.cloudflarestorage.com",
+            aws_access_key_id=settings.R2_ACCESS_KEY_ID,
+            aws_secret_access_key=settings.R2_SECRET_ACCESS_KEY,
+            config=BotoConfig(signature_version="s3v4"),
+            region_name="auto",
+        )
+        url = s3.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": settings.R2_BUCKET_NAME, "Key": photo.storage_path},
+            ExpiresIn=300,
+        )
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(url=url)
+
+    # Local storage — read file and stream it
+    file_path = Path(settings.LOCAL_UPLOAD_PATH) / Path(photo.storage_path).name
+    if not file_path.exists():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Photo file not found")
+
+    def iterfile():
+        with open(file_path, "rb") as f:
+            yield from f
+
+    return StreamingResponse(iterfile(), media_type=photo.mime_type)
 
 
 @router.patch("/{report_id}/flag", response_model=dict)
@@ -287,21 +437,15 @@ async def update_report_flag(
             detail="flag_status must be grey, green, orange, or red",
         )
 
-    result = await db.execute(
-        select(Report).where(Report.id == report_id)
-    )
+    result = await db.execute(select(Report).where(Report.id == report_id))
     report = result.scalar_one_or_none()
     if not report:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Report not found",
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report not found")
 
     previous_flag = report.flag_status
     report.flag_status = request.flag_status
     report.updated_at = datetime.now(timezone.utc)
 
-    # Log flag event
     flag_event = FlagEvent(
         report_id=report.id,
         dashboard_user_id=current_user.id,
@@ -313,16 +457,11 @@ async def update_report_flag(
     db.add(flag_event)
     await db.commit()
 
-    # Publish SSE event
     from app.routers.dashboard_sse import publish_event
     await publish_event(
         crisis_id=str(report.crisis_id),
         event_type="flag_changed",
-        data={
-            "report_id": report_id,
-            "flag_from": previous_flag,
-            "flag_to": request.flag_status,
-        },
+        data={"report_id": report_id, "flag_from": previous_flag, "flag_to": request.flag_status},
     )
 
     return {
@@ -340,27 +479,19 @@ async def translate_report_description(
     db: AsyncSession = Depends(get_db),
     current_user: DashboardUser = Depends(get_current_dashboard_user),
 ):
-    """On-demand translation of report description via LibreTranslate.
-    Only called when dashboard user clicks Translate button."""
+    """On-demand translation of report description via LibreTranslate."""
 
     import httpx
 
-    result = await db.execute(
-        select(Report).where(Report.id == report_id)
-    )
+    result = await db.execute(select(Report).where(Report.id == report_id))
     report = result.scalar_one_or_none()
     if not report:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Report not found",
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report not found")
 
     if not report.description:
         return {"translated": None, "message": "No description to translate"}
 
-    # Call LibreTranslate
     try:
-        from app.config import settings
         async with httpx.AsyncClient(timeout=15.0) as client:
             response = await client.post(
                 f"{settings.LIBRETRANSLATE_URL}/translate",
@@ -375,7 +506,6 @@ async def translate_report_description(
             data = response.json()
             translated_text = data.get("translatedText", "")
 
-        # Save translation to database
         report.description_translated = translated_text
         await db.commit()
 
@@ -385,7 +515,7 @@ async def translate_report_description(
             "target_language": request.target_language,
         }
 
-    except Exception as e:
+    except Exception:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Translation service unavailable. Please try again.",

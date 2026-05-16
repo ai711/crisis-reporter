@@ -12,7 +12,7 @@ from app.models.reporter import Reporter
 from app.models.crisis import Crisis
 from app.models.flag_event import FlagEvent
 from app.services.dependencies import get_optional_reporter, get_current_reporter
-from app.services.encryption import encrypt_field
+from app.services.encryption import encrypt_field, hash_field
 from app.services.auto_flagging import auto_flag_report
 
 router = APIRouter(prefix="/api/reports", tags=["Reports"])
@@ -231,6 +231,7 @@ async def submit_report(
     import base64
     client_ip = http_request.client.host if http_request.client else None
     ip_encrypted = base64.b64encode(encrypt_field(client_ip)).decode() if client_ip else None
+    ip_hash = hash_field(client_ip) if client_ip else None
 
     # Parse optional ISO datetime strings from BE-02 fields
     submission_started_at = None
@@ -310,6 +311,7 @@ async def submit_report(
         mnc=request.mnc,
         carrier_name=request.carrier_name,
         ip_address_encrypted=ip_encrypted,
+        ip_address_hash=ip_hash,
         was_queued=request.was_queued,
         queued_at=request.queued_at,
         synced_at=datetime.now(timezone.utc) if request.was_queued else None,

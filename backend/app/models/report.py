@@ -120,6 +120,10 @@ class Report(Base):
     ip_address_encrypted: Mapped[bytes | None] = mapped_column(
         String(500), nullable=True
     )
+    # SHA-256 hash of the IP — allows same-IP queries without decrypting
+    ip_address_hash: Mapped[str | None] = mapped_column(
+        String(64), nullable=True, index=True
+    )
 
     # BE-02 — Chapter 4 submission timing and photo metadata
     submission_started_at: Mapped[datetime | None] = mapped_column(

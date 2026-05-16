@@ -6,9 +6,11 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, text
 
+from sqlalchemy import func
 from app.database import get_db
 from app.config import settings
 from app.models.health_incident import HealthIncident
+from app.models.report import Report
 from app.services.dependencies import get_current_dashboard_user
 from app.models.dashboard_user import DashboardUser
 
@@ -129,6 +131,20 @@ async def health_check(db: AsyncSession = Depends(get_db)):
         "app": settings.APP_NAME,
         "version": settings.APP_VERSION,
     }
+
+
+@router.get("/grey-count")
+async def grey_flag_count(
+    db: AsyncSession = Depends(get_db),
+    current_user: DashboardUser = Depends(get_current_dashboard_user),
+):
+    """Return the current count of reports in Grey flag status.
+    Consumed by the System Status page (Chapter 13)."""
+    result = await db.execute(
+        select(func.count(Report.id)).where(Report.flag_status == "grey")
+    )
+    count = result.scalar() or 0
+    return {"grey_count": count, "checked_at": datetime.now(timezone.utc).isoformat()}
 
 
 @router.get("/incidents")

@@ -1,4 +1,5 @@
 import uuid
+import hashlib
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -97,6 +98,9 @@ async def upload_photo(
 
     final_size = len(processed_bytes)
 
+    # SHA-256 hash of final bytes for duplicate image detection
+    photo_hash = hashlib.sha256(processed_bytes).hexdigest()
+
     # Store via StorageService
     storage_path = await storage_service.save(
         file_data=processed_bytes,
@@ -124,6 +128,7 @@ async def upload_photo(
         exif_device_make=exif_data.get("device_make"),
         exif_device_model=exif_data.get("device_model"),
         display_order=display_order,
+        photo_hash=photo_hash,
     )
 
     db.add(photo)

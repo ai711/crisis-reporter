@@ -54,6 +54,9 @@ class Settings(BaseSettings):
     # LibreTranslate
     LIBRETRANSLATE_URL: str = "https://libretranslate.com"
 
+    # Auto-flagging thresholds
+    SAME_IP_DEVICE_THRESHOLD: int = 3   # distinct device IDs from one IP in 24 h before red flag
+
     # CORS — origins allowed to call the API
     ALLOWED_ORIGINS: list[str] = [
         "http://localhost:5173",
