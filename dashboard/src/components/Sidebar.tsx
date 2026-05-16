@@ -1,96 +1,55 @@
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuthStore } from "../stores/authStore";
+import {
+  Map,
+  FileText,
+  MapPin,
+  AlertCircle,
+  BarChart2,
+  Users,
+  Download,
+  Folder,
+  UserCog,
+  Shield,
+  Settings,
+  SlidersHorizontal,
+  type LucideIcon,
+} from "lucide-react";
 
 // ── Navigation item definitions ───────────────────────────────────────────────
-// Order is fixed and must never change. Visibility is role-filtered.
 
-const NAV_ITEMS = [
-  {
-    path: "/map",
-    icon: "🗺️",
-    label: "Main Map View",
-    requiredRole: null,
-  },
-  {
-    path: "/reports",
-    icon: "📋",
-    label: "Reports Page",
-    requiredRole: null,
-  },
-  {
-    path: "/locations",
-    icon: "📍",
-    label: "Location Page",
-    requiredRole: null,
-  },
-  {
-    path: "/review-queue",
-    icon: "🔍",
-    label: "Review Queue",
-    requiredRole: null,
-  },
-  {
-    path: "/analytics",
-    icon: "📊",
-    label: "Analytics and Statistics",
-    requiredRole: null,
-  },
-  {
-    path: "/reporters",
-    icon: "👥",
-    label: "Reporter Profiles",
-    requiredRole: null,
-  },
-  {
-    path: "/export",
-    icon: "📤",
-    label: "Export",
-    requiredRole: null,
-  },
-  {
-    path: "/projects",
-    icon: "🌐",
-    label: "Projects",
-    requiredRole: null,
-  },
-  {
-    path: "/users",
-    icon: "🔑",
-    label: "Manage Users",
-    requiredRole: "admin" as const,
-  },
-  {
-    path: "/roles",
-    icon: "🛡️",
-    label: "Manage Roles",
-    requiredRole: "admin" as const,
-  },
-  {
-    path: "/settings",
-    icon: "⚙️",
-    label: "App Configuration",
-    requiredRole: "admin" as const,
-  },
-  {
-    path: "/dashboard-settings",
-    icon: "🛠️",
-    label: "Dashboard Settings",
-    requiredRole: "superadmin" as const,
-  },
-] as const;
+type NavRole = "admin" | "superadmin" | null;
+
+type NavItem = {
+  path: string;
+  icon: LucideIcon;
+  label: string;
+  requiredRole: NavRole;
+};
+
+const NAV_ITEMS: NavItem[] = [
+  { path: "/map",              icon: Map,              label: "Main Map View",           requiredRole: null        },
+  { path: "/reports",          icon: FileText,         label: "Reports Page",            requiredRole: null        },
+  { path: "/locations",        icon: MapPin,           label: "Location Page",           requiredRole: null        },
+  { path: "/review-queue",     icon: AlertCircle,      label: "Review Queue",            requiredRole: null        },
+  { path: "/analytics",        icon: BarChart2,        label: "Analytics and Statistics",requiredRole: null        },
+  { path: "/reporters",        icon: Users,            label: "Reporter Profiles",       requiredRole: null        },
+  { path: "/export",           icon: Download,         label: "Export",                  requiredRole: null        },
+  { path: "/projects",         icon: Folder,           label: "Projects",                requiredRole: null        },
+  { path: "/users",            icon: UserCog,          label: "Manage Users",            requiredRole: "admin"     },
+  { path: "/roles",            icon: Shield,           label: "Manage Roles",            requiredRole: "admin"     },
+  { path: "/settings",         icon: Settings,         label: "App Configuration",       requiredRole: "admin"     },
+  { path: "/dashboard-settings", icon: SlidersHorizontal, label: "Dashboard Settings",  requiredRole: "superadmin"},
+];
 
 // ── Role visibility helper ────────────────────────────────────────────────────
 
 type Role = "admin" | "analyst" | "superadmin";
 
-function canSee(
-  requiredRole: "admin" | "superadmin" | null,
-  userRole: Role | undefined
-): boolean {
+function canSee(requiredRole: NavRole, userRole: Role | undefined): boolean {
   if (!requiredRole) return true;
   if (!userRole) return false;
   if (requiredRole === "superadmin") return userRole === "superadmin";
-  // "admin" level — admin and superadmin can see it
   return userRole === "admin" || userRole === "superadmin";
 }
 
@@ -109,7 +68,22 @@ export default function Sidebar() {
     <div style={styles.sidebar}>
       {/* Brand logo */}
       <div style={styles.logo}>
-        <span style={styles.logoIcon}>🆘</span>
+        <svg
+          width={28}
+          height={28}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="#7AAFD4"
+          strokeWidth={2}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+          style={{ flexShrink: 0 }}
+        >
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" y1="8" x2="12" y2="12" />
+          <line x1="12" y1="16" x2="12.01" y2="16" />
+        </svg>
         <div>
           <div style={styles.logoTitle}>Crisis Reporter</div>
           <div style={styles.logoSub}>UNDP Dashboard</div>
@@ -120,6 +94,7 @@ export default function Sidebar() {
       <nav style={styles.nav} aria-label="Primary navigation">
         {visibleItems.map((item) => {
           const isActive = location.pathname === item.path;
+          const IconComponent = item.icon;
           return (
             <button
               key={item.path}
@@ -131,14 +106,18 @@ export default function Sidebar() {
               onClick={() => navigate(item.path)}
               aria-current={isActive ? "page" : undefined}
             >
-              <span style={styles.navIcon}>{item.icon}</span>
+              <IconComponent
+                size={18}
+                color={isActive ? "#fff" : "#A0B4CC"}
+                style={{ flexShrink: 0 }}
+              />
               <span style={styles.navLabel}>{item.label}</span>
             </button>
           );
         })}
       </nav>
 
-      {/* User info — name and role only; logout is in the profile panel */}
+      {/* User info */}
       <div style={styles.userSection}>
         <div style={styles.userAvatar}>
           {user?.full_name?.charAt(0)?.toUpperCase() ?? "U"}
@@ -175,10 +154,6 @@ const styles: Record<string, React.CSSProperties> = {
     padding: "20px 20px",
     borderBottom: "1px solid rgba(255,255,255,0.1)",
   },
-  logoIcon: {
-    fontSize: 28,
-    flexShrink: 0,
-  },
   logoTitle: {
     color: "#fff",
     fontWeight: 700,
@@ -210,12 +185,6 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 500,
     transition: "all 0.12s",
     width: "100%",
-  },
-  navIcon: {
-    fontSize: 16,
-    width: 22,
-    textAlign: "center",
-    flexShrink: 0,
   },
   navLabel: {
     flex: 1,

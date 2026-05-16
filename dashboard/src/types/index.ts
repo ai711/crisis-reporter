@@ -132,6 +132,13 @@ export interface MapPin {
   damage_level: DamageLevel;
   report_count: number;
   flag_status: FlagStatus;
+  // Panel fields — populated in Chapter 4 when backend support is added
+  property_id?: string | null;
+  property_name?: string | null;
+  address?: string | null;
+  confirmed_status?: DamageLevel | null;
+  reporter_count?: number | null;
+  last_report_at?: string | null;
 }
 
 export interface MapPinsResponse {

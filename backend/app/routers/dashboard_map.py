@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, cast, String
 from pydantic import BaseModel
 from typing import Optional
 
@@ -46,26 +46,46 @@ async def get_map_pins(
     db: AsyncSession = Depends(get_db),
     current_user: DashboardUser = Depends(get_current_dashboard_user),
 ):
-    """Get all map pins for a crisis.
-    Each pin represents one building with its highest damage level.
-    Only Green and Orange flagged reports appear by default.
-    One pin per building — never duplicate pins."""
+    """Get one pin per property for a crisis.
 
-    # Default to green and orange only
+    Groups all qualifying Green/Orange reports by building_id (or lat/lng pair
+    when building_id is null). Returns the most recent report's damage_level as
+    the pin colour and the total qualifying report count for the property.
+    Uses PostgreSQL window functions — no application-level deduplication.
+    """
+
     allowed_flags = ["green", "orange"]
-    if flag_status and flag_status in ["grey", "green", "orange", "red"]:
+    if flag_status and flag_status in ["green", "orange", "red", "grey"]:
         allowed_flags = [flag_status]
 
-    # Get one representative report per building
-    # Priority: most recent, highest damage level
-    result = await db.execute(
+    # Property grouping key: building_id if set, otherwise "lat_lng" string
+    property_key = func.coalesce(
+        Report.building_id,
+        func.concat(
+            cast(Report.gps_latitude, String),
+            "_",
+            cast(Report.gps_longitude, String),
+        ),
+    )
+
+    # Subquery: rank reports within each property group (most recent first)
+    # and count total qualifying reports per group via window functions.
+    subq = (
         select(
             Report.building_id,
             Report.gps_latitude,
             Report.gps_longitude,
             Report.damage_level,
             Report.flag_status,
-            func.count(Report.id).label("report_count"),
+            func.row_number()
+            .over(
+                partition_by=property_key,
+                order_by=Report.submitted_at.desc(),
+            )
+            .label("rn"),
+            func.count()
+            .over(partition_by=property_key)
+            .label("report_count"),
         )
         .where(
             Report.crisis_id == crisis_id,
@@ -73,16 +93,11 @@ async def get_map_pins(
             Report.gps_latitude.isnot(None),
             Report.gps_longitude.isnot(None),
         )
-        .group_by(
-            Report.building_id,
-            Report.gps_latitude,
-            Report.gps_longitude,
-            Report.damage_level,
-            Report.flag_status,
-        )
-        .order_by(Report.gps_latitude)
+        .subquery()
     )
 
+    # Keep only the most-recent row per property group
+    result = await db.execute(select(subq).where(subq.c.rn == 1))
     rows = result.all()
 
     pins = [
@@ -106,8 +121,7 @@ async def get_dashboard_stats(
     db: AsyncSession = Depends(get_db),
     current_user: DashboardUser = Depends(get_current_dashboard_user),
 ):
-    """Get report counts by flag status for a crisis.
-    Used for dashboard counters and analytics."""
+    """Get report counts by flag status for a crisis."""
 
     result = await db.execute(
         select(Report.flag_status, func.count(Report.id))
