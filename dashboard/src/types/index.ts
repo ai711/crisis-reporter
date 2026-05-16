@@ -39,7 +39,7 @@ export interface Crisis {
 // ── Reports ───────────────────────────────────────────────────────────────────
 
 export type DamageLevel = "minimal" | "partial" | "complete";
-export type FlagStatus = "grey" | "green" | "orange" | "red";
+export type FlagStatus = "grey" | "green" | "orange" | "red" | "discarded";
 export type Platform = "android" | "pwa" | "web";
 
 export interface ReportListItem {
@@ -77,6 +77,7 @@ export interface FlagEvent {
   reason: string | null;
   metadata: Record<string, unknown> | null;
   dashboard_user_id: string | null;
+  is_emergency_override: boolean;
   created_at: string;
 }
 

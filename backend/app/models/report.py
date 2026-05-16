@@ -85,7 +85,7 @@ class Report(Base):
     # Flag system
     flag_status: Mapped[str] = mapped_column(
         String(20), default="grey", nullable=False, index=True
-    )  # grey, green, orange, red
+    )  # grey, green, orange, red, discarded
 
     # Submission metadata
     platform: Mapped[str] = mapped_column(

@@ -7,7 +7,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_
 from sqlalchemy.orm import joinedload
-from pydantic import BaseModel
+from pydantic import BaseModel, validator
 from typing import Optional
 
 from app.database import get_db
@@ -16,7 +16,7 @@ from app.models.reporter import Reporter
 from app.models.photo import Photo
 from app.models.flag_event import FlagEvent
 from app.models.dashboard_user import DashboardUser
-from app.services.dependencies import get_current_dashboard_user
+from app.services.dependencies import get_current_dashboard_user, require_superadmin
 from app.services.storage import storage_service
 from app.config import settings
 
@@ -41,6 +41,7 @@ class FlagEventSummary(BaseModel):
     reason: Optional[str]
     metadata: Optional[dict]
     dashboard_user_id: Optional[str]
+    is_emergency_override: bool = False
     created_at: datetime
 
 
@@ -115,9 +116,48 @@ class ReportListResponse(BaseModel):
     has_more: bool
 
 
+VALID_FLAG_STATUSES = {"grey", "green", "orange", "red", "discarded"}
+
+# Transitions that can only happen automatically — reject all manual attempts
+AUTO_ONLY_TRANSITIONS = {
+    ("grey", "green"),
+    ("grey", "red"),
+}
+
+# Transitions permitted manually — all require a comment
+MANUAL_TRANSITIONS = {
+    ("red", "orange"),
+    ("red", "discarded"),
+    ("discarded", "orange"),
+}
+
+
 class FlagUpdateRequest(BaseModel):
     flag_status: str
-    reason: Optional[str] = None
+    reason: str
+
+    @validator("reason")
+    def reason_min_length(cls, v):
+        if len(v.strip()) < 10:
+            raise ValueError("Comment must be at least 10 characters.")
+        return v.strip()
+
+
+class EmergencyOverrideRequest(BaseModel):
+    target_status: str
+    reason: str
+
+    @validator("target_status")
+    def target_must_be_green_or_red(cls, v):
+        if v not in ("green", "red"):
+            raise ValueError("target_status must be 'green' or 'red'.")
+        return v
+
+    @validator("reason")
+    def reason_min_length(cls, v):
+        if len(v.strip()) < 10:
+            raise ValueError("Comment must be at least 10 characters.")
+        return v.strip()
 
 
 class TranslateRequest(BaseModel):
@@ -326,6 +366,7 @@ async def get_report_detail(
             reason=f.reason,
             metadata=f.metadata,
             dashboard_user_id=str(f.dashboard_user_id) if f.dashboard_user_id else None,
+            is_emergency_override=f.is_emergency_override,
             created_at=f.created_at,
         )
         for f, _ in flag_rows
@@ -429,12 +470,12 @@ async def update_report_flag(
     db: AsyncSession = Depends(get_db),
     current_user: DashboardUser = Depends(get_current_dashboard_user),
 ):
-    """Manually update a report flag status. Logged as a flag event."""
+    """Manually update a report flag status. Enforces strict transition matrix."""
 
-    if request.flag_status not in ["grey", "green", "orange", "red"]:
+    if request.flag_status not in VALID_FLAG_STATUSES:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="flag_status must be grey, green, orange, or red",
+            detail=f"flag_status must be one of: {', '.join(sorted(VALID_FLAG_STATUSES))}",
         )
 
     result = await db.execute(select(Report).where(Report.id == report_id))
@@ -442,17 +483,33 @@ async def update_report_flag(
     if not report:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report not found")
 
-    previous_flag = report.flag_status
-    report.flag_status = request.flag_status
+    current_status = report.flag_status
+    requested_status = request.flag_status
+    transition = (current_status, requested_status)
+
+    if transition in AUTO_ONLY_TRANSITIONS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This transition is automatic only and cannot be performed manually.",
+        )
+
+    if transition not in MANUAL_TRANSITIONS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid flag transition from {current_status} to {requested_status}.",
+        )
+
+    report.flag_status = requested_status
     report.updated_at = datetime.now(timezone.utc)
 
     flag_event = FlagEvent(
         report_id=report.id,
         dashboard_user_id=current_user.id,
-        flag_from=previous_flag,
-        flag_to=request.flag_status,
+        flag_from=current_status,
+        flag_to=requested_status,
         changed_by="manual",
         reason=request.reason,
+        is_emergency_override=False,
     )
     db.add(flag_event)
     await db.commit()
@@ -461,14 +518,66 @@ async def update_report_flag(
     await publish_event(
         crisis_id=str(report.crisis_id),
         event_type="flag_changed",
-        data={"report_id": report_id, "flag_from": previous_flag, "flag_to": request.flag_status},
+        data={"report_id": report_id, "flag_from": current_status, "flag_to": requested_status},
+    )
+
+    return {
+        "report_id": report_id,
+        "flag_from": current_status,
+        "flag_to": requested_status,
+        "message": "Flag updated successfully",
+    }
+
+
+@router.post("/{report_id}/emergency-override", response_model=dict)
+async def emergency_override_flag(
+    report_id: str,
+    request: EmergencyOverrideRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: DashboardUser = Depends(require_superadmin),
+):
+    """Superadmin-only: force a Grey report to Green or Red, bypassing the transition matrix."""
+
+    result = await db.execute(select(Report).where(Report.id == report_id))
+    report = result.scalar_one_or_none()
+    if not report:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report not found")
+
+    if report.flag_status != "grey":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Emergency override only applies to Grey reports. Current status: {report.flag_status}",
+        )
+
+    previous_flag = report.flag_status
+    report.flag_status = request.target_status
+    report.updated_at = datetime.now(timezone.utc)
+
+    flag_event = FlagEvent(
+        report_id=report.id,
+        dashboard_user_id=current_user.id,
+        flag_from=previous_flag,
+        flag_to=request.target_status,
+        changed_by="manual",
+        reason=request.reason,
+        is_emergency_override=True,
+    )
+    db.add(flag_event)
+    await db.commit()
+
+    from app.routers.dashboard_sse import publish_event
+    await publish_event(
+        crisis_id=str(report.crisis_id),
+        event_type="flag_changed",
+        data={"report_id": report_id, "flag_from": previous_flag, "flag_to": request.target_status},
     )
 
     return {
         "report_id": report_id,
         "flag_from": previous_flag,
-        "flag_to": request.flag_status,
-        "message": "Flag updated successfully",
+        "flag_to": request.target_status,
+        "is_emergency_override": True,
+        "message": "Emergency override applied successfully",
     }
 
 

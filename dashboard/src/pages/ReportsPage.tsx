@@ -14,6 +14,7 @@ const FLAG_COLORS: Record<FlagStatus, string> = {
   green: "#4caf50",
   orange: "#ff9800",
   red: "#f44336",
+  discarded: "#616161",
 };
 
 const PAGE_SIZE_OPTIONS = [100, 200, 300, 400, 500];
@@ -219,7 +220,7 @@ export default function ReportsPage() {
               {/* Flag status */}
               <div style={styles.filterSection}>
                 <div style={styles.filterSectionLabel}>Flag Status</div>
-                {(["grey", "green", "orange", "red"] as FlagStatus[]).map((flag) => (
+                {(["grey", "green", "orange", "red", "discarded"] as FlagStatus[]).map((flag) => (
                   <label key={flag} style={styles.checkboxRow}>
                     <input
                       type="checkbox"

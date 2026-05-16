@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import String, DateTime, Text, ForeignKey, JSON
+from sqlalchemy import String, DateTime, Text, ForeignKey, JSON, Boolean
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID
 from app.database import Base
@@ -32,6 +32,11 @@ class FlagEvent(Base):
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Structured context for auto-flag reasons (IP details, device lists, etc.)
     metadata: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+
+    # Superadmin emergency override — bypasses normal transition matrix
+    is_emergency_override: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False
+    )
 
     # Timestamp
     created_at: Mapped[datetime] = mapped_column(
