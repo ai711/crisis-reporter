@@ -67,14 +67,14 @@ api.interceptors.response.use(
 
     if (originalRequest.url?.includes("/auth/refresh")) {
       tokenStorage.clearTokens();
-      window.location.href = "/login";
+      window.location.href = "/login?reason=expired";
       return Promise.reject(error);
     }
 
     const refreshToken = tokenStorage.getRefreshToken();
     if (!refreshToken) {
       tokenStorage.clearTokens();
-      window.location.href = "/login";
+      window.location.href = "/login?reason=expired";
       return Promise.reject(error);
     }
 
@@ -103,7 +103,7 @@ api.interceptors.response.use(
     } catch (refreshError) {
       processQueue(refreshError, null);
       tokenStorage.clearTokens();
-      window.location.href = "/login";
+      window.location.href = "/login?reason=expired";
       return Promise.reject(refreshError);
     } finally {
       isRefreshing = false;

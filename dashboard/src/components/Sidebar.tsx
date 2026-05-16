@@ -1,36 +1,113 @@
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuthStore } from "../stores/authStore";
-import { logout } from "../services/auth";
+
+// ── Navigation item definitions ───────────────────────────────────────────────
+// Order is fixed and must never change. Visibility is role-filtered.
 
 const NAV_ITEMS = [
-  { path: "/", icon: "🗺️", label: "Map", adminOnly: false, superadminOnly: false },
-  { path: "/crises", icon: "🌐", label: "Crisis Management", adminOnly: false, superadminOnly: false },
-  { path: "/reports", icon: "📋", label: "Reports", adminOnly: false, superadminOnly: false },
-  { path: "/report-queue", icon: "📥", label: "Report Queue", adminOnly: false, superadminOnly: false },
-  { path: "/review-queue", icon: "🔍", label: "Review Queue", adminOnly: false, superadminOnly: false },
-  { path: "/reporters", icon: "👥", label: "Reporters", adminOnly: false, superadminOnly: false },
-  { path: "/analytics", icon: "📊", label: "Analytics", adminOnly: false, superadminOnly: false },
-  { path: "/export", icon: "📤", label: "Export", adminOnly: false, superadminOnly: false },
-  { path: "/users", icon: "🔑", label: "User Management", adminOnly: true, superadminOnly: false },
-  { path: "/roles", icon: "🛡️", label: "Manage Roles", adminOnly: true, superadminOnly: false },
-  { path: "/settings", icon: "⚙️", label: "System Settings", adminOnly: true, superadminOnly: false },
-  { path: "/dashboard-settings", icon: "🛠️", label: "Dashboard Settings", adminOnly: false, superadminOnly: true },
-];
+  {
+    path: "/map",
+    icon: "🗺️",
+    label: "Main Map View",
+    requiredRole: null,
+  },
+  {
+    path: "/reports",
+    icon: "📋",
+    label: "Reports Page",
+    requiredRole: null,
+  },
+  {
+    path: "/locations",
+    icon: "📍",
+    label: "Location Page",
+    requiredRole: null,
+  },
+  {
+    path: "/review-queue",
+    icon: "🔍",
+    label: "Review Queue",
+    requiredRole: null,
+  },
+  {
+    path: "/analytics",
+    icon: "📊",
+    label: "Analytics and Statistics",
+    requiredRole: null,
+  },
+  {
+    path: "/reporters",
+    icon: "👥",
+    label: "Reporter Profiles",
+    requiredRole: null,
+  },
+  {
+    path: "/export",
+    icon: "📤",
+    label: "Export",
+    requiredRole: null,
+  },
+  {
+    path: "/projects",
+    icon: "🌐",
+    label: "Projects",
+    requiredRole: null,
+  },
+  {
+    path: "/users",
+    icon: "🔑",
+    label: "Manage Users",
+    requiredRole: "admin" as const,
+  },
+  {
+    path: "/roles",
+    icon: "🛡️",
+    label: "Manage Roles",
+    requiredRole: "admin" as const,
+  },
+  {
+    path: "/settings",
+    icon: "⚙️",
+    label: "App Configuration",
+    requiredRole: "admin" as const,
+  },
+  {
+    path: "/dashboard-settings",
+    icon: "🛠️",
+    label: "Dashboard Settings",
+    requiredRole: "superadmin" as const,
+  },
+] as const;
+
+// ── Role visibility helper ────────────────────────────────────────────────────
+
+type Role = "admin" | "analyst" | "superadmin";
+
+function canSee(
+  requiredRole: "admin" | "superadmin" | null,
+  userRole: Role | undefined
+): boolean {
+  if (!requiredRole) return true;
+  if (!userRole) return false;
+  if (requiredRole === "superadmin") return userRole === "superadmin";
+  // "admin" level — admin and superadmin can see it
+  return userRole === "admin" || userRole === "superadmin";
+}
+
+// ── Component ─────────────────────────────────────────────────────────────────
 
 export default function Sidebar() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, reset } = useAuthStore();
+  const { user } = useAuthStore();
 
-  const handleLogout = () => {
-    logout();
-    reset();
-    navigate("/login");
-  };
+  const visibleItems = NAV_ITEMS.filter((item) =>
+    canSee(item.requiredRole, user?.role)
+  );
 
   return (
     <div style={styles.sidebar}>
-      {/* Logo */}
+      {/* Brand logo */}
       <div style={styles.logo}>
         <span style={styles.logoIcon}>🆘</span>
         <div>
@@ -39,13 +116,9 @@ export default function Sidebar() {
         </div>
       </div>
 
-      {/* Nav items */}
-      <nav style={styles.nav}>
-        {NAV_ITEMS.filter((item) => {
-          if (item.superadminOnly) return user?.role === "superadmin";
-          if (item.adminOnly) return user?.role === "admin" || user?.role === "superadmin";
-          return true;
-        }).map((item) => {
+      {/* Navigation */}
+      <nav style={styles.nav} aria-label="Primary navigation">
+        {visibleItems.map((item) => {
           const isActive = location.pathname === item.path;
           return (
             <button
@@ -56,6 +129,7 @@ export default function Sidebar() {
                 color: isActive ? "#fff" : "#A0B4CC",
               }}
               onClick={() => navigate(item.path)}
+              aria-current={isActive ? "page" : undefined}
             >
               <span style={styles.navIcon}>{item.icon}</span>
               <span style={styles.navLabel}>{item.label}</span>
@@ -64,19 +138,21 @@ export default function Sidebar() {
         })}
       </nav>
 
-      {/* User info */}
+      {/* User info — name and role only; logout is in the profile panel */}
       <div style={styles.userSection}>
+        <div style={styles.userAvatar}>
+          {user?.full_name?.charAt(0)?.toUpperCase() ?? "U"}
+        </div>
         <div style={styles.userInfo}>
           <div style={styles.userName}>{user?.full_name}</div>
           <div style={styles.userRole}>{user?.role}</div>
         </div>
-        <button style={styles.logoutBtn} onClick={handleLogout}>
-          Sign Out
-        </button>
       </div>
     </div>
   );
 }
+
+// ── Styles ────────────────────────────────────────────────────────────────────
 
 const styles: Record<string, React.CSSProperties> = {
   sidebar: {
@@ -96,76 +172,89 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     alignItems: "center",
     gap: 12,
-    padding: "24px 20px",
+    padding: "20px 20px",
     borderBottom: "1px solid rgba(255,255,255,0.1)",
   },
   logoIcon: {
-    fontSize: 32,
+    fontSize: 28,
+    flexShrink: 0,
   },
   logoTitle: {
     color: "#fff",
     fontWeight: 700,
-    fontSize: 16,
+    fontSize: 15,
+    lineHeight: 1.2,
   },
   logoSub: {
     color: "#7AAFD4",
-    fontSize: 12,
+    fontSize: 11,
   },
   nav: {
     flex: 1,
-    padding: "16px 12px",
+    padding: "12px 10px",
     display: "flex",
     flexDirection: "column",
-    gap: 4,
+    gap: 2,
     overflowY: "auto",
   },
   navItem: {
     display: "flex",
     alignItems: "center",
-    gap: 12,
-    padding: "10px 16px",
-    borderRadius: 8,
+    gap: 10,
+    padding: "9px 14px",
+    borderRadius: 7,
     border: "none",
     cursor: "pointer",
     textAlign: "left",
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: 500,
-    transition: "all 0.15s",
+    transition: "all 0.12s",
     width: "100%",
   },
   navIcon: {
-    fontSize: 18,
-    width: 24,
+    fontSize: 16,
+    width: 22,
     textAlign: "center",
+    flexShrink: 0,
   },
   navLabel: {
     flex: 1,
+    lineHeight: 1.3,
   },
   userSection: {
-    padding: "16px 20px",
+    padding: "14px 16px",
     borderTop: "1px solid rgba(255,255,255,0.1)",
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+  },
+  userAvatar: {
+    width: 34,
+    height: 34,
+    borderRadius: "50%",
+    background: "rgba(255,255,255,0.15)",
+    color: "#fff",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: 15,
+    fontWeight: 700,
+    flexShrink: 0,
   },
   userInfo: {
-    marginBottom: 12,
+    minWidth: 0,
   },
   userName: {
     color: "#fff",
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: 600,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap" as React.CSSProperties["whiteSpace"],
   },
   userRole: {
     color: "#7AAFD4",
-    fontSize: 12,
-    textTransform: "capitalize",
-  },
-  logoutBtn: {
-    width: "100%",
-    padding: "8px",
-    background: "transparent",
-    color: "#A0B4CC",
-    border: "1px solid rgba(255,255,255,0.2)",
-    borderRadius: 6,
-    fontSize: 13,
-    cursor: "pointer",
+    fontSize: 11,
+    textTransform: "capitalize" as React.CSSProperties["textTransform"],
   },
 };

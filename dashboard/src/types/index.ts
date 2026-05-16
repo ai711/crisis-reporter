@@ -4,8 +4,13 @@ export interface DashboardUser {
   id: string;
   email: string;
   full_name: string;
+  first_name: string | null;
+  last_name: string | null;
+  contact_number: string | null;
+  profile_photo_url: string | null;
   role: "admin" | "analyst" | "superadmin";
   last_login_at: string | null;
+  inactivity_timeout_minutes: number;
 }
 
 export interface AuthTokens {
@@ -13,6 +18,7 @@ export interface AuthTokens {
   refresh_token: string;
   token_type: string;
   expires_in: number;
+  inactivity_timeout_minutes: number;
 }
 
 // ── Crisis ────────────────────────────────────────────────────────────────────

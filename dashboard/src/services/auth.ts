@@ -21,8 +21,18 @@ export async function getMe(): Promise<DashboardUser> {
   return response.data;
 }
 
-export function logout(): void {
-  tokenStorage.clearTokens();
+/**
+ * Logout — calls the backend to record the logout, then always clears local
+ * tokens regardless of whether the backend call succeeds.
+ */
+export async function logout(): Promise<void> {
+  try {
+    await api.post("/api/dashboard/auth/logout");
+  } catch {
+    // Network failure or expired token — proceed with local logout anyway
+  } finally {
+    tokenStorage.clearTokens();
+  }
 }
 
 export function isAuthenticated(): boolean {

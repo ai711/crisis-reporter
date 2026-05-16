@@ -1,112 +1,242 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { login } from "../services/auth";
 import { useAuthStore } from "../stores/authStore";
+import axios from "axios";
+
+// ── UNDP logo SVG ─────────────────────────────────────────────────────────────
+
+function UndpLogo() {
+  return (
+    <svg
+      width={64}
+      height={64}
+      viewBox="0 0 64 64"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-label="UNDP logo"
+    >
+      <rect width={64} height={64} rx={10} fill="#0468B1" />
+      <text
+        x={32}
+        y={26}
+        textAnchor="middle"
+        fill="#ffffff"
+        fontFamily="Arial, Helvetica, sans-serif"
+        fontWeight="800"
+        fontSize={18}
+        letterSpacing={1}
+      >
+        UN
+      </text>
+      <text
+        x={32}
+        y={46}
+        textAnchor="middle"
+        fill="#ffffff"
+        fontFamily="Arial, Helvetica, sans-serif"
+        fontWeight="800"
+        fontSize={18}
+        letterSpacing={1}
+      >
+        DP
+      </text>
+    </svg>
+  );
+}
+
+// ── Spinner ───────────────────────────────────────────────────────────────────
+
+function Spinner() {
+  return (
+    <span
+      style={{
+        display: "inline-block",
+        width: 16,
+        height: 16,
+        border: "2.5px solid rgba(255,255,255,0.35)",
+        borderTopColor: "#ffffff",
+        borderRadius: "50%",
+        animation: "spin 0.7s linear infinite",
+        verticalAlign: "middle",
+        marginRight: 8,
+        flexShrink: 0,
+      }}
+    />
+  );
+}
+
+// ── Error message map ─────────────────────────────────────────────────────────
+
+function resolveError(err: unknown): string {
+  if (axios.isAxiosError(err)) {
+    const status = err.response?.status;
+    const detail = err.response?.data?.detail as string | undefined;
+
+    if (status === 401 && detail === "invalid_credentials") {
+      return "The email address or password you entered is not correct. Please try again.";
+    }
+    if (status === 403 && detail === "account_deactivated") {
+      return "Your account has been deactivated. Please contact your administrator.";
+    }
+    if (status === 429 && detail === "too_many_attempts") {
+      return "Too many failed attempts. Please wait 15 minutes before trying again.";
+    }
+  }
+  return "Something went wrong. Please try again.";
+}
+
+// ── Component ─────────────────────────────────────────────────────────────────
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { setUser } = useAuthStore();
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  // Session-expiry / reason banner — shown when redirected with ?reason=expired
+  const reason = searchParams.get("reason");
+  const [sessionMsg, setSessionMsg] = useState(
+    reason === "expired" ? "Your session has expired. Please log in again." : ""
+  );
+
+  // Clear the session message as soon as the user starts typing
+  const clearSessionMsg = () => setSessionMsg("");
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
+    clearSessionMsg();
     setError("");
+    setLoading(true);
 
     try {
       const { user } = await login(email, password);
       setUser(user);
-      navigate("/");
-    } catch {
-      setError("Invalid email or password. Please try again.");
+      navigate("/map");
+    } catch (err) {
+      setError(resolveError(err));
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div style={styles.container}>
-      <div style={styles.card}>
-        {/* Logo */}
-        <div style={styles.logoSection}>
-          <span style={styles.logo}>🆘</span>
-          <h1 style={styles.appName}>Crisis Reporter</h1>
-          <p style={styles.subtitle}>UNDP Staff Dashboard</p>
-        </div>
+    <>
+      {/* Keyframe animation injected as a global style tag */}
+      <style>{`
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
 
-        {/* Form */}
-        <form onSubmit={handleLogin} style={styles.form}>
-          <div style={styles.field}>
-            <label style={styles.label}>Email Address</label>
-            <input
-              style={styles.input}
-              type="email"
-              value={email}
-              onChange={(e) => { setEmail(e.target.value); setError(""); }}
-              placeholder="your@email.com"
-              required
-              autoFocus
-            />
+      <div style={styles.container}>
+        <div style={styles.card}>
+          {/* Logo + wordmark */}
+          <div style={styles.logoSection}>
+            <UndpLogo />
+            <h1 style={styles.appName}>Crisis Reporter</h1>
+            <p style={styles.subtitle}>UNDP Staff Dashboard</p>
           </div>
 
-          <div style={styles.field}>
-            <label style={styles.label}>Password</label>
-            <div style={styles.passwordWrap}>
+          {/* Session-expiry message (shown when ?reason=expired) */}
+          {sessionMsg && (
+            <div style={styles.sessionMsg}>{sessionMsg}</div>
+          )}
+
+          {/* Login form */}
+          <form onSubmit={handleLogin} style={styles.form} noValidate>
+            <div style={styles.field}>
+              <label style={styles.label}>Email Address</label>
               <input
-                style={{ ...styles.input, ...styles.passwordInput }}
-                type={showPassword ? "text" : "password"}
-                value={password}
-                onChange={(e) => { setPassword(e.target.value); setError(""); }}
-                placeholder="••••••••"
+                style={styles.input}
+                type="email"
+                value={email}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  setError("");
+                  clearSessionMsg();
+                }}
+                placeholder="your@email.com"
                 required
+                autoFocus
+                autoComplete="email"
+                disabled={loading}
               />
-              <button
-                type="button"
-                style={styles.eyeBtn}
-                onClick={() => setShowPassword((v) => !v)}
-                aria-label={showPassword ? "Hide password" : "Show password"}
-              >
-                {showPassword ? (
-                  <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94"/>
-                    <path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19"/>
-                    <line x1="1" y1="1" x2="23" y2="23"/>
-                  </svg>
-                ) : (
-                  <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                    <circle cx="12" cy="12" r="3"/>
-                  </svg>
-                )}
-              </button>
             </div>
-          </div>
 
-          {error && <div style={styles.error}>{error}</div>}
+            <div style={styles.field}>
+              <label style={styles.label}>Password</label>
+              <div style={styles.passwordWrap}>
+                <input
+                  style={{ ...styles.input, ...styles.passwordInput }}
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    setError("");
+                    clearSessionMsg();
+                  }}
+                  placeholder="••••••••"
+                  required
+                  autoComplete="current-password"
+                  disabled={loading}
+                />
+                <button
+                  type="button"
+                  style={styles.eyeBtn}
+                  onClick={() => setShowPassword((v) => !v)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  tabIndex={-1}
+                  disabled={loading}
+                >
+                  {showPassword ? (
+                    <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94" />
+                      <path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19" />
+                      <line x1="1" y1="1" x2="23" y2="23" />
+                    </svg>
+                  ) : (
+                    <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                      <circle cx="12" cy="12" r="3" />
+                    </svg>
+                  )}
+                </button>
+              </div>
+            </div>
 
-          <button
-            type="submit"
-            style={{
-              ...styles.submitBtn,
-              opacity: loading ? 0.7 : 1,
-            }}
-            disabled={loading}
-          >
-            {loading ? "Signing in..." : "Sign In"}
-          </button>
-        </form>
+            {/* Inline error — shown below password field, above the button */}
+            {error && <div style={styles.error} role="alert">{error}</div>}
 
-        <p style={styles.footer}>
-          Authorised UNDP staff only. Access is logged.
-        </p>
+            <button
+              type="submit"
+              style={{
+                ...styles.submitBtn,
+                opacity: loading ? 0.85 : 1,
+                cursor: loading ? "not-allowed" : "pointer",
+              }}
+              disabled={loading}
+            >
+              {loading && <Spinner />}
+              {loading ? "Signing in…" : "Sign In"}
+            </button>
+          </form>
+
+          <p style={styles.footer}>
+            Authorised UNDP staff only. Access is logged.
+          </p>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
+
+// ── Styles ────────────────────────────────────────────────────────────────────
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
@@ -127,22 +257,31 @@ const styles: Record<string, React.CSSProperties> = {
   },
   logoSection: {
     textAlign: "center",
-    marginBottom: 40,
-  },
-  logo: {
-    fontSize: 48,
-    display: "block",
-    marginBottom: 12,
+    marginBottom: 32,
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    gap: 12,
   },
   appName: {
     fontSize: 24,
     fontWeight: 700,
     color: "#1A2B4A",
-    marginBottom: 4,
+    margin: 0,
   },
   subtitle: {
     fontSize: 14,
     color: "#666",
+    margin: 0,
+  },
+  sessionMsg: {
+    background: "#fff8e1",
+    color: "#7a5c00",
+    padding: "12px 16px",
+    borderRadius: 8,
+    fontSize: 14,
+    border: "1px solid #ffe082",
+    marginBottom: 20,
   },
   form: {
     display: "flex",
@@ -166,14 +305,15 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 15,
     outline: "none",
     transition: "border-color 0.15s",
+    width: "100%",
+    boxSizing: "border-box" as const,
+    background: "#fff",
   },
   passwordWrap: {
     position: "relative",
   },
   passwordInput: {
-    width: "100%",
     paddingRight: 44,
-    boxSizing: "border-box" as const,
   },
   eyeBtn: {
     position: "absolute",
@@ -204,8 +344,12 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 8,
     fontSize: 16,
     fontWeight: 600,
-    cursor: "pointer",
     marginTop: 4,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    width: "100%",
   },
   footer: {
     textAlign: "center",

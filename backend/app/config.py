@@ -21,6 +21,14 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
+    # Login rate limiting
+    LOGIN_RATE_LIMIT_ATTEMPTS: int = 5          # failed attempts before lockout
+    LOGIN_RATE_LIMIT_WINDOW_MINUTES: int = 10   # rolling window for counting attempts
+    LOGIN_LOCKOUT_MINUTES: int = 15             # how long to block after threshold reached
+
+    # Session / inactivity
+    INACTIVITY_TIMEOUT_MINUTES: int = 30        # dashboard idle timeout
+
     # Encryption
     FERNET_KEY: str = ""
 

@@ -18,6 +18,10 @@ class DashboardUser(Base):
         String(255), nullable=False, unique=True, index=True
     )
     full_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    first_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    last_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    contact_number: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    profile_photo_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
 
     # Role
