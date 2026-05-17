@@ -177,14 +177,13 @@ def _pipe(values: list[str] | None, fallback: str | None) -> str:
 
 def _fix_gdf_dtypes(gdf: "gpd.GeoDataFrame") -> "gpd.GeoDataFrame":
     """
-    Pandas 2.x infers StringDtype for string columns; fiona (geopandas' file
-    backend) only accepts NumPy object dtype.  Cast any string-typed column
-    back to plain Python object so to_file() works on Railway.
+    Pandas 2.x infers StringDtype for string columns (repr starts with
+    'StringDtype', not 'string'), but fiona only accepts NumPy object dtype.
+    Unconditionally cast every non-geometry column to object — safe because
+    all our stored values are plain Python strings or None.
     """
     for col in gdf.columns:
-        if col == "geometry":
-            continue
-        if hasattr(gdf[col], "dtype") and str(gdf[col].dtype).startswith("string"):
+        if col != "geometry":
             gdf[col] = gdf[col].astype(object)
     return gdf
 
