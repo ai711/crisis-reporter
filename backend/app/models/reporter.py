@@ -61,6 +61,29 @@ class Reporter(Base):
         DateTime(timezone=True), nullable=True
     )
 
+    # Profile status — tri-state replaces boolean is_blocked for new code
+    profile_status: Mapped[str] = mapped_column(
+        String(20), default="active", nullable=False, index=True
+    )  # "active" | "flagged" | "blocked"
+
+    # Profile type — cached, recomputed on submission
+    profile_type: Mapped[str] = mapped_column(
+        String(30), default="anonymous_no_reports", nullable=False, index=True
+    )  # "anonymous_no_reports" | "anonymous_with_reports" | "named_profile"
+
+    # Identity / device detail fields
+    ip_address: Mapped[str | None] = mapped_column(String(45), nullable=True)
+    app_version: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    browser_version: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    mcc: Mapped[str | None] = mapped_column(String(10), nullable=True)
+
+    # 24-hour submission pause
+    is_paused: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    pause_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
+    pause_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
     # Auto-block state for Tab 4
     auto_blocked_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
@@ -116,6 +139,12 @@ class Reporter(Base):
     )
     safety_progress: Mapped[list["SafetyProgress"]] = relationship(
         "SafetyProgress", back_populates="reporter", lazy="select"
+    )
+    activity_log: Mapped[list["ReporterActivityLog"]] = relationship(
+        "ReporterActivityLog",
+        back_populates="reporter",
+        order_by="ReporterActivityLog.created_at",
+        lazy="select",
     )
 
     def __repr__(self) -> str:

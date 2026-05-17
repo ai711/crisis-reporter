@@ -923,6 +923,20 @@ async def confirm_auto_block(
         f"Auto-block confirmed by {current_user.full_name}. Comment: {body.comment}"
     )
     reporter.updated_at = now
+    try:
+        from app.services.reporter_activity_service import write_activity_log
+        await write_activity_log(
+            db,
+            reporter_id=reporter.id,
+            action="auto_block_confirmed",
+            source=current_user.full_name,
+            previous_value="blocked",
+            new_value="blocked",
+            dashboard_user_id=str(current_user.id),
+            comment=body.comment,
+        )
+    except Exception:
+        log.exception("confirm_auto_block: activity log write failed for %s", reporter_id)
     await db.commit()
 
     try:
@@ -978,11 +992,26 @@ async def reverse_auto_block(
 
     now = datetime.now(timezone.utc)
     reporter.is_blocked = False
+    reporter.profile_status = "active"
     reporter.auto_block_confirmed = False
     reporter.pending_auto_block_confirmation = False
     reporter.block_reason = None
     reporter.blocked_at = None
     reporter.updated_at = now
+    try:
+        from app.services.reporter_activity_service import write_activity_log
+        await write_activity_log(
+            db,
+            reporter_id=reporter.id,
+            action="auto_block_reversed",
+            source=current_user.full_name,
+            previous_value="blocked",
+            new_value="active",
+            dashboard_user_id=str(current_user.id),
+            comment=body.comment,
+        )
+    except Exception:
+        log.exception("reverse_auto_block: activity log write failed for %s", reporter_id)
 
     await db.commit()
 

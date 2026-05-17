@@ -330,10 +330,22 @@ async def submit_report(
         reason="Report received — pending auto-flagging",
     ))
 
-    # Update reporter activity
+    # Update reporter activity and identity fields
     if reporter:
         reporter.report_count = (reporter.report_count or 0) + 1
         reporter.last_active_at = datetime.now(timezone.utc)
+        # Capture identity fields on first submission (never overwrite)
+        if not reporter.ip_address and client_ip:
+            reporter.ip_address = client_ip
+        if not reporter.app_version and request.app_version:
+            reporter.app_version = request.app_version
+        if not reporter.mcc and request.mcc:
+            reporter.mcc = request.mcc
+        # Update profile_type based on current state
+        if reporter.is_verified or reporter.name_encrypted or reporter.email_encrypted:
+            reporter.profile_type = "named_profile"
+        elif (reporter.report_count or 0) > 0:
+            reporter.profile_type = "anonymous_with_reports"
 
     await db.commit()
     await db.refresh(report)

@@ -113,6 +113,7 @@ async def auto_flag_report(report_id: str) -> None:
                             "device_id_hash": current_reporter.device_id_hash,
                         }
                         current_reporter.is_blocked = True
+                        current_reporter.profile_status = "blocked"
                         current_reporter.auto_blocked_at = datetime.now(timezone.utc)
                         current_reporter.auto_block_expires_at = (
                             datetime.now(timezone.utc)
@@ -122,6 +123,21 @@ async def auto_flag_report(report_id: str) -> None:
                         current_reporter.matched_blocked_reporter_id = str(matched_blocked.id)
                         current_reporter.auto_block_confirmed = False
                         db.add(current_reporter)
+                        matched_display = str(matched_blocked.display_id) if matched_blocked.display_id else str(matched_blocked.id)
+                        try:
+                            from app.services.reporter_activity_service import write_activity_log
+                            await write_activity_log(
+                                db,
+                                reporter_id=current_reporter.id,
+                                action="auto_blocked",
+                                source="System",
+                                previous_value="active",
+                                new_value="blocked",
+                                matched_reporter_id=matched_display,
+                                comment=f"Automatically blocked — device ID matches manually blocked profile {matched_display}",
+                            )
+                        except Exception:
+                            log.exception("auto_flag_report: activity log write failed for auto_blocked %s", current_reporter.id)
                         log.info(
                             "auto_flag_report: reporter %s auto-blocked — device_id matches blocked reporter %s",
                             current_reporter.id, matched_blocked.id,
@@ -195,6 +211,33 @@ async def auto_flag_report(report_id: str) -> None:
                 if (rapid_result.scalar() or 0) >= _thresholds["rapid_submission_count"]:
                     new_flag = "red"
                     flag_reason = "High submission rate detected"
+                    # Apply 24-hour submission pause on the reporter
+                    try:
+                        pause_rep_result = await db.execute(
+                            select(Reporter).where(Reporter.id == report.reporter_id)
+                        )
+                        pause_reporter = pause_rep_result.scalar_one_or_none()
+                        if pause_reporter and not pause_reporter.is_paused:
+                            pause_expires = datetime.now(timezone.utc) + timedelta(hours=24)
+                            pause_reporter.is_paused = True
+                            pause_reporter.pause_expires_at = pause_expires
+                            pause_reporter.pause_reason = "High submission volume"
+                            db.add(pause_reporter)
+                            from app.services.reporter_activity_service import write_activity_log
+                            await write_activity_log(
+                                db,
+                                reporter_id=pause_reporter.id,
+                                action="pause_applied",
+                                source="System",
+                                comment=(
+                                    f"Submission paused — device submitted more than "
+                                    f"{int(_thresholds['rapid_submission_count'])} reports in "
+                                    f"{int(_thresholds['rapid_submission_window_hours'])} hour(s). "
+                                    f"Expires {pause_expires.isoformat()}"
+                                ),
+                            )
+                    except Exception:
+                        log.exception("auto_flag_report: pause apply failed for reporter %s", report.reporter_id)
 
             # ── Rule 5 (new): IP country mismatch ────────────────────────────
             if new_flag == "green" and report.ip_address_hash:
