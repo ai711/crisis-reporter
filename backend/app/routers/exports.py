@@ -1,33 +1,45 @@
 """
-exports.py — Real CSV and GeoJSON export file generation with RAPIDA field mapping.
+exports.py — CSV, GeoJSON, Shapefile, and GeoPackage export generation
+with RAPIDA field mapping applied at export time.
 
-RAPIDA field name mapping applied at export time:
-  internal damage_level       → RAPIDA damage_classification
-  internal gps_latitude       → RAPIDA latitude_decimal
-  internal gps_longitude      → RAPIDA longitude_decimal
-  internal created_at         → RAPIDA timestamp
-  internal infrastructure_name → RAPIDA infrastructure_type
+RAPIDA field mappings:
+  damage_level        → damage_classification (Complete / Partial / Minimal)
+  gps_latitude        → latitude              (decimal degrees)
+  gps_longitude       → longitude             (decimal degrees)
+  created_at          → timestamp             (ISO 8601 UTC)
+  infrastructure_name → infrastructure_type   (single value)
+  infrastructure_types → infrastructure_type  (pipe-delimited multi-select)
 """
 
 import csv
 import json
+import os
 import pathlib
+import tempfile
 import uuid
+import zipfile
 from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator, model_validator
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
 from app.database import AsyncSessionLocal
 from app.models.crisis import Crisis
 from app.models.dashboard_user import DashboardUser
-from app.models.flag_event import FlagEvent  # noqa: F401 — ensures relationship is loaded
+from app.models.flag_event import FlagEvent  # noqa: F401 — ensures relationship loaded
 from app.models.report import Report
 from app.services.dependencies import get_current_dashboard_user
+
+try:
+    import geopandas as gpd
+    from shapely.geometry import Point
+    GEOPANDAS_AVAILABLE = True
+except ImportError:
+    GEOPANDAS_AVAILABLE = False
 
 router = APIRouter(prefix="/api/exports", tags=["Exports"])
 
@@ -37,7 +49,6 @@ EXPORT_DIR = pathlib.Path("/tmp/exports")
 EXPORT_DIR.mkdir(parents=True, exist_ok=True)
 
 # ── In-memory job store ───────────────────────────────────────────────────────
-# Sufficient for prototype — survives process lifetime
 
 _jobs: dict[str, dict] = {}
 
@@ -51,18 +62,28 @@ VALID_REPORT_TYPES = {
     "project_summary",
 }
 
-VALID_FORMATS = {"csv", "json", "geojson"}
+VALID_FORMATS = {"csv", "json", "geojson", "shapefile", "geopackage"}
 
 _CONTENT_TYPE: dict[str, str] = {
     "csv": "text/csv",
     "json": "application/json",
     "geojson": "application/geo+json",
+    "shapefile": "application/zip",
+    "geopackage": "application/geopackage+sqlite3",
 }
 
 _FILE_EXT: dict[str, str] = {
     "csv": "csv",
     "json": "json",
     "geojson": "geojson",
+    "shapefile": "zip",
+    "geopackage": "gpkg",
+}
+
+DAMAGE_MAP: dict[str, str] = {
+    "complete": "Complete",
+    "partial": "Partial",
+    "minimal": "Minimal",
 }
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
@@ -70,10 +91,30 @@ _FILE_EXT: dict[str, str] = {
 
 class GenerateRequest(BaseModel):
     report_type: str
-    date_from: Optional[str] = None
-    date_to: Optional[str] = None
-    country_filter: Optional[str] = None
-    format: str = "csv"
+    format: str
+    date_from: str
+    date_to: str
+    country_filter: list[str] | None = None
+    damage_level: list[str] | None = None
+    crisis_type: list[str] | None = None
+    flag_status: list[str] | None = None
+    platform: list[str] | None = None
+    project_id: str | None = None
+
+    @field_validator("date_from", "date_to")
+    @classmethod
+    def date_not_empty(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("Date range is required for all exports.")
+        return v.strip()
+
+    @model_validator(mode="after")
+    def cross_field_validate(self) -> "GenerateRequest":
+        if self.date_from and self.date_to and self.date_to < self.date_from:
+            raise ValueError("End date cannot be before start date.")
+        if self.report_type == "project_summary" and not self.project_id:
+            raise ValueError("Project selection is required for Project Summary Report.")
+        return self
 
 
 class GenerateResponse(BaseModel):
@@ -87,23 +128,31 @@ class JobStatusResponse(BaseModel):
 
 
 class ExportHistoryItem(BaseModel):
-    job_id: str
+    id: str
     report_type: str
     format: str
-    country_filter: Optional[str]
-    date_from: Optional[str]
-    date_to: Optional[str]
+    date_from: str
+    date_to: str
+    country_filter: Optional[list[str]] = None
+    damage_level: Optional[list[str]] = None
+    crisis_type: Optional[list[str]] = None
+    flag_status: Optional[list[str]] = None
+    platform: Optional[list[str]] = None
+    project_id: Optional[str] = None
     status: str
-    download_url: Optional[str]
+    download_url: Optional[str] = None
     created_at: datetime
     created_by: str
+
+
+class RedownloadResponse(BaseModel):
+    job_id: str
 
 
 # ── Shared utilities ──────────────────────────────────────────────────────────
 
 
 def _parse_date(s: str | None) -> datetime | None:
-    """Accept YYYY-MM-DD or full ISO-8601 strings; return None when blank."""
     if not s:
         return None
     try:
@@ -120,52 +169,102 @@ def _fmt(v: object) -> str:
     return "" if v is None else str(v)
 
 
-def _write_csv(
-    file_path: pathlib.Path,
-    headers: list[str],
-    rows: list[list[str]],
-) -> None:
-    """Write a UTF-8 CSV with a header row followed by data rows."""
+def _pipe(values: list[str] | None, fallback: str | None) -> str:
+    if values:
+        return "|".join(values)
+    return fallback or ""
+
+
+def _write_csv(file_path: pathlib.Path, headers: list[str], rows: list[list[str]]) -> None:
     with open(file_path, "w", newline="", encoding="utf-8") as fh:
         writer = csv.writer(fh)
         writer.writerow(headers)
         writer.writerows(rows)
 
 
+def build_filename(report_type: str, date_from: str, date_to: str, fmt: str) -> str:
+    type_labels = {
+        "standard_damage": "StandardDamageReport",
+        "full_data": "FullDataReport",
+        "reporter_activity": "ReporterActivityReport",
+        "flagged_reports": "FlaggedReportsReport",
+        "project_summary": "ProjectSummaryReport",
+    }
+    ext_map = {
+        "csv": "csv",
+        "json": "json",
+        "geojson": "geojson",
+        "shapefile": "zip",
+        "geopackage": "gpkg",
+    }
+    label = type_labels.get(report_type, report_type)
+    ext = ext_map.get(fmt, fmt)
+    return f"CrisisReporter_{label}_{date_from}_to_{date_to}_RAPIDA.{ext}"
+
+
+def _build_where_clauses(job: dict, default_flag_statuses: list[str]) -> list:
+    """Return a list of SQLAlchemy WHERE conditions derived from job filter dict."""
+    clauses = []
+
+    date_from = _parse_date(job.get("date_from"))
+    date_to = _parse_date(job.get("date_to"))
+    if date_from:
+        clauses.append(Report.created_at >= date_from)
+    if date_to:
+        clauses.append(Report.created_at <= date_to)
+
+    country_filter = job.get("country_filter")
+    if country_filter:
+        crisis_subq = select(Crisis.id).where(
+            Crisis.country_code.in_(country_filter)
+        ).scalar_subquery()
+        clauses.append(Report.crisis_id.in_(crisis_subq))
+
+    damage_level = job.get("damage_level")
+    if damage_level:
+        clauses.append(Report.damage_level.in_(damage_level))
+
+    crisis_type = job.get("crisis_type")
+    if crisis_type:
+        clauses.append(Report.disaster_type.in_(crisis_type))
+
+    flag_status = job.get("flag_status")
+    if flag_status:
+        clauses.append(Report.flag_status.in_(flag_status))
+    else:
+        clauses.append(Report.flag_status.in_(default_flag_statuses))
+
+    platform = job.get("platform")
+    if platform:
+        clauses.append(Report.platform.in_(platform))
+
+    project_id = job.get("project_id")
+    if project_id:
+        clauses.append(Report.crisis_id == project_id)
+
+    return clauses
+
+
 # ── Standard Damage Report (CSV) ──────────────────────────────────────────────
 
 _STANDARD_DAMAGE_HEADERS = [
-    "timestamp",            # RAPIDA: created_at
-    "latitude_decimal",     # RAPIDA: gps_latitude
-    "longitude_decimal",    # RAPIDA: gps_longitude
-    "damage_classification",# RAPIDA: damage_level
-    "infrastructure_type",  # RAPIDA: infrastructure_name
+    "timestamp",
+    "latitude",
+    "longitude",
+    "damage_classification",
+    "infrastructure_type",
     "disaster_type",
     "debris_blocking",
     "reporter_id",
 ]
 
 
-async def _gen_standard_damage_csv(
-    file_path: pathlib.Path,
-    date_from: datetime | None,
-    date_to: datetime | None,
-    country_filter: str | None,
-) -> None:
+async def _gen_standard_damage_csv(file_path: pathlib.Path, job: dict) -> None:
     async with AsyncSessionLocal() as session:
         stmt = select(Report)
-        if country_filter:
-            stmt = stmt.join(Crisis, Report.crisis_id == Crisis.id).where(
-                Crisis.country_code == country_filter
-            )
-        if date_from:
-            stmt = stmt.where(Report.created_at >= date_from)
-        if date_to:
-            stmt = stmt.where(Report.created_at <= date_to)
-        # Default inclusion: green and orange flags only
-        stmt = stmt.where(Report.flag_status.in_(["green", "orange"]))
+        for clause in _build_where_clauses(job, ["green", "orange"]):
+            stmt = stmt.where(clause)
         stmt = stmt.order_by(Report.created_at)
-
         result = await session.execute(stmt)
         reports = result.scalars().all()
 
@@ -174,8 +273,8 @@ async def _gen_standard_damage_csv(
             _fmt_dt(r.created_at),
             _fmt(r.gps_latitude),
             _fmt(r.gps_longitude),
-            r.damage_level,
-            _fmt(r.infrastructure_name),
+            DAMAGE_MAP.get(r.damage_level, r.damage_level),
+            _pipe(r.infrastructure_types, r.infrastructure_name),
             _fmt(r.disaster_type),
             _fmt(r.debris_blocking),
             _fmt(r.reporter_id),
@@ -188,28 +287,15 @@ async def _gen_standard_damage_csv(
 # ── Standard Damage Report (GeoJSON) ─────────────────────────────────────────
 
 
-async def _gen_standard_damage_geojson(
-    file_path: pathlib.Path,
-    date_from: datetime | None,
-    date_to: datetime | None,
-    country_filter: str | None,
-) -> None:
+async def _gen_standard_damage_geojson(file_path: pathlib.Path, job: dict) -> None:
     async with AsyncSessionLocal() as session:
-        stmt = select(Report)
-        if country_filter:
-            stmt = stmt.join(Crisis, Report.crisis_id == Crisis.id).where(
-                Crisis.country_code == country_filter
-            )
-        if date_from:
-            stmt = stmt.where(Report.created_at >= date_from)
-        if date_to:
-            stmt = stmt.where(Report.created_at <= date_to)
-        stmt = stmt.where(Report.flag_status.in_(["green", "orange"]))
-        # Only reports that have valid coordinates make sense in GeoJSON
-        stmt = stmt.where(Report.gps_latitude.isnot(None))
-        stmt = stmt.where(Report.gps_longitude.isnot(None))
+        stmt = select(Report).where(
+            Report.gps_latitude.isnot(None),
+            Report.gps_longitude.isnot(None),
+        )
+        for clause in _build_where_clauses(job, ["green", "orange"]):
+            stmt = stmt.where(clause)
         stmt = stmt.order_by(Report.created_at)
-
         result = await session.execute(stmt)
         reports = result.scalars().all()
 
@@ -218,35 +304,121 @@ async def _gen_standard_damage_geojson(
             "type": "Feature",
             "geometry": {
                 "type": "Point",
-                # GeoJSON spec: [longitude, latitude]
                 "coordinates": [r.gps_longitude, r.gps_latitude],
             },
             "properties": {
-                "damage_classification": r.damage_level,
-                "infrastructure_type": r.infrastructure_name,
                 "timestamp": _fmt_dt(r.created_at),
-                "disaster_type": r.disaster_type,
+                "damage_classification": DAMAGE_MAP.get(r.damage_level, r.damage_level),
+                "infrastructure_type": _pipe(r.infrastructure_types, r.infrastructure_name),
+                "disaster_type": _fmt(r.disaster_type),
                 "reporter_id": str(r.reporter_id) if r.reporter_id else None,
             },
         }
         for r in reports
     ]
-
-    feature_collection = {"type": "FeatureCollection", "features": features}
     with open(file_path, "w", encoding="utf-8") as fh:
-        json.dump(feature_collection, fh, ensure_ascii=False, indent=2)
+        json.dump({"type": "FeatureCollection", "features": features}, fh,
+                  ensure_ascii=False, indent=2)
+
+
+# ── Shapefile (ZIP) ───────────────────────────────────────────────────────────
+
+
+async def _gen_shapefile(file_path: pathlib.Path, job: dict) -> None:
+    if not GEOPANDAS_AVAILABLE:
+        raise RuntimeError(
+            "Shapefile/GeoPackage generation unavailable — GIS libraries not installed "
+            "on this server. Please use GeoJSON format instead."
+        )
+    async with AsyncSessionLocal() as session:
+        stmt = select(Report).where(
+            Report.gps_latitude.isnot(None),
+            Report.gps_longitude.isnot(None),
+        )
+        for clause in _build_where_clauses(job, ["green", "orange"]):
+            stmt = stmt.where(clause)
+        stmt = stmt.order_by(Report.created_at)
+        result = await session.execute(stmt)
+        reports = result.scalars().all()
+
+    if not reports:
+        raise RuntimeError("No records with valid GPS coordinates to export as Shapefile.")
+
+    # Shapefile column names are capped at 10 chars by the ESRI format spec
+    records = [
+        {
+            "rpt_id": str(r.id)[:10],
+            "timestamp": _fmt_dt(r.created_at)[:80],
+            "dmg_class": DAMAGE_MAP.get(r.damage_level, r.damage_level),
+            "infra_type": _pipe(r.infrastructure_types, r.infrastructure_name)[:80],
+            "dsastr_tp": _fmt(r.disaster_type)[:40],
+            "flag_stat": r.flag_status,
+            "rptr_id": str(r.reporter_id)[:36] if r.reporter_id else "",
+            "geometry": Point(r.gps_longitude, r.gps_latitude),
+        }
+        for r in reports
+    ]
+
+    gdf = gpd.GeoDataFrame(records, crs="EPSG:4326")
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        shp_path = os.path.join(tmpdir, "crisis_reporter_export.shp")
+        gdf.to_file(shp_path, driver="ESRI Shapefile")
+        with zipfile.ZipFile(str(file_path), "w") as zf:
+            for fname in os.listdir(tmpdir):
+                zf.write(os.path.join(tmpdir, fname), fname)
+
+
+# ── GeoPackage ────────────────────────────────────────────────────────────────
+
+
+async def _gen_geopackage(file_path: pathlib.Path, job: dict) -> None:
+    if not GEOPANDAS_AVAILABLE:
+        raise RuntimeError(
+            "Shapefile/GeoPackage generation unavailable — GIS libraries not installed "
+            "on this server. Please use GeoJSON format instead."
+        )
+    async with AsyncSessionLocal() as session:
+        stmt = select(Report).where(
+            Report.gps_latitude.isnot(None),
+            Report.gps_longitude.isnot(None),
+        )
+        for clause in _build_where_clauses(job, ["green", "orange"]):
+            stmt = stmt.where(clause)
+        stmt = stmt.order_by(Report.created_at)
+        result = await session.execute(stmt)
+        reports = result.scalars().all()
+
+    if not reports:
+        raise RuntimeError("No records with valid GPS coordinates to export as GeoPackage.")
+
+    records = [
+        {
+            "report_id": str(r.id),
+            "timestamp": _fmt_dt(r.created_at),
+            "damage_classification": DAMAGE_MAP.get(r.damage_level, r.damage_level),
+            "infrastructure_type": _pipe(r.infrastructure_types, r.infrastructure_name),
+            "disaster_type": _fmt(r.disaster_type),
+            "flag_status": r.flag_status,
+            "reporter_id": str(r.reporter_id) if r.reporter_id else "",
+            "geometry": Point(r.gps_longitude, r.gps_latitude),
+        }
+        for r in reports
+    ]
+
+    gdf = gpd.GeoDataFrame(records, crs="EPSG:4326")
+    gdf.to_file(str(file_path), driver="GPKG")
 
 
 # ── Full Data Report (CSV) ────────────────────────────────────────────────────
 
 _FULL_DATA_HEADERS = [
     "id",
-    "timestamp",             # RAPIDA: created_at
-    "latitude_decimal",      # RAPIDA: gps_latitude
-    "longitude_decimal",     # RAPIDA: gps_longitude
-    "damage_classification", # RAPIDA: damage_level
-    "infrastructure_type",   # RAPIDA: infrastructure_name
-    "infrastructure_types",  # multi-select, semicolon-separated
+    "timestamp",
+    "latitude",
+    "longitude",
+    "damage_classification",
+    "infrastructure_type",
     "infrastructure_other",
     "disaster_type",
     "debris_blocking",
@@ -264,83 +436,53 @@ _FULL_DATA_HEADERS = [
 ]
 
 
-async def _gen_full_data_csv(
-    file_path: pathlib.Path,
-    date_from: datetime | None,
-    date_to: datetime | None,
-    country_filter: str | None,
-) -> None:
+async def _gen_full_data_csv(file_path: pathlib.Path, job: dict) -> None:
     async with AsyncSessionLocal() as session:
         stmt = select(Report).options(selectinload(Report.flag_events))
-        if country_filter:
-            stmt = stmt.join(Crisis, Report.crisis_id == Crisis.id).where(
-                Crisis.country_code == country_filter
-            )
-        if date_from:
-            stmt = stmt.where(Report.created_at >= date_from)
-        if date_to:
-            stmt = stmt.where(Report.created_at <= date_to)
-        # Full data: all flag statuses included
+        # Full data: include all flag statuses unless user specified a filter
+        for clause in _build_where_clauses(job, ["grey", "green", "orange", "red", "discarded"]):
+            stmt = stmt.where(clause)
         stmt = stmt.order_by(Report.created_at)
-
         result = await session.execute(stmt)
         reports = result.scalars().all()
 
-    rows = []
-    for r in reports:
-        infra_types = (
-            ";".join(r.infrastructure_types) if r.infrastructure_types else ""
-        )
-        rows.append(
-            [
-                str(r.id),
-                _fmt_dt(r.created_at),
-                _fmt(r.gps_latitude),
-                _fmt(r.gps_longitude),
-                r.damage_level,
-                _fmt(r.infrastructure_name),
-                infra_types,
-                _fmt(r.infrastructure_other),
-                _fmt(r.disaster_type),
-                _fmt(r.debris_blocking),
-                r.flag_status,
-                r.platform,
-                r.language_code,
-                _fmt(r.location_address),
-                _fmt(r.location_landmark),
-                _fmt(r.building_id),
-                _fmt(r.reporter_id),
-                str(r.crisis_id),
-                str(r.was_queued),
-                _fmt(r.description),
-                str(len(r.flag_events)),
-            ]
-        )
-
+    rows = [
+        [
+            str(r.id),
+            _fmt_dt(r.created_at),
+            _fmt(r.gps_latitude),
+            _fmt(r.gps_longitude),
+            DAMAGE_MAP.get(r.damage_level, r.damage_level),
+            _pipe(r.infrastructure_types, r.infrastructure_name),
+            _fmt(r.infrastructure_other),
+            _fmt(r.disaster_type),
+            _fmt(r.debris_blocking),
+            r.flag_status,
+            r.platform,
+            r.language_code,
+            _fmt(r.location_address),
+            _fmt(r.location_landmark),
+            _fmt(r.building_id),
+            _fmt(r.reporter_id),
+            str(r.crisis_id),
+            str(r.was_queued),
+            _fmt(r.description),
+            str(len(r.flag_events)),
+        ]
+        for r in reports
+    ]
     _write_csv(file_path, _FULL_DATA_HEADERS, rows)
 
 
 # ── Full Data Report (JSON) ───────────────────────────────────────────────────
 
 
-async def _gen_full_data_json(
-    file_path: pathlib.Path,
-    date_from: datetime | None,
-    date_to: datetime | None,
-    country_filter: str | None,
-) -> None:
+async def _gen_full_data_json(file_path: pathlib.Path, job: dict) -> None:
     async with AsyncSessionLocal() as session:
         stmt = select(Report).options(selectinload(Report.flag_events))
-        if country_filter:
-            stmt = stmt.join(Crisis, Report.crisis_id == Crisis.id).where(
-                Crisis.country_code == country_filter
-            )
-        if date_from:
-            stmt = stmt.where(Report.created_at >= date_from)
-        if date_to:
-            stmt = stmt.where(Report.created_at <= date_to)
+        for clause in _build_where_clauses(job, ["grey", "green", "orange", "red", "discarded"]):
+            stmt = stmt.where(clause)
         stmt = stmt.order_by(Report.created_at)
-
         result = await session.execute(stmt)
         reports = result.scalars().all()
 
@@ -348,11 +490,10 @@ async def _gen_full_data_json(
         {
             "id": str(r.id),
             "timestamp": _fmt_dt(r.created_at),
-            "latitude_decimal": r.gps_latitude,
-            "longitude_decimal": r.gps_longitude,
-            "damage_classification": r.damage_level,
-            "infrastructure_type": r.infrastructure_name,
-            "infrastructure_types": r.infrastructure_types or [],
+            "latitude": r.gps_latitude,
+            "longitude": r.gps_longitude,
+            "damage_classification": DAMAGE_MAP.get(r.damage_level, r.damage_level),
+            "infrastructure_type": _pipe(r.infrastructure_types, r.infrastructure_name),
             "infrastructure_other": r.infrastructure_other,
             "disaster_type": r.disaster_type,
             "debris_blocking": r.debris_blocking,
@@ -370,7 +511,6 @@ async def _gen_full_data_json(
         }
         for r in reports
     ]
-
     with open(file_path, "w", encoding="utf-8") as fh:
         json.dump(records, fh, ensure_ascii=False, indent=2)
 
@@ -386,14 +526,10 @@ _REPORTER_ACTIVITY_HEADERS = [
 ]
 
 
-async def _gen_reporter_activity_csv(
-    file_path: pathlib.Path,
-    date_from: datetime | None,
-    date_to: datetime | None,
-    country_filter: str | None,
-) -> None:
+async def _gen_reporter_activity_csv(file_path: pathlib.Path, job: dict) -> None:
+    clauses = _build_where_clauses(job, ["grey", "green", "orange", "red", "discarded"])
+
     async with AsyncSessionLocal() as session:
-        # Aggregate counts, date range per reporter
         agg_stmt = (
             select(
                 Report.reporter_id,
@@ -403,14 +539,8 @@ async def _gen_reporter_activity_csv(
             )
             .where(Report.reporter_id.isnot(None))
         )
-        if country_filter:
-            agg_stmt = agg_stmt.join(
-                Crisis, Report.crisis_id == Crisis.id
-            ).where(Crisis.country_code == country_filter)
-        if date_from:
-            agg_stmt = agg_stmt.where(Report.created_at >= date_from)
-        if date_to:
-            agg_stmt = agg_stmt.where(Report.created_at <= date_to)
+        for clause in clauses:
+            agg_stmt = agg_stmt.where(clause)
         agg_stmt = agg_stmt.group_by(Report.reporter_id).order_by(
             func.count(Report.id).desc()
         )
@@ -418,8 +548,6 @@ async def _gen_reporter_activity_csv(
         agg_rows = agg_result.all()
 
         reporter_ids = [row.reporter_id for row in agg_rows]
-
-        # Collect distinct country codes per reporter from their report crises
         countries_by_reporter: dict[uuid.UUID, set[str]] = {
             rid: set() for rid in reporter_ids
         }
@@ -441,7 +569,7 @@ async def _gen_reporter_activity_csv(
             str(row.total_reports),
             _fmt_dt(row.first_submission),
             _fmt_dt(row.last_submission),
-            ";".join(sorted(countries_by_reporter.get(row.reporter_id, set()))),
+            "|".join(sorted(countries_by_reporter.get(row.reporter_id, set()))),
         ]
         for row in agg_rows
     ]
@@ -452,8 +580,8 @@ async def _gen_reporter_activity_csv(
 
 _FLAGGED_REPORTS_HEADERS = [
     "timestamp",
-    "latitude_decimal",
-    "longitude_decimal",
+    "latitude",
+    "longitude",
     "damage_classification",
     "infrastructure_type",
     "disaster_type",
@@ -464,46 +592,29 @@ _FLAGGED_REPORTS_HEADERS = [
 ]
 
 
-async def _gen_flagged_reports_csv(
-    file_path: pathlib.Path,
-    date_from: datetime | None,
-    date_to: datetime | None,
-    country_filter: str | None,
-) -> None:
+async def _gen_flagged_reports_csv(file_path: pathlib.Path, job: dict) -> None:
     async with AsyncSessionLocal() as session:
-        stmt = (
-            select(Report)
-            .options(selectinload(Report.flag_events))
-            .where(Report.flag_status.in_(["red", "orange"]))
-        )
-        if country_filter:
-            stmt = stmt.join(Crisis, Report.crisis_id == Crisis.id).where(
-                Crisis.country_code == country_filter
-            )
-        if date_from:
-            stmt = stmt.where(Report.created_at >= date_from)
-        if date_to:
-            stmt = stmt.where(Report.created_at <= date_to)
+        stmt = select(Report).options(selectinload(Report.flag_events))
+        # Default for audit report: all non-green statuses
+        for clause in _build_where_clauses(job, ["red", "orange", "grey", "discarded"]):
+            stmt = stmt.where(clause)
         stmt = stmt.order_by(Report.created_at)
-
         result = await session.execute(stmt)
         reports = result.scalars().all()
 
     rows = []
     for r in reports:
-        # Most recent flag event carries the authoritative reason
         flag_reason = ""
         if r.flag_events:
             latest = max(r.flag_events, key=lambda e: e.created_at)
             flag_reason = latest.reason or ""
-
         rows.append(
             [
                 _fmt_dt(r.created_at),
                 _fmt(r.gps_latitude),
                 _fmt(r.gps_longitude),
-                r.damage_level,
-                _fmt(r.infrastructure_name),
+                DAMAGE_MAP.get(r.damage_level, r.damage_level),
+                _pipe(r.infrastructure_types, r.infrastructure_name),
                 _fmt(r.disaster_type),
                 _fmt(r.debris_blocking),
                 _fmt(r.reporter_id),
@@ -511,93 +622,143 @@ async def _gen_flagged_reports_csv(
                 flag_reason,
             ]
         )
-
     _write_csv(file_path, _FLAGGED_REPORTS_HEADERS, rows)
+
+
+# ── Flagged Reports Report (JSON) ─────────────────────────────────────────────
+
+
+async def _gen_flagged_reports_json(file_path: pathlib.Path, job: dict) -> None:
+    async with AsyncSessionLocal() as session:
+        stmt = select(Report).options(selectinload(Report.flag_events))
+        for clause in _build_where_clauses(job, ["red", "orange", "grey", "discarded"]):
+            stmt = stmt.where(clause)
+        stmt = stmt.order_by(Report.created_at)
+        result = await session.execute(stmt)
+        reports = result.scalars().all()
+
+    records = []
+    for r in reports:
+        flag_reason = ""
+        if r.flag_events:
+            latest = max(r.flag_events, key=lambda e: e.created_at)
+            flag_reason = latest.reason or ""
+        records.append(
+            {
+                "timestamp": _fmt_dt(r.created_at),
+                "latitude": r.gps_latitude,
+                "longitude": r.gps_longitude,
+                "damage_classification": DAMAGE_MAP.get(r.damage_level, r.damage_level),
+                "infrastructure_type": _pipe(r.infrastructure_types, r.infrastructure_name),
+                "disaster_type": _fmt(r.disaster_type),
+                "flag_status": r.flag_status,
+                "flag_reason": flag_reason,
+                "reporter_id": str(r.reporter_id) if r.reporter_id else None,
+            }
+        )
+    with open(file_path, "w", encoding="utf-8") as fh:
+        json.dump(records, fh, ensure_ascii=False, indent=2)
 
 
 # ── Project Summary Report (CSV) ──────────────────────────────────────────────
 
 
-async def _gen_project_summary_csv(
-    file_path: pathlib.Path,
-    date_from: datetime | None,
-    date_to: datetime | None,
-    country_filter: str | None,
-) -> None:
+async def _gen_project_summary_csv(file_path: pathlib.Path, job: dict) -> None:
     async with AsyncSessionLocal() as session:
         stmt = select(
             Report.flag_status,
             Report.damage_level,
             func.count(Report.id).label("count"),
         )
-        if country_filter:
-            stmt = stmt.join(Crisis, Report.crisis_id == Crisis.id).where(
-                Crisis.country_code == country_filter
-            )
-        if date_from:
-            stmt = stmt.where(Report.created_at >= date_from)
-        if date_to:
-            stmt = stmt.where(Report.created_at <= date_to)
+        for clause in _build_where_clauses(job, ["green", "orange"]):
+            stmt = stmt.where(clause)
         stmt = stmt.group_by(Report.flag_status, Report.damage_level)
-
         result = await session.execute(stmt)
         summary_rows = result.all()
 
     headers = ["flag_status", "damage_classification", "count"]
     rows = [
-        [row.flag_status, row.damage_level, str(row.count)]
+        [row.flag_status, DAMAGE_MAP.get(row.damage_level, row.damage_level), str(row.count)]
         for row in summary_rows
     ]
     _write_csv(file_path, headers, rows)
+
+
+# ── Project Summary Report (GeoJSON) ─────────────────────────────────────────
+
+
+async def _gen_project_summary_geojson(file_path: pathlib.Path, job: dict) -> None:
+    async with AsyncSessionLocal() as session:
+        stmt = select(Report).where(
+            Report.gps_latitude.isnot(None),
+            Report.gps_longitude.isnot(None),
+        )
+        for clause in _build_where_clauses(job, ["green", "orange"]):
+            stmt = stmt.where(clause)
+        stmt = stmt.order_by(Report.created_at)
+        result = await session.execute(stmt)
+        reports = result.scalars().all()
+
+    features = [
+        {
+            "type": "Feature",
+            "geometry": {
+                "type": "Point",
+                "coordinates": [r.gps_longitude, r.gps_latitude],
+            },
+            "properties": {
+                "timestamp": _fmt_dt(r.created_at),
+                "damage_classification": DAMAGE_MAP.get(r.damage_level, r.damage_level),
+                "infrastructure_type": _pipe(r.infrastructure_types, r.infrastructure_name),
+                "flag_status": r.flag_status,
+            },
+        }
+        for r in reports
+    ]
+    with open(file_path, "w", encoding="utf-8") as fh:
+        json.dump({"type": "FeatureCollection", "features": features}, fh,
+                  ensure_ascii=False, indent=2)
 
 
 # ── Background generation task ────────────────────────────────────────────────
 
 
 async def _generate_file(job_id: str) -> None:
-    """
-    Background task: generates the export file and updates the in-memory job
-    record with status and file path.  Runs after the HTTP response is sent.
-    """
     job = _jobs.get(job_id)
     if not job:
         return
 
     report_type: str = job["report_type"]
     fmt: str = job["format"]
-    date_from = _parse_date(job["date_from"])
-    date_to = _parse_date(job["date_to"])
-    country_filter: str | None = job["country_filter"]
+    date_from: str = job["date_from"]
+    date_to: str = job["date_to"]
 
     ext = _FILE_EXT.get(fmt, "csv")
     file_path = EXPORT_DIR / f"{job_id}.{ext}"
 
     try:
         if report_type == "standard_damage" and fmt == "geojson":
-            await _gen_standard_damage_geojson(
-                file_path, date_from, date_to, country_filter
-            )
+            await _gen_standard_damage_geojson(file_path, job)
+        elif report_type == "standard_damage" and fmt == "shapefile":
+            await _gen_shapefile(file_path, job)
+        elif report_type == "standard_damage" and fmt == "geopackage":
+            await _gen_geopackage(file_path, job)
         elif report_type == "standard_damage":
-            await _gen_standard_damage_csv(
-                file_path, date_from, date_to, country_filter
-            )
+            await _gen_standard_damage_csv(file_path, job)
         elif report_type == "full_data" and fmt == "json":
-            await _gen_full_data_json(file_path, date_from, date_to, country_filter)
+            await _gen_full_data_json(file_path, job)
         elif report_type == "full_data":
-            await _gen_full_data_csv(file_path, date_from, date_to, country_filter)
+            await _gen_full_data_csv(file_path, job)
         elif report_type == "reporter_activity":
-            await _gen_reporter_activity_csv(
-                file_path, date_from, date_to, country_filter
-            )
+            await _gen_reporter_activity_csv(file_path, job)
+        elif report_type == "flagged_reports" and fmt == "json":
+            await _gen_flagged_reports_json(file_path, job)
         elif report_type == "flagged_reports":
-            await _gen_flagged_reports_csv(
-                file_path, date_from, date_to, country_filter
-            )
+            await _gen_flagged_reports_csv(file_path, job)
+        elif report_type == "project_summary" and fmt == "geojson":
+            await _gen_project_summary_geojson(file_path, job)
         else:
-            # project_summary and any future types
-            await _gen_project_summary_csv(
-                file_path, date_from, date_to, country_filter
-            )
+            await _gen_project_summary_csv(file_path, job)
 
         _jobs[job_id]["status"] = "complete"
         _jobs[job_id]["file_path"] = str(file_path)
@@ -611,17 +772,16 @@ async def _generate_file(job_id: str) -> None:
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 
-@router.post("/generate", response_model=GenerateResponse, status_code=status.HTTP_202_ACCEPTED)
+@router.post(
+    "/generate",
+    response_model=GenerateResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
 async def generate_export(
     request: GenerateRequest,
     background_tasks: BackgroundTasks,
     current_user: DashboardUser = Depends(get_current_dashboard_user),
 ) -> GenerateResponse:
-    """
-    Create an export job.  Returns job_id immediately (202 Accepted).
-    The file is generated in a background task; poll /{job_id}/status to
-    check progress, then download via /{job_id}/download when complete.
-    """
     if request.report_type not in VALID_REPORT_TYPES:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -634,14 +794,22 @@ async def generate_export(
         )
 
     job_id = str(uuid.uuid4())
+    configuration = {
+        "report_type": request.report_type,
+        "format": request.format,
+        "date_from": request.date_from,
+        "date_to": request.date_to,
+        "country_filter": request.country_filter,
+        "damage_level": request.damage_level,
+        "crisis_type": request.crisis_type,
+        "flag_status": request.flag_status,
+        "platform": request.platform,
+        "project_id": request.project_id,
+    }
 
     _jobs[job_id] = {
         "job_id": job_id,
-        "report_type": request.report_type,
-        "format": request.format,
-        "country_filter": request.country_filter,
-        "date_from": request.date_from,
-        "date_to": request.date_to,
+        **configuration,
         "status": "pending",
         "file_path": None,
         "download_url": None,
@@ -649,6 +817,7 @@ async def generate_export(
         "created_at": datetime.now(timezone.utc),
         "user_id": str(current_user.id),
         "created_by": current_user.email,
+        "configuration": configuration,
     }
 
     background_tasks.add_task(_generate_file, job_id)
@@ -659,19 +828,23 @@ async def generate_export(
 async def get_export_history(
     current_user: DashboardUser = Depends(get_current_dashboard_user),
 ) -> list[ExportHistoryItem]:
-    """Return the last 20 exports initiated by the authenticated user."""
     user_id = str(current_user.id)
     user_jobs = [j for j in _jobs.values() if j["user_id"] == user_id]
     user_jobs.sort(key=lambda j: j["created_at"], reverse=True)
 
     return [
         ExportHistoryItem(
-            job_id=j["job_id"],
+            id=j["job_id"],
             report_type=j["report_type"],
             format=j["format"],
-            country_filter=j["country_filter"],
             date_from=j["date_from"],
             date_to=j["date_to"],
+            country_filter=j.get("country_filter"),
+            damage_level=j.get("damage_level"),
+            crisis_type=j.get("crisis_type"),
+            flag_status=j.get("flag_status"),
+            platform=j.get("platform"),
+            project_id=j.get("project_id"),
             status=j["status"],
             download_url=j.get("download_url"),
             created_at=j["created_at"],
@@ -686,18 +859,11 @@ async def get_job_status(
     job_id: str,
     current_user: DashboardUser = Depends(get_current_dashboard_user),
 ) -> JobStatusResponse:
-    """Poll export job status.  Returns pending → complete or failed."""
     job = _jobs.get(job_id)
     if not job:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Export job not found",
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Export job not found")
     if job["user_id"] != str(current_user.id):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied",
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
     return JobStatusResponse(
         status=job["status"],
         download_url=job.get("download_url"),
@@ -705,28 +871,49 @@ async def get_job_status(
     )
 
 
+@router.post("/{job_id}/redownload", response_model=GenerateResponse)
+async def redownload_export(
+    job_id: str,
+    background_tasks: BackgroundTasks,
+    current_user: DashboardUser = Depends(get_current_dashboard_user),
+) -> GenerateResponse:
+    """Create a fresh generation job using the same configuration as an existing job."""
+    job = _jobs.get(job_id)
+    if not job:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Export job not found")
+    if job["user_id"] != str(current_user.id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
+    configuration: dict = job.get("configuration", {})
+    new_job_id = str(uuid.uuid4())
+
+    _jobs[new_job_id] = {
+        "job_id": new_job_id,
+        **configuration,
+        "status": "pending",
+        "file_path": None,
+        "download_url": None,
+        "error": None,
+        "created_at": datetime.now(timezone.utc),
+        "user_id": str(current_user.id),
+        "created_by": current_user.email,
+        "configuration": configuration,
+    }
+
+    background_tasks.add_task(_generate_file, new_job_id)
+    return GenerateResponse(job_id=new_job_id)
+
+
 @router.get("/{job_id}/download")
 async def download_export(
     job_id: str,
     current_user: DashboardUser = Depends(get_current_dashboard_user),
 ) -> FileResponse:
-    """
-    Stream the generated export file to the browser.
-
-    Sets Content-Type and Content-Disposition so the browser triggers a
-    named file download rather than displaying the content inline.
-    """
     job = _jobs.get(job_id)
     if not job:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Export job not found",
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Export job not found")
     if job["user_id"] != str(current_user.id):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied",
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
     if job["status"] == "pending":
         raise HTTPException(
             status_code=status.HTTP_425_TOO_EARLY,
@@ -740,24 +927,19 @@ async def download_export(
 
     file_path_str: str | None = job.get("file_path")
     if not file_path_str:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Export file path missing — regenerate this export",
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail="Export file path missing — regenerate this export")
 
     file_path = pathlib.Path(file_path_str)
     if not file_path.exists():
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Export file has been removed from disk — regenerate this export",
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail="Export file has been removed from disk — regenerate this export")
 
     fmt: str = job["format"]
-    ext = _FILE_EXT.get(fmt, "bin")
     content_type = _CONTENT_TYPE.get(fmt, "application/octet-stream")
-    # Filename: crisis_reporter_export_<8-char-job-prefix>_<type>.<ext>
-    safe_type = job["report_type"].replace(" ", "_")
-    filename = f"crisis_reporter_{safe_type}_{job_id[:8]}.{ext}"
+    filename = build_filename(
+        job["report_type"], job["date_from"], job["date_to"], fmt
+    )
 
     return FileResponse(
         path=str(file_path),

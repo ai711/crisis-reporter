@@ -18,4 +18,7 @@ python-dotenv==1.2.2
 alembic==1.18.4
 psycopg2-binary==2.9.12
 pydantic-settings==2.14.0
-# fiona and geopandas deferred — requires GDAL, added at export stage
+geopandas==0.14.4
+fiona==1.9.6
+pyproj==3.6.1
+shapely==2.0.4
