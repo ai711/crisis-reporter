@@ -1,11 +1,15 @@
 import asyncio
+import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 from pathlib import Path
+from sqlalchemy import text
 from app.config import settings
 from app.database import engine, Base
+
+logger = logging.getLogger(__name__)
 
 # Import all models so SQLAlchemy registers them
 import app.models
@@ -47,10 +51,25 @@ async def _stuck_report_loop() -> None:
         await monitor_stuck_grey_reports()
 
 
+_MIGRATIONS = [
+    "ALTER TABLE dashboard_users ADD COLUMN IF NOT EXISTS first_name VARCHAR(100)",
+    "ALTER TABLE dashboard_users ADD COLUMN IF NOT EXISTS last_name VARCHAR(100)",
+    "ALTER TABLE dashboard_users ADD COLUMN IF NOT EXISTS contact_number VARCHAR(50)",
+    "ALTER TABLE dashboard_users ADD COLUMN IF NOT EXISTS profile_photo_url TEXT",
+    "ALTER TABLE reports ADD COLUMN IF NOT EXISTS property_id VARCHAR(50)",
+    "ALTER TABLE reports ADD COLUMN IF NOT EXISTS ip_address_hash VARCHAR(64)",
+]
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        for stmt in _MIGRATIONS:
+            try:
+                await conn.execute(text(stmt))
+            except Exception as e:
+                logger.warning("Migration skipped: %s — %s", stmt, e)
     Path(settings.LOCAL_UPLOAD_PATH).mkdir(parents=True, exist_ok=True)
     await seed_initial_package()
     await seed_string_keys()
