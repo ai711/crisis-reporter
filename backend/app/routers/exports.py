@@ -175,17 +175,22 @@ def _pipe(values: list[str] | None, fallback: str | None) -> str:
     return fallback or ""
 
 
-def _fix_gdf_dtypes(gdf: "gpd.GeoDataFrame") -> "gpd.GeoDataFrame":
+def _make_gdf(records: list[dict], crs: str = "EPSG:4326") -> "gpd.GeoDataFrame":
     """
-    Pandas 2.x infers StringDtype for string columns (repr starts with
-    'StringDtype', not 'string'), but fiona only accepts NumPy object dtype.
-    Unconditionally cast every non-geometry column to object — safe because
-    all our stored values are plain Python strings or None.
+    Build a GeoDataFrame without triggering pandas 2.x StringDtype inference.
+
+    Pandas 2.x defaults to StringDtype for string columns when constructing a
+    DataFrame from dicts, but fiona (geopandas' file backend) only understands
+    NumPy object dtype.  The fix is to separate geometry from attributes and
+    pass dtype=object when constructing the intermediate DataFrame — this
+    prevents StringDtype from ever being set, so no post-hoc cast is needed.
     """
-    for col in gdf.columns:
-        if col != "geometry":
-            gdf[col] = gdf[col].astype(object)
-    return gdf
+    import pandas as pd
+
+    geoms = [r["geometry"] for r in records]
+    attrs = [{k: v for k, v in r.items() if k != "geometry"} for r in records]
+    df = pd.DataFrame(attrs, dtype=object)
+    return gpd.GeoDataFrame(df, geometry=geoms, crs=crs)
 
 
 def _write_csv(file_path: pathlib.Path, headers: list[str], rows: list[list[str]]) -> None:
@@ -372,7 +377,7 @@ async def _gen_shapefile(file_path: pathlib.Path, job: dict) -> None:
         for r in reports
     ]
 
-    gdf = _fix_gdf_dtypes(gpd.GeoDataFrame(records, crs="EPSG:4326"))
+    gdf = _make_gdf(records)
 
     with tempfile.TemporaryDirectory() as tmpdir:
         shp_path = os.path.join(tmpdir, "crisis_reporter_export.shp")
@@ -419,7 +424,7 @@ async def _gen_geopackage(file_path: pathlib.Path, job: dict) -> None:
         for r in reports
     ]
 
-    gdf = _fix_gdf_dtypes(gpd.GeoDataFrame(records, crs="EPSG:4326"))
+    gdf = _make_gdf(records)
     gdf.to_file(str(file_path), driver="GPKG")
 
 
