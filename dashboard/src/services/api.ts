@@ -145,5 +145,40 @@ export const flagPropertyForReview = (propertyId: string, note?: string) =>
 export const getReporterVersionHistory = (propertyId: string, reporterId: string) =>
   api.get(`/api/properties/${propertyId}/reporters/${reporterId}/versions`);
 
+// ── Review Queue ──────────────────────────────────────────────────────────────
+
+export const getReviewQueueCounts = () =>
+  api.get('/api/review-queue/counts');
+
+export const getTab1Reports = (params: Record<string, string | number>) =>
+  api.get('/api/review-queue/tab1', { params });
+
+export const getTab2Properties = (params: Record<string, string | number>) =>
+  api.get('/api/review-queue/tab2', { params });
+
+export const getTab3StuckReports = (params: Record<string, string | number>) =>
+  api.get('/api/review-queue/tab3', { params });
+
+export const getTab4AutoBlocked = (params: Record<string, string | number>) =>
+  api.get('/api/review-queue/tab4', { params });
+
+export const acquireReviewLock = (reportId: string) =>
+  api.post(`/api/review-queue/tab1/${reportId}/review`);
+
+export const forceResolution = (reportId: string, targetStatus: 'green' | 'red', reason: string) =>
+  api.post(`/api/review-queue/tab3/${reportId}/force-resolution`, { target_status: targetStatus, reason });
+
+export const dismissPropertyFromReview = (propertyId: string, comment: string) =>
+  api.post(`/api/review-queue/tab2/${propertyId}/dismiss`, { comment });
+
+export const confirmAutoBlock = (reporterId: string, comment: string) =>
+  api.post(`/api/review-queue/tab4/${reporterId}/confirm`, { comment });
+
+export const reverseAutoBlock = (reporterId: string, comment: string) =>
+  api.post(`/api/review-queue/tab4/${reporterId}/reverse`, { comment });
+
+export const releaseSoftLock = (itemType: string, itemId: string) =>
+  api.post('/api/review-queue/release-lock', { item_type: itemType, item_id: itemId });
+
 export const API_BASE = BASE_URL;
 export default api;

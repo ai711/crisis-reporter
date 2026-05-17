@@ -255,6 +255,70 @@ export interface PropertiesListResponse {
   has_more: boolean;
 }
 
+// ── Review Queue ──────────────────────────────────────────────────────────────
+
+export interface ReviewQueueCounts {
+  tab1_count: number;
+  tab2_count: number;
+  tab3_count: number;
+  tab4_count: number;
+}
+
+export interface Tab1Row {
+  report_id: string;
+  flagged_at: string;
+  country: string | null;
+  damage_level: string | null;
+  infrastructure_types: string[];
+  crisis_type: string | null;
+  flag_reasons: string[];
+  reporter_id: string;
+  reporter_display_id: string;
+  time_in_queue: number; // seconds
+  soft_lock: { reviewer_name: string; locked_at: string } | null;
+}
+
+export interface Tab2Row {
+  property_id: string;
+  display_name: string;
+  country: string | null;
+  current_damage_level: string | null;
+  has_conflict_warning: boolean;
+  is_flagged_for_review: boolean;
+  flagged_for_review_note: string | null;
+  review_reason: string;
+  time_in_queue: number; // seconds
+  soft_lock: { reviewer_name: string; locked_at: string } | null;
+}
+
+export interface Tab3Row {
+  report_id: string;
+  received_at: string;
+  country: string | null;
+  damage_level: string | null;
+  platform: string | null;
+  reporter_id: string;
+  reporter_display_id: string;
+  time_stuck_seconds: number;
+  soft_lock: { reviewer_name: string; locked_at: string } | null;
+}
+
+export interface Tab4Row {
+  reporter_id: string;
+  auto_blocked_at: string;
+  device_id: string | null;
+  matched_blocked_reporter_id: string | null;
+  time_remaining_seconds: number;
+  soft_lock: { reviewer_name: string; locked_at: string } | null;
+}
+
+export interface ReviewQueueListResponse<T> {
+  items: T[];
+  total: number;
+  cursor: string | null;
+  has_more: boolean;
+}
+
 // ── SSE Events ────────────────────────────────────────────────────────────────
 
 export interface SSEEvent {

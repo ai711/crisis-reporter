@@ -1,5 +1,8 @@
 import { useNavigate, useLocation } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { useAuthStore } from "../stores/authStore";
+import { getReviewQueueCounts } from "../services/api";
+import type { ReviewQueueCounts } from "../types";
 import {
   Map,
   FileText,
@@ -60,6 +63,20 @@ export default function Sidebar() {
   const location = useLocation();
   const { user } = useAuthStore();
 
+  const { data: countsData } = useQuery<ReviewQueueCounts>({
+    queryKey: ["review-queue-counts"],
+    queryFn: async () => {
+      const res = await getReviewQueueCounts();
+      return res.data as ReviewQueueCounts;
+    },
+    refetchInterval: 20000,
+    staleTime: 0,
+  });
+
+  const totalQueueCount = countsData
+    ? countsData.tab1_count + countsData.tab2_count + countsData.tab3_count + countsData.tab4_count
+    : 0;
+
   const visibleItems = NAV_ITEMS.filter((item) =>
     canSee(item.requiredRole, user?.role)
   );
@@ -112,6 +129,22 @@ export default function Sidebar() {
                 style={{ flexShrink: 0 }}
               />
               <span style={styles.navLabel}>{item.label}</span>
+              {item.path === "/review-queue" && totalQueueCount > 0 && (
+                <span style={{
+                  background: "#f44336",
+                  color: "#fff",
+                  fontSize: 11,
+                  fontWeight: 700,
+                  borderRadius: 10,
+                  padding: "2px 7px",
+                  minWidth: 18,
+                  textAlign: "center" as const,
+                  lineHeight: 1.4,
+                  flexShrink: 0,
+                }}>
+                  {totalQueueCount}
+                </span>
+              )}
             </button>
           );
         })}
