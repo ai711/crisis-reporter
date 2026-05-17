@@ -175,6 +175,20 @@ def _pipe(values: list[str] | None, fallback: str | None) -> str:
     return fallback or ""
 
 
+def _fix_gdf_dtypes(gdf: "gpd.GeoDataFrame") -> "gpd.GeoDataFrame":
+    """
+    Pandas 2.x infers StringDtype for string columns; fiona (geopandas' file
+    backend) only accepts NumPy object dtype.  Cast any string-typed column
+    back to plain Python object so to_file() works on Railway.
+    """
+    for col in gdf.columns:
+        if col == "geometry":
+            continue
+        if hasattr(gdf[col], "dtype") and str(gdf[col].dtype).startswith("string"):
+            gdf[col] = gdf[col].astype(object)
+    return gdf
+
+
 def _write_csv(file_path: pathlib.Path, headers: list[str], rows: list[list[str]]) -> None:
     with open(file_path, "w", newline="", encoding="utf-8") as fh:
         writer = csv.writer(fh)
@@ -359,7 +373,7 @@ async def _gen_shapefile(file_path: pathlib.Path, job: dict) -> None:
         for r in reports
     ]
 
-    gdf = gpd.GeoDataFrame(records, crs="EPSG:4326")
+    gdf = _fix_gdf_dtypes(gpd.GeoDataFrame(records, crs="EPSG:4326"))
 
     with tempfile.TemporaryDirectory() as tmpdir:
         shp_path = os.path.join(tmpdir, "crisis_reporter_export.shp")
@@ -406,7 +420,7 @@ async def _gen_geopackage(file_path: pathlib.Path, job: dict) -> None:
         for r in reports
     ]
 
-    gdf = gpd.GeoDataFrame(records, crs="EPSG:4326")
+    gdf = _fix_gdf_dtypes(gpd.GeoDataFrame(records, crs="EPSG:4326"))
     gdf.to_file(str(file_path), driver="GPKG")
 
 
