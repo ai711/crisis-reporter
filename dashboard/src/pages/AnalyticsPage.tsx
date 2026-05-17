@@ -1,10 +1,8 @@
-import { useState, useCallback } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
   ResponsiveContainer,
-  LineChart,
-  Line,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -16,19 +14,20 @@ import {
   BarChart,
   Bar,
 } from "recharts";
+import { CheckCircle, AlertTriangle } from "lucide-react";
 import Header from "../components/Header";
-import api from "../services/api";
+import api, { getReviewQueueCounts } from "../services/api";
+import type { ReviewQueueCounts } from "../types";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
 const BLUE = "#0468B1";
 
-const CRISIS_TYPES = [
-  "All",
+const CRISIS_TYPE_OPTIONS = [
   "Earthquake",
   "Flood",
   "Tsunami",
-  "Hurricane/Cyclone",
+  "Hurricane or Cyclone",
   "Wildfire",
   "Explosion",
   "Chemical Incident",
@@ -37,32 +36,32 @@ const CRISIS_TYPES = [
 ];
 
 const PIE_COLORS: Record<string, string> = {
-  "Completely Damaged": "#E53E3E",
-  "Partially Damaged": "#F57C00",
-  "Minimal / No Damage": "#38A169",
-  complete: "#E53E3E",
-  partial: "#F57C00",
-  minimal: "#38A169",
+  "Completely Destroyed": "#F44336",
+  "Partially Damaged": "#FF9800",
+  "Minimal or No Damage": "#4CAF50",
 };
 
 const PIE_LABEL_MAP: Record<string, string> = {
-  complete: "Completely Damaged",
+  complete: "Completely Destroyed",
   partial: "Partially Damaged",
-  minimal: "Minimal / No Damage",
+  minimal: "Minimal or No Damage",
 };
+
+const TOP_COUNTRIES = 10;
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
 interface Filters {
-  country: string;
+  country: string[];
   dateFrom: string;
   dateTo: string;
-  crisisType: string;
+  crisisType: string[];
 }
 
-interface Country {
-  id: string;
+interface CountryOption {
+  code: string;
   name: string;
+  is_active: boolean;
 }
 
 interface AnalyticsSummary {
@@ -70,6 +69,7 @@ interface AnalyticsSummary {
   total_properties: number;
   completely_damaged: number;
   partially_damaged: number;
+  minimal_damage: number;
 }
 
 interface TimePoint {
@@ -83,7 +83,7 @@ interface DistPoint {
 }
 
 interface InfraPoint {
-  type: string;
+  infrastructure_type: string;
   count: number;
 }
 
@@ -92,29 +92,150 @@ interface CountryPoint {
   count: number;
 }
 
+interface CrisisTypePoint {
+  crisis_type: string;
+  count: number;
+}
+
+interface FlagQualityItem {
+  flag_type: string;
+  total_raised: number;
+  cleared_count: number;
+  cleared_percentage: number;
+  discard_reason_count: number;
+  discard_reason_percentage: number;
+  inconclusive_count: number;
+  inconclusive_percentage: number;
+}
+
+interface FlagQualityResponse {
+  total_reviewed: number;
+  items: FlagQualityItem[];
+}
+
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 const DEFAULT_FILTERS: Filters = {
-  country: "",
+  country: [],
   dateFrom: "",
   dateTo: "",
-  crisisType: "All",
+  crisisType: [],
 };
 
 function filtersToParams(f: Filters): Record<string, string> {
   const p: Record<string, string> = {};
-  if (f.country) p.country = f.country;
+  if (f.country.length > 0) p.country = f.country.join(",");
   if (f.dateFrom) p.date_from = f.dateFrom;
   if (f.dateTo) p.date_to = f.dateTo;
-  if (f.crisisType !== "All") p.crisis_type = f.crisisType;
+  if (f.crisisType.length > 0) p.crisis_type = f.crisisType.join(",");
   return p;
 }
 
-function fmtDate(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+function getDefaultDateRange(granularity: "daily" | "weekly"): { date_from: string; date_to: string } {
+  const today = new Date();
+  const todayStr = today.toISOString().split("T")[0];
+  const daysBack = granularity === "daily" ? 30 : 84;
+  const from = new Date(today);
+  from.setDate(from.getDate() - daysBack);
+  return { date_from: from.toISOString().split("T")[0], date_to: todayStr };
 }
 
-// ── Small components ───────────────────────────────────────────────────────────
+function fmtDayLabel(isoDate: string): string {
+  const [y, m, d] = isoDate.split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+function fmtWeekLabel(isoDate: string): string {
+  const [y, m, d] = isoDate.split("-").map(Number);
+  const start = new Date(y, m - 1, d);
+  const end = new Date(y, m - 1, d + 6);
+  const startStr = start.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  if (start.getMonth() === end.getMonth()) {
+    return `${startStr}–${end.getDate()}`;
+  }
+  return `${startStr}–${end.toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
+}
+
+function countPct(count: number, pct: number): string {
+  return `${count} (${pct.toFixed(0)}%)`;
+}
+
+// ── Multi-select dropdown ──────────────────────────────────────────────────────
+
+interface MultiSelectOption {
+  id: string;
+  name: string;
+}
+
+interface MultiSelectDropdownProps {
+  label: string;
+  options: MultiSelectOption[];
+  selected: string[];
+  onChange: (vals: string[]) => void;
+  placeholder: string;
+}
+
+function MultiSelectDropdown({ label, options, selected, onChange, placeholder }: MultiSelectDropdownProps) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleOutside);
+    return () => document.removeEventListener("mousedown", handleOutside);
+  }, []);
+
+  const toggle = (id: string) => {
+    onChange(selected.includes(id) ? selected.filter((s) => s !== id) : [...selected, id]);
+  };
+
+  const buttonText =
+    selected.length === 0
+      ? placeholder
+      : selected.length === 1
+      ? options.find((o) => o.id === selected[0])?.name ?? selected[0]
+      : `${selected.length} selected`;
+
+  return (
+    <div ref={ref} style={s.filterField}>
+      <label style={s.filterLabel}>{label}</label>
+      <button
+        type="button"
+        style={{ ...s.filterSelect, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 }}
+        onClick={() => setOpen((o) => !o)}
+      >
+        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const, flex: 1, textAlign: "left" as const }}>
+          {buttonText}
+        </span>
+        <span style={{ fontSize: 9, color: "#718096", flexShrink: 0 }}>{open ? "▲" : "▼"}</span>
+      </button>
+      {open && (
+        <div style={s.dropdownPanel}>
+          {options.map((opt) => (
+            <label key={opt.id} style={s.dropdownItem}>
+              <input
+                type="checkbox"
+                checked={selected.includes(opt.id)}
+                onChange={() => toggle(opt.id)}
+                style={{ marginRight: 8, accentColor: BLUE }}
+              />
+              {opt.name}
+            </label>
+          ))}
+          {options.length === 0 && (
+            <div style={{ padding: "8px 12px", color: "#a0aec0", fontSize: 13 }}>Loading…</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Small shared components ────────────────────────────────────────────────────
 
 function Spinner() {
   return (
@@ -143,49 +264,80 @@ function EmptyState() {
 
 interface ChartCardProps {
   title: string;
-  subtitle: string;
+  subtitle?: string;
   loading: boolean;
   empty: boolean;
   children: React.ReactNode;
+  fullWidth?: boolean;
+  headerRight?: React.ReactNode;
+  footnote?: string;
 }
 
-function ChartCard({ title, subtitle, loading, empty, children }: ChartCardProps) {
+function ChartCard({ title, subtitle, loading, empty, children, headerRight, footnote }: ChartCardProps) {
   return (
     <div style={s.chartCard}>
-      <div style={s.chartCardHeader}>
-        <div style={s.chartTitle}>{title}</div>
-        <div style={s.chartSubtitle}>{subtitle}</div>
+      <div style={{ ...s.chartCardHeader, justifyContent: "space-between", flexDirection: "row", alignItems: "flex-start" }}>
+        <div>
+          <div style={s.chartTitle}>{title}</div>
+          {subtitle && <div style={s.chartSubtitle}>{subtitle}</div>}
+        </div>
+        {headerRight && <div>{headerRight}</div>}
       </div>
       {loading ? <Spinner /> : empty ? <EmptyState /> : children}
+      {footnote && (
+        <div style={s.footnote}>{footnote}</div>
+      )}
     </div>
   );
 }
+
+// ── Pie label renderer ─────────────────────────────────────────────────────────
+
+const renderPieLabel = ({ value, percent }: { value: number; percent: number }) =>
+  `${value} (${(percent * 100).toFixed(0)}%)`;
 
 // ── Main component ─────────────────────────────────────────────────────────────
 
 export default function AnalyticsPage() {
   const navigate = useNavigate();
-
-  // Pending (in-progress edits) vs applied (used for queries)
+  const [granularity, setGranularity] = useState<"daily" | "weekly">("daily");
   const [pending, setPending] = useState<Filters>(DEFAULT_FILTERS);
   const [applied, setApplied] = useState<Filters>(DEFAULT_FILTERS);
+  const [showAllCountries, setShowAllCountries] = useState(false);
 
   function applyFilters() {
     setApplied({ ...pending });
   }
 
-  function removeTag(key: keyof Filters) {
-    const reset = { ...pending, [key]: key === "crisisType" ? "All" : "" };
+  function clearAll() {
+    setPending(DEFAULT_FILTERS);
+    setApplied(DEFAULT_FILTERS);
+  }
+
+  function removeFilterKey(key: keyof Filters) {
+    const reset: Filters = {
+      ...pending,
+      [key]: Array.isArray(pending[key]) ? [] : "",
+    };
     setPending(reset);
     setApplied(reset);
   }
 
-  // Countries for dropdown
-  const { data: countries = [] } = useQuery<Country[]>({
+  const { data: countriesRaw = [] } = useQuery<CountryOption[]>({
     queryKey: ["analytics-countries"],
-    queryFn: () => api.get<Country[]>("/api/countries").then((r) => r.data),
+    queryFn: () => api.get<CountryOption[]>("/api/countries").then((r) => r.data),
     staleTime: 5 * 60 * 1000,
   });
+
+  const countryOptions: MultiSelectOption[] = countriesRaw.map((c) => ({
+    id: c.code,
+    name: c.name,
+  }));
+
+  const crisisTypeOptions: MultiSelectOption[] = CRISIS_TYPE_OPTIONS.map((t) => ({
+    id: t,
+    name: t,
+  }));
 
   const params = filtersToParams(applied);
 
@@ -196,109 +348,145 @@ export default function AnalyticsPage() {
       api.get<AnalyticsSummary>("/api/analytics/summary", { params }).then((r) => r.data),
   });
 
-  // Reports over time
+  // Reports over time — uses default date window when no date filter active
+  const defaultRange = getDefaultDateRange(granularity);
+  const timeParams: Record<string, string> = {
+    ...params,
+    granularity,
+    ...(applied.dateFrom || applied.dateTo
+      ? {}
+      : { date_from: defaultRange.date_from, date_to: defaultRange.date_to }),
+  };
+
   const { data: timeData = [], isLoading: timeLoading } = useQuery<TimePoint[]>({
-    queryKey: ["analytics-time", applied],
+    queryKey: ["analytics-time", applied, granularity],
     queryFn: () =>
-      api
-        .get<TimePoint[]>("/api/analytics/reports-over-time", { params })
-        .then((r) => r.data),
+      api.get<TimePoint[]>("/api/analytics/reports-over-time", { params: timeParams }).then((r) => r.data),
   });
 
   // Damage distribution
   const { data: distRaw = [], isLoading: distLoading } = useQuery<DistPoint[]>({
     queryKey: ["analytics-dist", applied],
     queryFn: () =>
-      api
-        .get<DistPoint[]>("/api/analytics/damage-distribution", { params })
-        .then((r) => r.data),
+      api.get<DistPoint[]>("/api/analytics/damage-distribution", { params }).then((r) => {
+        // Transform the distribution object to array for Recharts
+        const d = r.data as unknown as {
+          completely_damaged: number;
+          partially_damaged: number;
+          minimal_damage: number;
+        };
+        return [
+          { level: "complete", count: d.completely_damaged },
+          { level: "partial", count: d.partially_damaged },
+          { level: "minimal", count: d.minimal_damage },
+        ];
+      }),
   });
 
   // Infrastructure breakdown
   const { data: infraData = [], isLoading: infraLoading } = useQuery<InfraPoint[]>({
     queryKey: ["analytics-infra", applied],
     queryFn: () =>
-      api
-        .get<InfraPoint[]>("/api/analytics/infrastructure-breakdown", { params })
-        .then((r) => r.data),
+      api.get<InfraPoint[]>("/api/analytics/infrastructure-breakdown", { params }).then((r) => r.data),
   });
 
   // Country breakdown
   const { data: countryData = [], isLoading: countryLoading } = useQuery<CountryPoint[]>({
     queryKey: ["analytics-country", applied],
     queryFn: () =>
+      api.get<CountryPoint[]>("/api/analytics/country-breakdown", { params }).then((r) => r.data),
+  });
+
+  // Crisis type breakdown
+  const { data: crisisTypeData = [], isLoading: crisisTypeLoading } = useQuery<CrisisTypePoint[]>({
+    queryKey: ["analytics-crisis-type", applied],
+    queryFn: () =>
       api
-        .get<CountryPoint[]>("/api/analytics/country-breakdown", { params })
+        .get<CrisisTypePoint[]>("/api/analytics/crisis-type-breakdown", { params })
         .then((r) => r.data),
   });
 
-  // Normalise pie data labels
-  const distData = distRaw.map((d) => ({
-    ...d,
-    level: PIE_LABEL_MAP[d.level] ?? d.level,
-  }));
+  // Review queue counts — always live, never filtered
+  const { data: reviewCounts } = useQuery<ReviewQueueCounts>({
+    queryKey: ["review-queue-counts"],
+    queryFn: async () => {
+      const res = await getReviewQueueCounts();
+      return res.data as ReviewQueueCounts;
+    },
+    refetchInterval: 20000,
+    staleTime: 0,
+  });
+
+  // Flag quality
+  const { data: flagQuality, isLoading: flagQualityLoading } = useQuery<FlagQualityResponse>({
+    queryKey: ["analytics-flag-quality", applied],
+    queryFn: () =>
+      api
+        .get<FlagQualityResponse>("/api/analytics/flag-quality", { params })
+        .then((r) => r.data),
+  });
+
+  // Normalise pie data
+  const distData = distRaw
+    .map((d) => ({ ...d, level: PIE_LABEL_MAP[d.level] ?? d.level }))
+    .filter((d) => d.count > 0);
 
   // Active filter tags
+  const hasFilters =
+    applied.country.length > 0 ||
+    applied.dateFrom !== "" ||
+    applied.dateTo !== "" ||
+    applied.crisisType.length > 0;
+
   const tags: { key: keyof Filters; label: string }[] = [];
-  if (applied.country) {
-    const name = countries.find((c) => c.id === applied.country)?.name ?? applied.country;
-    tags.push({ key: "country", label: `Country: ${name}` });
+  if (applied.country.length > 0) {
+    const names = applied.country
+      .map((code) => countryOptions.find((c) => c.id === code)?.name ?? code)
+      .join(", ");
+    tags.push({ key: "country", label: `Country: ${names}` });
   }
   if (applied.dateFrom) tags.push({ key: "dateFrom", label: `From: ${applied.dateFrom}` });
   if (applied.dateTo) tags.push({ key: "dateTo", label: `To: ${applied.dateTo}` });
-  if (applied.crisisType !== "All")
-    tags.push({ key: "crisisType", label: `Type: ${applied.crisisType}` });
+  if (applied.crisisType.length > 0) {
+    tags.push({ key: "crisisType", label: `Type: ${applied.crisisType.join(", ")}` });
+  }
 
-  const scopeLabel =
-    tags.length === 0
-      ? "All reports"
-      : tags.map((t) => t.label).join(" · ");
+  const scopeLabel = hasFilters ? tags.map((t) => t.label).join(" · ") : "All confirmed reports";
 
-  const SUMMARY_CARDS = [
-    { label: "Total Reports", value: summary?.total_reports },
-    { label: "Total Properties Affected", value: summary?.total_properties },
-    { label: "Completely Damaged", value: summary?.completely_damaged },
-    { label: "Partially Damaged", value: summary?.partially_damaged },
-  ];
+  const countryBarHeight = Math.max(200, countryData.length * 36);
+  const infraBarHeight = Math.max(200, infraData.length * 36);
+  const crisisBarHeight = Math.max(200, crisisTypeData.length * 36);
 
-  const countryBarHeight = Math.max(240, countryData.length * 36);
+  const displayedCountriesCompact = showAllCountries
+    ? countryData
+    : countryData.slice(0, TOP_COUNTRIES);
+
+  const tab1Count = reviewCounts?.tab1_count ?? 0;
+  const tab2Count = reviewCounts?.tab2_count ?? 0;
+  const actionAllClear = tab1Count === 0 && tab2Count === 0;
+
+  const flagQualityTotal = flagQuality?.total_reviewed ?? 0;
+  const flagQualityItems = flagQuality?.items ?? [];
+  const FLAG_QUALITY_THRESHOLD = 50;
 
   return (
     <div style={s.page}>
       <style>{`@keyframes an-spin { to { transform: rotate(360deg); } }`}</style>
 
-      <Header title="Analytics" subtitle="Crisis damage statistics" />
+      <Header title="Analytics and Statistics" subtitle="Crisis damage statistics" />
 
       <div style={s.content}>
-        {/* ── Top bar ── */}
-        <div style={s.topBar}>
-          <h2 style={s.pageTitle}>Damage Analytics</h2>
-          <button style={s.exportBtn} onClick={() => navigate("/export")}>
-            Export Data →
-          </button>
-        </div>
-
         {/* ── Filter bar ── */}
         <div style={s.filterCard}>
           <div style={s.filterRow}>
-            {/* Country */}
-            <div style={s.filterField}>
-              <label style={s.filterLabel}>Country</label>
-              <select
-                style={s.filterSelect}
-                value={pending.country}
-                onChange={(e) => setPending((p) => ({ ...p, country: e.target.value }))}
-              >
-                <option value="">All countries</option>
-                {countries.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <MultiSelectDropdown
+              label="Country"
+              options={countryOptions}
+              selected={pending.country}
+              onChange={(vals) => setPending((p) => ({ ...p, country: vals }))}
+              placeholder="All countries"
+            />
 
-            {/* Date from */}
             <div style={s.filterField}>
               <label style={s.filterLabel}>Start Date</label>
               <input
@@ -309,7 +497,6 @@ export default function AnalyticsPage() {
               />
             </div>
 
-            {/* Date to */}
             <div style={s.filterField}>
               <label style={s.filterLabel}>End Date</label>
               <input
@@ -320,28 +507,26 @@ export default function AnalyticsPage() {
               />
             </div>
 
-            {/* Crisis type */}
-            <div style={s.filterField}>
-              <label style={s.filterLabel}>Crisis Type</label>
-              <select
-                style={s.filterSelect}
-                value={pending.crisisType}
-                onChange={(e) => setPending((p) => ({ ...p, crisisType: e.target.value }))}
-              >
-                {CRISIS_TYPES.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <MultiSelectDropdown
+              label="Crisis Type"
+              options={crisisTypeOptions}
+              selected={pending.crisisType}
+              onChange={(vals) => setPending((p) => ({ ...p, crisisType: vals }))}
+              placeholder="All crisis types"
+            />
 
-            <button style={s.applyBtn} onClick={applyFilters}>
-              Apply Filters
-            </button>
+            <div style={{ display: "flex", alignItems: "flex-end", gap: 8 }}>
+              <button style={s.applyBtn} onClick={applyFilters}>
+                Apply Filters
+              </button>
+              {hasFilters && (
+                <button style={s.clearBtn} onClick={clearAll}>
+                  Clear All
+                </button>
+              )}
+            </div>
           </div>
 
-          {/* Active filter tags */}
           {tags.length > 0 && (
             <div style={s.tagRow}>
               {tags.map((tag) => (
@@ -349,7 +534,7 @@ export default function AnalyticsPage() {
                   {tag.label}
                   <button
                     style={s.tagRemove}
-                    onClick={() => removeTag(tag.key)}
+                    onClick={() => removeFilterKey(tag.key)}
                     aria-label={`Remove ${tag.label}`}
                   >
                     ×
@@ -359,18 +544,22 @@ export default function AnalyticsPage() {
             </div>
           )}
 
-          {/* Persistent note */}
           <div style={s.filterNote}>
-            📋 Showing confirmed reports only — Grey and Red flagged reports are excluded
-            from all statistics.
+            Showing confirmed reports only — Grey and Red flagged reports are excluded from all statistics.
           </div>
         </div>
 
         {/* ── Summary cards ── */}
         <div style={s.summaryGrid}>
-          {SUMMARY_CARDS.map((card) => (
+          {[
+            { label: "Total Reports", value: summary?.total_reports },
+            { label: "Total Properties Reported", value: summary?.total_properties },
+            { label: "Completely Destroyed", value: summary?.completely_damaged, accent: "#F44336" },
+            { label: "Partially Damaged", value: summary?.partially_damaged, accent: "#FF9800" },
+            { label: "Minimal or No Damage", value: summary?.minimal_damage, accent: "#4CAF50" },
+          ].map((card) => (
             <div key={card.label} style={s.summaryCard}>
-              <div style={s.summaryAccent} />
+              <div style={{ ...s.summaryAccent, background: card.accent ?? BLUE }} />
               <div style={s.summaryBody}>
                 <div style={s.summaryNumber}>
                   {summaryLoading ? "—" : (card.value ?? 0).toLocaleString()}
@@ -381,23 +570,169 @@ export default function AnalyticsPage() {
           ))}
         </div>
 
-        {/* ── Charts ── */}
-        <div style={s.chartsGrid}>
-          {/* Chart 1 — Reports Over Time */}
-          <ChartCard
-            title="Reports Over Time"
-            subtitle={scopeLabel}
-            loading={timeLoading}
-            empty={timeData.length === 0}
+        {/* ── Compact breakdowns ── */}
+        <div style={s.twoCol}>
+          {/* Crisis type compact */}
+          <div style={s.compactCard}>
+            <div style={s.compactTitle}>Reports by Crisis Type</div>
+            {crisisTypeLoading ? (
+              <Spinner />
+            ) : crisisTypeData.length === 0 ? (
+              <EmptyState />
+            ) : (
+              <div style={s.compactList}>
+                {crisisTypeData.map((row) => (
+                  <div key={row.crisis_type} style={s.compactRow}>
+                    <span style={s.compactLabel}>{row.crisis_type}</span>
+                    <span style={s.compactCount}>{row.count.toLocaleString()}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Country compact */}
+          <div style={s.compactCard}>
+            <div style={s.compactTitle}>Reports by Country</div>
+            {countryLoading ? (
+              <Spinner />
+            ) : countryData.length === 0 ? (
+              <EmptyState />
+            ) : (
+              <>
+                <div style={s.compactList}>
+                  {displayedCountriesCompact.map((row) => (
+                    <div key={row.country} style={s.compactRow}>
+                      <span style={s.compactLabel}>{row.country}</span>
+                      <span style={s.compactCount}>{row.count.toLocaleString()}</span>
+                    </div>
+                  ))}
+                </div>
+                {countryData.length > TOP_COUNTRIES && (
+                  <button
+                    style={s.showAllBtn}
+                    onClick={() => setShowAllCountries((v) => !v)}
+                  >
+                    {showAllCountries
+                      ? "Show fewer"
+                      : `Show all (${countryData.length})`}
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* ── Action indicator cards ── */}
+        <div style={s.twoCol}>
+          <button
+            style={{ ...s.actionCard, ...(actionAllClear ? s.actionCardClear : s.actionCardAlert) }}
+            onClick={() => navigate("/review-queue")}
           >
-            <ResponsiveContainer width="100%" height={240}>
-              <LineChart data={timeData} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f4f8" />
+            {actionAllClear ? (
+              <>
+                <CheckCircle size={20} color="#38A169" />
+                <div style={s.actionBody}>
+                  <div style={{ ...s.actionCount, color: "#38A169" }}>0</div>
+                  <div style={s.actionLabel}>Red-flagged reports pending review</div>
+                  <div style={s.actionSub}>All clear — Review Queue</div>
+                </div>
+              </>
+            ) : (
+              <>
+                <AlertTriangle size={20} color="#E65100" />
+                <div style={s.actionBody}>
+                  <div style={{ ...s.actionCount, color: "#E65100" }}>{tab1Count.toLocaleString()}</div>
+                  <div style={s.actionLabel}>Red-flagged reports pending review</div>
+                  <div style={s.actionSub}>Awaiting human review in Review Queue</div>
+                </div>
+              </>
+            )}
+          </button>
+
+          <button
+            style={{ ...s.actionCard, ...(actionAllClear ? s.actionCardClear : s.actionCardAlert) }}
+            onClick={() => navigate("/review-queue")}
+          >
+            {actionAllClear ? (
+              <>
+                <CheckCircle size={20} color="#38A169" />
+                <div style={s.actionBody}>
+                  <div style={{ ...s.actionCount, color: "#38A169" }}>0</div>
+                  <div style={s.actionLabel}>Properties pending review</div>
+                  <div style={s.actionSub}>All clear — Review Queue</div>
+                </div>
+              </>
+            ) : (
+              <>
+                <AlertTriangle size={20} color="#E65100" />
+                <div style={s.actionBody}>
+                  <div style={{ ...s.actionCount, color: "#E65100" }}>{tab2Count.toLocaleString()}</div>
+                  <div style={s.actionLabel}>Properties pending review</div>
+                  <div style={s.actionSub}>Conflict warnings or manually flagged</div>
+                </div>
+              </>
+            )}
+          </button>
+        </div>
+
+        {/* ── Export button ── */}
+        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+          <button
+            style={s.exportBtn}
+            onClick={() =>
+              navigate("/export", {
+                state: {
+                  prefill: {
+                    country: applied.country,
+                    date_from: applied.dateFrom,
+                    date_to: applied.dateTo,
+                    crisis_type: applied.crisisType,
+                  },
+                },
+              })
+            }
+          >
+            Export Data →
+          </button>
+        </div>
+
+        {/* ── Reports Over Time (full width) ── */}
+        <div style={s.chartCard}>
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
+            <div>
+              <div style={s.chartTitle}>Reports Over Time</div>
+              <div style={s.chartSubtitle}>{scopeLabel}</div>
+            </div>
+            <div style={s.toggleGroup}>
+              <button
+                style={{ ...s.toggleBtn, ...(granularity === "daily" ? s.toggleActive : {}) }}
+                onClick={() => setGranularity("daily")}
+              >
+                Daily
+              </button>
+              <button
+                style={{ ...s.toggleBtn, ...(granularity === "weekly" ? s.toggleActive : {}) }}
+                onClick={() => setGranularity("weekly")}
+              >
+                Weekly
+              </button>
+            </div>
+          </div>
+          {timeLoading ? (
+            <Spinner />
+          ) : timeData.length === 0 ? (
+            <EmptyState />
+          ) : (
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={timeData} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f4f8" vertical={false} />
                 <XAxis
                   dataKey="date"
-                  tickFormatter={fmtDate}
+                  tickFormatter={granularity === "weekly" ? fmtWeekLabel : fmtDayLabel}
                   tick={{ fontSize: 11, fill: "#718096" }}
                   tickLine={false}
+                  interval="preserveStartEnd"
                 />
                 <YAxis
                   tick={{ fontSize: 11, fill: "#718096" }}
@@ -406,30 +741,24 @@ export default function AnalyticsPage() {
                   allowDecimals={false}
                 />
                 <Tooltip
-                  labelFormatter={fmtDate}
+                  labelFormatter={granularity === "weekly" ? fmtWeekLabel : fmtDayLabel}
                   contentStyle={{ fontSize: 13, borderRadius: 8, border: "1px solid #e2e8f0" }}
                 />
-                <Line
-                  type="monotone"
-                  dataKey="count"
-                  stroke={BLUE}
-                  strokeWidth={2.5}
-                  dot={false}
-                  activeDot={{ r: 5 }}
-                  name="Reports"
-                />
-              </LineChart>
+                <Bar dataKey="count" fill={BLUE} radius={[3, 3, 0, 0]} name="Reports" />
+              </BarChart>
             </ResponsiveContainer>
-          </ChartCard>
+          )}
+        </div>
 
-          {/* Chart 2 — Damage Level Distribution */}
+        {/* ── Damage Distribution + Country ── */}
+        <div style={s.twoCol}>
           <ChartCard
             title="Damage Level Distribution"
             subtitle={scopeLabel}
             loading={distLoading}
             empty={distData.length === 0}
           >
-            <ResponsiveContainer width="100%" height={240}>
+            <ResponsiveContainer width="100%" height={260}>
               <PieChart>
                 <Pie
                   data={distData}
@@ -438,10 +767,8 @@ export default function AnalyticsPage() {
                   cx="50%"
                   cy="50%"
                   outerRadius={90}
-                  label={({ name, percent }) =>
-                    `${(percent * 100).toFixed(0)}%`
-                  }
-                  labelLine={false}
+                  label={renderPieLabel}
+                  labelLine
                 >
                   {distData.map((entry) => (
                     <Cell
@@ -453,57 +780,18 @@ export default function AnalyticsPage() {
                 <Tooltip
                   contentStyle={{ fontSize: 13, borderRadius: 8, border: "1px solid #e2e8f0" }}
                 />
-                <Legend
-                  iconSize={10}
-                  wrapperStyle={{ fontSize: 12 }}
-                />
+                <Legend iconSize={10} wrapperStyle={{ fontSize: 12 }} />
               </PieChart>
             </ResponsiveContainer>
           </ChartCard>
 
-          {/* Chart 3 — Infrastructure Type Breakdown */}
-          <ChartCard
-            title="Infrastructure Type Breakdown"
-            subtitle={scopeLabel}
-            loading={infraLoading}
-            empty={infraData.length === 0}
-          >
-            <ResponsiveContainer width="100%" height={240}>
-              <BarChart
-                data={infraData}
-                margin={{ top: 8, right: 16, left: 0, bottom: 40 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f4f8" vertical={false} />
-                <XAxis
-                  dataKey="type"
-                  tick={{ fontSize: 11, fill: "#718096" }}
-                  tickLine={false}
-                  angle={-35}
-                  textAnchor="end"
-                  interval={0}
-                />
-                <YAxis
-                  tick={{ fontSize: 11, fill: "#718096" }}
-                  tickLine={false}
-                  axisLine={false}
-                  allowDecimals={false}
-                />
-                <Tooltip
-                  contentStyle={{ fontSize: 13, borderRadius: 8, border: "1px solid #e2e8f0" }}
-                />
-                <Bar dataKey="count" fill={BLUE} radius={[4, 4, 0, 0]} name="Reports" />
-              </BarChart>
-            </ResponsiveContainer>
-          </ChartCard>
-
-          {/* Chart 4 — Reports by Country (horizontal) */}
           <ChartCard
             title="Reports by Country"
             subtitle={scopeLabel}
             loading={countryLoading}
             empty={countryData.length === 0}
           >
-            <ResponsiveContainer width="100%" height={countryBarHeight}>
+            <ResponsiveContainer width="100%" height={Math.max(260, countryBarHeight)}>
               <BarChart
                 data={countryData}
                 layout="vertical"
@@ -527,10 +815,140 @@ export default function AnalyticsPage() {
                 <Tooltip
                   contentStyle={{ fontSize: 13, borderRadius: 8, border: "1px solid #e2e8f0" }}
                 />
-                <Bar dataKey="count" fill={BLUE} radius={[0, 4, 4, 0]} name="Reports" />
+                <Bar dataKey="count" fill={BLUE} radius={[0, 3, 3, 0]} name="Reports" />
               </BarChart>
             </ResponsiveContainer>
           </ChartCard>
+        </div>
+
+        {/* ── Infrastructure + Crisis Type ── */}
+        <div style={s.twoCol}>
+          <ChartCard
+            title="Infrastructure Type Breakdown"
+            subtitle={scopeLabel}
+            loading={infraLoading}
+            empty={infraData.length === 0}
+            footnote="A single report may be counted in multiple categories if more than one infrastructure type was selected."
+          >
+            <ResponsiveContainer width="100%" height={Math.max(260, infraBarHeight)}>
+              <BarChart
+                data={infraData}
+                layout="vertical"
+                margin={{ top: 4, right: 24, left: 0, bottom: 0 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f4f8" horizontal={false} />
+                <XAxis
+                  type="number"
+                  tick={{ fontSize: 11, fill: "#718096" }}
+                  tickLine={false}
+                  axisLine={false}
+                  allowDecimals={false}
+                />
+                <YAxis
+                  type="category"
+                  dataKey="infrastructure_type"
+                  tick={{ fontSize: 11, fill: "#4a5568" }}
+                  tickLine={false}
+                  width={200}
+                />
+                <Tooltip
+                  contentStyle={{ fontSize: 13, borderRadius: 8, border: "1px solid #e2e8f0" }}
+                />
+                <Bar dataKey="count" fill={BLUE} radius={[0, 3, 3, 0]} name="Reports" />
+              </BarChart>
+            </ResponsiveContainer>
+          </ChartCard>
+
+          <ChartCard
+            title="Reports by Crisis Type"
+            subtitle={scopeLabel}
+            loading={crisisTypeLoading}
+            empty={crisisTypeData.length === 0}
+          >
+            <ResponsiveContainer width="100%" height={Math.max(260, crisisBarHeight)}>
+              <BarChart
+                data={crisisTypeData}
+                layout="vertical"
+                margin={{ top: 4, right: 24, left: 0, bottom: 0 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f4f8" horizontal={false} />
+                <XAxis
+                  type="number"
+                  tick={{ fontSize: 11, fill: "#718096" }}
+                  tickLine={false}
+                  axisLine={false}
+                  allowDecimals={false}
+                />
+                <YAxis
+                  type="category"
+                  dataKey="crisis_type"
+                  tick={{ fontSize: 12, fill: "#4a5568" }}
+                  tickLine={false}
+                  width={150}
+                />
+                <Tooltip
+                  contentStyle={{ fontSize: 13, borderRadius: 8, border: "1px solid #e2e8f0" }}
+                />
+                <Bar dataKey="count" fill={BLUE} radius={[0, 3, 3, 0]} name="Reports" />
+              </BarChart>
+            </ResponsiveContainer>
+          </ChartCard>
+        </div>
+
+        {/* ── Flag Quality section ── */}
+        <div style={s.flagQualitySection}>
+          <div style={s.flagQualityHeader}>Flag Quality — Automatic Check Performance</div>
+
+          {flagQualityLoading ? (
+            <Spinner />
+          ) : flagQualityTotal < FLAG_QUALITY_THRESHOLD ? (
+            <div style={s.flagQualityNote}>
+              Insufficient data — flag quality statistics require at least {FLAG_QUALITY_THRESHOLD} reviewed
+              reports. Currently: {flagQualityTotal} reviewed.
+            </div>
+          ) : (
+            <>
+              <div style={{ overflowX: "auto" as const }}>
+                <table style={s.fqTable}>
+                  <thead>
+                    <tr>
+                      {["Flag Type", "Total Raised", "Cleared by Reviewer", "Recorded as Discard Reason", "Inconclusive"].map(
+                        (col) => (
+                          <th key={col} style={s.fqTh}>
+                            {col}
+                          </th>
+                        )
+                      )}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {flagQualityItems.map((row) => (
+                      <tr key={row.flag_type}>
+                        <td style={s.fqTd}>{row.flag_type}</td>
+                        <td style={{ ...s.fqTd, textAlign: "right" as const, fontWeight: 600 }}>
+                          {row.total_raised}
+                        </td>
+                        <td style={{ ...s.fqTd, textAlign: "right" as const }}>
+                          {countPct(row.cleared_count, row.cleared_percentage)}
+                        </td>
+                        <td style={{ ...s.fqTd, textAlign: "right" as const }}>
+                          {countPct(row.discard_reason_count, row.discard_reason_percentage)}
+                        </td>
+                        <td style={{ ...s.fqTd, textAlign: "right" as const }}>
+                          {countPct(row.inconclusive_count, row.inconclusive_percentage)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div style={s.flagQualityFootnote}>
+                This data reflects reviewer decisions made in the Review Queue. Use it to identify which
+                automatic checks are producing reliable signals versus frequent false positives, and adjust
+                flag thresholds in Dashboard Settings accordingly.
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -554,28 +972,6 @@ const s: Record<string, React.CSSProperties> = {
     flexDirection: "column",
     gap: 24,
   },
-  // Top bar
-  topBar: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  pageTitle: {
-    fontSize: 18,
-    fontWeight: 700,
-    color: "#1A2B4A",
-    margin: 0,
-  },
-  exportBtn: {
-    padding: "9px 18px",
-    background: "#EBF5FB",
-    color: BLUE,
-    border: `1px solid #bee3f8`,
-    borderRadius: 8,
-    fontSize: 13,
-    fontWeight: 700,
-    cursor: "pointer",
-  },
   // Filter card
   filterCard: {
     background: "#fff",
@@ -597,6 +993,7 @@ const s: Record<string, React.CSSProperties> = {
     flexDirection: "column",
     gap: 5,
     minWidth: 150,
+    position: "relative",
   },
   filterLabel: {
     fontSize: 12,
@@ -613,6 +1010,7 @@ const s: Record<string, React.CSSProperties> = {
     color: "#1A2B4A",
     background: "#fff",
     minWidth: 150,
+    height: 36,
   },
   filterInput: {
     padding: "8px 10px",
@@ -621,6 +1019,7 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: 13,
     color: "#1A2B4A",
     background: "#fff",
+    height: 36,
   },
   applyBtn: {
     padding: "9px 20px",
@@ -631,8 +1030,44 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: 13,
     fontWeight: 700,
     cursor: "pointer",
-    alignSelf: "flex-end",
-    whiteSpace: "nowrap" as const,
+    whiteSpace: "nowrap",
+    height: 36,
+  },
+  clearBtn: {
+    padding: "9px 16px",
+    background: "transparent",
+    color: "#718096",
+    border: "1.5px solid #e2e8f0",
+    borderRadius: 8,
+    fontSize: 13,
+    fontWeight: 600,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+    height: 36,
+  },
+  dropdownPanel: {
+    position: "absolute",
+    top: "100%",
+    left: 0,
+    minWidth: 200,
+    maxWidth: 280,
+    background: "#fff",
+    border: "1.5px solid #e2e8f0",
+    borderRadius: 8,
+    boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+    zIndex: 200,
+    maxHeight: 260,
+    overflowY: "auto",
+    marginTop: 2,
+  },
+  dropdownItem: {
+    display: "flex",
+    alignItems: "center",
+    padding: "8px 12px",
+    fontSize: 13,
+    color: "#1A2B4A",
+    cursor: "pointer",
+    borderBottom: "1px solid #f7fafc",
   },
   tagRow: {
     display: "flex",
@@ -673,8 +1108,8 @@ const s: Record<string, React.CSSProperties> = {
   // Summary cards
   summaryGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(4, 1fr)",
-    gap: 16,
+    gridTemplateColumns: "repeat(5, 1fr)",
+    gap: 14,
   },
   summaryCard: {
     background: "#fff",
@@ -685,32 +1120,146 @@ const s: Record<string, React.CSSProperties> = {
   },
   summaryAccent: {
     width: 5,
-    background: BLUE,
     flexShrink: 0,
   },
   summaryBody: {
-    padding: "18px 20px",
+    padding: "14px 16px",
     display: "flex",
     flexDirection: "column",
-    gap: 6,
+    gap: 4,
   },
   summaryNumber: {
-    fontSize: 36,
+    fontSize: 30,
     fontWeight: 800,
     color: "#1A2B4A",
     lineHeight: 1,
   },
   summaryLabel: {
-    fontSize: 13,
+    fontSize: 12,
     color: "#718096",
     fontWeight: 500,
   },
-  // Charts
-  chartsGrid: {
+  // Compact breakdowns
+  twoCol: {
     display: "grid",
     gridTemplateColumns: "1fr 1fr",
     gap: 20,
   },
+  compactCard: {
+    background: "#fff",
+    borderRadius: 12,
+    boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
+    padding: "18px 20px",
+    display: "flex",
+    flexDirection: "column",
+    gap: 10,
+  },
+  compactTitle: {
+    fontSize: 14,
+    fontWeight: 700,
+    color: "#1A2B4A",
+  },
+  compactList: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 4,
+  },
+  compactRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: "4px 0",
+    borderBottom: "1px solid #f7fafc",
+    fontSize: 13,
+  },
+  compactLabel: {
+    color: "#4a5568",
+  },
+  compactCount: {
+    fontWeight: 700,
+    color: "#1A2B4A",
+  },
+  showAllBtn: {
+    background: "none",
+    border: "none",
+    color: BLUE,
+    fontSize: 12,
+    fontWeight: 600,
+    cursor: "pointer",
+    padding: "4px 0",
+    textAlign: "left",
+  },
+  // Action cards
+  actionCard: {
+    display: "flex",
+    alignItems: "center",
+    gap: 14,
+    borderRadius: 12,
+    padding: "16px 20px",
+    cursor: "pointer",
+    border: "none",
+    textAlign: "left",
+    width: "100%",
+  },
+  actionCardAlert: {
+    background: "#FFF3E0",
+    border: "1.5px solid #FFCC80",
+  },
+  actionCardClear: {
+    background: "#F0FFF4",
+    border: "1.5px solid #9AE6B4",
+  },
+  actionBody: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 2,
+  },
+  actionCount: {
+    fontSize: 28,
+    fontWeight: 800,
+    lineHeight: 1,
+  },
+  actionLabel: {
+    fontSize: 13,
+    fontWeight: 600,
+    color: "#1A2B4A",
+  },
+  actionSub: {
+    fontSize: 12,
+    color: "#718096",
+  },
+  // Export
+  exportBtn: {
+    padding: "9px 18px",
+    background: "#EBF5FB",
+    color: BLUE,
+    border: `1px solid #bee3f8`,
+    borderRadius: 8,
+    fontSize: 13,
+    fontWeight: 700,
+    cursor: "pointer",
+  },
+  // Toggle group
+  toggleGroup: {
+    display: "flex",
+    borderRadius: 7,
+    border: "1.5px solid #e2e8f0",
+    overflow: "hidden",
+  },
+  toggleBtn: {
+    padding: "6px 14px",
+    fontSize: 12,
+    fontWeight: 600,
+    background: "#fff",
+    border: "none",
+    cursor: "pointer",
+    color: "#718096",
+  },
+  toggleActive: {
+    background: BLUE,
+    color: "#fff",
+  },
+  // Charts
   chartCard: {
     background: "#fff",
     borderRadius: 12,
@@ -733,5 +1282,61 @@ const s: Record<string, React.CSSProperties> = {
   chartSubtitle: {
     fontSize: 12,
     color: "#a0aec0",
+  },
+  footnote: {
+    fontSize: 11,
+    color: "#a0aec0",
+    fontStyle: "italic",
+    paddingTop: 4,
+  },
+  // Flag quality
+  flagQualitySection: {
+    background: "#fff",
+    borderRadius: 12,
+    boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
+    padding: "24px",
+    display: "flex",
+    flexDirection: "column",
+    gap: 16,
+  },
+  flagQualityHeader: {
+    fontSize: 16,
+    fontWeight: 700,
+    color: "#1A2B4A",
+  },
+  flagQualityNote: {
+    fontSize: 13,
+    color: "#718096",
+    background: "#f7fafc",
+    borderRadius: 8,
+    padding: "14px 16px",
+    border: "1px solid #e2e8f0",
+  },
+  fqTable: {
+    width: "100%",
+    borderCollapse: "collapse",
+    fontSize: 13,
+  },
+  fqTh: {
+    textAlign: "left",
+    padding: "10px 14px",
+    background: "#f7fafc",
+    fontWeight: 700,
+    color: "#4a5568",
+    fontSize: 12,
+    borderBottom: "2px solid #e2e8f0",
+    whiteSpace: "nowrap",
+  },
+  fqTd: {
+    padding: "10px 14px",
+    borderBottom: "1px solid #f0f4f8",
+    color: "#1A2B4A",
+    verticalAlign: "middle",
+  },
+  flagQualityFootnote: {
+    fontSize: 12,
+    color: "#a0aec0",
+    paddingTop: 4,
+    lineHeight: 1.6,
   },
 };
