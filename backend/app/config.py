@@ -57,6 +57,10 @@ class Settings(BaseSettings):
     # Auto-flagging thresholds
     SAME_IP_DEVICE_THRESHOLD: int = 3   # distinct device IDs from one IP in 24 h before red flag
 
+    # Property grouping and conflict warning
+    CONFLICT_WARNING_THRESHOLD: float = 0.25  # minority share >= 25% triggers conflict warning
+    GPS_GROUPING_RADIUS_DEGREES: float = 0.001  # ~100 metres at equator
+
     # CORS — origins allowed to call the API
     ALLOWED_ORIGINS: list[str] = [
         "http://localhost:5173",

@@ -35,6 +35,11 @@ class Report(Base):
     )
     building_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
+    # Property record — set after auto-flagging assigns Green or Orange
+    property_id: Mapped[str | None] = mapped_column(
+        String(50), ForeignKey("properties.id"), nullable=True, index=True
+    )
+
     # Location
     gps_latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
     gps_longitude: Mapped[float | None] = mapped_column(Float, nullable=True)

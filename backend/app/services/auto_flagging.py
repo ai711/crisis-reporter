@@ -247,7 +247,7 @@ async def auto_flag_report(report_id: str) -> None:
                     flag_to=new_flag,
                     changed_by="auto",
                     reason=flag_reason or "Auto-flagging rules applied",
-                    metadata=flag_metadata,
+                    flag_metadata=flag_metadata,
                 ))
                 await db.commit()
                 log.info(
@@ -269,6 +269,30 @@ async def auto_flag_report(report_id: str) -> None:
                     )
                 except Exception:
                     log.exception("auto_flag_report: SSE publish failed for %s", report_id)
+
+            # ── Property creation — Green and Orange flags only ────────────────
+            if new_flag in ("green", "orange"):
+                try:
+                    from app.services.property_service import (
+                        get_or_create_property,
+                        update_conflict_warning,
+                    )
+                    async with AsyncSessionLocal() as prop_db:
+                        prop_report = await prop_db.get(Report, report.id)
+                        if prop_report:
+                            prop = await get_or_create_property(prop_db, prop_report)
+                            prop_report.property_id = prop.id
+                            await prop_db.flush()
+                            await update_conflict_warning(prop_db, prop.id)
+                            await prop_db.commit()
+                            log.info(
+                                "auto_flag_report: report %s linked to property %s",
+                                report_id, prop.id,
+                            )
+                except Exception:
+                    log.exception(
+                        "auto_flag_report: property creation failed for report %s", report_id
+                    )
 
         except Exception:
             await db.rollback()

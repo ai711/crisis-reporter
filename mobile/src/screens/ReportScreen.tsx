@@ -516,6 +516,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
       ...(pressingNeeds.includes("other") && { pressing_needs_other: pressingNeedsOther }),
       platform: "android" as const,
       submitted_at: new Date().toISOString(),
+      building_id: selectedBuilding ? String(selectedBuilding.id) : null,
       location: {
         gps_latitude: gpsCoords?.lat ?? null,
         gps_longitude: gpsCoords?.lng ?? null,

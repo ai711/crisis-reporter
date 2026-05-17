@@ -31,7 +31,7 @@ class FlagEvent(Base):
     )  # auto, manual
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Structured context for auto-flag reasons (IP details, device lists, etc.)
-    metadata: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    flag_metadata: Mapped[dict | None] = mapped_column("metadata", JSON, nullable=True)
 
     # Superadmin emergency override — bypasses normal transition matrix
     is_emergency_override: Mapped[bool] = mapped_column(

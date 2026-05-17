@@ -6,6 +6,7 @@ from typing import Optional
 
 from app.database import get_db
 from app.models.report import Report
+from app.models.property import Property
 from app.models.dashboard_user import DashboardUser
 from app.services.dependencies import get_current_dashboard_user
 
@@ -21,6 +22,7 @@ class MapPin(BaseModel):
     damage_level: str
     report_count: int
     flag_status: str
+    property_id: Optional[str] = None
 
 
 class MapPinsResponse(BaseModel):
@@ -100,6 +102,17 @@ async def get_map_pins(
     result = await db.execute(select(subq).where(subq.c.rn == 1))
     rows = result.all()
 
+    # Batch-look up property_id for each non-null building_id
+    building_ids = [row.building_id for row in rows if row.building_id]
+    prop_map: dict[str, str] = {}
+    if building_ids:
+        prop_result = await db.execute(
+            select(Property.building_id, Property.id).where(
+                Property.building_id.in_(building_ids)
+            )
+        )
+        prop_map = {r.building_id: r.id for r in prop_result.all()}
+
     pins = [
         MapPin(
             building_id=row.building_id,
@@ -108,6 +121,7 @@ async def get_map_pins(
             damage_level=row.damage_level,
             report_count=row.report_count,
             flag_status=row.flag_status,
+            property_id=prop_map.get(row.building_id) if row.building_id else None,
         )
         for row in rows
     ]

@@ -21,6 +21,7 @@ from app.routers import (
     dashboard_reports,
     dashboard_reporters,
     dashboard_map,
+    dashboard_properties,
     analytics,
     exports,
     question_packages,
@@ -96,6 +97,7 @@ app.include_router(photos.router)
 app.include_router(dashboard_reports.router)
 app.include_router(dashboard_reporters.router)
 app.include_router(dashboard_map.router)
+app.include_router(dashboard_properties.router)
 app.include_router(analytics.router)
 app.include_router(exports.router)
 app.include_router(question_packages.router)
