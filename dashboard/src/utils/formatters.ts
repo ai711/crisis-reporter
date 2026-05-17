@@ -1,34 +1,28 @@
-export function formatDamageLevel(raw: string): string {
-  switch (raw?.toLowerCase()) {
-    case "complete":
-    case "completely_destroyed":
-      return "Completely Destroyed";
-    case "partial":
-    case "partially_damaged":
-      return "Partially Damaged";
-    case "minimal":
-    case "minimal_or_no_damage":
-      return "Minimal or No Damage";
-    default:
-      return raw || "Unknown";
-  }
-}
+export const formatDamageLevel = (raw: string | null): string => {
+  if (!raw) return "—";
+  const map: Record<string, string> = {
+    completely_destroyed: "Completely Destroyed",
+    partially_damaged: "Partially Damaged",
+    minimal_or_no_damage: "Minimal or No Damage",
+    complete: "Completely Destroyed",
+    partial: "Partially Damaged",
+    minimal: "Minimal or No Damage",
+  };
+  return map[raw.toLowerCase()] ?? raw;
+};
 
-export function formatDateTime(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleDateString("en-GB", {
+export const formatDateTime = (iso: string | null): string => {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleString("en-GB", {
     day: "2-digit",
     month: "short",
     year: "numeric",
-  }) + ", " + d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
-}
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
 
-export function formatFlagLabel(flag: string): string {
-  switch (flag) {
-    case "grey":   return "Grey";
-    case "green":  return "Green";
-    case "orange": return "Orange";
-    case "red":    return "Red";
-    default:       return flag;
-  }
-}
+export const formatFlagLabel = (status: string | null): string => {
+  if (!status) return "—";
+  return status.charAt(0).toUpperCase() + status.slice(1);
+};

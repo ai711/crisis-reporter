@@ -21,6 +21,7 @@ import ManageRolesPage from "./pages/ManageRolesPage";
 import DashboardSettingsPage from "./pages/DashboardSettingsPage";
 import ReportDetailPage from "./pages/ReportDetailPage";
 import LocationsPage from "./pages/LocationsPage";
+import PropertyDetailPage from "./pages/PropertyDetailPage";
 import ProjectsPage from "./pages/ProjectsPage";
 import AccessDeniedPage from "./pages/AccessDeniedPage";
 
@@ -128,6 +129,14 @@ export default function App() {
               element={
                 <ProtectedRoute>
                   <LocationsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/locations/:propertyId"
+              element={
+                <ProtectedRoute>
+                  <PropertyDetailPage />
                 </ProtectedRoute>
               }
             />

@@ -182,6 +182,79 @@ export interface DashboardStats {
   review_queue_count: number;
 }
 
+// ── Properties ────────────────────────────────────────────────────────────────
+
+export interface Property {
+  property_id: string;
+  building_id: string | null;
+  display_name: string;
+  address: string | null;
+  country: string | null;
+  current_damage_level: string | null;
+  confirmed_status: string | null;
+  confirmed_by: string | null;
+  confirmed_at: string | null;
+  has_conflict_warning: boolean;
+  total_reports: number;
+  total_reporters: number;
+  most_recent_report_at: string | null;
+  is_recovered: boolean;
+  property_status: "Active" | "Recovered";
+  override_name: string | null;
+  override_lat: number | null;
+  override_lng: number | null;
+  is_flagged_for_review: boolean;
+  latitude: number;
+  longitude: number;
+}
+
+export interface PropertyDetail extends Property {
+  damage_distribution: {
+    completely_destroyed: number;
+    partially_damaged: number;
+    minimal_or_no_damage: number;
+  };
+  conflict_warning_details: {
+    majority_level: string;
+    minority_count: number;
+    minority_percentage: number;
+  } | null;
+  reporter_rows: ReporterRow[];
+}
+
+export interface ReporterRow {
+  reporter_id: string;
+  reporter_name: string | null;
+  most_recent_damage_level: string;
+  most_recent_submitted_at: string;
+  platform: string;
+  flag_status: string;
+}
+
+export interface PropertyComment {
+  id: number;
+  comment_text: string;
+  is_system_generated: boolean;
+  system_event_type: string | null;
+  created_at: string;
+  dashboard_user_name: string | null;
+}
+
+export interface VersionHistoryEntry {
+  report_id: string;
+  submitted_at: string;
+  damage_level: string;
+  flag_status: string;
+  change_note: string | null;
+}
+
+export interface PropertiesListResponse {
+  items: Property[];
+  total: number;
+  cursor: string | null;
+  has_more: boolean;
+}
+
 // ── SSE Events ────────────────────────────────────────────────────────────────
 
 export interface SSEEvent {

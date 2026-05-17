@@ -111,5 +111,39 @@ api.interceptors.response.use(
   }
 );
 
+// ── Properties ────────────────────────────────────────────────────────────────
+
+export const getProperties = (params: Record<string, string | number | boolean>) =>
+  api.get('/api/properties', { params });
+
+export const getPropertyDetail = (propertyId: string, projectId?: string) =>
+  api.get(`/api/properties/${propertyId}`, {
+    params: projectId ? { project_id: projectId } : {}
+  });
+
+export const setConfirmedStatus = (propertyId: string, confirmedStatus: string | null, comment: string) =>
+  api.patch(`/api/properties/${propertyId}/confirmed-status`, {
+    confirmed_status: confirmedStatus,
+    comment
+  });
+
+export const savePropertyOverride = (propertyId: string, data: { override_name?: string | null; override_lat?: number | null; override_lng?: number | null }) =>
+  api.patch(`/api/properties/${propertyId}/override`, data);
+
+export const getPropertyComments = (propertyId: string) =>
+  api.get(`/api/properties/${propertyId}/comments`);
+
+export const postPropertyComment = (propertyId: string, commentText: string) =>
+  api.post(`/api/properties/${propertyId}/comments`, { comment_text: commentText });
+
+export const setRecoveryStatus = (propertyId: string, isRecovered: boolean, comment: string) =>
+  api.patch(`/api/properties/${propertyId}/recovery-status`, { is_recovered: isRecovered, comment });
+
+export const flagPropertyForReview = (propertyId: string, note?: string) =>
+  api.post(`/api/properties/${propertyId}/flag-for-review`, { note: note || null });
+
+export const getReporterVersionHistory = (propertyId: string, reporterId: string) =>
+  api.get(`/api/properties/${propertyId}/reporters/${reporterId}/versions`);
+
 export const API_BASE = BASE_URL;
 export default api;
