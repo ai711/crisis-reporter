@@ -61,6 +61,12 @@ class Settings(BaseSettings):
     CONFLICT_WARNING_THRESHOLD: float = 0.25  # minority share >= 25% triggers conflict warning
     GPS_GROUPING_RADIUS_DEGREES: float = 0.001  # ~100 metres at equator
 
+    # Review Queue
+    REVIEW_SOFT_LOCK_MINUTES: int = 15
+    AUTO_BLOCK_CONFIRMATION_HOURS: int = 72
+    AUTO_BLOCK_CHECK_INTERVAL_MINUTES: int = 15
+    STUCK_REPORT_THRESHOLD_MINUTES: int = 10
+
     # CORS — origins allowed to call the API
     ALLOWED_ORIGINS: list[str] = [
         "http://localhost:5173",

@@ -61,6 +61,29 @@ class Reporter(Base):
         DateTime(timezone=True), nullable=True
     )
 
+    # Auto-block state for Tab 4
+    auto_blocked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    auto_block_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
+    auto_block_confirmed: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False
+    )
+    auto_block_confirmed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    auto_block_confirmed_by: Mapped[str | None] = mapped_column(
+        String(255), nullable=True
+    )
+    matched_blocked_reporter_id: Mapped[str | None] = mapped_column(
+        String(255), nullable=True
+    )
+    pending_auto_block_confirmation: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, index=True
+    )
+
     # Profile photo
     photo_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
 

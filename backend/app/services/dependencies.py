@@ -1,4 +1,4 @@
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -131,6 +131,11 @@ async def get_current_reporter(
         raise credentials_exception
 
     return reporter
+
+
+async def get_redis(request: Request):
+    """Returns the shared Redis connection from app state."""
+    return request.app.state.redis
 
 
 # Optional reporter auth — used on routes that accept both

@@ -13,7 +13,7 @@ import asyncio
 import ipaddress
 import logging
 from datetime import datetime, timezone, timedelta
-from sqlalchemy import select, func, and_
+from sqlalchemy import select, func, and_, or_
 
 from app.database import AsyncSessionLocal
 
@@ -86,7 +86,49 @@ async def auto_flag_report(report_id: str) -> None:
             flag_reason: str | None = None
             flag_metadata: dict | None = None
 
-            # ── Rule 1: Photo validation ──────────────────────────────────────
+            # ── Rule 1: Blocked device ID match ───────────────────────────────
+            # If the reporter's device_id_hash matches any manually-blocked reporter,
+            # auto-block this reporter and flag the report Red immediately.
+            if new_flag == "green" and report.reporter_id:
+                rep_result = await db.execute(
+                    select(Reporter).where(Reporter.id == report.reporter_id)
+                )
+                current_reporter = rep_result.scalar_one_or_none()
+                if current_reporter and current_reporter.device_id_hash and not current_reporter.is_blocked:
+                    blocked_match_result = await db.execute(
+                        select(Reporter).where(
+                            and_(
+                                Reporter.device_id_hash == current_reporter.device_id_hash,
+                                Reporter.is_blocked == True,
+                                Reporter.id != current_reporter.id,
+                            )
+                        ).limit(1)
+                    )
+                    matched_blocked = blocked_match_result.scalar_one_or_none()
+                    if matched_blocked:
+                        new_flag = "red"
+                        flag_reason = "Device ID matches a blocked reporter profile"
+                        flag_metadata = {
+                            "matched_blocked_reporter_id": str(matched_blocked.id),
+                            "device_id_hash": current_reporter.device_id_hash,
+                        }
+                        current_reporter.is_blocked = True
+                        current_reporter.auto_blocked_at = datetime.now(timezone.utc)
+                        current_reporter.auto_block_expires_at = (
+                            datetime.now(timezone.utc)
+                            + timedelta(hours=settings.AUTO_BLOCK_CONFIRMATION_HOURS)
+                        )
+                        current_reporter.pending_auto_block_confirmation = True
+                        current_reporter.matched_blocked_reporter_id = str(matched_blocked.id)
+                        current_reporter.auto_block_confirmed = False
+                        db.add(current_reporter)
+                        log.info(
+                            "auto_flag_report: reporter %s auto-blocked — device_id matches blocked reporter %s",
+                            current_reporter.id, matched_blocked.id,
+                        )
+
+            # ── Rule 2: Photo validation ──────────────────────────────────────
+            # (was Rule 1 before blocked-device check was added above)
             async def _photo_count() -> int:
                 r = await db.execute(
                     select(func.count(Photo.id)).where(Photo.report_id == report.id)
@@ -307,8 +349,9 @@ async def auto_flag_report(report_id: str) -> None:
 async def monitor_stuck_grey_reports() -> None:
     """Periodic task: find and alert on reports stuck in Grey for > 10 minutes."""
     from app.models.report import Report
+    from app.config import settings
 
-    stuck_threshold = datetime.now(timezone.utc) - timedelta(minutes=10)
+    stuck_threshold = datetime.now(timezone.utc) - timedelta(minutes=settings.STUCK_REPORT_THRESHOLD_MINUTES)
 
     async with AsyncSessionLocal() as db:
         try:
