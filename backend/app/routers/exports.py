@@ -101,12 +101,12 @@ class GenerateRequest(BaseModel):
     platform: list[str] | None = None
     project_id: str | None = None
 
-    @field_validator("date_from", "date_to")
+    @field_validator("date_from", "date_to", mode="before")
     @classmethod
-    def date_not_empty(cls, v: str) -> str:
-        if not v or not v.strip():
+    def date_not_empty(cls, v: object) -> str:
+        if not v or not str(v).strip():
             raise ValueError("Date range is required for all exports.")
-        return v.strip()
+        return str(v).strip()
 
     @model_validator(mode="after")
     def cross_field_validate(self) -> "GenerateRequest":
@@ -793,6 +793,18 @@ async def generate_export(
             detail=f"format must be one of: {', '.join(sorted(VALID_FORMATS))}",
         )
 
+    # Belt-and-suspenders: reject missing dates even if the validator was bypassed
+    if not request.date_from or not request.date_from.strip():
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="date_from is required.",
+        )
+    if not request.date_to or not request.date_to.strip():
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="date_to is required.",
+        )
+
     job_id = str(uuid.uuid4())
     configuration = {
         "report_type": request.report_type,
@@ -824,34 +836,37 @@ async def generate_export(
     return GenerateResponse(job_id=job_id)
 
 
-@router.get("/history", response_model=list[ExportHistoryItem])
+@router.get("/history")
 async def get_export_history(
     current_user: DashboardUser = Depends(get_current_dashboard_user),
-) -> list[ExportHistoryItem]:
+) -> list[dict]:
     user_id = str(current_user.id)
     user_jobs = [j for j in _jobs.values() if j["user_id"] == user_id]
     user_jobs.sort(key=lambda j: j["created_at"], reverse=True)
 
-    return [
-        ExportHistoryItem(
-            id=j["job_id"],
-            report_type=j["report_type"],
-            format=j["format"],
-            date_from=j["date_from"],
-            date_to=j["date_to"],
-            country_filter=j.get("country_filter"),
-            damage_level=j.get("damage_level"),
-            crisis_type=j.get("crisis_type"),
-            flag_status=j.get("flag_status"),
-            platform=j.get("platform"),
-            project_id=j.get("project_id"),
-            status=j["status"],
-            download_url=j.get("download_url"),
-            created_at=j["created_at"],
-            created_by=j["created_by"],
+    result = []
+    for j in user_jobs[:20]:
+        created_at = j["created_at"]
+        result.append(
+            {
+                "id": j["job_id"],
+                "report_type": j["report_type"],
+                "format": j["format"],
+                "date_from": j.get("date_from", ""),
+                "date_to": j.get("date_to", ""),
+                "country_filter": j.get("country_filter"),
+                "damage_level": j.get("damage_level"),
+                "crisis_type": j.get("crisis_type"),
+                "flag_status": j.get("flag_status"),
+                "platform": j.get("platform"),
+                "project_id": j.get("project_id"),
+                "status": j["status"],
+                "download_url": j.get("download_url"),
+                "created_at": created_at.isoformat() if isinstance(created_at, datetime) else str(created_at),
+                "created_by": j["created_by"],
+            }
         )
-        for j in user_jobs[:20]
-    ]
+    return result
 
 
 @router.get("/{job_id}/status", response_model=JobStatusResponse)
