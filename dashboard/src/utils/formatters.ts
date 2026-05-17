@@ -41,3 +41,29 @@ export const formatCountdown = (seconds: number): string => {
   if (h > 24) return `${Math.floor(h / 24)}d ${h % 24}h remaining`;
   return `${h}h ${m}m remaining`;
 };
+
+import type { ProfileType, ProfileStatus } from '../types';
+
+export const formatProfileType = (type: ProfileType | string | null): string => {
+  const map: Record<string, string> = {
+    anonymous_no_reports: 'Anonymous — No Reports',
+    anonymous_with_reports: 'Anonymous — With Reports',
+    named_profile: 'Named Profile',
+  };
+  return map[type ?? ''] ?? '—';
+};
+
+export const formatProfileStatus = (status: ProfileStatus | string | null): string => {
+  const map: Record<string, string> = {
+    active: 'Active',
+    flagged: 'Flagged',
+    blocked: 'Blocked',
+  };
+  return map[status ?? ''] ?? '—';
+};
+
+export const PROFILE_STATUS_COLOURS: Record<string, { bg: string; text: string }> = {
+  active:  { bg: '#E8F5E9', text: '#2E7D32' },
+  flagged: { bg: '#FFF3E0', text: '#E65100' },
+  blocked: { bg: '#FDECEA', text: '#C62828' },
+};

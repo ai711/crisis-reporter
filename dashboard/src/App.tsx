@@ -20,6 +20,7 @@ import UserManagementPage from "./pages/UserManagementPage";
 import ManageRolesPage from "./pages/ManageRolesPage";
 import DashboardSettingsPage from "./pages/DashboardSettingsPage";
 import ReportDetailPage from "./pages/ReportDetailPage";
+import ReporterDetailPage from "./pages/ReporterDetailPage";
 import LocationsPage from "./pages/LocationsPage";
 import PropertyDetailPage from "./pages/PropertyDetailPage";
 import ProjectsPage from "./pages/ProjectsPage";
@@ -161,6 +162,14 @@ export default function App() {
               element={
                 <ProtectedRoute>
                   <ReportersPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/reporters/:reporterId"
+              element={
+                <ProtectedRoute>
+                  <ReporterDetailPage />
                 </ProtectedRoute>
               }
             />

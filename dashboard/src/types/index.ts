@@ -126,6 +126,67 @@ export interface ReportListResponse {
 
 // ── Reporters ─────────────────────────────────────────────────────────────────
 
+export type ProfileStatus = 'active' | 'flagged' | 'blocked';
+export type ProfileType = 'anonymous_no_reports' | 'anonymous_with_reports' | 'named_profile';
+
+export interface ReporterListRow {
+  reporter_id: string;
+  profile_type: ProfileType;
+  created_at: string;
+  country: string | null;
+  ip_address: string | null;
+  platform: string | null;
+  app_version: string | null;
+  browser_version: string | null;
+  total_reports: number;
+  profile_status: ProfileStatus;
+  last_active_at: string | null;
+}
+
+export interface ReporterDetail extends ReporterListRow {
+  device_id: string | null;
+  mcc: string | null;
+  language_code: string | null;
+  green_orange_reports: number;
+  red_reports: number;
+  discarded_reports: number;
+  total_unique_properties: number;
+  first_report_at: string | null;
+  last_report_at: string | null;
+  is_paused: boolean;
+  pause_expires_at: string | null;
+  pause_reason: string | null;
+}
+
+export interface ReporterActivityEntry {
+  id: number;
+  action: string;
+  previous_value: string | null;
+  new_value: string | null;
+  source: string;
+  comment: string | null;
+  matched_reporter_id: string | null;
+  created_at: string;
+}
+
+export interface ReporterBadge {
+  badge_name: string;
+  earned_at: string | null;
+}
+
+export interface ReporterBadgesResponse {
+  badges_eligible: boolean;
+  badges: ReporterBadge[];
+}
+
+export interface ReportersListResponse {
+  items: ReporterListRow[];
+  total: number;
+  cursor: string | null;
+  has_more: boolean;
+}
+
+// Keep legacy alias so PropertyDetailPage reporter rows still compile
 export interface ReporterListItem {
   id: string;
   platform: Platform;
@@ -136,19 +197,6 @@ export interface ReporterListItem {
   report_count: number;
   last_active_at: string | null;
   created_at: string;
-}
-
-export interface ReporterDetail extends ReporterListItem {
-  email: string | null;
-  block_reason: string | null;
-  blocked_at: string | null;
-}
-
-export interface ReporterListResponse {
-  items: ReporterListItem[];
-  total: number;
-  cursor: string | null;
-  has_more: boolean;
 }
 
 // ── Map ───────────────────────────────────────────────────────────────────────

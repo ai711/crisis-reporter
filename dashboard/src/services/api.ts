@@ -192,5 +192,33 @@ export const submitReviewDecision = (
     comment,
   });
 
+// ── Reporters ─────────────────────────────────────────────────────────────────
+
+export const getReporters = (params: Record<string, string | number>) =>
+  api.get('/api/dashboard/reporters', { params });
+
+export const getReporterDetail = (reporterId: string) =>
+  api.get(`/api/dashboard/reporters/${reporterId}`);
+
+export const changeReporterStatus = (reporterId: string, profileStatus: string, comment: string) =>
+  api.patch(`/api/dashboard/reporters/${reporterId}/status`, {
+    profile_status: profileStatus,
+    comment,
+  });
+
+export const removeReporterPause = (reporterId: string, comment: string) =>
+  api.post(`/api/dashboard/reporters/${reporterId}/remove-pause`, { comment });
+
+export const getReporterReports = (reporterId: string, params: Record<string, string | number>) =>
+  api.get(`/api/dashboard/reporters/${reporterId}/reports`, { params });
+
+export const getReporterActivityLog = (reporterId: string, page: number = 1) =>
+  api.get(`/api/dashboard/reporters/${reporterId}/activity-log`, {
+    params: { page, page_size: 20 },
+  });
+
+export const getReporterBadges = (reporterId: string) =>
+  api.get(`/api/dashboard/reporters/${reporterId}/badges`);
+
 export const API_BASE = BASE_URL;
 export default api;
