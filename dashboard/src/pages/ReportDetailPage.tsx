@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft,
   Globe,
@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import Header from "../components/Header";
 import FlagChangeModal from "../components/FlagChangeModal";
+import ReviewPanel from "../components/ReviewPanel";
 import api from "../services/api";
 import { useAuthStore } from "../stores/authStore";
 import type { ReportDetail, FlagStatus, FlagEvent, VersionHistoryItem, QuestionAnswer } from "../types";
@@ -440,9 +441,11 @@ function Toast({ message, onDone }: { message: string; onDone: () => void }) {
 export default function ReportDetailPage() {
   const { reportId } = useParams<{ reportId: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const { user } = useAuthStore();
   const isSuperadmin = user?.role === "superadmin";
+  const isFromQueue = searchParams.get("from") === "queue";
 
   const [translating, setTranslating] = useState(false);
   const [modal, setModal] = useState<ModalState>(CLOSED_MODAL);
@@ -463,6 +466,13 @@ export default function ReportDetailPage() {
     queryClient.invalidateQueries({ queryKey: ["reports"] });
     queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
     queryClient.invalidateQueries({ queryKey: ["map-pins"] });
+  }
+
+  function handleDecisionComplete() {
+    queryClient.invalidateQueries({ queryKey: ["review-queue-counts"] });
+    queryClient.invalidateQueries({ queryKey: ["review-queue-tab1"] });
+    invalidateAll();
+    setToast("Review decision submitted.");
   }
 
   const flagMutation = useMutation({
@@ -584,6 +594,22 @@ export default function ReportDetailPage() {
   // Review log: manual events only
   const reviewLogEvents = report.flag_events.filter((e) => e.changed_by === "manual");
 
+  // Extract flag reasons and metadata from auto red-flag events for ReviewPanel
+  const autoRedEvents = report.flag_events.filter(
+    (e) => e.changed_by === "auto" && e.flag_to === "red"
+  );
+  const flagReasons: string[] = [
+    ...new Set(
+      autoRedEvents.map((e) => e.reason).filter((r): r is string => r !== null)
+    ),
+  ];
+  const flagMetadata: Record<string, Record<string, unknown> | null> = {};
+  autoRedEvents.forEach((e) => {
+    if (e.reason && !(e.reason in flagMetadata)) {
+      flagMetadata[e.reason] = e.metadata as Record<string, unknown> | null;
+    }
+  });
+
   return (
     <div style={styles.container}>
       <Header
@@ -614,6 +640,17 @@ export default function ReportDetailPage() {
           <ArrowLeft size={15} style={{ marginRight: 6 }} />
           Back to Reports
         </button>
+
+        {/* Review panel — shown for all Red-flagged reports */}
+        {report.flag_status === "red" && (
+          <ReviewPanel
+            reportId={report.id}
+            flagReasons={flagReasons}
+            flagMetadata={flagMetadata}
+            isFromQueue={isFromQueue}
+            onDecisionComplete={handleDecisionComplete}
+          />
+        )}
 
         {/* ── Section 1: Report header ────────────────────────────────── */}
         <div style={styles.reportHeader}>

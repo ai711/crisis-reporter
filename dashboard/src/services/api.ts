@@ -180,5 +180,17 @@ export const reverseAutoBlock = (reporterId: string, comment: string) =>
 export const releaseSoftLock = (itemType: string, itemId: string) =>
   api.post('/api/review-queue/release-lock', { item_type: itemType, item_id: itemId });
 
+export const submitReviewDecision = (
+  reportId: string,
+  decision: 'approve' | 'discard',
+  flagAssessments: Array<{ reason: string; dismissed: boolean }>,
+  comment: string
+) =>
+  api.post(`/api/review-queue/tab1/${reportId}/submit`, {
+    decision,
+    flag_assessments: flagAssessments,
+    comment,
+  });
+
 export const API_BASE = BASE_URL;
 export default api;

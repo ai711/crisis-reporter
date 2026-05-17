@@ -319,6 +319,21 @@ export interface ReviewQueueListResponse<T> {
   has_more: boolean;
 }
 
+export interface ReviewPanelFlag {
+  reason: string;
+  label: string;
+  detail: string | null;
+  checked: boolean;
+}
+
+export interface ReviewPanelState {
+  flags: ReviewPanelFlag[];
+  decision: 'approve' | 'discard' | null;
+  comment: string;
+  isSubmitting: boolean;
+  submitError: string | null;
+}
+
 // ── SSE Events ────────────────────────────────────────────────────────────────
 
 export interface SSEEvent {

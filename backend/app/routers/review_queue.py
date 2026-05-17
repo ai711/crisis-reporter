@@ -88,6 +88,26 @@ class ReleaseLockRequest(BaseModel):
     item_id: str
 
 
+class ReviewDecisionRequest(BaseModel):
+    decision: str
+    flag_assessments: list[dict]
+    comment: str
+
+    @field_validator("decision")
+    @classmethod
+    def valid_decision(cls, v: str) -> str:
+        if v not in ("approve", "discard"):
+            raise ValueError("decision must be 'approve' or 'discard'")
+        return v
+
+    @field_validator("comment")
+    @classmethod
+    def comment_min_length(cls, v: str) -> str:
+        if len(v.strip()) < 10:
+            raise ValueError("comment must be at least 10 characters")
+        return v.strip()
+
+
 # ── Safe soft-lock helper ─────────────────────────────────────────────────────
 
 async def _get_lock_safe(redis, item_type: str, item_id: str) -> Optional[dict]:
@@ -979,6 +999,108 @@ async def reverse_auto_block(
         "reporter_id": reporter_id,
         "is_blocked": False,
         "message": "Auto-block reversed. Reports discarded during block period are not reinstated.",
+    }
+
+
+# ── Tab 1: Submit review decision ────────────────────────────────────────────
+
+@router.post("/tab1/{report_id}/submit")
+async def submit_review_decision(
+    report_id: str,
+    body: ReviewDecisionRequest,
+    db: AsyncSession = Depends(get_db),
+    redis=Depends(get_redis),
+    current_user: DashboardUser = Depends(get_current_dashboard_user),
+):
+    """Submit a review decision on a Red-flagged report.
+
+    approve → Red becomes Orange (passed with notes).
+    discard → Red becomes Discarded.
+    Requires the current user to hold the soft lock on the report.
+    """
+    result = await db.execute(select(Report).where(Report.id == report_id))
+    report = result.scalar_one_or_none()
+    if not report:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report not found")
+
+    if report.flag_status != "red":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Submit only applies to Red reports. Current status: {report.flag_status}",
+        )
+
+    # Require current user to hold the soft lock
+    existing_lock = await _get_lock_safe(redis, "report", report_id)
+    if not existing_lock or existing_lock.get("reviewer_id") != str(current_user.id):
+        locked_by = existing_lock.get("reviewer_name") if existing_lock else None
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "message": "You do not hold the review lock on this report. Re-open from the review queue.",
+                "locked_by": locked_by,
+            },
+        )
+
+    target_status = "orange" if body.decision == "approve" else "discarded"
+    previous_flag = report.flag_status
+    now = datetime.now(timezone.utc)
+
+    report.flag_status = target_status
+    report.updated_at = now
+
+    flag_event = FlagEvent(
+        report_id=report.id,
+        dashboard_user_id=current_user.id,
+        flag_from=previous_flag,
+        flag_to=target_status,
+        changed_by="manual",
+        reason=f"Review queue decision: {body.decision}",
+        is_emergency_override=False,
+    )
+    flag_event.flag_metadata = {
+        "decision": body.decision,
+        "flag_assessments": body.flag_assessments,
+        "reviewer_comment": body.comment,
+    }
+    db.add(flag_event)
+    await db.commit()
+
+    # Release lock
+    try:
+        await release_soft_lock(redis, "report", report_id, str(current_user.id))
+    except Exception:
+        pass
+
+    # Publish SSE events
+    try:
+        from app.routers.dashboard_sse import publish_event
+        await publish_event(
+            crisis_id=str(report.crisis_id),
+            event_type="flag_changed",
+            data={
+                "report_id": report_id,
+                "flag_from": previous_flag,
+                "flag_to": target_status,
+            },
+        )
+        await publish_event(
+            crisis_id=str(report.crisis_id),
+            event_type="review_queue_updated",
+            data={"report_id": report_id},
+        )
+    except Exception:
+        pass
+
+    log.info(
+        "submit_review_decision: report %s → %s by %s",
+        report_id, target_status, current_user.full_name,
+    )
+
+    return {
+        "report_id": report_id,
+        "flag_from": previous_flag,
+        "flag_to": target_status,
+        "decision": body.decision,
     }
 
 

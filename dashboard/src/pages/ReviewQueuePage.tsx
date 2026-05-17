@@ -384,7 +384,9 @@ function Tab1({ currentUserName }: { currentUserName: string }) {
       return (
         <button
           style={s.reviewBtn}
-          onClick={() => window.open("/reports/" + row.report_id, "_blank")}
+          onClick={() =>
+            window.open("/reports/" + row.report_id + "?from=queue", "_blank")
+          }
         >
           Review →
         </button>
@@ -394,7 +396,9 @@ function Tab1({ currentUserName }: { currentUserName: string }) {
       return (
         <button
           style={s.reviewBtn}
-          onClick={() => window.open("/reports/" + row.report_id, "_blank")}
+          onClick={() =>
+            window.open("/reports/" + row.report_id + "?from=queue", "_blank")
+          }
         >
           Resume →
         </button>
