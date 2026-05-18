@@ -3,7 +3,6 @@ from datetime import datetime
 from sqlalchemy import String, Boolean, DateTime, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.sql import func
 from app.database import Base
 
 
@@ -23,7 +22,7 @@ class ProjectUser(Base):
 
     is_creator: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     assigned_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
+        DateTime(timezone=True), default=datetime.utcnow, nullable=False
     )
 
     # Relationships
