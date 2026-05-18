@@ -269,6 +269,16 @@ async def create_project(
     current_user: DashboardUser = Depends(get_current_dashboard_user),
 ):
     """Create a new project. Assigns PR-XXXX serial ID. Triggers async import."""
+    import traceback as _tb
+    try:
+        return await _create_project_impl(body, db, current_user)
+    except HTTPException:
+        raise
+    except Exception as _exc:
+        raise HTTPException(status_code=500, detail=f"DEBUG: {_tb.format_exc()}")
+
+
+async def _create_project_impl(body: ProjectCreate, db: AsyncSession, current_user: DashboardUser):
     # Name uniqueness check
     existing = await db.execute(
         select(Crisis).where(Crisis.name == body.name)
