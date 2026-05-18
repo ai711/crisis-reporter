@@ -67,3 +67,36 @@ export const PROFILE_STATUS_COLOURS: Record<string, { bg: string; text: string }
   flagged: { bg: '#FFF3E0', text: '#E65100' },
   blocked: { bg: '#FDECEA', text: '#C62828' },
 };
+
+// ── Project formatters ────────────────────────────────────────────────────────
+
+export const PROJECT_STATUS_COLOURS: Record<string, { bg: string; text: string }> = {
+  active:   { bg: '#E8F5E9', text: '#2E7D32' },
+  closed:   { bg: '#F5F5F5', text: '#616161' },
+  archived: { bg: '#EEEEEE', text: '#9E9E9E' },
+};
+
+export const formatProjectStatus = (status: string | null): string => {
+  const map: Record<string, string> = {
+    active: 'Active',
+    closed: 'Closed',
+    archived: 'Archived',
+  };
+  return map[status ?? ''] ?? '—';
+};
+
+export const formatDateRange = (startDate: string, endDate: string): string => {
+  const start = new Date(startDate).toLocaleDateString('en-GB', {
+    day: '2-digit', month: 'short', year: 'numeric',
+  });
+  const end = new Date(endDate).toLocaleDateString('en-GB', {
+    day: '2-digit', month: 'short', year: 'numeric',
+  });
+  return `${start} — ${end}`;
+};
+
+export const isEndDatePassed = (endDate: string): boolean => {
+  const end = new Date(endDate);
+  end.setHours(23, 59, 59, 999);
+  return new Date() > end;
+};

@@ -24,6 +24,7 @@ import ReporterDetailPage from "./pages/ReporterDetailPage";
 import LocationsPage from "./pages/LocationsPage";
 import PropertyDetailPage from "./pages/PropertyDetailPage";
 import ProjectsPage from "./pages/ProjectsPage";
+import ProjectDetailPage from "./pages/ProjectDetailPage";
 import AccessDeniedPage from "./pages/AccessDeniedPage";
 
 // ── Query client ──────────────────────────────────────────────────────────────
@@ -186,6 +187,14 @@ export default function App() {
               element={
                 <ProtectedRoute>
                   <ProjectsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/projects/:serialId"
+              element={
+                <ProtectedRoute>
+                  <ProjectDetailPage />
                 </ProtectedRoute>
               }
             />

@@ -382,6 +382,50 @@ export interface ReviewPanelState {
   submitError: string | null;
 }
 
+// ── Projects ──────────────────────────────────────────────────────────────────
+
+export type ProjectStatus = 'active' | 'closed' | 'archived';
+
+export interface ProjectListRow {
+  id: string;
+  serial_id: string;
+  name: string;
+  countries: string[];
+  start_date: string;
+  end_date: string;
+  total_reports: number;
+  status: ProjectStatus;
+  created_at: string;
+  created_by_name: string | null;
+  created_by_user_id: string | null;
+  import_status: string;
+  description: string | null;
+}
+
+export interface ProjectDetail extends ProjectListRow {
+  map_center_lat: number | null;
+  map_center_lng: number | null;
+  import_progress: number;
+  import_total: number;
+}
+
+export interface ProjectUser {
+  dashboard_user_id: string;
+  full_name: string;
+  email: string;
+  role: string;
+  access_level: 'view_only' | 'view_and_edit';
+  is_creator: boolean;
+  assigned_at: string;
+}
+
+export interface ProjectsListResponse {
+  items: ProjectListRow[];
+  total: number;
+  cursor: string | null;
+  has_more: boolean;
+}
+
 // ── SSE Events ────────────────────────────────────────────────────────────────
 
 export interface SSEEvent {

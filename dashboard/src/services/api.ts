@@ -220,5 +220,53 @@ export const getReporterActivityLog = (reporterId: string, page: number = 1) =>
 export const getReporterBadges = (reporterId: string) =>
   api.get(`/api/dashboard/reporters/${reporterId}/badges`);
 
+// ── Projects ──────────────────────────────────────────────────────────────────
+
+export const getDashboardProjects = (params: Record<string, string | number>) =>
+  api.get('/api/dashboard/projects', { params });
+
+export const getProjectDetail = (serialId: string) =>
+  api.get(`/api/dashboard/projects/${serialId}`);
+
+export const createProject = (data: {
+  name: string;
+  countries: string[];
+  start_date: string;
+  end_date: string;
+  description?: string;
+}) => api.post('/api/dashboard/projects', data);
+
+export const updateProject = (serialId: string, data: Record<string, unknown>) =>
+  api.patch(`/api/dashboard/projects/${serialId}`, data);
+
+export const getProjectImportStatus = (serialId: string) =>
+  api.get(`/api/dashboard/projects/${serialId}/import-status`);
+
+export const getProjectReports = (serialId: string, params: Record<string, string | number>) =>
+  api.get(`/api/dashboard/projects/${serialId}/reports`, { params });
+
+export const getProjectProperties = (serialId: string, params: Record<string, string | number>) =>
+  api.get(`/api/dashboard/projects/${serialId}/properties`, { params });
+
+export const getProjectStats = (serialId: string, params: Record<string, string | number>) =>
+  api.get(`/api/dashboard/projects/${serialId}/stats`, { params });
+
+export const getProjectUsers = (serialId: string) =>
+  api.get(`/api/dashboard/projects/${serialId}/users`);
+
+export const addProjectUser = (serialId: string, userId: string, accessLevel: string) =>
+  api.post(`/api/dashboard/projects/${serialId}/users`, {
+    dashboard_user_id: userId,
+    access_level: accessLevel,
+  });
+
+export const removeProjectUser = (serialId: string, userId: string) =>
+  api.delete(`/api/dashboard/projects/${serialId}/users/${userId}`);
+
+export const updateProjectUserAccess = (serialId: string, userId: string, accessLevel: string) =>
+  api.patch(`/api/dashboard/projects/${serialId}/users/${userId}`, {
+    access_level: accessLevel,
+  });
+
 export const API_BASE = BASE_URL;
 export default api;
