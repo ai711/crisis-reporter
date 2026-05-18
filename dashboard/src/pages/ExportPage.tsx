@@ -396,6 +396,8 @@ export default function ExportPage() {
         : [prefill.crisis_type as string];
       setCrisisTypeFilter(vals);
     }
+    if (prefill.report_type) setSelectedId(prefill.report_type as string);
+    if (prefill.project_id) setProjectFilter(String(prefill.project_id));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {

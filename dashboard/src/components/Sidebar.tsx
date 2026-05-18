@@ -1,8 +1,8 @@
 import { useNavigate, useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useAuthStore } from "../stores/authStore";
-import { getReviewQueueCounts } from "../services/api";
-import type { ReviewQueueCounts } from "../types";
+import { getReviewQueueCounts, getDashboardProjects } from "../services/api";
+import type { ReviewQueueCounts, ProjectsListResponse } from "../types";
 import {
   Map,
   FileText,
@@ -77,6 +77,18 @@ export default function Sidebar() {
     ? countsData.tab1_count + countsData.tab2_count + countsData.tab3_count + countsData.tab4_count
     : 0;
 
+  const { data: activeProjectsData } = useQuery<ProjectsListResponse>({
+    queryKey: ["active-projects-count"],
+    queryFn: async () => {
+      const res = await getDashboardProjects({ status: "active", limit: 1 });
+      return res.data as ProjectsListResponse;
+    },
+    refetchInterval: 60000,
+    staleTime: 55000,
+  });
+
+  const activeProjectCount = activeProjectsData?.total ?? 0;
+
   const visibleItems = NAV_ITEMS.filter((item) =>
     canSee(item.requiredRole, user?.role)
   );
@@ -143,6 +155,22 @@ export default function Sidebar() {
                   flexShrink: 0,
                 }}>
                   {totalQueueCount}
+                </span>
+              )}
+              {item.path === "/projects" && activeProjectCount > 0 && (
+                <span style={{
+                  background: "#0468B1",
+                  color: "#fff",
+                  fontSize: 11,
+                  fontWeight: 700,
+                  borderRadius: 10,
+                  padding: "2px 7px",
+                  minWidth: 18,
+                  textAlign: "center" as const,
+                  lineHeight: 1.4,
+                  flexShrink: 0,
+                }}>
+                  {activeProjectCount}
                 </span>
               )}
             </button>
