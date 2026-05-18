@@ -8,9 +8,36 @@ export interface DashboardUser {
   last_name: string | null;
   contact_number: string | null;
   profile_photo_url: string | null;
-  role: "admin" | "analyst" | "superadmin";
-  last_login_at: string | null;
-  inactivity_timeout_minutes: number;
+  role: string;
+  // Auth-only fields (present on /me responses)
+  last_login_at?: string | null;
+  inactivity_timeout_minutes?: number;
+  // User management fields (present on /users list and detail responses)
+  is_active?: boolean;
+  created_at?: string;
+  created_by_user_id?: string | null;
+  created_by_name?: string | null;
+}
+
+export interface DashboardUserDetail extends DashboardUser {
+  project_assignments: UserProjectAssignment[];
+}
+
+export interface UserProjectAssignment {
+  serial_id: string;
+  project_name: string;
+  countries: string[];
+  status: string;
+  access_level: 'view_only' | 'view_and_edit';
+  is_creator: boolean;
+  assigned_at: string;
+}
+
+export interface DashboardUsersListResponse {
+  items: DashboardUser[];
+  total: number;
+  cursor: string | null;
+  has_more: boolean;
 }
 
 export interface AuthTokens {

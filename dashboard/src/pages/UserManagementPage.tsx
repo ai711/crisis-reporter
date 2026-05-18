@@ -1,184 +1,242 @@
-import { useState, useEffect } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState, useEffect, useRef } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
+import { Users, X, Eye, EyeOff } from "lucide-react";
 import { useAuthStore } from "../stores/authStore";
-import api from "../services/api";
-
-// ── Constants ──────────────────────────────────────────────────────────────────
+import {
+  getDashboardUsers,
+  createDashboardUser,
+  getRolesList,
+} from "../services/api";
+import type { DashboardUser, DashboardUsersListResponse } from "../types";
+import { formatDateTime } from "../utils/formatters";
 
 const BLUE = "#0468B1";
+const PAGE_SIZE = 50;
 
-// ── Types ──────────────────────────────────────────────────────────────────────
+// ── Role display ───────────────────────────────────────────────────────────────
 
-type UserRole = "admin" | "analyst";
-
-interface DashboardUserFull {
-  id: string;
-  full_name: string;
-  email: string;
-  role: UserRole;
-  is_active: boolean;
-  last_login_at: string | null;
+function capitalize(s: string): string {
+  return s ? s.charAt(0).toUpperCase() + s.slice(1) : "";
 }
 
-// ── Helpers ────────────────────────────────────────────────────────────────────
+// ── Status pill ────────────────────────────────────────────────────────────────
 
-function timeAgo(iso: string | null): string {
-  if (!iso) return "Never";
-  const diff = Date.now() - new Date(iso).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  if (days < 30) return `${days}d ago`;
-  return new Date(iso).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
-}
-
-// ── Role badge ─────────────────────────────────────────────────────────────────
-
-function RoleBadge({ role }: { role: UserRole }) {
-  const isAdmin = role === "admin";
+function StatusPill({ active }: { active: boolean }) {
   return (
     <span style={{
       display: "inline-block",
-      padding: "4px 12px",
+      padding: "3px 10px",
       borderRadius: 20,
       fontSize: 12,
       fontWeight: 600,
-      background: isAdmin ? "#EBF5FB" : "#f0f4f8",
-      color: isAdmin ? BLUE : "#4a5568",
-      border: `1px solid ${isAdmin ? "#bee3f8" : "#e2e8f0"}`,
-    }}>
-      {isAdmin ? "Admin" : "Analyst"}
-    </span>
-  );
-}
-
-// ── Status badge ───────────────────────────────────────────────────────────────
-
-function StatusBadge({ active }: { active: boolean }) {
-  return (
-    <span style={{
-      display: "inline-block",
-      padding: "4px 12px",
-      borderRadius: 20,
-      fontSize: 12,
-      fontWeight: 600,
-      background: active ? "#d4edda" : "#e2e8f0",
-      color: active ? "#155724" : "#4a5568",
+      background: active ? "#E8F5E9" : "#FDECEA",
+      color: active ? "#2E7D32" : "#C62828",
     }}>
       {active ? "Active" : "Inactive"}
     </span>
   );
 }
 
-// ── Add User Modal ─────────────────────────────────────────────────────────────
+// ── Create User Modal ──────────────────────────────────────────────────────────
 
-interface AddModalProps {
-  onClose: () => void;
-  onSuccess: () => void;
+interface RoleOption {
+  id: string;
+  name: string;
 }
 
-function AddUserModal({ onClose, onSuccess }: AddModalProps) {
-  const [fullName, setFullName] = useState("");
+interface CreateUserModalProps {
+  onClose: () => void;
+  onSuccess: (newUserId: string) => void;
+  currentUserRole: string;
+}
+
+function CreateUserModal({ onClose, onSuccess, currentUserRole }: CreateUserModalProps) {
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<UserRole | "">("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [role, setRole] = useState("");
+  const [isActive, setIsActive] = useState(true);
+  const [contactNumber, setContactNumber] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitError, setSubmitError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  function validate(): boolean {
-    const e: Record<string, string> = {};
-    if (!fullName.trim()) e.fullName = "Full name is required";
-    if (!email.trim()) e.email = "Email is required";
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) e.email = "Enter a valid email address";
-    if (!password) e.password = "Password is required";
-    else if (password.length < 8) e.password = "Password must be at least 8 characters";
-    if (!role) e.role = "Role is required";
-    setErrors(e);
-    return Object.keys(e).length === 0;
+  const { data: rolesData } = useQuery({
+    queryKey: ["roles-list"],
+    queryFn: async () => {
+      const res = await getRolesList();
+      return res.data as RoleOption[];
+    },
+  });
+
+  const availableRoles = (rolesData ?? []).filter((r) =>
+    currentUserRole === "superadmin" ? true : r.name !== "superadmin"
+  );
+
+  const isValid =
+    firstName.trim().length > 0 &&
+    lastName.trim().length > 0 &&
+    email.trim().length > 0 &&
+    password.length >= 8 &&
+    role.length > 0;
+
+  function clearErr(key: string) {
+    setErrors((p) => { const n = { ...p }; delete n[key]; return n; });
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!validate()) return;
+    const errs: Record<string, string> = {};
+    if (!firstName.trim()) errs.firstName = "First name is required";
+    if (!lastName.trim()) errs.lastName = "Last name is required";
+    if (!email.trim()) errs.email = "Email is required";
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errs.email = "Enter a valid email address";
+    if (!password) errs.password = "Password is required";
+    else if (password.length < 8) errs.password = "Password must be at least 8 characters";
+    if (!role) errs.role = "Role is required";
+    setErrors(errs);
+    if (Object.keys(errs).length > 0) return;
+
     setSubmitError("");
     setSubmitting(true);
     try {
-      await api.post("/api/dashboard-users", {
-        full_name: fullName.trim(),
+      const res = await createDashboardUser({
+        first_name: firstName.trim(),
+        last_name: lastName.trim(),
         email: email.trim().toLowerCase(),
         password,
         role,
+        is_active: isActive,
+        contact_number: contactNumber.trim() || undefined,
       });
-      onSuccess();
-    } catch {
-      setSubmitError("Failed to create user. The email may already be in use.");
+      onSuccess(res.data.id);
+    } catch (err: unknown) {
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      if (status === 409) {
+        setErrors((p) => ({ ...p, email: "This email address is already in use." }));
+      } else {
+        setSubmitError("Failed to create user. Please try again.");
+      }
     } finally {
       setSubmitting(false);
     }
   }
 
   return (
-    <div style={s.overlay} onClick={onClose}>
-      <div style={s.modal} onClick={(e) => e.stopPropagation()}>
-        <div style={s.modalHeader}>
-          <h2 style={s.modalTitle}>Add User</h2>
-          <button style={s.closeBtn} onClick={onClose}>✕</button>
+    <div style={ms.overlay} onClick={onClose}>
+      <div style={ms.modal} onClick={(e) => e.stopPropagation()}>
+        <div style={ms.header}>
+          <h2 style={ms.title}>Create User</h2>
+          <button style={ms.closeBtn} onClick={onClose}>✕</button>
         </div>
-        <form onSubmit={handleSubmit} style={s.form}>
-          <Field label="Full Name" required error={errors.fullName}>
-            <input
-              type="text"
-              value={fullName}
-              onChange={(e) => { setFullName(e.target.value); clearErr("fullName"); }}
-              placeholder="e.g. Jane Smith"
-              style={{ ...s.input, borderColor: errors.fullName ? "#e53e3e" : "#e2e8f0" }}
-            />
-          </Field>
+        <form onSubmit={handleSubmit} style={ms.form}>
+          <div style={{ display: "flex", gap: 12 }}>
+            <MField label="First Name" required error={errors.firstName} style={{ flex: 1 }}>
+              <input
+                type="text"
+                value={firstName}
+                onChange={(e) => { setFirstName(e.target.value); clearErr("firstName"); }}
+                placeholder="Jane"
+                style={{ ...ms.input, borderColor: errors.firstName ? "#e53e3e" : "#e2e8f0" }}
+              />
+            </MField>
+            <MField label="Last Name" required error={errors.lastName} style={{ flex: 1 }}>
+              <input
+                type="text"
+                value={lastName}
+                onChange={(e) => { setLastName(e.target.value); clearErr("lastName"); }}
+                placeholder="Smith"
+                style={{ ...ms.input, borderColor: errors.lastName ? "#e53e3e" : "#e2e8f0" }}
+              />
+            </MField>
+          </div>
 
-          <Field label="Email" required error={errors.email}>
+          <MField label="Email Address" required error={errors.email}>
             <input
               type="email"
               value={email}
               onChange={(e) => { setEmail(e.target.value); clearErr("email"); }}
               placeholder="jane@undp.org"
-              style={{ ...s.input, borderColor: errors.email ? "#e53e3e" : "#e2e8f0" }}
+              style={{ ...ms.input, borderColor: errors.email ? "#e53e3e" : "#e2e8f0" }}
             />
-          </Field>
+          </MField>
 
-          <Field label="Password" required error={errors.password}>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => { setPassword(e.target.value); clearErr("password"); }}
-              placeholder="Min. 8 characters"
-              style={{ ...s.input, borderColor: errors.password ? "#e53e3e" : "#e2e8f0" }}
-            />
-          </Field>
+          <MField label="Password" required error={errors.password}>
+            <div style={{ position: "relative" }}>
+              <input
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={(e) => { setPassword(e.target.value); clearErr("password"); }}
+                placeholder="Min. 8 characters"
+                style={{ ...ms.input, borderColor: errors.password ? "#e53e3e" : "#e2e8f0", paddingRight: 40, width: "100%", boxSizing: "border-box" }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((p) => !p)}
+                style={ms.eyeBtn}
+                tabIndex={-1}
+              >
+                {showPassword ? <EyeOff size={16} color="#718096" /> : <Eye size={16} color="#718096" />}
+              </button>
+            </div>
+            <span style={{ fontSize: 11, color: password.length >= 8 ? "#2E7D32" : "#718096", marginTop: 2 }}>
+              {password.length} / 8 characters minimum
+            </span>
+          </MField>
 
-          <Field label="Role" required error={errors.role}>
+          <MField label="Role" required error={errors.role}>
             <select
               value={role}
-              onChange={(e) => { setRole(e.target.value as UserRole | ""); clearErr("role"); }}
-              style={{ ...s.select, borderColor: errors.role ? "#e53e3e" : "#e2e8f0" }}
+              onChange={(e) => { setRole(e.target.value); clearErr("role"); }}
+              style={{ ...ms.select, borderColor: errors.role ? "#e53e3e" : "#e2e8f0" }}
             >
               <option value="">Select role…</option>
-              <option value="admin">Admin</option>
-              <option value="analyst">Analyst</option>
+              {availableRoles.map((r) => (
+                <option key={r.id} value={r.name}>{capitalize(r.name)}</option>
+              ))}
             </select>
-          </Field>
+          </MField>
 
-          {submitError && <div style={s.submitError}>{submitError}</div>}
+          <MField label="Account Status">
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                type="button"
+                onClick={() => setIsActive(true)}
+                style={{ ...ms.toggleBtn, background: isActive ? "#E8F5E9" : "#f0f4f8", color: isActive ? "#2E7D32" : "#718096", border: `1.5px solid ${isActive ? "#A5D6A7" : "#e2e8f0"}`, fontWeight: isActive ? 700 : 500 }}
+              >
+                Active
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsActive(false)}
+                style={{ ...ms.toggleBtn, background: !isActive ? "#FDECEA" : "#f0f4f8", color: !isActive ? "#C62828" : "#718096", border: `1.5px solid ${!isActive ? "#EF9A9A" : "#e2e8f0"}`, fontWeight: !isActive ? 700 : 500 }}
+              >
+                Inactive
+              </button>
+            </div>
+          </MField>
 
-          <div style={s.modalFooter}>
-            <button type="button" style={s.cancelBtn} onClick={onClose}>Cancel</button>
+          <MField label="Contact Number">
+            <input
+              type="text"
+              value={contactNumber}
+              onChange={(e) => setContactNumber(e.target.value)}
+              placeholder="+1 555 000 0000 (optional)"
+              style={ms.input}
+            />
+          </MField>
+
+          {submitError && <div style={ms.submitError}>{submitError}</div>}
+
+          <div style={ms.footer}>
+            <button type="button" style={ms.cancelBtn} onClick={onClose}>Cancel</button>
             <button
               type="submit"
-              style={{ ...s.submitBtn, opacity: submitting ? 0.7 : 1 }}
-              disabled={submitting}
+              disabled={!isValid || submitting}
+              style={{ ...ms.submitBtn, opacity: !isValid || submitting ? 0.5 : 1, cursor: !isValid || submitting ? "default" : "pointer" }}
             >
               {submitting ? "Creating…" : "Create User"}
             </button>
@@ -187,159 +245,28 @@ function AddUserModal({ onClose, onSuccess }: AddModalProps) {
       </div>
     </div>
   );
-
-  function clearErr(key: string) {
-    setErrors((p) => { const next = { ...p }; delete next[key]; return next; });
-  }
 }
 
-// ── Edit User Modal ────────────────────────────────────────────────────────────
-
-interface EditModalProps {
-  user: DashboardUserFull;
-  onClose: () => void;
-  onSuccess: () => void;
-}
-
-function EditUserModal({ user, onClose, onSuccess }: EditModalProps) {
-  const [fullName, setFullName] = useState(user.full_name);
-  const [role, setRole] = useState<UserRole>(user.role);
-  const [isActive, setIsActive] = useState(user.is_active);
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [submitError, setSubmitError] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-
-  function validate(): boolean {
-    const e: Record<string, string> = {};
-    if (!fullName.trim()) e.fullName = "Full name is required";
-    setErrors(e);
-    return Object.keys(e).length === 0;
-  }
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!validate()) return;
-    setSubmitError("");
-    setSubmitting(true);
-    try {
-      await api.patch(`/api/dashboard-users/${user.id}`, {
-        full_name: fullName.trim(),
-        role,
-        is_active: isActive,
-      });
-      onSuccess();
-    } catch {
-      setSubmitError("Failed to update user. Please try again.");
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  return (
-    <div style={s.overlay} onClick={onClose}>
-      <div style={s.modal} onClick={(e) => e.stopPropagation()}>
-        <div style={s.modalHeader}>
-          <h2 style={s.modalTitle}>Edit User</h2>
-          <button style={s.closeBtn} onClick={onClose}>✕</button>
-        </div>
-        <form onSubmit={handleSubmit} style={s.form}>
-          <div style={s.editEmailNote}>
-            <span style={s.editEmailLabel}>Email</span>
-            <span style={s.editEmailValue}>{user.email}</span>
-          </div>
-
-          <Field label="Full Name" required error={errors.fullName}>
-            <input
-              type="text"
-              value={fullName}
-              onChange={(e) => {
-                setFullName(e.target.value);
-                setErrors((p) => { const next = { ...p }; delete next.fullName; return next; });
-              }}
-              style={{ ...s.input, borderColor: errors.fullName ? "#e53e3e" : "#e2e8f0" }}
-            />
-          </Field>
-
-          <Field label="Role" required>
-            <select
-              value={role}
-              onChange={(e) => setRole(e.target.value as UserRole)}
-              style={s.select}
-            >
-              <option value="admin">Admin</option>
-              <option value="analyst">Analyst</option>
-            </select>
-          </Field>
-
-          <Field label="Status" required>
-            <div style={s.toggleRow}>
-              <button
-                type="button"
-                onClick={() => setIsActive(true)}
-                style={{
-                  ...s.toggleBtn,
-                  background: isActive ? "#d4edda" : "#f0f4f8",
-                  color: isActive ? "#155724" : "#4a5568",
-                  border: `1.5px solid ${isActive ? "#c3e6cb" : "#e2e8f0"}`,
-                  fontWeight: isActive ? 700 : 500,
-                }}
-              >
-                Active
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsActive(false)}
-                style={{
-                  ...s.toggleBtn,
-                  background: !isActive ? "#e2e8f0" : "#f0f4f8",
-                  color: !isActive ? "#2d3748" : "#a0aec0",
-                  border: `1.5px solid ${!isActive ? "#cbd5e0" : "#e2e8f0"}`,
-                  fontWeight: !isActive ? 700 : 500,
-                }}
-              >
-                Inactive
-              </button>
-            </div>
-          </Field>
-
-          {submitError && <div style={s.submitError}>{submitError}</div>}
-
-          <div style={s.modalFooter}>
-            <button type="button" style={s.cancelBtn} onClick={onClose}>Cancel</button>
-            <button
-              type="submit"
-              style={{ ...s.submitBtn, opacity: submitting ? 0.7 : 1 }}
-              disabled={submitting}
-            >
-              {submitting ? "Saving…" : "Save Changes"}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-// ── Field wrapper ──────────────────────────────────────────────────────────────
-
-function Field({
+function MField({
   label,
   required,
   error,
   children,
+  style,
 }: {
   label: string;
   required?: boolean;
   error?: string;
   children: React.ReactNode;
+  style?: React.CSSProperties;
 }) {
   return (
-    <div style={s.fieldGroup}>
-      <label style={s.label}>
-        {label} {required && <span style={s.req}>*</span>}
+    <div style={{ display: "flex", flexDirection: "column", gap: 5, ...style }}>
+      <label style={{ fontSize: 13, fontWeight: 600, color: "#4a5568" }}>
+        {label} {required && <span style={{ color: "#e53e3e" }}>*</span>}
       </label>
       {children}
-      {error && <span style={s.fieldErr}>{error}</span>}
+      {error && <span style={{ fontSize: 12, color: "#e53e3e", fontWeight: 500 }}>{error}</span>}
     </div>
   );
 }
@@ -348,172 +275,187 @@ function Field({
 
 export default function UserManagementPage() {
   const { user: currentUser } = useAuthStore();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [editTarget, setEditTarget] = useState<DashboardUserFull | null>(null);
-  const [successBanner, setSuccessBanner] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [search, setSearch] = useState("");
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Admin guard
-  if (currentUser?.role !== "admin") {
-    return (
-      <div style={s.page}>
-        <div style={s.accessDenied}>
-          <div style={s.accessIcon}>🔒</div>
-          <div style={s.accessTitle}>Admin access required</div>
-          <div style={s.accessNote}>
-            User Management is restricted to Admin accounts. Contact your administrator if you need access.
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const [cursors, setCursors] = useState<(string | null)[]>([null]);
+  const [pageIndex, setPageIndex] = useState(0);
 
-  // Fetch users
-  const { data: users = [], isLoading } = useQuery<DashboardUserFull[]>({
-    queryKey: ["dashboard-users"],
+  const [showCreate, setShowCreate] = useState(false);
+
+  const isAdminOrSuper = currentUser?.role === "admin" || currentUser?.role === "superadmin";
+
+  // Debounce search
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      setSearch(searchInput);
+      // Reset pagination on new search
+      setCursors([null]);
+      setPageIndex(0);
+    }, 400);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [searchInput]);
+
+  const queryParams: Record<string, string | number> = {
+    limit: PAGE_SIZE,
+  };
+  if (search) queryParams.search = search;
+  const currentCursor = cursors[pageIndex];
+  if (currentCursor) queryParams.cursor = currentCursor;
+
+  const { data, isLoading } = useQuery<DashboardUsersListResponse>({
+    queryKey: ["dashboard-users", search, pageIndex, currentCursor],
     queryFn: async () => {
-      const res = await api.get<DashboardUserFull[]>("/api/dashboard-users");
+      const res = await getDashboardUsers(queryParams);
       return res.data;
     },
   });
 
-  // Deactivate mutation
-  const deactivateMutation = useMutation({
-    mutationFn: async (id: string) => {
-      await api.patch(`/api/dashboard-users/${id}`, { is_active: false });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["dashboard-users"] });
-    },
-  });
+  const users: DashboardUser[] = data?.items ?? [];
+  const total = data?.total ?? 0;
+  const hasMore = data?.has_more ?? false;
 
-  function handleDeactivate(user: DashboardUserFull) {
-    if (!window.confirm(`Are you sure you want to deactivate ${user.full_name}?`)) return;
-    deactivateMutation.mutate(user.id);
+  function handleNext() {
+    if (!data?.cursor) return;
+    const nextCursors = [...cursors];
+    nextCursors[pageIndex + 1] = data.cursor;
+    setCursors(nextCursors);
+    setPageIndex((p) => p + 1);
   }
 
-  function handleSuccess(message: string) {
-    setShowAddModal(false);
-    setEditTarget(null);
+  function handlePrev() {
+    if (pageIndex === 0) return;
+    setPageIndex((p) => p - 1);
+  }
+
+  function handleCreateSuccess(newUserId: string) {
+    setShowCreate(false);
     queryClient.invalidateQueries({ queryKey: ["dashboard-users"] });
-    setSuccessBanner(message);
+    navigate(`/users/${newUserId}`);
   }
-
-  useEffect(() => {
-    if (!successBanner) return;
-    const t = setTimeout(() => setSuccessBanner(""), 4000);
-    return () => clearTimeout(t);
-  }, [successBanner]);
 
   return (
     <div style={s.page}>
       {/* Header */}
       <div style={s.headerRow}>
-        <div>
-          <h1 style={s.pageTitle}>User Management</h1>
-          <p style={s.pageSubtitle}>
-            {isLoading ? "Loading…" : `${users.length} dashboard user${users.length !== 1 ? "s" : ""}`}
-          </p>
+        <h1 style={s.pageTitle}>Manage Users</h1>
+        <div style={s.topBar}>
+          {/* Search */}
+          <div style={s.searchWrap}>
+            <input
+              type="text"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              placeholder="Search by name, email, role, or status"
+              style={s.searchInput}
+            />
+            {searchInput && (
+              <button
+                style={s.clearBtn}
+                onClick={() => setSearchInput("")}
+                aria-label="Clear search"
+              >
+                <X size={14} color="#718096" />
+              </button>
+            )}
+          </div>
+          {/* Create User — Admin/Superadmin only */}
+          {isAdminOrSuper && (
+            <button style={s.createBtn} onClick={() => setShowCreate(true)}>
+              + Create User
+            </button>
+          )}
         </div>
-        <button style={s.addBtn} onClick={() => setShowAddModal(true)}>
-          + Add User
-        </button>
       </div>
 
-      {successBanner && <div style={s.successBanner}>{successBanner}</div>}
-
+      {/* Content */}
       <div style={s.content}>
         {isLoading ? (
           <div style={s.loading}>Loading users…</div>
         ) : users.length === 0 ? (
           <div style={s.empty}>
-            <div style={{ fontSize: 44 }}>👥</div>
-            <div style={s.emptyText}>No users yet. Add one to get started.</div>
+            <Users size={44} color="#cbd5e0" />
+            <div style={s.emptyText}>No dashboard users found.</div>
           </div>
         ) : (
-          <div style={s.tableWrap}>
-            <table style={s.table}>
-              <thead>
-                <tr style={s.thead}>
-                  <th style={s.th}>Full Name</th>
-                  <th style={s.th}>Email</th>
-                  <th style={s.th}>Role</th>
-                  <th style={s.th}>Status</th>
-                  <th style={s.th}>Last Login</th>
-                  <th style={s.th}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {users.map((u) => {
-                  const isSelf = u.id === currentUser?.id;
-                  return (
-                    <tr key={u.id} style={s.tr}>
-                      <td style={s.td}>
-                        <div style={s.nameCell}>
-                          <span style={s.nameInitial}>
-                            {u.full_name.charAt(0).toUpperCase()}
-                          </span>
-                          <span style={s.nameFull}>{u.full_name}</span>
-                          {isSelf && <span style={s.youPill}>You</span>}
-                        </div>
-                      </td>
-                      <td style={s.td}>
-                        <span style={s.emailText}>{u.email}</span>
-                      </td>
-                      <td style={s.td}>
-                        <RoleBadge role={u.role} />
-                      </td>
-                      <td style={s.td}>
-                        <StatusBadge active={u.is_active} />
-                      </td>
-                      <td style={s.td}>
-                        <span style={s.lastLogin}>{timeAgo(u.last_login_at)}</span>
-                      </td>
-                      <td style={s.td}>
-                        <div style={s.actionRow}>
-                          <button
-                            style={s.editBtn}
-                            onClick={() => setEditTarget(u)}
-                          >
-                            Edit
-                          </button>
-                          {!isSelf && u.is_active && (
+          <>
+            <div style={s.tableWrap}>
+              <table style={s.table}>
+                <thead>
+                  <tr style={s.thead}>
+                    <th style={s.th}>Full Name</th>
+                    <th style={s.th}>Email Address</th>
+                    <th style={s.th}>Role</th>
+                    <th style={s.th}>Account Status</th>
+                    <th style={s.th}>Date Created</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {users.map((u) => {
+                    const isSelf = u.id === currentUser?.id;
+                    return (
+                      <tr key={u.id} style={s.tr}>
+                        <td style={s.td}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                             <button
-                              style={{
-                                ...s.deactivateBtn,
-                                opacity: deactivateMutation.isPending ? 0.5 : 1,
-                                cursor: deactivateMutation.isPending ? "default" : "pointer",
-                              }}
-                              onClick={() => handleDeactivate(u)}
-                              disabled={deactivateMutation.isPending}
+                              style={s.nameLink}
+                              onClick={() => navigate(`/users/${u.id}`)}
                             >
-                              Deactivate
+                              {u.full_name}
                             </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                            {isSelf && (
+                              <span style={s.youPill}>You</span>
+                            )}
+                          </div>
+                        </td>
+                        <td style={s.td}>{u.email}</td>
+                        <td style={s.td}>{capitalize(u.role)}</td>
+                        <td style={s.td}>
+                          <StatusPill active={u.is_active ?? true} />
+                        </td>
+                        <td style={s.td}>{u.created_at ? formatDateTime(u.created_at) : "—"}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination bar */}
+            <div style={s.paginationBar}>
+              <span style={s.totalCount}>{total.toLocaleString()} user{total !== 1 ? "s" : ""}</span>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <button
+                  style={{ ...s.pageBtn, opacity: pageIndex === 0 ? 0.4 : 1, cursor: pageIndex === 0 ? "default" : "pointer" }}
+                  onClick={handlePrev}
+                  disabled={pageIndex === 0}
+                >
+                  ← Previous
+                </button>
+                <span style={s.pageLabel}>Page {pageIndex + 1}</span>
+                <button
+                  style={{ ...s.pageBtn, opacity: !hasMore ? 0.4 : 1, cursor: !hasMore ? "default" : "pointer" }}
+                  onClick={handleNext}
+                  disabled={!hasMore}
+                >
+                  Next →
+                </button>
+              </div>
+            </div>
+          </>
         )}
       </div>
 
-      {showAddModal && (
-        <AddUserModal
-          onClose={() => setShowAddModal(false)}
-          onSuccess={() => handleSuccess("User created successfully")}
-        />
-      )}
-
-      {editTarget && (
-        <EditUserModal
-          user={editTarget}
-          onClose={() => setEditTarget(null)}
-          onSuccess={() => handleSuccess("User updated successfully")}
+      {showCreate && (
+        <CreateUserModal
+          onClose={() => setShowCreate(false)}
+          onSuccess={handleCreateSuccess}
+          currentUserRole={currentUser?.role ?? ""}
         />
       )}
     </div>
@@ -528,31 +470,18 @@ const s: Record<string, React.CSSProperties> = {
     flexDirection: "column",
     height: "100vh",
     background: "#f4f6f9",
+    overflow: "hidden",
   },
-  // Access denied
-  accessDenied: {
-    flex: 1,
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 14,
-    padding: 60,
-  },
-  accessIcon: { fontSize: 52 },
-  accessTitle: { fontSize: 22, fontWeight: 700, color: "#1A2B4A" },
-  accessNote: { fontSize: 14, color: "#718096", maxWidth: 400, textAlign: "center" },
-  // Header
   headerRow: {
     background: "#fff",
     borderBottom: "1px solid #e0e0e0",
     padding: "16px 32px",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
     position: "sticky",
     top: 0,
     zIndex: 50,
+    display: "flex",
+    flexDirection: "column",
+    gap: 12,
   },
   pageTitle: {
     fontSize: 20,
@@ -560,14 +489,40 @@ const s: Record<string, React.CSSProperties> = {
     color: "#1A2B4A",
     margin: 0,
   },
-  pageSubtitle: {
-    fontSize: 13,
-    color: "#718096",
-    marginTop: 4,
-    marginBottom: 0,
+  topBar: {
+    display: "flex",
+    gap: 12,
+    alignItems: "center",
   },
-  addBtn: {
-    padding: "10px 20px",
+  searchWrap: {
+    flex: 1,
+    position: "relative",
+    display: "flex",
+    alignItems: "center",
+  },
+  searchInput: {
+    width: "100%",
+    padding: "9px 36px 9px 12px",
+    border: "1.5px solid #e2e8f0",
+    borderRadius: 8,
+    fontSize: 14,
+    color: "#1A2B4A",
+    background: "#fff",
+    outline: "none",
+    boxSizing: "border-box",
+  },
+  clearBtn: {
+    position: "absolute",
+    right: 10,
+    background: "transparent",
+    border: "none",
+    cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    padding: 0,
+  },
+  createBtn: {
+    padding: "9px 20px",
     background: BLUE,
     color: "#fff",
     border: "none",
@@ -575,22 +530,15 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: 14,
     fontWeight: 600,
     cursor: "pointer",
-    whiteSpace: "nowrap" as const,
+    whiteSpace: "nowrap",
   },
-  // Banner
-  successBanner: {
-    background: "#d4edda",
-    color: "#155724",
-    border: "1px solid #c3e6cb",
-    padding: "12px 32px",
-    fontSize: 14,
-    fontWeight: 500,
-  },
-  // Content
   content: {
     flex: 1,
-    padding: "28px 32px",
+    padding: "24px 32px",
     overflowY: "auto",
+    display: "flex",
+    flexDirection: "column",
+    gap: 12,
   },
   loading: {
     padding: 60,
@@ -603,11 +551,10 @@ const s: Record<string, React.CSSProperties> = {
     flexDirection: "column",
     alignItems: "center",
     justifyContent: "center",
-    gap: 12,
+    gap: 14,
     padding: 80,
   },
   emptyText: { fontSize: 15, color: "#718096" },
-  // Table
   tableWrap: {
     background: "#fff",
     borderRadius: 12,
@@ -628,54 +575,47 @@ const s: Record<string, React.CSSProperties> = {
   },
   tr: { borderBottom: "1px solid #f0f4f8" },
   td: { padding: "14px 16px", fontSize: 13, color: "#2d3748", verticalAlign: "middle" },
-  // Name cell
-  nameCell: { display: "flex", alignItems: "center", gap: 10 },
-  nameInitial: {
-    width: 32,
-    height: 32,
-    borderRadius: "50%",
-    background: BLUE,
-    color: "#fff",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontSize: 14,
-    fontWeight: 700,
-    flexShrink: 0,
+  nameLink: {
+    background: "transparent",
+    border: "none",
+    color: BLUE,
+    fontSize: 13,
+    fontWeight: 600,
+    cursor: "pointer",
+    padding: 0,
+    textAlign: "left",
   },
-  nameFull: { fontWeight: 600, color: "#1A2B4A", fontSize: 14 },
   youPill: {
     fontSize: 10,
     fontWeight: 700,
-    background: "#EBF5FB",
-    color: BLUE,
+    background: "#f0f4f8",
+    color: "#718096",
     padding: "2px 7px",
     borderRadius: 10,
-    border: `1px solid #bee3f8`,
+    border: "1px solid #e2e8f0",
   },
-  emailText: { fontSize: 13, color: "#4a5568" },
-  lastLogin: { fontSize: 13, color: "#718096" },
-  // Action buttons
-  actionRow: { display: "flex", gap: 12, alignItems: "center" },
-  editBtn: {
-    background: "transparent",
-    border: "none",
-    color: BLUE,
+  paginationBar: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: "8px 0",
+  },
+  totalCount: { fontSize: 13, color: "#718096" },
+  pageLabel: { fontSize: 13, color: "#4a5568", fontWeight: 500 },
+  pageBtn: {
+    padding: "7px 16px",
+    background: "#fff",
+    border: "1px solid #e2e8f0",
+    borderRadius: 7,
     fontSize: 13,
-    fontWeight: 600,
-    cursor: "pointer",
-    padding: "4px 0",
+    fontWeight: 500,
+    color: "#4a5568",
   },
-  deactivateBtn: {
-    background: "transparent",
-    border: "none",
-    color: "#e53e3e",
-    fontSize: 13,
-    fontWeight: 600,
-    cursor: "pointer",
-    padding: "4px 0",
-  },
-  // Modal shared
+};
+
+// ── Modal styles ───────────────────────────────────────────────────────────────
+
+const ms: Record<string, React.CSSProperties> = {
   overlay: {
     position: "fixed",
     inset: 0,
@@ -689,12 +629,12 @@ const s: Record<string, React.CSSProperties> = {
     background: "#fff",
     borderRadius: 14,
     width: "100%",
-    maxWidth: 480,
+    maxWidth: 520,
     maxHeight: "90vh",
     overflowY: "auto",
     boxShadow: "0 20px 60px rgba(0,0,0,0.25)",
   },
-  modalHeader: {
+  header: {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
@@ -705,7 +645,7 @@ const s: Record<string, React.CSSProperties> = {
     background: "#fff",
     zIndex: 1,
   },
-  modalTitle: { fontSize: 18, fontWeight: 700, color: "#1A2B4A", margin: 0 },
+  title: { fontSize: 18, fontWeight: 700, color: "#1A2B4A", margin: 0 },
   closeBtn: {
     background: "transparent",
     border: "none",
@@ -719,19 +659,18 @@ const s: Record<string, React.CSSProperties> = {
     padding: "24px",
     display: "flex",
     flexDirection: "column",
-    gap: 18,
+    gap: 16,
   },
-  fieldGroup: { display: "flex", flexDirection: "column", gap: 6 },
-  label: { fontSize: 13, fontWeight: 600, color: "#4a5568" },
-  req: { color: "#e53e3e" },
   input: {
     padding: "10px 12px",
     borderRadius: 7,
-    border: "1.5px solid",
+    border: "1.5px solid #e2e8f0",
     fontSize: 14,
     color: "#1A2B4A",
     outline: "none",
     background: "#fff",
+    width: "100%",
+    boxSizing: "border-box",
   },
   select: {
     padding: "10px 12px",
@@ -740,8 +679,31 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: 14,
     color: "#1A2B4A",
     background: "#fff",
+    width: "100%",
   },
-  fieldErr: { fontSize: 12, color: "#e53e3e", fontWeight: 500 },
+  eyeBtn: {
+    position: "absolute",
+    right: 10,
+    top: "50%",
+    transform: "translateY(-50%)",
+    background: "transparent",
+    border: "none",
+    cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    padding: 0,
+  },
+  toggleBtn: {
+    flex: 1,
+    padding: "9px 0",
+    borderRadius: 7,
+    fontSize: 14,
+    cursor: "pointer",
+    textAlign: "center",
+    border: "1.5px solid #e2e8f0",
+    background: "#f0f4f8",
+    color: "#718096",
+  },
   submitError: {
     background: "#fff5f5",
     color: "#c53030",
@@ -751,7 +713,7 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: 13,
     fontWeight: 500,
   },
-  modalFooter: {
+  footer: {
     display: "flex",
     justifyContent: "flex-end",
     gap: 10,
@@ -776,27 +738,5 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: 14,
     fontWeight: 600,
     cursor: "pointer",
-  },
-  // Edit modal specific
-  editEmailNote: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 4,
-    background: "#f7fafc",
-    border: "1px solid #e2e8f0",
-    borderRadius: 7,
-    padding: "10px 14px",
-  },
-  editEmailLabel: { fontSize: 11, fontWeight: 700, color: "#718096", textTransform: "uppercase", letterSpacing: 0.4 },
-  editEmailValue: { fontSize: 14, color: "#2d3748", fontWeight: 500 },
-  toggleRow: { display: "flex", gap: 8 },
-  toggleBtn: {
-    flex: 1,
-    padding: "9px 0",
-    borderRadius: 7,
-    fontSize: 14,
-    cursor: "pointer",
-    textAlign: "center" as const,
-    transition: "all 0.15s",
   },
 };

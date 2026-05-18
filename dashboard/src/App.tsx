@@ -25,6 +25,7 @@ import LocationsPage from "./pages/LocationsPage";
 import PropertyDetailPage from "./pages/PropertyDetailPage";
 import ProjectsPage from "./pages/ProjectsPage";
 import ProjectDetailPage from "./pages/ProjectDetailPage";
+import UserDetailPage from "./pages/UserDetailPage";
 import AccessDeniedPage from "./pages/AccessDeniedPage";
 
 // ── Query client ──────────────────────────────────────────────────────────────
@@ -224,6 +225,14 @@ export default function App() {
               element={
                 <ProtectedRoute requiredRole="admin">
                   <UserManagementPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/users/:userId"
+              element={
+                <ProtectedRoute requiredRole="admin">
+                  <UserDetailPage />
                 </ProtectedRoute>
               }
             />

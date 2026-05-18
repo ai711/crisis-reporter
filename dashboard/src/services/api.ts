@@ -268,5 +268,35 @@ export const updateProjectUserAccess = (serialId: string, userId: string, access
     access_level: accessLevel,
   });
 
+// ── Dashboard Users ───────────────────────────────────────────────────────────
+
+export const getDashboardUsers = (params: Record<string, string | number>) =>
+  api.get('/api/dashboard/users', { params });
+
+export const createDashboardUser = (data: {
+  first_name: string;
+  last_name: string;
+  email: string;
+  password: string;
+  role: string;
+  is_active: boolean;
+  contact_number?: string;
+}) => api.post('/api/dashboard/users', data);
+
+export const getDashboardUserDetail = (userId: string) =>
+  api.get(`/api/dashboard/users/${userId}`);
+
+export const updateDashboardUser = (userId: string, data: Record<string, unknown>) =>
+  api.patch(`/api/dashboard/users/${userId}`, data);
+
+export const updateDashboardUserStatus = (userId: string, isActive: boolean) =>
+  api.patch(`/api/dashboard/users/${userId}/status`, { is_active: isActive });
+
+export const getDashboardUserProjects = (userId: string) =>
+  api.get(`/api/dashboard/users/${userId}/projects`);
+
+export const getRolesList = () =>
+  api.get('/api/roles');
+
 export const API_BASE = BASE_URL;
 export default api;
