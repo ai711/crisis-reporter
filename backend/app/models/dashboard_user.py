@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import String, Boolean, DateTime, Text
+from sqlalchemy import String, Boolean, DateTime, Text, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID
 from app.database import Base
@@ -22,6 +22,9 @@ class DashboardUser(Base):
     last_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
     contact_number: Mapped[str | None] = mapped_column(String(50), nullable=True)
     profile_photo_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("dashboard_users.id"), nullable=True
+    )
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
 
     # Role

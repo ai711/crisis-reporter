@@ -18,6 +18,7 @@ import app.models
 # Import routers
 from app.routers import (
     dashboard_auth,
+    dashboard_users,
     reporter_auth,
     reporters,
     crises,
@@ -217,6 +218,8 @@ ON CONFLICT DO NOTHING""",
     "ALTER TABLE dashboard_users ADD COLUMN IF NOT EXISTS last_name VARCHAR(100)",
     "ALTER TABLE dashboard_users ADD COLUMN IF NOT EXISTS contact_number VARCHAR(50)",
     "ALTER TABLE dashboard_users ADD COLUMN IF NOT EXISTS profile_photo_url TEXT",
+    # Chapter 10 — user management
+    "ALTER TABLE dashboard_users ADD COLUMN IF NOT EXISTS created_by_user_id UUID REFERENCES dashboard_users(id)",
     "ALTER TABLE reports ADD COLUMN IF NOT EXISTS property_id VARCHAR(50)",
     "ALTER TABLE reports ADD COLUMN IF NOT EXISTS ip_address_hash VARCHAR(64)",
     # Reporter auto-block fields (Chapter 5 Part 1)
@@ -354,3 +357,4 @@ app.include_router(content.router)
 app.include_router(countries.router)
 app.include_router(review_queue.router)
 app.include_router(dashboard_projects.router, prefix="/api")
+app.include_router(dashboard_users.router, prefix="/api")

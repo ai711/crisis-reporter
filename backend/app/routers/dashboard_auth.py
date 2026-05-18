@@ -371,9 +371,13 @@ async def update_me(
 
 class CreateUserRequest(BaseModel):
     email: str
-    full_name: str
+    full_name: str | None = None
+    first_name: str | None = None
+    last_name: str | None = None
     password: str
     role: str = "analyst"
+    is_active: bool = True
+    contact_number: str | None = None
 
 
 @router.post("/users", response_model=DashboardUserResponse)
@@ -382,35 +386,54 @@ async def create_dashboard_user(
     current_user: DashboardUser = Depends(get_current_dashboard_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Create a new dashboard user — Admin only."""
+    """Create a new dashboard user — Admin only. Superadmin role requires Superadmin caller."""
     if current_user.role not in ("admin", "superadmin"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin role required",
         )
 
-    if request.role not in ("admin", "analyst"):
+    allowed_roles = ["admin", "analyst", "superadmin"]
+    if request.role not in allowed_roles:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Role must be admin or analyst",
+            detail=f"Role must be one of: {', '.join(allowed_roles)}",
         )
 
-    result = await db.execute(
-        select(DashboardUser).where(
-            DashboardUser.email == request.email.lower().strip()
+    if request.role == "superadmin" and current_user.role != "superadmin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only a Superadmin can assign the Superadmin role.",
         )
+
+    email = request.email.lower().strip()
+    result = await db.execute(
+        select(DashboardUser).where(DashboardUser.email == email)
     )
     if result.scalar_one_or_none():
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already registered",
+            status_code=status.HTTP_409_CONFLICT,
+            detail="email_taken",
         )
 
+    # Resolve full_name from first/last if not provided directly
+    if request.full_name:
+        full_name = request.full_name.strip()
+    elif request.first_name or request.last_name:
+        full_name = f"{(request.first_name or '').strip()} {(request.last_name or '').strip()}".strip()
+    else:
+        full_name = email.split("@")[0]
+
     user = DashboardUser(
-        email=request.email.lower().strip(),
-        full_name=request.full_name,
+        email=email,
+        full_name=full_name,
+        first_name=request.first_name.strip() if request.first_name else None,
+        last_name=request.last_name.strip() if request.last_name else None,
         password_hash=hash_password(request.password),
         role=request.role,
+        is_active=request.is_active,
+        contact_number=request.contact_number,
+        created_by_user_id=current_user.id,
     )
 
     db.add(user)
