@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,7 +15,7 @@ router = APIRouter(prefix="/api/content", tags=["Content"])
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
-SIMPLE_TYPES = {"tc", "onboarding", "reporting-guidelines", "first-aid"}
+SIMPLE_TYPES = {"tc", "onboarding", "reporting-guidelines", "first-aid", "error_messages", "system_messages"}
 
 DISASTER_TYPES = {
     "earthquake", "flood", "hurricane", "landslide", "tsunami",
@@ -38,6 +39,30 @@ _FIRST_AID_DEFAULT = [
     {"title": "Control Bleeding", "bullets": ["Apply firm direct pressure to the wound", "Do not remove embedded objects", "Keep pressure until help arrives"]},
 ]
 
+_ERROR_MESSAGES_DEFAULT = {
+    "items": [
+        {"key": "network_error", "text": "A network error occurred. Please check your connection and try again."},
+        {"key": "location_denied", "text": "Location access was denied. Please enable location services and try again."},
+        {"key": "photo_required", "text": "At least one photo is required before submitting your report."},
+        {"key": "submission_failed", "text": "Your report could not be submitted. It has been saved to your offline queue."},
+        {"key": "session_expired", "text": "Your session has expired. Please log in again."},
+    ],
+    "version": 1,
+    "updated_at": None,
+}
+
+_SYSTEM_MESSAGES_DEFAULT = {
+    "items": [
+        {"key": "sync_complete", "text": "Your offline reports have been synced successfully."},
+        {"key": "tc_update", "text": "Our Terms and Conditions have been updated. Please review and accept to continue."},
+        {"key": "report_received", "text": "Your report has been received and is being processed."},
+        {"key": "offline_queued", "text": "You are offline. Your report has been saved and will be sent when you reconnect."},
+        {"key": "update_available", "text": "A new version of the app is available. Please refresh to update."},
+    ],
+    "version": 1,
+    "updated_at": None,
+}
+
 DEFAULTS: dict[str, Any] = {
     "tc": {"content": "", "version": 1, "updated_at": None},
     "onboarding": {
@@ -55,6 +80,8 @@ DEFAULTS: dict[str, Any] = {
         "version": 1,
         "updated_at": None,
     },
+    "error_messages": _ERROR_MESSAGES_DEFAULT,
+    "system_messages": _SYSTEM_MESSAGES_DEFAULT,
 }
 
 
@@ -95,6 +122,7 @@ async def _upsert(db: AsyncSession, key: str, value: dict) -> None:
 class ContentPatch(BaseModel):
     content: str | None = None
     slides: list[dict] | None = None
+    items: list[dict] | None = None  # for error_messages / system_messages
 
 
 class SafetyTipSlide(BaseModel):
@@ -173,13 +201,29 @@ async def patch_content(
     now = datetime.now(timezone.utc).isoformat()
 
     if payload.content is not None:
-        # Plain text content (tc, onboarding)
         updated: dict = {"content": payload.content, "version": new_version, "updated_at": now}
     elif payload.slides is not None:
-        # Slideshow content (reporting-guidelines, first-aid)
         updated = {"slides": payload.slides, "version": new_version, "updated_at": now}
+    elif payload.items is not None:
+        updated = {"items": payload.items, "version": new_version, "updated_at": now}
     else:
-        raise HTTPException(status_code=400, detail="Provide either 'content' or 'slides'")
+        raise HTTPException(status_code=400, detail="Provide 'content', 'slides', or 'items'")
 
     await _upsert(db, key, updated)
+
+    # When TC content changes, bump the global tc_current_version counter
+    if content_type == "tc":
+        tc_ver_key = "tc_current_version"
+        result = await db.execute(select(AppSetting).where(AppSetting.key == tc_ver_key))
+        row = result.scalar_one_or_none()
+        if row is None:
+            db.add(AppSetting(key=tc_ver_key, value={"version": new_version}))
+        else:
+            row.value = {"version": new_version}
+        await db.commit()
+
+    # Enqueue background auto-translation
+    from app.tasks import auto_translate_content
+    asyncio.create_task(auto_translate_content(content_type=content_type))
+
     return updated

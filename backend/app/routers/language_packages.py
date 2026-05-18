@@ -673,6 +673,31 @@ async def create_translation(
     )
 
 
+# ── Translation queue status ──────────────────────────────────────────────────
+
+class QueueStatusOut(BaseModel):
+    has_pending: bool
+    pending_count: int
+
+
+@translations_router.get("/queue-status", response_model=QueueStatusOut)
+async def get_queue_status(
+    db: AsyncSession = Depends(get_db),
+    _=Depends(get_current_dashboard_user),
+) -> QueueStatusOut:
+    """
+    Return whether any translations are in draft or failed state across all languages.
+    Used by QuestionsTab to block publishing until all translated strings are reviewed.
+    """
+    result = await db.execute(
+        select(func.count(Translation.id)).where(
+            Translation.status.in_(["draft"])
+        )
+    )
+    count = result.scalar() or 0
+    return QueueStatusOut(has_pending=count > 0, pending_count=count)
+
+
 # ── Seed data ─────────────────────────────────────────────────────────────────
 
 # All 8 questions + options, keyed by stable machine key

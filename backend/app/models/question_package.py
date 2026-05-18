@@ -74,6 +74,7 @@ class Question(Base):
     order_index: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     is_mandatory: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    is_core: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     # Relationships
     package: Mapped["QuestionPackage"] = relationship(

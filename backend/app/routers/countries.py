@@ -1,3 +1,4 @@
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -18,10 +19,12 @@ class CountryCreate(BaseModel):
     name: str
     official_language: str
     is_active: bool = False
+    dialling_code: Optional[str] = None
 
 
 class CountryPatch(BaseModel):
-    is_active: bool
+    is_active: Optional[bool] = None
+    dialling_code: Optional[str] = None
 
 
 class CountryResponse(BaseModel):
@@ -29,6 +32,7 @@ class CountryResponse(BaseModel):
     name: str
     official_language: str
     is_active: bool
+    dialling_code: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -288,6 +292,7 @@ async def create_country(
         name=request.name,
         official_language=request.official_language,
         is_active=request.is_active,
+        dialling_code=request.dialling_code,
     )
     db.add(country)
     await db.commit()
@@ -302,14 +307,17 @@ async def update_country(
     db: AsyncSession = Depends(get_db),
     _: DashboardUser = Depends(require_admin),
 ):
-    """Update country is_active status. Admin only."""
+    """Update country fields. Admin only."""
     country = await db.get(Country, code.upper())
     if not country:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Country not found",
         )
-    country.is_active = request.is_active
+    if request.is_active is not None:
+        country.is_active = request.is_active
+    if request.dialling_code is not None:
+        country.dialling_code = request.dialling_code
     await db.commit()
     await db.refresh(country)
     return country

@@ -65,6 +65,9 @@ class Settings(BaseSettings):
     CONFLICT_WARNING_THRESHOLD: float = 0.25  # minority share >= 25% triggers conflict warning
     GPS_GROUPING_RADIUS_DEGREES: float = 0.001  # ~100 metres at equator
 
+    # Map settings
+    REPORTING_RADIUS_DEFAULT_MILES: int = 50
+
     # Review Queue
     REVIEW_SOFT_LOCK_MINUTES: int = 15
     AUTO_BLOCK_CONFIRMATION_HOURS: int = 72

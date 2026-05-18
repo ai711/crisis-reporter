@@ -222,6 +222,13 @@ ON CONFLICT DO NOTHING""",
     "ALTER TABLE dashboard_users ADD COLUMN IF NOT EXISTS created_by_user_id UUID REFERENCES dashboard_users(id)",
     "ALTER TABLE reports ADD COLUMN IF NOT EXISTS property_id VARCHAR(50)",
     "ALTER TABLE reports ADD COLUMN IF NOT EXISTS ip_address_hash VARCHAR(64)",
+    # Chapter 12 — App Configuration structural fixes
+    "ALTER TABLE questions ADD COLUMN IF NOT EXISTS is_core BOOLEAN NOT NULL DEFAULT FALSE",
+    "ALTER TABLE countries ADD COLUMN IF NOT EXISTS dialling_code VARCHAR(10)",
+    "ALTER TABLE reporters ADD COLUMN IF NOT EXISTS tc_version_accepted VARCHAR(20)",
+    # Backfill: mark the 5 seeded questions (package v1.0.0) as core
+    """UPDATE questions SET is_core = TRUE
+       WHERE package_id = '00000000-0000-0000-0000-000000000001'""",
     # Reporter auto-block fields (Chapter 5 Part 1)
     "ALTER TABLE reporters ADD COLUMN IF NOT EXISTS auto_blocked_at TIMESTAMPTZ",
     "ALTER TABLE reporters ADD COLUMN IF NOT EXISTS auto_block_expires_at TIMESTAMPTZ",

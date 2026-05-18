@@ -2,12 +2,13 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from pydantic import BaseModel
-from typing import Any
+from typing import Any, Optional
 
+from app.config import settings as app_config
 from app.database import get_db
 from app.models.app_setting import AppSetting
 from app.models.dashboard_user import DashboardUser
-from app.services.dependencies import get_current_dashboard_user, require_superadmin
+from app.services.dependencies import get_current_dashboard_user, require_admin, require_superadmin
 
 router = APIRouter(prefix="/api/settings", tags=["Settings"])
 
@@ -215,4 +216,56 @@ async def patch_notification_settings(
 
     current["types"] = list(existing_types.values())
     await _upsert_setting(db, "notifications", current)
+    return current
+
+
+# ── Map settings ──────────────────────────────────────────────────────────────
+
+class MapSettingsPayload(BaseModel):
+    reporting_radius_miles: Optional[int] = None
+    building_source: Optional[str] = None
+    country_overrides: Optional[dict] = None  # country_code → radius in miles
+
+
+@router.get("/map")
+async def get_map_settings(
+    db: AsyncSession = Depends(get_db),
+    current_user: DashboardUser = Depends(get_current_dashboard_user),
+):
+    """Return current map settings. Dashboard auth required."""
+    defaults = {
+        "reporting_radius_miles": app_config.REPORTING_RADIUS_DEFAULT_MILES,
+        "building_source": "osm",
+        "country_overrides": {},
+    }
+    current = await _get_setting(db, "map")
+    if not isinstance(current, dict):
+        return defaults
+    defaults.update(current)
+    return defaults
+
+
+@router.patch("/map")
+async def patch_map_settings(
+    payload: MapSettingsPayload,
+    db: AsyncSession = Depends(get_db),
+    current_user: DashboardUser = Depends(require_admin),
+):
+    """Update map settings. Admin only."""
+    defaults = {
+        "reporting_radius_miles": app_config.REPORTING_RADIUS_DEFAULT_MILES,
+        "building_source": "osm",
+        "country_overrides": {},
+    }
+    current = await _get_setting(db, "map")
+    if not isinstance(current, dict):
+        current = defaults
+    else:
+        merged = dict(defaults)
+        merged.update(current)
+        current = merged
+
+    updates = payload.model_dump(exclude_none=True)
+    current.update(updates)
+    await _upsert_setting(db, "map", current)
     return current

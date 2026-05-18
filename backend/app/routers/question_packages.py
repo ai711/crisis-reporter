@@ -3,15 +3,17 @@ question_packages.py
 
 Endpoints for the question-package versioning system.
 
-GET  /api/question-packages/active      — public; reporter app calls on startup
-GET  /api/question-packages             — dashboard auth; list all packages
-POST /api/question-packages             — dashboard auth; create draft
+GET  /api/question-packages/active            — public; reporter app calls on startup
+GET  /api/question-packages                   — dashboard auth; list all packages
+POST /api/question-packages                   — dashboard auth; create draft
+POST /api/question-packages/draft/questions   — dashboard auth; add question to current/new draft
 PATCH /api/question-packages/{version}/publish — admin only; promote draft → published
 
 A separate async helper `seed_initial_package` is called from the app lifespan
 to insert v1.0.0 if the table is empty.
 """
 
+import asyncio
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
@@ -50,6 +52,7 @@ class QuestionOut(BaseModel):
     order_index: int
     is_mandatory: bool
     is_active: bool
+    is_core: bool
     options: list[OptionOut]
 
     class Config:
@@ -113,6 +116,15 @@ class PackageCreate(BaseModel):
     questions: list[QuestionIn]
 
 
+class AddQuestionRequest(BaseModel):
+    question_text: str
+    question_type: str  # single_select | multi_select | text
+    is_mandatory: bool = False
+    available_offline: bool = True
+    country_codes: list[str] = []  # empty = all countries
+    options: list[OptionIn] = []
+
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 VALID_QUESTION_TYPES = {"single_select", "multi_select", "text"}
@@ -126,6 +138,7 @@ def _build_question_out(q: Question) -> QuestionOut:
         order_index=q.order_index,
         is_mandatory=q.is_mandatory,
         is_active=q.is_active,
+        is_core=q.is_core,
         options=[
             OptionOut(
                 id=str(o.id),
@@ -282,6 +295,10 @@ async def create_package(
     )
     pkg = result.scalar_one()
 
+    # Enqueue background auto-translation for the new draft
+    from app.tasks import auto_translate_question_package
+    asyncio.create_task(auto_translate_question_package(package_version=pkg.version))
+
     return PackageOut(
         id=str(pkg.id),
         version=pkg.version,
@@ -289,6 +306,139 @@ async def create_package(
         created_at=pkg.created_at,
         published_at=pkg.published_at,
         questions=[_build_question_out(q) for q in pkg.questions],
+    )
+
+
+@router.post("/draft/questions", response_model=PackageOut, status_code=status.HTTP_201_CREATED)
+async def add_question_to_draft(
+    request: AddQuestionRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: DashboardUser = Depends(get_current_dashboard_user),
+) -> PackageOut:
+    """
+    Add a new (non-core) question to the current draft package.
+    If no draft exists, creates a new draft by copying the published package
+    and incrementing the patch version. Admin/Analyst can call this.
+    """
+    if request.question_type not in VALID_QUESTION_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Invalid question_type '{request.question_type}'.",
+        )
+
+    # Find or create draft
+    draft_result = await db.execute(
+        select(QuestionPackage)
+        .where(QuestionPackage.status == "draft")
+        .options(selectinload(QuestionPackage.questions).selectinload(Question.options))
+        .order_by(QuestionPackage.created_at.desc())
+    )
+    draft_pkg = draft_result.scalar_one_or_none()
+
+    if draft_pkg is None:
+        # Clone the published package into a new draft
+        pub_result = await db.execute(
+            select(QuestionPackage)
+            .where(QuestionPackage.status == "published")
+            .options(selectinload(QuestionPackage.questions).selectinload(Question.options))
+        )
+        pub_pkg = pub_result.scalar_one_or_none()
+
+        # Determine next version (e.g. 1.0.0 → 1.0.1)
+        base_version = pub_pkg.version if pub_pkg else "1.0.0"
+        parts = base_version.split(".")
+        try:
+            parts[-1] = str(int(parts[-1]) + 1)
+        except ValueError:
+            parts.append("1")
+        new_version = ".".join(parts)
+
+        # Ensure version is unique
+        while True:
+            ex = await db.execute(
+                select(QuestionPackage).where(QuestionPackage.version == new_version)
+            )
+            if ex.scalar_one_or_none() is None:
+                break
+            parts[-1] = str(int(parts[-1]) + 1)
+            new_version = ".".join(parts)
+
+        draft_pkg = QuestionPackage(
+            version=new_version,
+            status="draft",
+            created_by=current_user.id,
+        )
+        db.add(draft_pkg)
+        await db.flush()
+
+        # Copy existing questions from published package
+        if pub_pkg:
+            for q in sorted(pub_pkg.questions, key=lambda x: x.order_index):
+                new_q = Question(
+                    package_id=draft_pkg.id,
+                    question_text=q.question_text,
+                    question_type=q.question_type,
+                    order_index=q.order_index,
+                    is_mandatory=q.is_mandatory,
+                    is_active=q.is_active,
+                    is_core=q.is_core,
+                )
+                db.add(new_q)
+                await db.flush()
+                for opt in q.options:
+                    db.add(QuestionOption(
+                        question_id=new_q.id,
+                        option_text=opt.option_text,
+                        option_value=opt.option_value,
+                        order_index=opt.order_index,
+                    ))
+
+    # Determine next order index
+    existing_count = len(draft_pkg.questions) if draft_pkg.questions else 0
+    next_order = existing_count + 1
+
+    # Add the new question
+    new_question = Question(
+        package_id=draft_pkg.id,
+        question_text=request.question_text,
+        question_type=request.question_type,
+        order_index=next_order,
+        is_mandatory=request.is_mandatory,
+        is_active=True,
+        is_core=False,
+    )
+    db.add(new_question)
+    await db.flush()
+
+    for idx, opt_in in enumerate(request.options):
+        order = opt_in.order_index if opt_in.order_index is not None else idx
+        db.add(QuestionOption(
+            question_id=new_question.id,
+            option_text=opt_in.option_text,
+            option_value=opt_in.option_value,
+            order_index=order,
+        ))
+
+    await db.commit()
+
+    # Re-fetch
+    result = await db.execute(
+        select(QuestionPackage)
+        .where(QuestionPackage.id == draft_pkg.id)
+        .options(selectinload(QuestionPackage.questions).selectinload(Question.options))
+    )
+    draft_pkg = result.scalar_one()
+
+    from app.tasks import auto_translate_question_package
+    asyncio.create_task(auto_translate_question_package(package_version=draft_pkg.version))
+
+    return PackageOut(
+        id=str(draft_pkg.id),
+        version=draft_pkg.version,
+        status=draft_pkg.status,
+        created_at=draft_pkg.created_at,
+        published_at=draft_pkg.published_at,
+        questions=[_build_question_out(q) for q in draft_pkg.questions],
     )
 
 
@@ -459,6 +609,7 @@ async def seed_initial_package() -> None:
                 order_index=q_data["order_index"],
                 is_mandatory=q_data["is_mandatory"],
                 is_active=True,
+                is_core=True,
             )
             session.add(question)
             await session.flush()

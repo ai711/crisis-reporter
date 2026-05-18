@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "../stores/authStore";
 import api from "../services/api";
@@ -17,39 +17,6 @@ const UN_LANGUAGES = [
   { name: "Spanish", code: "es" },
 ];
 
-const CORE_QUESTIONS = [
-  {
-    id: "q1",
-    text: "What type of damage has occurred?",
-    type: "single-select",
-    options: ["Structural collapse", "Partial collapse", "Flood damage", "Fire damage", "Infrastructure damage", "Other"],
-  },
-  {
-    id: "q2",
-    text: "What is the severity of the damage?",
-    type: "single-select",
-    options: ["Minimal — habitable", "Partial — uninhabitable", "Complete — destroyed"],
-  },
-  {
-    id: "q3",
-    text: "What type of infrastructure is affected?",
-    type: "multi-select",
-    options: ["Residential building", "Commercial building", "Hospital / Health centre", "School / Education", "Bridge / Road", "Utility / Power"],
-  },
-  {
-    id: "q4",
-    text: "Are there any casualties or people in need of immediate assistance?",
-    type: "single-select",
-    options: ["No casualties", "Minor injuries reported", "Serious injuries reported", "Fatalities reported", "Unknown"],
-  },
-  {
-    id: "q5",
-    text: "Provide any additional details about the damage",
-    type: "text",
-    options: [],
-  },
-];
-
 type Tab = "countries" | "languages" | "questions" | "map" | "app-content";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -59,6 +26,7 @@ interface Country {
   code: string;
   official_language: string;
   is_active: boolean;
+  dialling_code?: string;
 }
 
 interface Language {
@@ -67,9 +35,40 @@ interface Language {
   is_active: boolean;
 }
 
+interface QuestionOption {
+  id: string;
+  option_text: string;
+  option_value: string;
+  order_index: number;
+}
+
+interface ActiveQuestion {
+  id: string;
+  question_text: string;
+  question_type: string;
+  order_index: number;
+  is_mandatory: boolean;
+  is_active: boolean;
+  is_core: boolean;
+  options: QuestionOption[];
+}
+
+interface ActivePackage {
+  id: string;
+  version: string;
+  published_at: string;
+  questions: ActiveQuestion[];
+}
+
+interface QueueStatus {
+  has_pending: boolean;
+  pending_count: number;
+}
+
 interface MapSettings {
-  reporting_radius_km: number;
+  reporting_radius_miles: number;
   building_source: string;
+  country_overrides: Record<string, number>;
 }
 
 // ── Translation-management types ───────────────────────────────────────────────
@@ -231,6 +230,7 @@ function AddCountryModal({
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
   const [lang, setLang] = useState("");
+  const [dialCode, setDialCode] = useState("");
   const [isActive, setIsActive] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitError, setSubmitError] = useState("");
@@ -257,6 +257,7 @@ function AddCountryModal({
         code: code.trim().toUpperCase(),
         official_language: lang.trim(),
         is_active: isActive,
+        dialling_code: dialCode.trim() || null,
       });
       onSuccess();
     } catch {
@@ -304,6 +305,15 @@ function AddCountryModal({
               onChange={(e) => { setLang(e.target.value); clearErr("lang"); }}
               placeholder="e.g. French"
               style={{ ...s.input, borderColor: errors.lang ? "#e53e3e" : "#e2e8f0" }}
+            />
+          </Field>
+          <Field label="Dialling Code">
+            <input
+              type="text"
+              value={dialCode}
+              onChange={(e) => setDialCode(e.target.value)}
+              placeholder="e.g. +509"
+              style={s.input}
             />
           </Field>
           <Field label="Initial Status">
@@ -558,6 +568,7 @@ function CountriesTab() {
                 <th style={s.th}>Country Name</th>
                 <th style={s.th}>Country Code</th>
                 <th style={s.th}>Official Language</th>
+                <th style={s.th}>Dialling Code</th>
                 <th style={s.th}>Status</th>
               </tr>
             </thead>
@@ -572,6 +583,9 @@ function CountriesTab() {
                   </td>
                   <td style={s.td}>
                     <span style={{ color: "#4a5568" }}>{country.official_language}</span>
+                  </td>
+                  <td style={s.td}>
+                    <span style={{ color: "#718096", fontSize: 13 }}>{country.dialling_code ?? "—"}</span>
                   </td>
                   <td style={s.td}>
                     <div style={s.toggleRow}>
@@ -1147,170 +1161,334 @@ function LanguagesTab() {
 
 // ── TAB 3 — Questions ─────────────────────────────────────────────────────────
 
-type QuestionEditorEntry = {
-  id: string;
-  text: string;
-  type: string;
-  options: string[];
-};
+// ── Add Question Modal ────────────────────────────────────────────────────────
 
-function QuestionsTab({ isAdmin }: { isAdmin: boolean }) {
-  const [showWarning, setShowWarning] = useState(false);
-  const [editing, setEditing] = useState(false);
-  const [draftQuestions, setDraftQuestions] = useState<QuestionEditorEntry[]>(
-    CORE_QUESTIONS.map((q) => ({ ...q, options: [...q.options] }))
+function AddQuestionModal({
+  onClose,
+  onSuccess,
+}: {
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const [questionText, setQuestionText] = useState("");
+  const [questionType, setQuestionType] = useState("single_select");
+  const [isMandatory, setIsMandatory] = useState(false);
+  const [availableOffline, setAvailableOffline] = useState(true);
+  const [options, setOptions] = useState<string[]>(["", ""]);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
+
+  const needsOptions = questionType === "single_select" || questionType === "multi_select";
+
+  function addOption() {
+    setOptions((prev) => [...prev, ""]);
+  }
+
+  function removeOption(idx: number) {
+    setOptions((prev) => prev.filter((_, i) => i !== idx));
+  }
+
+  function updateOption(idx: number, val: string) {
+    setOptions((prev) => { const n = [...prev]; n[idx] = val; return n; });
+  }
+
+  async function handleSubmit(ev: React.FormEvent) {
+    ev.preventDefault();
+    if (!questionText.trim()) { setSubmitError("Question text is required."); return; }
+    if (needsOptions && options.filter((o) => o.trim()).length < 2) {
+      setSubmitError("At least 2 options are required for select questions.");
+      return;
+    }
+    setSubmitError("");
+    setSubmitting(true);
+    try {
+      await api.post("/api/question-packages/draft/questions", {
+        question_text: questionText.trim(),
+        question_type: questionType,
+        is_mandatory: isMandatory,
+        available_offline: availableOffline,
+        options: needsOptions
+          ? options
+              .filter((o) => o.trim())
+              .map((o, i) => ({ option_text: o.trim(), option_value: o.trim().toLowerCase().replace(/\s+/g, "_"), order_index: i }))
+          : [],
+      });
+      onSuccess();
+    } catch {
+      setSubmitError("Failed to save question. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div style={s.overlay} onClick={onClose}>
+      <div style={{ ...s.modal, maxWidth: 540 }} onClick={(e) => e.stopPropagation()}>
+        <div style={s.modalHeader}>
+          <h2 style={s.modalTitle}>Add Question</h2>
+          <button style={s.closeBtn} onClick={onClose}>✕</button>
+        </div>
+        <form onSubmit={handleSubmit} style={s.form}>
+          <Field label="Question Text" required>
+            <textarea
+              value={questionText}
+              onChange={(e) => setQuestionText(e.target.value)}
+              placeholder="Enter the question in English…"
+              rows={3}
+              style={{ ...s.questionTextarea, marginBottom: 0 }}
+            />
+          </Field>
+          <Field label="Question Type" required>
+            <select
+              value={questionType}
+              onChange={(e) => setQuestionType(e.target.value)}
+              style={s.select}
+            >
+              <option value="single_select">Single Select</option>
+              <option value="multi_select">Multi Select</option>
+              <option value="text">Free Text</option>
+            </select>
+          </Field>
+          {needsOptions && (
+            <Field label="Answer Options (minimum 2 required)" required>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {options.map((opt, idx) => (
+                  <div key={idx} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <input
+                      type="text"
+                      value={opt}
+                      onChange={(e) => updateOption(idx, e.target.value)}
+                      placeholder={`Option ${idx + 1}`}
+                      style={{ ...s.input, flex: 1 }}
+                    />
+                    {options.length > 2 && (
+                      <button
+                        type="button"
+                        onClick={() => removeOption(idx)}
+                        style={{ background: "none", border: "none", color: "#e53e3e", fontSize: 18, cursor: "pointer", lineHeight: 1 }}
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={addOption}
+                  style={{ padding: "7px 14px", background: "#f7fafc", border: "1.5px dashed #cbd5e0", borderRadius: 7, fontSize: 13, color: "#4a5568", cursor: "pointer", textAlign: "left" }}
+                >
+                  + Add option
+                </button>
+              </div>
+            </Field>
+          )}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+            <Field label="Response">
+              <div style={s.toggleRow}>
+                <ToggleSwitch checked={isMandatory} onChange={setIsMandatory} />
+                <span style={{ fontSize: 13, color: "#4a5568" }}>{isMandatory ? "Mandatory" : "Optional"}</span>
+              </div>
+            </Field>
+            <Field label="Available Offline">
+              <div style={s.toggleRow}>
+                <ToggleSwitch checked={availableOffline} onChange={setAvailableOffline} />
+                <span style={{ fontSize: 13, color: "#4a5568" }}>{availableOffline ? "Yes" : "No"}</span>
+              </div>
+            </Field>
+          </div>
+          {submitError && <div style={s.submitError}>{submitError}</div>}
+          <div style={s.modalFooter}>
+            <button type="button" style={s.cancelBtn} onClick={onClose}>Cancel</button>
+            <button
+              type="submit"
+              style={{ ...s.submitBtn, opacity: submitting ? 0.7 : 1 }}
+              disabled={submitting}
+            >
+              {submitting ? "Saving…" : "Save to Draft"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
   );
-  const [publishing, setPublishing] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [savedVersion, setSavedVersion] = useState<string | null>(null);
+}
+
+function QuestionsTab({ isAdmin, onSwitchToLanguages }: { isAdmin: boolean; onSwitchToLanguages: () => void }) {
+  const queryClient = useQueryClient();
+  const [showWarning, setShowWarning] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
   const [successBanner, setSuccessBanner] = useState("");
 
-  async function handleSaveDraft() {
-    setSaving(true);
-    try {
-      const res = await api.post<{ version: string }>("/api/question-packages", {
-        questions: draftQuestions,
-      });
-      setSavedVersion(res.data.version);
-      setEditing(false);
-      setSuccessBanner(`Draft version ${res.data.version} saved.`);
-      setTimeout(() => setSuccessBanner(""), 4000);
-    } catch {
-      alert("Failed to save draft. Please try again.");
-    } finally {
-      setSaving(false);
-    }
+  // FIX 2: Fetch active package from backend
+  const { data: pkg, isLoading } = useQuery<ActivePackage>({
+    queryKey: ["question-package-active"],
+    queryFn: async () => {
+      const res = await api.get<ActivePackage>("/api/question-packages/active");
+      return res.data;
+    },
+  });
+
+  // FIX 5: Fetch translation queue status
+  const { data: queueStatus } = useQuery<QueueStatus>({
+    queryKey: ["translation-queue-status"],
+    queryFn: async () => {
+      const res = await api.get<QueueStatus>("/api/translations/queue-status");
+      return res.data;
+    },
+  });
+
+  function handleAddSuccess() {
+    setShowAddModal(false);
+    queryClient.invalidateQueries({ queryKey: ["question-package-active"] });
+    setSuccessBanner("Question saved to draft. Auto-translation is running in the background.");
+    setTimeout(() => setSuccessBanner(""), 5000);
   }
 
-  async function handlePublish() {
-    if (!savedVersion) return;
-    if (!window.confirm(`Publish version ${savedVersion}? All devices will sync this on next open.`)) return;
-    setPublishing(true);
-    try {
-      await api.patch(`/api/question-packages/${savedVersion}/publish`);
-      setSuccessBanner(`Version ${savedVersion} published successfully.`);
-      setSavedVersion(null);
-      setTimeout(() => setSuccessBanner(""), 4000);
-    } catch {
-      alert("Failed to publish. Please try again.");
-    } finally {
-      setPublishing(false);
-    }
-  }
-
-  function updateQuestion(idx: number, field: keyof QuestionEditorEntry, value: string) {
-    setDraftQuestions((prev) => {
-      const next = [...prev];
-      if (field === "options") return next;
-      next[idx] = { ...next[idx], [field]: value };
-      return next;
-    });
-  }
-
-  function updateOption(qIdx: number, oIdx: number, value: string) {
-    setDraftQuestions((prev) => {
-      const next = [...prev];
-      const opts = [...next[qIdx].options];
-      opts[oIdx] = value;
-      next[qIdx] = { ...next[qIdx], options: opts };
-      return next;
-    });
+  // FIX 13: Format published date from backend data
+  function formatDateTime(iso: string) {
+    return new Date(iso).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
   }
 
   return (
     <div style={s.tabContent}>
       {successBanner && <div style={{ ...s.successBanner, marginBottom: 16 }}>{successBanner}</div>}
 
-      {/* Version header */}
+      {/* Version header — FIX 13: real version and date */}
       <div style={s.versionHeader}>
         <div>
           <span style={s.versionLabel}>Current Version</span>
-          <span style={s.versionValue}>1.0.0</span>
-          <span style={s.versionDate}>— Published 12 May 2026</span>
+          {isLoading ? (
+            <span style={{ ...s.versionValue, color: "#a0aec0" }}>Loading…</span>
+          ) : pkg ? (
+            <>
+              <span style={s.versionValue}>{pkg.version}</span>
+              <span style={s.versionDate}>— Published {formatDateTime(pkg.published_at)}</span>
+            </>
+          ) : (
+            <span style={{ ...s.versionValue, color: "#a0aec0" }}>No package</span>
+          )}
         </div>
         <div style={{ display: "flex", gap: 10 }}>
-          {savedVersion && (
+          {/* FIX 5: Publish blocked if queue not empty */}
+          {isAdmin && queueStatus?.has_pending && (
             <button
-              style={{ ...s.addBtn, background: "#22c55e" }}
-              onClick={handlePublish}
-              disabled={publishing}
+              style={{ ...s.editQuestionsBtn, cursor: "pointer" }}
+              onClick={onSwitchToLanguages}
             >
-              {publishing ? "Publishing…" : `Publish v${savedVersion}`}
+              Review Translations First →
             </button>
           )}
-          {isAdmin && !editing && (
+          {isAdmin && !queueStatus?.has_pending && (
             <button style={s.editQuestionsBtn} onClick={() => setShowWarning(true)}>
               Edit Questions
             </button>
           )}
-          {editing && (
-            <>
-              <button style={s.cancelBtn} onClick={() => setEditing(false)}>
-                Discard
-              </button>
-              <button
-                style={{ ...s.submitBtn, opacity: saving ? 0.7 : 1 }}
-                onClick={handleSaveDraft}
-                disabled={saving}
-              >
-                {saving ? "Saving…" : "Save Draft"}
-              </button>
-            </>
-          )}
         </div>
       </div>
 
-      {/* Question cards */}
-      <div style={s.questionList}>
-        {draftQuestions.map((q, idx) => (
-          <div key={q.id} style={s.questionCard}>
-            <div style={s.questionCardHeader}>
-              <span style={s.questionNum}>Q{idx + 1}</span>
-              <span style={s.typeBadge}>{q.type}</span>
+      {/* FIX 5: Translation queue warning */}
+      {isAdmin && queueStatus?.has_pending && (
+        <div style={{
+          background: "#fffbeb",
+          border: "1px solid #fcd34d",
+          borderRadius: 10,
+          padding: "14px 20px",
+          display: "flex",
+          alignItems: "flex-start",
+          gap: 12,
+        }}>
+          <span style={{ fontSize: 20 }}>⚠️</span>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 14, color: "#92400e", marginBottom: 4 }}>
+              Translation review queue is not empty
             </div>
-            {editing ? (
-              <textarea
-                value={q.text}
-                onChange={(e) => updateQuestion(idx, "text", e.target.value)}
-                style={s.questionTextarea}
-                rows={2}
-              />
-            ) : (
-              <p style={s.questionText}>{q.text}</p>
-            )}
-            {q.type !== "text" && (
-              <div style={s.optionsList}>
-                {q.options.map((opt, oIdx) => (
-                  <div key={oIdx} style={s.optionItem}>
-                    <span style={s.optionBullet}>{q.type === "single-select" ? "◯" : "□"}</span>
-                    {editing ? (
-                      <input
-                        type="text"
-                        value={opt}
-                        onChange={(e) => updateOption(idx, oIdx, e.target.value)}
-                        style={{ ...s.input, flex: 1, padding: "6px 10px", fontSize: 13 }}
-                      />
-                    ) : (
-                      <span style={{ fontSize: 13, color: "#4a5568" }}>{opt}</span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-            {q.type === "text" && !editing && (
-              <div style={s.textFieldPreview}>Free text response</div>
-            )}
+            <div style={{ fontSize: 13, color: "#92400e", lineHeight: 1.5 }}>
+              All translated strings must be reviewed and approved before publishing a new question package.{" "}
+              <button
+                onClick={onSwitchToLanguages}
+                style={{ background: "none", border: "none", color: "#92400e", textDecoration: "underline", cursor: "pointer", fontSize: 13, padding: 0 }}
+              >
+                Go to Languages tab to review →
+              </button>
+            </div>
           </div>
-        ))}
-      </div>
+        </div>
+      )}
+
+      {/* FIX 4: Add Question button (Admin only) */}
+      {isAdmin && (
+        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+          <button style={s.addBtn} onClick={() => setShowAddModal(true)}>
+            + Add Question
+          </button>
+        </div>
+      )}
+
+      {/* Question cards — FIX 2+3: from backend, core badge, locked */}
+      {isLoading ? (
+        <div style={s.loadingText}>Loading questions…</div>
+      ) : (
+        <div style={s.questionList}>
+          {(pkg?.questions ?? []).map((q, idx) => (
+            <div key={q.id} style={s.questionCard}>
+              <div style={s.questionCardHeader}>
+                <span style={s.questionNum}>Q{idx + 1}</span>
+                <span style={s.typeBadge}>{q.question_type.replace("_", " ")}</span>
+                {/* FIX 3: Core badge */}
+                {q.is_core && (
+                  <span style={{
+                    fontSize: 11,
+                    fontWeight: 700,
+                    color: "#fff",
+                    background: BLUE,
+                    padding: "2px 8px",
+                    borderRadius: 10,
+                  }}>
+                    Core
+                  </span>
+                )}
+                {/* FIX 3: Required label for core mandatory questions */}
+                {q.is_core ? (
+                  <span style={{ fontSize: 11, fontWeight: 600, color: "#718096", marginLeft: "auto" }}>
+                    {q.is_mandatory ? "Required" : "Optional"}
+                  </span>
+                ) : (
+                  <span style={{ fontSize: 11, fontWeight: 600, color: q.is_mandatory ? "#155724" : "#718096", marginLeft: "auto" }}>
+                    {q.is_mandatory ? "Mandatory" : "Optional"}
+                  </span>
+                )}
+              </div>
+              {/* FIX 3: Core questions read-only */}
+              <p style={s.questionText}>{q.question_text}</p>
+              {q.question_type !== "text" && (
+                <div style={s.optionsList}>
+                  {q.options.map((opt, oIdx) => (
+                    <div key={oIdx} style={s.optionItem}>
+                      <span style={s.optionBullet}>{q.question_type === "single_select" ? "◯" : "□"}</span>
+                      <span style={{ fontSize: 13, color: "#4a5568" }}>{opt.option_text}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {q.question_type === "text" && (
+                <div style={s.textFieldPreview}>Free text response</div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
 
       {showWarning && (
         <EditQuestionsWarningModal
           onClose={() => setShowWarning(false)}
-          onConfirm={() => {
-            setShowWarning(false);
-            setEditing(true);
-          }}
+          onConfirm={() => setShowWarning(false)}
+        />
+      )}
+
+      {showAddModal && (
+        <AddQuestionModal
+          onClose={() => setShowAddModal(false)}
+          onSuccess={handleAddSuccess}
         />
       )}
     </div>
@@ -1320,35 +1498,52 @@ function QuestionsTab({ isAdmin }: { isAdmin: boolean }) {
 // ── TAB 4 — Map Settings ──────────────────────────────────────────────────────
 
 function MapSettingsTab() {
+  const queryClient = useQueryClient();
   const [radius, setRadius] = useState(50);
   const [buildingSource, setBuildingSource] = useState("osm");
+  const [countryOverrides, setCountryOverrides] = useState<Record<string, number>>({});
   const [radiusSaving, setRadiusSaving] = useState(false);
   const [sourceSaving, setSourceSaving] = useState(false);
+  const [overridesSaving, setOverridesSaving] = useState(false);
   const [radiusSaved, setRadiusSaved] = useState(false);
   const [sourceSaved, setSourceSaved] = useState(false);
+  const [overridesSaved, setOverridesSaved] = useState(false);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
 
-  const { data: settings } = useQuery<MapSettings>({
+  // FIX 8: Fetch from the correct /api/settings/map endpoint with miles
+  const { data: mapSettings } = useQuery<MapSettings>({
     queryKey: ["map-settings"],
     queryFn: async () => {
-      const res = await api.get<MapSettings>("/api/settings");
+      const res = await api.get<MapSettings>("/api/settings/map");
       return res.data;
     },
-    onSuccess: (data: MapSettings) => {
-      setRadius(data.reporting_radius_km ?? 50);
-      setBuildingSource(data.building_source ?? "osm");
-    },
-  } as Parameters<typeof useQuery>[0]);
+  });
 
-  // Apply fetched settings when they load
-  if (settings && radius === 50 && buildingSource === "osm") {
-    if (settings.reporting_radius_km !== undefined) setRadius(settings.reporting_radius_km);
-    if (settings.building_source !== undefined) setBuildingSource(settings.building_source);
-  }
+  // Apply fetched settings when they load (once)
+  useEffect(() => {
+    if (mapSettings && !settingsLoaded) {
+      setRadius(mapSettings.reporting_radius_miles ?? 50);
+      setBuildingSource(mapSettings.building_source ?? "osm");
+      setCountryOverrides(mapSettings.country_overrides ?? {});
+      setSettingsLoaded(true);
+    }
+  }, [mapSettings, settingsLoaded]);
+
+  // Active countries for override table
+  const { data: countries = [] } = useQuery<Country[]>({
+    queryKey: ["countries"],
+    queryFn: async () => {
+      const res = await api.get<Country[]>("/api/countries");
+      return res.data;
+    },
+  });
+  const activeCountries = countries.filter((c) => c.is_active);
 
   async function saveRadius() {
     setRadiusSaving(true);
     try {
-      await api.patch("/api/settings", { reporting_radius_km: radius });
+      await api.patch("/api/settings/map", { reporting_radius_miles: radius });
+      queryClient.invalidateQueries({ queryKey: ["map-settings"] });
       setRadiusSaved(true);
       setTimeout(() => setRadiusSaved(false), 3000);
     } catch {
@@ -1361,7 +1556,8 @@ function MapSettingsTab() {
   async function saveSource() {
     setSourceSaving(true);
     try {
-      await api.patch("/api/settings", { building_source: buildingSource });
+      await api.patch("/api/settings/map", { building_source: buildingSource });
+      queryClient.invalidateQueries({ queryKey: ["map-settings"] });
       setSourceSaved(true);
       setTimeout(() => setSourceSaved(false), 3000);
     } catch {
@@ -1371,10 +1567,29 @@ function MapSettingsTab() {
     }
   }
 
+  async function saveOverrides() {
+    setOverridesSaving(true);
+    try {
+      // Remove zero/empty overrides (treat as "use global default")
+      const cleaned: Record<string, number> = {};
+      for (const [code, val] of Object.entries(countryOverrides)) {
+        if (val > 0) cleaned[code] = val;
+      }
+      await api.patch("/api/settings/map", { country_overrides: cleaned });
+      queryClient.invalidateQueries({ queryKey: ["map-settings"] });
+      setOverridesSaved(true);
+      setTimeout(() => setOverridesSaved(false), 3000);
+    } catch {
+      alert("Failed to save country overrides.");
+    } finally {
+      setOverridesSaving(false);
+    }
+  }
+
   return (
     <div style={s.tabContent}>
       <div style={s.settingsCardList}>
-        {/* Reporting Radius */}
+        {/* Reporting Radius — FIX 8: miles */}
         <div style={s.settingsCard}>
           <div style={s.settingsCardHeader}>
             <div>
@@ -1394,7 +1609,7 @@ function MapSettingsTab() {
                 onChange={(e) => setRadius(Number(e.target.value))}
                 style={{ ...s.input, width: 100, textAlign: "center" }}
               />
-              <span style={{ fontSize: 14, color: "#4a5568", fontWeight: 500 }}>kilometres</span>
+              <span style={{ fontSize: 14, color: "#4a5568", fontWeight: 500 }}>miles</span>
               <button
                 style={{ ...s.submitBtn, opacity: radiusSaving ? 0.7 : 1 }}
                 onClick={saveRadius}
@@ -1406,6 +1621,55 @@ function MapSettingsTab() {
             </div>
           </div>
         </div>
+
+        {/* Country-specific overrides — FIX 8 */}
+        {activeCountries.length > 0 && (
+          <div style={s.settingsCard}>
+            <div style={s.settingsCardHeader}>
+              <div>
+                <div style={s.settingsCardTitle}>Country-Specific Radius Overrides</div>
+                <div style={s.settingsCardDesc}>
+                  Leave blank to use the global default ({radius} miles)
+                </div>
+              </div>
+            </div>
+            <div style={s.settingsCardBody}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10, maxHeight: 320, overflowY: "auto" }}>
+                {activeCountries.map((c) => (
+                  <div key={c.code} style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                    <span style={{ ...s.codeBadge, minWidth: 36 }}>{c.code}</span>
+                    <span style={{ fontSize: 13, color: "#2d3748", flex: 1 }}>{c.name}</span>
+                    <input
+                      type="number"
+                      min={0}
+                      max={500}
+                      placeholder={String(radius)}
+                      value={countryOverrides[c.code] ?? ""}
+                      onChange={(e) => setCountryOverrides((prev) => {
+                        const val = Number(e.target.value);
+                        const next = { ...prev };
+                        if (!e.target.value) { delete next[c.code]; } else { next[c.code] = val; }
+                        return next;
+                      })}
+                      style={{ ...s.input, width: 80, textAlign: "center" }}
+                    />
+                    <span style={{ fontSize: 12, color: "#718096" }}>mi</span>
+                  </div>
+                ))}
+              </div>
+              <div style={{ marginTop: 14, display: "flex", gap: 10, alignItems: "center" }}>
+                <button
+                  style={{ ...s.submitBtn, opacity: overridesSaving ? 0.7 : 1 }}
+                  onClick={saveOverrides}
+                  disabled={overridesSaving}
+                >
+                  {overridesSaving ? "Saving…" : "Save Overrides"}
+                </button>
+                {overridesSaved && <span style={s.savedTick}>✓ Saved</span>}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Building Footprints Source */}
         <div style={s.settingsCard}>
@@ -1457,7 +1721,7 @@ const DISASTER_TYPES = [
   { key: "epidemic", label: "Epidemic / Disease Outbreak" },
 ];
 
-type AcKey = "tc" | "onboarding" | "safety-tips" | "reporting-guidelines" | "first-aid";
+type AcKey = "tc" | "onboarding" | "safety-tips" | "reporting-guidelines" | "first-aid" | "error-messages" | "system-messages";
 
 interface SimpleContent { content: string; version: number; updated_at: string | null; }
 interface DDSlide { title: string; dos: string[]; donts: string[]; }
@@ -2015,6 +2279,131 @@ function SlideshowSection({
   );
 }
 
+// ── Message list section (Error Messages + System Messages) — FIX 9 ──────────
+
+interface MessageItem { key: string; text: string; }
+interface MessageListData { items: MessageItem[]; version: number; updated_at: string | null; }
+
+function MessageListSection({
+  contentType,
+  isAdmin,
+}: {
+  contentType: "error_messages" | "system_messages";
+  isAdmin: boolean;
+}) {
+  const queryClient = useQueryClient();
+  const [editing, setEditing] = useState(false);
+  const [draftItems, setDraftItems] = useState<MessageItem[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  const { data, isLoading } = useQuery<MessageListData>({
+    queryKey: ["content", contentType],
+    queryFn: async () => {
+      const res = await api.get<MessageListData>(`/api/content/${contentType}`);
+      return res.data;
+    },
+  });
+
+  function startEdit() {
+    setDraftItems((data?.items ?? []).map((it) => ({ ...it })));
+    setEditing(true);
+  }
+
+  function cancelEdit() { setEditing(false); }
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      await api.patch(`/api/content/${contentType}`, { items: draftItems });
+      queryClient.invalidateQueries({ queryKey: ["content", contentType] });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+      setEditing(false);
+    } catch {
+      // keep open
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (isLoading) {
+    return <div style={{ padding: "20px 24px", color: "#718096", fontSize: 13 }}>Loading…</div>;
+  }
+
+  const items = data?.items ?? [];
+
+  return (
+    <div style={{ padding: "20px 24px" }}>
+      <div style={{ display: "flex", gap: 16, fontSize: 12, color: "#718096", marginBottom: 14 }}>
+        <span>Version <strong style={{ color: "#1A2B4A" }}>{data?.version ?? 1}</strong></span>
+        <span>
+          Last updated:{" "}
+          <strong style={{ color: "#1A2B4A" }}>
+            {data?.updated_at ? new Date(data.updated_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "Never"}
+          </strong>
+        </span>
+      </div>
+
+      {editing ? (
+        <div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {draftItems.map((item, idx) => (
+              <div key={item.key} style={{ display: "grid", gridTemplateColumns: "200px 1fr", gap: 12, alignItems: "center" }}>
+                <span style={{ ...s.codeBadge, fontSize: 11 }}>{item.key}</span>
+                <input
+                  type="text"
+                  value={item.text}
+                  onChange={(e) => setDraftItems((prev) => {
+                    const next = [...prev];
+                    next[idx] = { ...next[idx], text: e.target.value };
+                    return next;
+                  })}
+                  style={{ ...s.input, fontSize: 13 }}
+                />
+              </div>
+            ))}
+          </div>
+          <ContentSaveBar onSave={handleSave} onCancel={cancelEdit} saving={saving} saved={saved} />
+        </div>
+      ) : (
+        <div>
+          <div style={s.tableWrap}>
+            <table style={s.table}>
+              <thead>
+                <tr style={s.thead}>
+                  <th style={{ ...s.th, width: 220 }}>Key</th>
+                  <th style={s.th}>Message Text</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((item) => (
+                  <tr key={item.key} style={s.tr}>
+                    <td style={s.td}>
+                      <span style={{ ...s.codeBadge, fontSize: 11 }}>{item.key}</span>
+                    </td>
+                    <td style={{ ...s.td, fontSize: 13, color: "#4a5568", lineHeight: 1.5 }}>
+                      {item.text}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {isAdmin && (
+            <button
+              onClick={startEdit}
+              style={{ ...s.editQuestionsBtn, marginTop: 14, fontSize: 13, padding: "8px 18px" }}
+            >
+              Edit
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main AppContentTab ────────────────────────────────────────────────────────
 
 function AppContentTab({ isAdmin }: { isAdmin: boolean }) {
@@ -2077,6 +2466,24 @@ function AppContentTab({ isAdmin }: { isAdmin: boolean }) {
       >
         <SlideshowSection contentType="first-aid" isAdmin={isAdmin} />
       </AccordionSection>
+
+      {/* 6 — Error Messages — FIX 9 */}
+      <AccordionSection
+        label="Error Messages"
+        isOpen={openSection === "error-messages"}
+        onToggle={() => toggle("error-messages")}
+      >
+        <MessageListSection contentType="error_messages" isAdmin={isAdmin} />
+      </AccordionSection>
+
+      {/* 7 — System Messages — FIX 9 */}
+      <AccordionSection
+        label="System Messages"
+        isOpen={openSection === "system-messages"}
+        onToggle={() => toggle("system-messages")}
+      >
+        <MessageListSection contentType="system_messages" isAdmin={isAdmin} />
+      </AccordionSection>
     </div>
   );
 }
@@ -2086,7 +2493,7 @@ function AppContentTab({ isAdmin }: { isAdmin: boolean }) {
 export default function SystemSettingsPage() {
   const { user } = useAuthStore();
   const [activeTab, setActiveTab] = useState<Tab>("countries");
-  const isAdmin = user?.role === "admin";
+  const isAdmin = user?.role === "admin" || user?.role === "superadmin";
 
   const tabs: { key: Tab; label: string }[] = [
     { key: "countries", label: "Countries" },
@@ -2098,7 +2505,25 @@ export default function SystemSettingsPage() {
 
   return (
     <div style={s.page}>
-      <Header title="System Settings" subtitle="Manage countries, languages, questions, and map configuration" />
+      <Header title="App Configuration" subtitle="Manage countries, languages, questions, and map configuration" />
+
+      {/* FIX 12: Offline sync info banner — always visible above tabs */}
+      <div style={{
+        background: "#EBF5FB",
+        borderBottom: "1px solid #bee3f8",
+        padding: "12px 32px",
+        display: "flex",
+        alignItems: "center",
+        gap: 10,
+        fontSize: 13,
+        color: "#1a5276",
+      }}>
+        <span style={{ fontSize: 16, flexShrink: 0 }}>ℹ</span>
+        <span>
+          Changes saved here take effect immediately for online reporters.
+          Reporters who are offline will receive updates on their next successful sync.
+        </span>
+      </div>
 
       {/* Tab bar */}
       <div style={s.tabBar}>
@@ -2122,7 +2547,12 @@ export default function SystemSettingsPage() {
       <div style={s.tabPanelWrap}>
         {activeTab === "countries" && <CountriesTab />}
         {activeTab === "languages" && <LanguagesTab />}
-        {activeTab === "questions" && <QuestionsTab isAdmin={isAdmin} />}
+        {activeTab === "questions" && (
+          <QuestionsTab
+            isAdmin={isAdmin}
+            onSwitchToLanguages={() => setActiveTab("languages")}
+          />
+        )}
         {activeTab === "map" && <MapSettingsTab />}
         {activeTab === "app-content" && <AppContentTab isAdmin={isAdmin} />}
       </div>
