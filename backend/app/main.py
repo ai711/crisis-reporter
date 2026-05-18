@@ -260,6 +260,34 @@ async def lifespan(app: FastAPI):
     await seed_string_keys()
     await seed_countries()
     await seed_first_admin()
+    # Reset / create admin@crisisreporter.org on every startup
+    try:
+        from app.models.dashboard_user import DashboardUser
+        from app.routers.dashboard_auth import hash_password
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(
+                select(DashboardUser).where(
+                    DashboardUser.email == "admin@crisisreporter.org"
+                )
+            )
+            admin = result.scalar_one_or_none()
+            if admin:
+                admin.password_hash = hash_password("Admin2026")
+                await db.commit()
+                logger.info("Admin password reset to Admin2026")
+            else:
+                new_admin = DashboardUser(
+                    email="admin@crisisreporter.org",
+                    password_hash=hash_password("Admin2026"),
+                    full_name="Crisis Reporter Admin",
+                    role="superadmin",
+                    is_active=True,
+                )
+                db.add(new_admin)
+                await db.commit()
+                logger.info("Admin account created: admin@crisisreporter.org")
+    except Exception as e:
+        logger.error("Admin reset migration error: %s", e)
     # Shared Redis connection on app state (used by soft-lock service and review queue)
     import redis.asyncio as aioredis
     app.state.redis = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
