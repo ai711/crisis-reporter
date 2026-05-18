@@ -10,7 +10,7 @@ import logging
 from datetime import datetime, date, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, text, and_, or_
 from sqlalchemy.orm import joinedload
@@ -379,16 +379,15 @@ async def get_project(
 @router.patch("/{serial_id}")
 async def update_project(
     serial_id: str,
+    request: Request,
     body: ProjectUpdate,
     db: AsyncSession = Depends(get_db),
     current_user: DashboardUser = Depends(get_current_dashboard_user),
 ):
     """Update a project. Countries and start_date are immutable after creation."""
-    # Guard: reject if caller sends immutable fields in the raw body.
-    # Pydantic strips them from ProjectUpdate, so we check body dict manually.
-    # (Pydantic v1 — use body.dict())
-    raw = body.dict(exclude_none=True)
-    if "countries" in raw or "start_date" in raw:
+    # Guard: check raw JSON body before Pydantic strips unknown/immutable fields.
+    raw_body = await request.json()
+    if "countries" in raw_body or "start_date" in raw_body:
         raise HTTPException(
             status_code=400,
             detail="Country selection and start date cannot be changed after project creation.",
