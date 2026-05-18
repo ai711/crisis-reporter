@@ -177,6 +177,9 @@ class Report(Base):
     flag_events: Mapped[list["FlagEvent"]] = relationship(
         "FlagEvent", back_populates="report", lazy="select"
     )
+    project_links: Mapped[list["ReportProject"]] = relationship(
+        "ReportProject", back_populates="report"
+    )
 
     # Composite indexes for dashboard queries
     __table_args__ = (

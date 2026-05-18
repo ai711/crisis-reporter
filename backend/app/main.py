@@ -27,6 +27,7 @@ from app.routers import (
     dashboard_reporters,
     dashboard_map,
     dashboard_properties,
+    dashboard_projects,
     analytics,
     exports,
     question_packages,
@@ -125,6 +126,67 @@ async def _pause_expiry_loop() -> None:
 
 
 _MIGRATIONS = [
+    # Crisis model overhaul — Chapter 9
+    "ALTER TABLE crises ADD COLUMN IF NOT EXISTS serial_number INTEGER",
+    "ALTER TABLE crises ADD COLUMN IF NOT EXISTS serial_id VARCHAR(20)",
+    "ALTER TABLE crises ADD COLUMN IF NOT EXISTS countries TEXT[]",
+    "ALTER TABLE crises ADD COLUMN IF NOT EXISTS start_date DATE",
+    "ALTER TABLE crises ADD COLUMN IF NOT EXISTS end_date DATE",
+    "ALTER TABLE crises ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'active'",
+    "ALTER TABLE crises ADD COLUMN IF NOT EXISTS created_by_user_id UUID",
+    "ALTER TABLE crises ADD COLUMN IF NOT EXISTS import_job_id VARCHAR(100)",
+    "ALTER TABLE crises ADD COLUMN IF NOT EXISTS import_status VARCHAR(20) DEFAULT 'pending'",
+    "ALTER TABLE crises ADD COLUMN IF NOT EXISTS import_progress INTEGER DEFAULT 0",
+    "ALTER TABLE crises ADD COLUMN IF NOT EXISTS import_total INTEGER DEFAULT 0",
+    "ALTER TABLE crises ADD COLUMN IF NOT EXISTS map_zoom INTEGER",
+    # Seed countries array from existing country_code (idempotent)
+    "UPDATE crises SET countries = ARRAY[country_code] WHERE countries IS NULL AND country_code IS NOT NULL",
+    # Sync status from is_active for existing rows
+    "UPDATE crises SET status = CASE WHEN is_active = TRUE THEN 'active' ELSE 'closed' END WHERE status IS NULL OR status = ''",
+    # Sequence for serial numbers
+    "CREATE SEQUENCE IF NOT EXISTS crisis_serial_seq START WITH 1 INCREMENT BY 1",
+    # Seed serial numbers for existing crises that have none (idempotent DO block)
+    """DO $$
+DECLARE
+  r RECORD;
+  n INTEGER;
+BEGIN
+  FOR r IN SELECT id FROM crises WHERE serial_number IS NULL ORDER BY created_at ASC LOOP
+    n := nextval('crisis_serial_seq');
+    UPDATE crises SET serial_number = n, serial_id = 'PR-' || LPAD(n::text, 4, '0') WHERE id = r.id;
+  END LOOP;
+END $$""",
+    # Advance sequence past any manually seeded values
+    "SELECT setval('crisis_serial_seq', COALESCE((SELECT MAX(serial_number) FROM crises), 0) + 1, false)",
+    # Unique constraint on serial_id (safe — each row now has one)
+    "CREATE UNIQUE INDEX IF NOT EXISTS ix_crises_serial_id_unique ON crises(serial_id) WHERE serial_id IS NOT NULL",
+    # report_projects join table
+    """CREATE TABLE IF NOT EXISTS report_projects (
+    report_id UUID NOT NULL REFERENCES reports(id),
+    crisis_id UUID NOT NULL REFERENCES crises(id),
+    linked_at TIMESTAMPTZ DEFAULT NOW(),
+    linked_by VARCHAR(20) DEFAULT 'auto',
+    PRIMARY KEY (report_id, crisis_id)
+)""",
+    "CREATE INDEX IF NOT EXISTS idx_report_projects_crisis_id ON report_projects(crisis_id)",
+    "CREATE INDEX IF NOT EXISTS idx_report_projects_report_id ON report_projects(report_id)",
+    # Seed report_projects from existing crisis_id FK on reports
+    """INSERT INTO report_projects (report_id, crisis_id, linked_by)
+SELECT id, crisis_id, 'auto'
+FROM reports
+WHERE crisis_id IS NOT NULL
+  AND flag_status IN ('green', 'orange')
+ON CONFLICT DO NOTHING""",
+    # project_users join table
+    """CREATE TABLE IF NOT EXISTS project_users (
+    crisis_id UUID NOT NULL REFERENCES crises(id),
+    dashboard_user_id UUID NOT NULL REFERENCES dashboard_users(id),
+    access_level VARCHAR(20) DEFAULT 'view_and_edit',
+    is_creator BOOLEAN DEFAULT FALSE,
+    assigned_at TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (crisis_id, dashboard_user_id)
+)""",
+    # Dashboard users: existing chapters
     "ALTER TABLE dashboard_users ADD COLUMN IF NOT EXISTS first_name VARCHAR(100)",
     "ALTER TABLE dashboard_users ADD COLUMN IF NOT EXISTS last_name VARCHAR(100)",
     "ALTER TABLE dashboard_users ADD COLUMN IF NOT EXISTS contact_number VARCHAR(50)",
@@ -236,3 +298,4 @@ app.include_router(app_settings.router)
 app.include_router(content.router)
 app.include_router(countries.router)
 app.include_router(review_queue.router)
+app.include_router(dashboard_projects.router, prefix="/api")

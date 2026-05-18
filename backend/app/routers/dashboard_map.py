@@ -6,6 +6,8 @@ from typing import Optional
 
 from app.database import get_db
 from app.models.report import Report
+from app.models.report_project import ReportProject
+from app.models.crisis import Crisis
 from app.models.property import Property
 from app.models.dashboard_user import DashboardUser
 from app.services.dependencies import get_current_dashboard_user
@@ -45,6 +47,7 @@ class DashboardStats(BaseModel):
 async def get_map_pins(
     crisis_id: str = Query(...),
     flag_status: Optional[str] = Query(None),
+    project_serial_id: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
     current_user: DashboardUser = Depends(get_current_dashboard_user),
 ):
@@ -60,6 +63,21 @@ async def get_map_pins(
     if flag_status and flag_status in ["green", "orange", "red", "grey"]:
         allowed_flags = [flag_status]
 
+    # Resolve project scope: when project_serial_id is provided, restrict pins to
+    # properties that have qualifying reports linked to that project.
+    project_report_ids: set | None = None
+    if project_serial_id:
+        proj_res = await db.execute(
+            select(Crisis).where(Crisis.serial_id == project_serial_id)
+        )
+        proj = proj_res.scalar_one_or_none()
+        if proj:
+            rp_res = await db.execute(
+                select(ReportProject.report_id)
+                .where(ReportProject.crisis_id == proj.id)
+            )
+            project_report_ids = {row[0] for row in rp_res.all()}
+
     # Property grouping key: building_id if set, otherwise "lat_lng" string
     property_key = func.coalesce(
         Report.building_id,
@@ -69,6 +87,15 @@ async def get_map_pins(
             cast(Report.gps_longitude, String),
         ),
     )
+
+    base_conditions = [
+        Report.crisis_id == crisis_id,
+        Report.flag_status.in_(allowed_flags),
+        Report.gps_latitude.isnot(None),
+        Report.gps_longitude.isnot(None),
+    ]
+    if project_report_ids is not None:
+        base_conditions.append(Report.id.in_(project_report_ids))
 
     # Subquery: rank reports within each property group (most recent first)
     # and count total qualifying reports per group via window functions.
@@ -89,12 +116,7 @@ async def get_map_pins(
             .over(partition_by=property_key)
             .label("report_count"),
         )
-        .where(
-            Report.crisis_id == crisis_id,
-            Report.flag_status.in_(allowed_flags),
-            Report.gps_latitude.isnot(None),
-            Report.gps_longitude.isnot(None),
-        )
+        .where(*base_conditions)
         .subquery()
     )
 

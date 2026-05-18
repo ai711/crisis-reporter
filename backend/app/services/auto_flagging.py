@@ -62,6 +62,55 @@ async def _geolocate_ip(ip: str) -> str | None:
     return None
 
 
+# ── Real-time project linking ────────────────────────────────────────────────
+
+async def _link_report_to_projects(db, report) -> None:
+    """Link a newly approved report to all matching active/closed projects."""
+    from app.models.crisis import Crisis
+    from app.models.report_project import ReportProject
+    from app.models.reporter import Reporter
+
+    # Resolve reporter country
+    reporter_country: str | None = None
+    if report.reporter_id:
+        rep_r = await db.execute(
+            select(Reporter).where(Reporter.id == report.reporter_id)
+        )
+        rep = rep_r.scalar_one_or_none()
+        if rep:
+            reporter_country = rep.country_code
+
+    if not reporter_country or not report.created_at:
+        return
+
+    report_date = report.created_at.date()
+
+    matching = await db.execute(
+        select(Crisis).where(
+            Crisis.status.in_(["active", "closed"]),
+            Crisis.start_date <= report_date,
+            Crisis.end_date >= report_date,
+            Crisis.countries.contains([reporter_country]),
+        )
+    )
+
+    for crisis in matching.scalars().all():
+        existing = await db.execute(
+            select(ReportProject).where(
+                ReportProject.report_id == report.id,
+                ReportProject.crisis_id == crisis.id,
+            )
+        )
+        if not existing.scalar_one_or_none():
+            db.add(ReportProject(
+                report_id=report.id,
+                crisis_id=crisis.id,
+                linked_by="realtime",
+            ))
+
+    await db.flush()
+
+
 # ── Background task entry point ───────────────────────────────────────────────
 
 async def auto_flag_report(report_id: str) -> None:
@@ -369,6 +418,7 @@ async def auto_flag_report(report_id: str) -> None:
                             prop_report.property_id = prop.id
                             await prop_db.flush()
                             await update_conflict_warning(prop_db, prop.id)
+                            await _link_report_to_projects(prop_db, prop_report)
                             await prop_db.commit()
                             log.info(
                                 "auto_flag_report: report %s linked to property %s",
