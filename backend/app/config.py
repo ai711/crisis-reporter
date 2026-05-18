@@ -54,6 +54,10 @@ class Settings(BaseSettings):
     # LibreTranslate
     LIBRETRANSLATE_URL: str = "https://libretranslate.com"
 
+    # Bootstrap admin — created once on first startup if no admin exists
+    FIRST_ADMIN_EMAIL: str = ""
+    FIRST_ADMIN_PASSWORD: str = ""
+
     # Auto-flagging thresholds
     SAME_IP_DEVICE_THRESHOLD: int = 3   # distinct device IDs from one IP in 24 h before red flag
 

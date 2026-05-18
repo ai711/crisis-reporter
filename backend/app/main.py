@@ -46,6 +46,32 @@ from app.routers.language_packages import seed_string_keys
 from app.routers.countries import seed_countries
 
 
+async def seed_first_admin() -> None:
+    """Create an admin user from FIRST_ADMIN_EMAIL / FIRST_ADMIN_PASSWORD env vars
+    if no admin users exist yet. Safe to run every startup — no-op once an admin exists."""
+    email = getattr(settings, "FIRST_ADMIN_EMAIL", None)
+    password = getattr(settings, "FIRST_ADMIN_PASSWORD", None)
+    if not email or not password:
+        return
+    from app.models.dashboard_user import DashboardUser
+    from app.routers.dashboard_auth import hash_password
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            select(DashboardUser).where(DashboardUser.role.in_(["admin", "superadmin"]))
+        )
+        if result.scalars().first():
+            return
+        user = DashboardUser(
+            email=email.lower().strip(),
+            full_name="Administrator",
+            password_hash=hash_password(password),
+            role="admin",
+        )
+        db.add(user)
+        await db.commit()
+        logger.info("Bootstrap admin created: %s", email)
+
+
 async def _stuck_report_loop() -> None:
     """Run stuck-grey-report monitor on configurable interval."""
     from app.services.auto_flagging import monitor_stuck_grey_reports
@@ -233,6 +259,7 @@ async def lifespan(app: FastAPI):
     await seed_initial_package()
     await seed_string_keys()
     await seed_countries()
+    await seed_first_admin()
     # Shared Redis connection on app state (used by soft-lock service and review queue)
     import redis.asyncio as aioredis
     app.state.redis = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
