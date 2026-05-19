@@ -65,6 +65,40 @@ interface QueueStatus {
   pending_count: number;
 }
 
+interface QueueStatusByLang {
+  has_pending: boolean;
+  total_pending: number;
+  by_language: { lang_code: string; lang_name: string; draft_count: number; failed_count: number }[];
+}
+
+interface LanguageLifecycle {
+  id: string;
+  code: string;
+  name: string;
+  status: string;
+  is_protected: boolean;
+  deprecated_at: string | null;
+  removal_scheduled_at: string | null;
+  created_at: string;
+}
+
+interface LockInfo {
+  locked: boolean;
+  locked_by: string | null;
+  locked_at: string | null;
+}
+
+interface AuditEntry {
+  id: number;
+  event_type: string;
+  lang_code: string | null;
+  string_key: string | null;
+  details: Record<string, unknown> | null;
+  performed_by: string | null;
+  dashboard_user_id: string | null;
+  created_at: string;
+}
+
 interface MapSettings {
   reporting_radius_miles: number;
   building_source: string;
@@ -622,11 +656,42 @@ function CountriesTab() {
 
 // ── TAB 2 — Languages (Translation Management) ────────────────────────────────
 
+function daysUntil(isoDate: string | null): number {
+  if (!isoDate) return 0;
+  return Math.ceil((new Date(isoDate).getTime() - Date.now()) / 86400000);
+}
+
+function LangStatusPill({ lang }: { lang: LanguageLifecycle }) {
+  if (lang.is_protected) {
+    return (
+      <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "2px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700, background: "#EBF5FB", color: BLUE, border: `1px solid #bee3f8` }}>
+        Protected
+      </span>
+    );
+  }
+  const map: Record<string, [string, string, string]> = {
+    active:     ["#d4edda", "#155724", "#c3e6cb"],
+    pending:    ["#fffbeb", "#92400e", "#fcd34d"],
+    deprecated: ["#fff5f5", "#c53030", "#fc8181"],
+  };
+  const [bg, color, border] = map[lang.status] ?? ["#f7fafc", "#718096", "#e2e8f0"];
+  const label = lang.status === "deprecated" && lang.removal_scheduled_at
+    ? `Deprecated · ${daysUntil(lang.removal_scheduled_at)}d left`
+    : lang.status.charAt(0).toUpperCase() + lang.status.slice(1);
+  return (
+    <span style={{ display: "inline-block", padding: "2px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700, background: bg, color, border: `1px solid ${border}`, whiteSpace: "nowrap" as const }}>
+      {label}
+    </span>
+  );
+}
+
 function LanguagesTab() {
   const queryClient = useQueryClient();
   const { user } = useAuthStore();
-  const isAdmin = user?.role === "admin";
+  const isAdmin = user?.role === "admin" || user?.role === "superadmin";
+  const isSuperadmin = user?.role === "superadmin";
 
+  // ── State ────────────────────────────────────────────────────────────────
   const [selectedLang, setSelectedLang] = useState("ar");
   const [filterTab, setFilterTab] = useState<FilterStatus>("draft");
   const [editedTexts, setEditedTexts] = useState<Record<string, string>>({});
@@ -634,13 +699,85 @@ function LanguagesTab() {
   const [autoTranslatingLang, setAutoTranslatingLang] = useState<string | null>(null);
   const [publishingLang, setPublishingLang] = useState<string | null>(null);
   const [banner, setBanner] = useState<{ msg: string; ok: boolean } | null>(null);
+  const [lockInfo, setLockInfo] = useState<LockInfo | null>(null);
+  const [lockLoading, setLockLoading] = useState(false);
+  const [rejectModal, setRejectModal] = useState<{ id: string; key: string } | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
+  const [rejectSubmitting, setRejectSubmitting] = useState(false);
+  const [deprecateModal, setDeprecateModal] = useState<{ code: string; name: string } | null>(null);
+  const [deprecateComment, setDeprecateComment] = useState("");
+  const [auditOpen, setAuditOpen] = useState(false);
+  const [auditPage, setAuditPage] = useState(1);
 
   function showBanner(msg: string, ok = true) {
     setBanner({ msg, ok });
     setTimeout(() => setBanner(null), 6000);
   }
 
+  // ── Lock management ──────────────────────────────────────────────────────
+
+  async function acquireLock(langCode: string) {
+    setLockLoading(true);
+    try {
+      await api.post(`/api/translations/lock/${langCode}`);
+      setLockInfo({ locked: true, locked_by: null, locked_at: null });
+    } catch (err: unknown) {
+      const d = (err as { response?: { data?: { locked_by?: string; locked_at?: string } } })?.response?.data;
+      setLockInfo({ locked: false, locked_by: d?.locked_by ?? null, locked_at: d?.locked_at ?? null });
+    } finally {
+      setLockLoading(false);
+    }
+  }
+
+  async function releaseLock(langCode: string) {
+    try {
+      await api.post(`/api/translations/unlock/${langCode}`);
+    } catch { /* ignore */ }
+    setLockInfo(null);
+  }
+
+  async function forceReleaseLock(langCode: string) {
+    try {
+      await api.post(`/api/translations/unlock/${langCode}/admin`);
+      showBanner("Lock force-released.");
+      setLockInfo({ locked: true, locked_by: null, locked_at: null });
+      queryClient.invalidateQueries({ queryKey: ["translations", langCode] });
+    } catch {
+      showBanner("Failed to force-release lock.", false);
+    }
+  }
+
+  // Acquire lock on language selection
+  useEffect(() => {
+    acquireLock(selectedLang);
+    return () => {
+      releaseLock(selectedLang);
+    };
+  }, [selectedLang]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Release lock on browser unload
+  useEffect(() => {
+    function handleUnload() {
+      const token = localStorage.getItem("token") ?? "";
+      fetch(`/api/translations/unlock/${selectedLang}`, {
+        method: "POST",
+        keepalive: true,
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      });
+    }
+    window.addEventListener("beforeunload", handleUnload);
+    return () => window.removeEventListener("beforeunload", handleUnload);
+  }, [selectedLang]);
+
   // ── Queries ──────────────────────────────────────────────────────────────
+
+  const { data: languages = [], isLoading: langsLoading } = useQuery<LanguageLifecycle[]>({
+    queryKey: ["languages"],
+    queryFn: async () => {
+      const res = await api.get<LanguageLifecycle[]>("/api/languages");
+      return res.data;
+    },
+  });
 
   const { data: stringKeys = [], isLoading: keysLoading } = useQuery<StringKeyData[]>({
     queryKey: ["string-keys"],
@@ -658,6 +795,24 @@ function LanguagesTab() {
     },
   });
 
+  const { data: queueStatus } = useQuery<QueueStatusByLang>({
+    queryKey: ["queue-status-by-lang"],
+    queryFn: async () => {
+      const res = await api.get<QueueStatusByLang>("/api/translations/queue-status");
+      return res.data;
+    },
+    refetchInterval: 30000,
+  });
+
+  const { data: auditData } = useQuery({
+    queryKey: ["translation-audit", auditPage],
+    queryFn: async () => {
+      const res = await api.get(`/api/translations/audit-log?page=${auditPage}&page_size=20`);
+      return res.data as { total: number; page: number; items: AuditEntry[] };
+    },
+    enabled: auditOpen,
+  });
+
   const { data: packages = [] } = useQuery<LanguagePkg[]>({
     queryKey: ["language-packages"],
     queryFn: async () => {
@@ -666,30 +821,22 @@ function LanguagesTab() {
     },
   });
 
-  // ── Coverage computation ─────────────────────────────────────────────────
+  // ── Derived data ─────────────────────────────────────────────────────────
 
   const activeKeys = stringKeys.filter((k) => k.is_active);
   const totalActive = activeKeys.length;
-
-  const coverageData = TRANSLATION_LANGS.map((lang) => {
-    let translated = 0, approved = 0, published = 0;
-    for (const key of activeKeys) {
-      const st = key.translations[lang.code];
-      if (st) translated++;
-      if (st === "approved" || st === "published") approved++;
-      if (st === "published") published++;
-    }
-    const coveragePct = totalActive > 0 ? Math.round((approved / totalActive) * 100) : 0;
-    return { ...lang, translated, approved, published, total: totalActive, coveragePct };
-  });
-
-  const fullyTranslated = coverageData.filter((l) => l.coveragePct === 100).length;
-
-  // ── Category lookup (from string-keys data) ──────────────────────────────
-
   const categoryMap = Object.fromEntries(stringKeys.map((k) => [k.key, k.category]));
 
-  // ── Filter counts ────────────────────────────────────────────────────────
+  const coverageByLang = Object.fromEntries(
+    languages.map((lang) => {
+      let approved = 0;
+      for (const key of activeKeys) {
+        const st = key.translations[lang.code];
+        if (st === "approved" || st === "published") approved++;
+      }
+      return [lang.code, totalActive > 0 ? Math.round((approved / totalActive) * 100) : 0];
+    })
+  );
 
   const counts: Record<FilterStatus, number> = {
     all:       translations.length,
@@ -702,7 +849,23 @@ function LanguagesTab() {
   const filtered =
     filterTab === "all" ? translations : translations.filter((t) => t.status === filterTab);
 
-  // ── Handlers ────────────────────────────────────────────────────────────
+  const selectedLangData = languages.find((l) => l.code === selectedLang);
+  const lockHeld = lockInfo?.locked === true;
+  const canEdit = lockHeld && selectedLangData?.status !== "deprecated";
+
+  // Publish eligibility
+  const langQueueEntry = queueStatus?.by_language.find((l) => l.lang_code === selectedLang);
+  const hasPending = (langQueueEntry?.draft_count ?? 0) + (langQueueEntry?.failed_count ?? 0) > 0;
+  const publishReady = (coverageByLang[selectedLang] ?? 0) === 100 && !hasPending;
+
+  // ── Handlers ─────────────────────────────────────────────────────────────
+
+  async function handleLangChange(code: string) {
+    await releaseLock(selectedLang);
+    setSelectedLang(code);
+    setFilterTab("draft");
+    setEditedTexts({});
+  }
 
   async function handleAutoTranslate(langCode: string) {
     setAutoTranslatingLang(langCode);
@@ -713,6 +876,7 @@ function LanguagesTab() {
       );
       queryClient.invalidateQueries({ queryKey: ["translations", langCode] });
       queryClient.invalidateQueries({ queryKey: ["string-keys"] });
+      queryClient.invalidateQueries({ queryKey: ["queue-status-by-lang"] });
       const { translated, failed } = res.data;
       showBanner(
         `Auto-translated ${translated} strings for ${langCode.toUpperCase()}${failed > 0 ? `, ${failed} failed` : ""}.`
@@ -724,24 +888,20 @@ function LanguagesTab() {
     }
   }
 
-  async function handlePublish(langCode: string) {
-    if (
-      !window.confirm(
-        `Publish all approved translations for ${langCode.toUpperCase()}? A new language package version will be created.`
-      )
-    )
-      return;
-    setPublishingLang(langCode);
+  async function handlePublish() {
+    if (!publishReady) return;
+    if (!window.confirm(`Publish all approved translations for ${selectedLang.toUpperCase()}? A new language package version will be created.`)) return;
+    setPublishingLang(selectedLang);
     try {
-      await api.post(`/api/language-packages/publish/${langCode}`);
-      queryClient.invalidateQueries({ queryKey: ["translations", langCode] });
+      await api.post(`/api/language-packages/publish/${selectedLang}`);
+      queryClient.invalidateQueries({ queryKey: ["translations", selectedLang] });
       queryClient.invalidateQueries({ queryKey: ["string-keys"] });
       queryClient.invalidateQueries({ queryKey: ["language-packages"] });
-      showBanner(`Language package for ${langCode.toUpperCase()} published successfully.`);
+      queryClient.invalidateQueries({ queryKey: ["queue-status-by-lang"] });
+      queryClient.invalidateQueries({ queryKey: ["translation-audit"] });
+      showBanner(`Language package for ${selectedLang.toUpperCase()} published.`);
     } catch (err: unknown) {
-      const detail =
-        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ??
-        "Publish failed.";
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? "Publish failed.";
       showBanner(detail, false);
     } finally {
       setPublishingLang(null);
@@ -749,6 +909,7 @@ function LanguagesTab() {
   }
 
   async function handleSave(t: TranslationItem) {
+    if (!canEdit) return;
     const editedText = editedTexts[t.string_key];
     if (editedText === undefined) return;
     const newText = editedText.trim();
@@ -769,8 +930,9 @@ function LanguagesTab() {
       }
       queryClient.invalidateQueries({ queryKey: ["translations", selectedLang] });
       queryClient.invalidateQueries({ queryKey: ["string-keys"] });
+      queryClient.invalidateQueries({ queryKey: ["queue-status-by-lang"] });
     } catch {
-      // Keep edited text so user doesn't lose work
+      showBanner("Failed to save translation. You may need to re-acquire the edit lock.", false);
     } finally {
       setSavingKeys((p) => { const n = new Set(p); n.delete(t.string_key); return n; });
       setEditedTexts((p) => { const n = { ...p }; delete n[t.string_key]; return n; });
@@ -778,12 +940,84 @@ function LanguagesTab() {
   }
 
   async function handleApprove(translationId: string) {
+    if (!canEdit) { showBanner("Acquire edit lock first.", false); return; }
     try {
       await api.patch(`/api/translations/${translationId}/approve`);
       queryClient.invalidateQueries({ queryKey: ["translations", selectedLang] });
       queryClient.invalidateQueries({ queryKey: ["string-keys"] });
+      queryClient.invalidateQueries({ queryKey: ["queue-status-by-lang"] });
+      queryClient.invalidateQueries({ queryKey: ["translation-audit"] });
     } catch {
       showBanner("Failed to approve translation.", false);
+    }
+  }
+
+  async function handleRejectSubmit() {
+    if (!rejectModal || rejectReason.trim().length < 5) return;
+    setRejectSubmitting(true);
+    try {
+      await api.patch(`/api/translations/${rejectModal.id}/reject`, { reason: rejectReason.trim() });
+      queryClient.invalidateQueries({ queryKey: ["translations", selectedLang] });
+      queryClient.invalidateQueries({ queryKey: ["string-keys"] });
+      queryClient.invalidateQueries({ queryKey: ["queue-status-by-lang"] });
+      queryClient.invalidateQueries({ queryKey: ["translation-audit"] });
+      setRejectModal(null);
+      setRejectReason("");
+      showBanner("Translation rejected.");
+    } catch {
+      showBanner("Failed to reject translation.", false);
+    } finally {
+      setRejectSubmitting(false);
+    }
+  }
+
+  async function handleApproveAll() {
+    const draftIds = translations.filter((t) => t.status === "draft" && t.id).map((t) => t.id);
+    if (draftIds.length === 0) { showBanner("No draft translations to approve."); return; }
+    if (!canEdit) { showBanner("Acquire edit lock first.", false); return; }
+    let ok = 0;
+    for (const id of draftIds) {
+      try { await api.patch(`/api/translations/${id}/approve`); ok++; } catch { /* continue */ }
+    }
+    queryClient.invalidateQueries({ queryKey: ["translations", selectedLang] });
+    queryClient.invalidateQueries({ queryKey: ["string-keys"] });
+    queryClient.invalidateQueries({ queryKey: ["queue-status-by-lang"] });
+    showBanner(`Approved ${ok} / ${draftIds.length} translations.`);
+  }
+
+  async function handleDeprecate() {
+    if (!deprecateModal || deprecateComment.trim().length < 10) return;
+    try {
+      await api.patch(`/api/languages/${deprecateModal.code}/status`, { status: "deprecated" });
+      queryClient.invalidateQueries({ queryKey: ["languages"] });
+      queryClient.invalidateQueries({ queryKey: ["translation-audit"] });
+      showBanner(`${deprecateModal.name} marked as deprecated.`);
+      setDeprecateModal(null);
+      setDeprecateComment("");
+    } catch {
+      showBanner("Failed to deprecate language.", false);
+    }
+  }
+
+  async function handleRestoreLang(code: string) {
+    try {
+      await api.patch(`/api/languages/${code}/status`, { status: "active" });
+      queryClient.invalidateQueries({ queryKey: ["languages"] });
+      showBanner("Language restored to active.");
+    } catch {
+      showBanner("Failed to restore language.", false);
+    }
+  }
+
+  async function handleRemoveLang(code: string, name: string) {
+    if (!window.confirm(`Permanently remove language "${name}"? This cannot be undone.`)) return;
+    try {
+      await api.delete(`/api/languages/${code}`);
+      queryClient.invalidateQueries({ queryKey: ["languages"] });
+      showBanner(`${name} removed.`);
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? "Remove failed.";
+      showBanner(detail, false);
     }
   }
 
@@ -792,49 +1026,82 @@ function LanguagesTab() {
   return (
     <div style={s.tabContent}>
       {banner && (
-        <div style={{
-          ...s.successBanner,
-          background: banner.ok ? "#d4edda" : "#fff5f5",
-          color: banner.ok ? "#155724" : "#c53030",
-          border: `1px solid ${banner.ok ? "#c3e6cb" : "#fc8181"}`,
-        }}>
+        <div style={{ ...s.successBanner, background: banner.ok ? "#d4edda" : "#fff5f5", color: banner.ok ? "#155724" : "#c53030", border: `1px solid ${banner.ok ? "#c3e6cb" : "#fc8181"}` }}>
           {banner.msg}
         </div>
       )}
 
-      {/* ── Section 1: Coverage Overview ────────────────────────────────── */}
+      {/* ── Unified Queue Summary ────────────────────────────────────────── */}
       <div style={sL.sectionCard}>
         <div style={sL.sectionHeader}>
-          <span style={sL.sectionTitle}>Translation Coverage</span>
-          {!keysLoading && (
+          <span style={sL.sectionTitle}>Translation Review Queue</span>
+          {queueStatus && (
             <span style={sL.sectionMeta}>
-              Total strings: <strong>{totalActive}</strong>
-              {" · "}
-              Fully translated: <strong>{fullyTranslated} / {TRANSLATION_LANGS.length}</strong>
+              {queueStatus.total_pending === 0
+                ? <span style={{ color: "#22c55e", fontWeight: 700 }}>All translations are up to date</span>
+                : <span style={{ color: "#d97706", fontWeight: 700 }}>{queueStatus.total_pending} strings need review</span>
+              }
             </span>
           )}
+        </div>
+        {queueStatus && queueStatus.total_pending > 0 ? (
+          <div style={{ display: "flex", flexWrap: "wrap" as const, gap: 12, padding: "16px 24px" }}>
+            {queueStatus.by_language.filter((l) => l.draft_count + l.failed_count > 0).map((l) => (
+              <button
+                key={l.lang_code}
+                onClick={() => handleLangChange(l.lang_code)}
+                style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", borderRadius: 10, border: selectedLang === l.lang_code ? `2px solid ${BLUE}` : "1px solid #e2e8f0", background: selectedLang === l.lang_code ? "#EBF5FB" : "#fafafa", cursor: "pointer" }}
+              >
+                <span style={s.codeBadge}>{l.lang_code}</span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: "#1A2B4A" }}>{l.lang_name}</span>
+                {l.draft_count > 0 && (
+                  <span style={{ ...sL.countBadge, background: "#fcd34d", color: "#92400e" }}>{l.draft_count} draft</span>
+                )}
+                {l.failed_count > 0 && (
+                  <span style={{ ...sL.countBadge, background: "#fc8181", color: "#7f1d1d" }}>{l.failed_count} failed</span>
+                )}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div style={{ padding: "16px 24px", color: "#718096", fontSize: 13, fontStyle: "italic" }}>
+            {queueStatus ? "No pending translations — all clear." : "Loading queue status…"}
+          </div>
+        )}
+      </div>
+
+      {/* ── Language List ────────────────────────────────────────────────── */}
+      <div style={sL.sectionCard}>
+        <div style={sL.sectionHeader}>
+          <span style={sL.sectionTitle}>Languages</span>
+          <span style={sL.sectionMeta}>
+            {!langsLoading && !keysLoading && (
+              <>{languages.length} languages · {totalActive} strings</>
+            )}
+          </span>
         </div>
         <div style={s.tableWrap}>
           <table style={s.table}>
             <thead>
               <tr style={s.thead}>
                 <th style={s.th}>Language</th>
-                <th style={{ ...s.th, textAlign: "right" as const }}>Translated</th>
-                <th style={{ ...s.th, textAlign: "right" as const }}>Approved</th>
-                <th style={{ ...s.th, textAlign: "right" as const }}>Published</th>
+                <th style={s.th}>Status</th>
                 <th style={{ ...s.th, textAlign: "right" as const }}>Coverage</th>
                 <th style={{ ...s.th, textAlign: "right" as const }}>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {keysLoading ? (
-                <tr>
-                  <td colSpan={6} style={{ ...s.td, textAlign: "center", color: "#718096" }}>
-                    Loading…
-                  </td>
-                </tr>
-              ) : (
-                coverageData.map((lang) => (
+              {langsLoading ? (
+                <tr><td colSpan={4} style={{ ...s.td, textAlign: "center", color: "#718096" }}>Loading…</td></tr>
+              ) : languages.map((lang) => {
+                const pct = coverageByLang[lang.code] ?? 0;
+                const langQEntry = queueStatus?.by_language.find((l) => l.lang_code === lang.code);
+                const pending = (langQEntry?.draft_count ?? 0) + (langQEntry?.failed_count ?? 0);
+                const canPublish = pct === 100 && pending === 0 && isSuperadmin;
+                const isPastRemoval = lang.removal_scheduled_at
+                  ? new Date(lang.removal_scheduled_at) <= new Date()
+                  : false;
+                return (
                   <tr key={lang.code} style={s.tr}>
                     <td style={s.td}>
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -842,266 +1109,236 @@ function LanguagesTab() {
                         <span style={{ fontWeight: 600, color: "#1A2B4A" }}>{lang.name}</span>
                       </div>
                     </td>
-                    <td style={{ ...s.td, textAlign: "right" as const, color: "#4a5568" }}>
-                      {lang.translated} / {lang.total}
-                    </td>
-                    <td style={{ ...s.td, textAlign: "right" as const, color: "#4a5568" }}>
-                      {lang.approved} / {lang.total}
-                    </td>
-                    <td style={{ ...s.td, textAlign: "right" as const, color: "#4a5568" }}>
-                      {lang.published} / {lang.total}
+                    <td style={s.td}>
+                      <LangStatusPill lang={lang} />
                     </td>
                     <td style={{ ...s.td, textAlign: "right" as const }}>
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8 }}>
                         <div style={sL.progressBar}>
-                          <div
-                            style={{
-                              ...sL.progressFill,
-                              width: `${lang.coveragePct}%`,
-                              background:
-                                lang.coveragePct === 100
-                                  ? "#22c55e"
-                                  : lang.coveragePct >= 50
-                                  ? "#d97706"
-                                  : "#e53e3e",
-                            }}
-                          />
+                          <div style={{ ...sL.progressFill, width: `${pct}%`, background: pct === 100 ? "#22c55e" : pct >= 50 ? "#d97706" : "#e53e3e" }} />
                         </div>
-                        <span style={{ fontSize: 12, fontWeight: 700, color: "#1A2B4A", minWidth: 36 }}>
-                          {lang.coveragePct}%
-                        </span>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: "#1A2B4A", minWidth: 36 }}>{pct}%</span>
                       </div>
                     </td>
                     <td style={{ ...s.td, textAlign: "right" as const }}>
-                      {isAdmin && (
-                        <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                      <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", flexWrap: "wrap" as const }}>
+                        <button
+                          style={{ ...sL.actionBtn, background: "#fffbeb", color: "#d97706", border: "1px solid #fcd34d", opacity: autoTranslatingLang === lang.code ? 0.6 : 1 }}
+                          onClick={() => handleAutoTranslate(lang.code)}
+                          disabled={!!autoTranslatingLang}
+                        >
+                          {autoTranslatingLang === lang.code ? "Translating…" : "Auto-translate"}
+                        </button>
+                        {canPublish && (
                           <button
-                            style={{
-                              ...sL.actionBtn,
-                              background: "#fffbeb",
-                              color: "#d97706",
-                              border: "1px solid #fcd34d",
-                              opacity: autoTranslatingLang === lang.code ? 0.6 : 1,
-                            }}
-                            onClick={() => handleAutoTranslate(lang.code)}
-                            disabled={autoTranslatingLang === lang.code}
-                          >
-                            {autoTranslatingLang === lang.code ? "Translating…" : "Auto-translate"}
-                          </button>
-                          <button
-                            style={{
-                              ...sL.actionBtn,
-                              background: lang.coveragePct === 100 ? "#d4edda" : "#f0f4f8",
-                              color: lang.coveragePct === 100 ? "#155724" : "#a0aec0",
-                              border: `1px solid ${lang.coveragePct === 100 ? "#c3e6cb" : "#e2e8f0"}`,
-                              opacity: publishingLang === lang.code ? 0.6 : 1,
-                              cursor: lang.coveragePct === 100 ? "pointer" : "default",
-                            }}
-                            onClick={() => lang.coveragePct === 100 && handlePublish(lang.code)}
-                            disabled={lang.coveragePct < 100 || publishingLang === lang.code}
+                            style={{ ...sL.actionBtn, background: "#d4edda", color: "#155724", border: "1px solid #c3e6cb", opacity: publishingLang === lang.code ? 0.6 : 1 }}
+                            onClick={() => { setSelectedLang(lang.code); handlePublish(); }}
+                            disabled={publishingLang === lang.code}
                           >
                             {publishingLang === lang.code ? "Publishing…" : "Publish"}
                           </button>
-                        </div>
-                      )}
+                        )}
+                        {isAdmin && !lang.is_protected && lang.status === "active" && (
+                          <button
+                            style={{ ...sL.actionBtn, background: "#fff5f5", color: "#c53030", border: "1px solid #fc8181" }}
+                            onClick={() => setDeprecateModal({ code: lang.code, name: lang.name })}
+                          >
+                            Deprecate
+                          </button>
+                        )}
+                        {isAdmin && !lang.is_protected && lang.status === "deprecated" && (
+                          <>
+                            <button
+                              style={{ ...sL.actionBtn, background: "#d4edda", color: "#155724", border: "1px solid #c3e6cb" }}
+                              onClick={() => handleRestoreLang(lang.code)}
+                            >
+                              Restore
+                            </button>
+                            {isSuperadmin && isPastRemoval && (
+                              <button
+                                style={{ ...sL.actionBtn, background: "#1A2B4A", color: "#fff", border: "none" }}
+                                onClick={() => handleRemoveLang(lang.code, lang.name)}
+                              >
+                                Remove now
+                              </button>
+                            )}
+                          </>
+                        )}
+                        {isAdmin && !lang.is_protected && lang.status === "pending" && (
+                          <button
+                            style={{ ...sL.actionBtn, background: "#d4edda", color: "#155724", border: "1px solid #c3e6cb" }}
+                            onClick={async () => {
+                              try {
+                                await api.patch(`/api/languages/${lang.code}/status`, { status: "active" });
+                                queryClient.invalidateQueries({ queryKey: ["languages"] });
+                              } catch { showBanner("Failed to activate.", false); }
+                            }}
+                          >
+                            Activate
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
-                ))
-              )}
+                );
+              })}
             </tbody>
           </table>
         </div>
       </div>
 
-      {/* ── Section 2: Translation Review Queue ─────────────────────────── */}
+      {/* ── Translation Editor ───────────────────────────────────────────── */}
       <div style={sL.sectionCard}>
         <div style={sL.sectionHeader}>
-          <span style={sL.sectionTitle}>Translation Review Queue</span>
+          <span style={sL.sectionTitle}>Edit Translations</span>
           <select
             value={selectedLang}
-            onChange={(e) => {
-              setSelectedLang(e.target.value);
-              setFilterTab("draft");
-              setEditedTexts({});
-            }}
-            style={{ ...s.select, minWidth: 180 }}
+            onChange={(e) => handleLangChange(e.target.value)}
+            style={{ ...s.select, minWidth: 200 }}
           >
-            {TRANSLATION_LANGS.map((l) => (
-              <option key={l.code} value={l.code}>
-                {l.name} ({l.code})
-              </option>
+            {languages.map((l) => (
+              <option key={l.code} value={l.code}>{l.name} ({l.code})</option>
             ))}
           </select>
         </div>
+
+        {/* Edit lock banner */}
+        {lockLoading ? (
+          <div style={{ padding: "10px 24px", fontSize: 13, color: "#718096" }}>Acquiring edit lock…</div>
+        ) : lockHeld ? (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 24px", background: "#d4edda", borderBottom: "1px solid #c3e6cb" }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: "#155724" }}>You are editing — {selectedLangData?.name ?? selectedLang}</span>
+            <button style={{ ...sL.actionBtn, background: "#fff", color: "#155724", border: "1px solid #c3e6cb" }} onClick={() => releaseLock(selectedLang)}>Release lock</button>
+          </div>
+        ) : (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 24px", background: "#fffbeb", borderBottom: "1px solid #fcd34d" }}>
+            <span style={{ fontSize: 13, color: "#92400e" }}>
+              {lockInfo?.locked_by
+                ? `Currently being edited by ${lockInfo.locked_by}. You can view but not edit.`
+                : "Edit lock not held — click to acquire."}
+            </span>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button style={{ ...sL.actionBtn, background: "#fff", color: "#d97706", border: "1px solid #fcd34d" }} onClick={() => acquireLock(selectedLang)}>Acquire lock</button>
+              {isSuperadmin && lockInfo?.locked_by && (
+                <button style={{ ...sL.actionBtn, background: "#c53030", color: "#fff", border: "none" }} onClick={() => forceReleaseLock(selectedLang)}>Force release</button>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Filter tabs */}
         <div style={sL.filterTabBar}>
           {(["all", "missing", "draft", "approved", "published"] as FilterStatus[]).map((tab) => (
             <button
               key={tab}
-              style={{
-                ...sL.filterTabBtn,
-                borderBottom: filterTab === tab ? `2px solid ${BLUE}` : "2px solid transparent",
-                color: filterTab === tab ? BLUE : "#718096",
-                fontWeight: filterTab === tab ? 700 : 500,
-              }}
+              style={{ ...sL.filterTabBtn, borderBottom: filterTab === tab ? `2px solid ${BLUE}` : "2px solid transparent", color: filterTab === tab ? BLUE : "#718096", fontWeight: filterTab === tab ? 700 : 500 }}
               onClick={() => setFilterTab(tab)}
             >
               {tab.charAt(0).toUpperCase() + tab.slice(1)}
-              <span
-                style={{
-                  ...sL.countBadge,
-                  background: filterTab === tab ? BLUE : "#e2e8f0",
-                  color: filterTab === tab ? "#fff" : "#4a5568",
-                }}
-              >
-                {counts[tab]}
-              </span>
+              <span style={{ ...sL.countBadge, background: filterTab === tab ? BLUE : "#e2e8f0", color: filterTab === tab ? "#fff" : "#4a5568" }}>{counts[tab]}</span>
             </button>
           ))}
+          <div style={{ flex: 1 }} />
+          {canEdit && counts.draft > 0 && (
+            <button style={{ ...sL.actionBtn, margin: "6px 8px", background: "#d4edda", color: "#155724", border: "1px solid #c3e6cb" }} onClick={handleApproveAll}>
+              Approve all Draft ({counts.draft})
+            </button>
+          )}
+          {isSuperadmin && (
+            <button
+              title={!publishReady ? (hasPending ? "Review queue has pending strings" : "Coverage is not 100%") : "Publish translations"}
+              style={{ ...sL.actionBtn, margin: "6px 8px", background: publishReady ? "#d4edda" : "#f0f4f8", color: publishReady ? "#155724" : "#a0aec0", border: `1px solid ${publishReady ? "#c3e6cb" : "#e2e8f0"}`, cursor: publishReady ? "pointer" : "default" }}
+              onClick={handlePublish}
+              disabled={!publishReady || !!publishingLang}
+            >
+              {publishingLang === selectedLang ? "Publishing…" : "Publish"}
+            </button>
+          )}
         </div>
 
         <div style={s.tableWrap}>
           <table style={{ ...s.table, tableLayout: "fixed" as const }}>
             <colgroup>
-              <col style={{ width: "17%" }} />
-              <col style={{ width: "8%" }} />
-              <col style={{ width: "23%" }} />
-              <col style={{ width: "28%" }} />
-              <col style={{ width: "11%" }} />
-              <col style={{ width: "13%" }} />
+              <col style={{ width: "16%" }} /><col style={{ width: "8%" }} /><col style={{ width: "22%" }} /><col style={{ width: "26%" }} /><col style={{ width: "11%" }} /><col style={{ width: "17%" }} />
             </colgroup>
             <thead>
               <tr style={s.thead}>
-                <th style={s.th}>String Key</th>
+                <th style={s.th}>Key</th>
                 <th style={s.th}>Category</th>
-                <th style={s.th}>English Text</th>
-                <th style={s.th}>Translated Text</th>
+                <th style={s.th}>English</th>
+                <th style={s.th}>Translation</th>
                 <th style={s.th}>Status</th>
-                <th style={{ ...s.th, textAlign: "center" as const }}>Action</th>
+                <th style={{ ...s.th, textAlign: "center" as const }}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {transLoading ? (
-                <tr>
-                  <td colSpan={6} style={{ ...s.td, textAlign: "center", color: "#718096" }}>
-                    Loading translations…
-                  </td>
-                </tr>
+                <tr><td colSpan={6} style={{ ...s.td, textAlign: "center", color: "#718096" }}>Loading translations…</td></tr>
               ) : filtered.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={6}
-                    style={{ ...s.td, textAlign: "center", color: "#718096", fontStyle: "italic" }}
-                  >
-                    No {filterTab === "all" ? "" : filterTab + " "}translations.
-                  </td>
-                </tr>
-              ) : (
-                filtered.map((t) => {
-                  const isSaving = savingKeys.has(t.string_key);
-                  const currentText = editedTexts[t.string_key] ?? t.translated_text;
-                  const canEdit = t.status !== "published";
-                  const canApprove = !!t.id && t.status === "draft";
-                  return (
-                    <tr key={t.string_key} style={s.tr}>
-                      <td style={s.td}>
-                        <span
-                          style={{
-                            ...s.codeBadge,
-                            fontSize: 11,
-                            wordBreak: "break-all" as const,
-                            display: "inline-block",
-                          }}
-                        >
-                          {t.string_key}
-                        </span>
-                      </td>
-                      <td style={s.td}>
-                        <span style={categoryBadgeStyle()}>
-                          {categoryMap[t.string_key] ?? "—"}
-                        </span>
-                      </td>
-                      <td
-                        style={{
-                          ...s.td,
-                          fontSize: 12,
-                          color: "#4a5568",
-                          lineHeight: 1.4,
-                          wordBreak: "break-word" as const,
-                        }}
-                      >
-                        {t.english_text}
-                      </td>
-                      <td style={s.td}>
-                        {canEdit ? (
-                          <input
-                            type="text"
-                            value={currentText}
-                            placeholder={t.status === "missing" ? "Enter translation…" : ""}
-                            onChange={(e) =>
-                              setEditedTexts((p) => ({
-                                ...p,
-                                [t.string_key]: e.target.value,
-                              }))
-                            }
-                            onBlur={() => handleSave(t)}
-                            disabled={isSaving}
-                            style={{
-                              ...s.input,
-                              width: "100%",
-                              fontSize: 12,
-                              padding: "6px 8px",
-                              opacity: isSaving ? 0.6 : 1,
-                              boxSizing: "border-box" as const,
-                            }}
-                          />
-                        ) : (
-                          <span style={{ fontSize: 12, color: "#4a5568", lineHeight: 1.4 }}>
-                            {t.translated_text}
-                          </span>
-                        )}
-                      </td>
-                      <td style={s.td}>
-                        <span style={statusBadgeStyle(t.status)}>{t.status}</span>
-                      </td>
-                      <td style={{ ...s.td, textAlign: "center" as const }}>
+                <tr><td colSpan={6} style={{ ...s.td, textAlign: "center", color: "#718096", fontStyle: "italic" }}>No {filterTab === "all" ? "" : filterTab + " "}translations.</td></tr>
+              ) : filtered.map((t) => {
+                const isSaving = savingKeys.has(t.string_key);
+                const currentText = editedTexts[t.string_key] ?? t.translated_text;
+                const editable = canEdit && t.status !== "published";
+                const canApprove = canEdit && !!t.id && (t.status === "draft" || t.status === "failed");
+                const canReject = canEdit && !!t.id && t.status !== "published" && t.status !== "missing";
+                return (
+                  <tr key={t.string_key} style={s.tr}>
+                    <td style={s.td}>
+                      <span style={{ ...s.codeBadge, fontSize: 11, wordBreak: "break-all" as const, display: "inline-block" }}>{t.string_key}</span>
+                    </td>
+                    <td style={s.td}>
+                      <span style={categoryBadgeStyle()}>{categoryMap[t.string_key] ?? "—"}</span>
+                    </td>
+                    <td style={{ ...s.td, fontSize: 12, color: "#4a5568", lineHeight: 1.4, wordBreak: "break-word" as const }}>{t.english_text}</td>
+                    <td style={s.td}>
+                      {editable ? (
+                        <input
+                          type="text"
+                          value={currentText}
+                          placeholder={t.status === "missing" ? "Enter translation…" : ""}
+                          onChange={(e) => setEditedTexts((p) => ({ ...p, [t.string_key]: e.target.value }))}
+                          onBlur={() => handleSave(t)}
+                          disabled={isSaving}
+                          style={{ ...s.input, width: "100%", fontSize: 12, padding: "6px 8px", opacity: isSaving ? 0.6 : 1, boxSizing: "border-box" as const }}
+                        />
+                      ) : (
+                        <span style={{ fontSize: 12, color: "#4a5568", lineHeight: 1.4 }}>{t.translated_text}</span>
+                      )}
+                      {t.rejection_reason && (
+                        <div style={{ fontSize: 11, color: "#c53030", marginTop: 2 }}>Rejected: {t.rejection_reason}</div>
+                      )}
+                    </td>
+                    <td style={s.td}>
+                      <span style={statusBadgeStyle(t.status)}>{t.status}</span>
+                    </td>
+                    <td style={{ ...s.td, textAlign: "center" as const }}>
+                      <div style={{ display: "flex", gap: 4, justifyContent: "center", flexWrap: "wrap" as const }}>
                         {canApprove && (
-                          <button
-                            style={{
-                              padding: "5px 12px",
-                              background: "#d4edda",
-                              color: "#155724",
-                              border: "1px solid #c3e6cb",
-                              borderRadius: 6,
-                              fontSize: 12,
-                              fontWeight: 600,
-                              cursor: "pointer",
-                            }}
-                            onClick={() => handleApprove(t.id)}
-                          >
+                          <button style={{ padding: "4px 10px", background: "#d4edda", color: "#155724", border: "1px solid #c3e6cb", borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: "pointer" }} onClick={() => handleApprove(t.id)}>
                             Approve
                           </button>
                         )}
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
+                        {canReject && (
+                          <button style={{ padding: "4px 10px", background: "#fff5f5", color: "#c53030", border: "1px solid #fc8181", borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: "pointer" }} onClick={() => { setRejectModal({ id: t.id, key: t.string_key }); setRejectReason(""); }}>
+                            Reject
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
       </div>
 
-      {/* ── Section 3: Publish History ───────────────────────────────────── */}
+      {/* ── Publish History ──────────────────────────────────────────────── */}
       <div style={sL.sectionCard}>
-        <div style={sL.sectionHeader}>
-          <span style={sL.sectionTitle}>Publish History</span>
-        </div>
+        <div style={sL.sectionHeader}><span style={sL.sectionTitle}>Publish History</span></div>
         {packages.length === 0 ? (
-          <div style={{ padding: "24px 28px", color: "#718096", fontSize: 13, fontStyle: "italic" }}>
-            No language packages published yet.
-          </div>
+          <div style={{ padding: "24px 28px", color: "#718096", fontSize: 13, fontStyle: "italic" }}>No language packages published yet.</div>
         ) : (
           <div style={s.tableWrap}>
             <table style={s.table}>
@@ -1120,34 +1357,15 @@ function LanguagesTab() {
                     <td style={s.td}>
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                         <span style={s.codeBadge}>{pkg.language_code}</span>
-                        <span style={{ color: "#4a5568" }}>
-                          {TRANSLATION_LANGS.find((l) => l.code === pkg.language_code)?.name ??
-                            pkg.language_code}
-                        </span>
+                        <span style={{ color: "#4a5568" }}>{languages.find((l) => l.code === pkg.language_code)?.name ?? pkg.language_code}</span>
                       </div>
                     </td>
-                    <td style={s.td}>
-                      <span style={{ fontWeight: 600, color: "#1A2B4A" }}>v{pkg.version}</span>
-                    </td>
-                    <td style={s.td}>
-                      <span
-                        style={statusBadgeStyle(pkg.status === "archived" ? "missing" : "published")}
-                      >
-                        {pkg.status}
-                      </span>
-                    </td>
+                    <td style={s.td}><span style={{ fontWeight: 600, color: "#1A2B4A" }}>v{pkg.version}</span></td>
+                    <td style={s.td}><span style={statusBadgeStyle(pkg.status === "archived" ? "missing" : "published")}>{pkg.status}</span></td>
                     <td style={{ ...s.td, color: "#718096", fontSize: 12 }}>
-                      {pkg.published_at
-                        ? new Date(pkg.published_at).toLocaleDateString("en-GB", {
-                            day: "2-digit",
-                            month: "short",
-                            year: "numeric",
-                          })
-                        : "—"}
+                      {pkg.published_at ? new Date(pkg.published_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—"}
                     </td>
-                    <td style={{ ...s.td, textAlign: "right" as const, fontWeight: 600, color: "#1A2B4A" }}>
-                      {pkg.string_count}
-                    </td>
+                    <td style={{ ...s.td, textAlign: "right" as const, fontWeight: 600, color: "#1A2B4A" }}>{pkg.string_count}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1155,6 +1373,137 @@ function LanguagesTab() {
           </div>
         )}
       </div>
+
+      {/* ── Audit Trail ──────────────────────────────────────────────────── */}
+      <div style={sL.sectionCard}>
+        <div style={{ ...sL.sectionHeader, cursor: "pointer" }} onClick={() => setAuditOpen((v) => !v)}>
+          <span style={sL.sectionTitle}>Audit Trail {auditOpen ? "▲" : "▼"}</span>
+          <span style={sL.sectionMeta}>Translation governance actions</span>
+        </div>
+        {auditOpen && (
+          <div>
+            {!auditData ? (
+              <div style={{ padding: "16px 24px", color: "#718096", fontSize: 13 }}>Loading audit log…</div>
+            ) : auditData.items.length === 0 ? (
+              <div style={{ padding: "16px 24px", color: "#718096", fontSize: 13, fontStyle: "italic" }}>No audit entries yet.</div>
+            ) : (
+              <div style={s.tableWrap}>
+                <table style={s.table}>
+                  <thead>
+                    <tr style={s.thead}>
+                      <th style={s.th}>Event</th>
+                      <th style={s.th}>Language</th>
+                      <th style={s.th}>String Key</th>
+                      <th style={s.th}>Performed By</th>
+                      <th style={s.th}>Date / Time</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {auditData.items.map((entry) => (
+                      <tr key={entry.id} style={s.tr}>
+                        <td style={s.td}>
+                          <span style={{ ...s.codeBadge, fontSize: 11 }}>
+                            {entry.event_type.replace(/_/g, " ")}
+                          </span>
+                        </td>
+                        <td style={{ ...s.td, color: "#4a5568" }}>{entry.lang_code ?? "—"}</td>
+                        <td style={{ ...s.td, fontSize: 11, color: "#718096", wordBreak: "break-word" as const }}>{entry.string_key ?? "—"}</td>
+                        <td style={{ ...s.td, color: "#4a5568" }}>{entry.performed_by ?? "system"}</td>
+                        <td style={{ ...s.td, fontSize: 12, color: "#718096" }}>
+                          {new Date(entry.created_at).toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {auditData && auditData.total > auditPage * 20 && (
+              <div style={{ padding: "12px 24px" }}>
+                <button style={{ ...sL.actionBtn, background: "#EBF5FB", color: BLUE, border: `1px solid #bee3f8` }} onClick={() => setAuditPage((p) => p + 1)}>
+                  Load more
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* ── Reject Modal ────────────────────────────────────────────────── */}
+      {rejectModal && (
+        <div style={s.overlay} onClick={() => setRejectModal(null)}>
+          <div style={{ ...s.modal, maxWidth: 440 }} onClick={(e) => e.stopPropagation()}>
+            <div style={s.modalHeader}>
+              <h2 style={s.modalTitle}>Reject Translation</h2>
+              <button style={s.closeBtn} onClick={() => setRejectModal(null)}>✕</button>
+            </div>
+            <div style={{ padding: "20px 24px" }}>
+              <div style={{ fontSize: 13, color: "#4a5568", marginBottom: 12 }}>
+                Key: <strong>{rejectModal.key}</strong>
+              </div>
+              <Field label="Rejection reason" required error={rejectReason.trim().length > 0 && rejectReason.trim().length < 5 ? "Minimum 5 characters" : undefined}>
+                <textarea
+                  value={rejectReason}
+                  onChange={(e) => setRejectReason(e.target.value)}
+                  placeholder="Describe why this translation is being rejected…"
+                  rows={3}
+                  style={{ ...s.input, width: "100%", resize: "vertical" as const, boxSizing: "border-box" as const }}
+                />
+              </Field>
+            </div>
+            <div style={{ ...s.modalFooter, padding: "0 24px 20px" }}>
+              <button style={s.cancelBtn} onClick={() => setRejectModal(null)}>Cancel</button>
+              <button
+                style={{ ...s.submitBtn, background: "#c53030", opacity: rejectReason.trim().length < 5 || rejectSubmitting ? 0.6 : 1 }}
+                disabled={rejectReason.trim().length < 5 || rejectSubmitting}
+                onClick={handleRejectSubmit}
+              >
+                {rejectSubmitting ? "Rejecting…" : "Reject"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Deprecate Modal ──────────────────────────────────────────────── */}
+      {deprecateModal && (
+        <div style={s.overlay} onClick={() => setDeprecateModal(null)}>
+          <div style={{ ...s.modal, maxWidth: 440 }} onClick={(e) => e.stopPropagation()}>
+            <div style={s.modalHeader}>
+              <h2 style={s.modalTitle}>Deprecate Language</h2>
+              <button style={s.closeBtn} onClick={() => setDeprecateModal(null)}>✕</button>
+            </div>
+            <div style={{ padding: "20px 24px" }}>
+              <div style={s.warningBanner}>
+                <span style={{ fontSize: 20 }}>⚠️</span>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 14, color: "#92400e", marginBottom: 4 }}>Deprecating {deprecateModal.name}</div>
+                  <div style={{ fontSize: 13, color: "#92400e", lineHeight: 1.5 }}>This language will be scheduled for removal in 90 days. You can restore it before the deadline.</div>
+                </div>
+              </div>
+              <Field label="Comment (required, min 10 characters)" required error={deprecateComment.trim().length > 0 && deprecateComment.trim().length < 10 ? "Minimum 10 characters" : undefined}>
+                <textarea
+                  value={deprecateComment}
+                  onChange={(e) => setDeprecateComment(e.target.value)}
+                  placeholder="Reason for deprecation…"
+                  rows={2}
+                  style={{ ...s.input, width: "100%", resize: "vertical" as const, boxSizing: "border-box" as const, marginTop: 12 }}
+                />
+              </Field>
+            </div>
+            <div style={{ ...s.modalFooter, padding: "0 24px 20px" }}>
+              <button style={s.cancelBtn} onClick={() => setDeprecateModal(null)}>Cancel</button>
+              <button
+                style={{ ...s.submitBtn, background: "#c53030", opacity: deprecateComment.trim().length < 10 ? 0.6 : 1 }}
+                disabled={deprecateComment.trim().length < 10}
+                onClick={handleDeprecate}
+              >
+                Deprecate Language
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

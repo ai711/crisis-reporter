@@ -6,6 +6,32 @@ from sqlalchemy.dialects.postgresql import UUID
 from app.database import Base
 
 
+class Language(Base):
+    """A language known to the system. The 6 UN languages are protected."""
+
+    __tablename__ = "languages"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    code: Mapped[str] = mapped_column(String(10), nullable=False, unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+
+    # pending | active | deprecated | removed
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
+    is_protected: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+    deprecated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    removal_scheduled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=datetime.utcnow, nullable=False
+    )
+
+    def __repr__(self) -> str:
+        return f"<Language {self.code} ({self.status})>"
+
+
 class StringKey(Base):
     """A translatable UI string identified by a stable machine key (e.g. Q1_LABEL)."""
 
@@ -63,6 +89,9 @@ class Translation(Base):
     # "auto" or a dashboard user UUID as string
     translated_by: Mapped[str] = mapped_column(String(255), nullable=False)
     reviewed_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    rejected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=datetime.utcnow, nullable=False

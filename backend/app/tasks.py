@@ -15,13 +15,14 @@ POST /api/translations/auto-translate in language_packages.py.
 """
 
 import logging
+from datetime import datetime, timezone
 
 import httpx
 from sqlalchemy import select
 
 from app.config import settings
 from app.database import AsyncSessionLocal
-from app.models.language_package import StringKey, Translation
+from app.models.language_package import Language, StringKey, Translation
 
 log = logging.getLogger(__name__)
 
@@ -203,3 +204,36 @@ async def auto_translate_content(content_type: str) -> None:
         "auto_translate_content: done for content_type=%s — %d strings translated",
         content_type, translated_total,
     )
+
+
+async def remove_expired_deprecated_languages() -> None:
+    """Hard-remove any language where removal_scheduled_at <= now() and status == 'deprecated'."""
+    log.info("remove_expired_deprecated_languages: checking for expired deprecations")
+    now = datetime.now(timezone.utc)
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            select(Language).where(
+                Language.status == "deprecated",
+                Language.removal_scheduled_at <= now,
+            )
+        )
+        expired = result.scalars().all()
+        if not expired:
+            log.info("remove_expired_deprecated_languages: nothing to remove")
+            return
+        from app.services.translation_audit_service import write_translation_audit
+        for lang in expired:
+            await write_translation_audit(
+                db,
+                event_type="language_removed",
+                lang_code=lang.code,
+                details={"name": lang.name, "removed_by": "system_scheduler"},
+                performed_by="system",
+            )
+            await db.delete(lang)
+        await db.commit()
+        log.info(
+            "remove_expired_deprecated_languages: removed %d language(s): %s",
+            len(expired),
+            [l.code for l in expired],
+        )

@@ -129,6 +129,17 @@ async def _auto_block_confirmation_loop() -> None:
             logger.error("Auto-block confirmation loop error: %s", e)
 
 
+async def _remove_expired_deprecated_languages_loop() -> None:
+    """Daily: hard-remove languages past their removal_scheduled_at date."""
+    from app.tasks import remove_expired_deprecated_languages
+    while True:
+        await asyncio.sleep(24 * 60 * 60)
+        try:
+            await remove_expired_deprecated_languages()
+        except Exception as e:
+            logger.error("remove_expired_deprecated_languages loop error: %s", e)
+
+
 async def _pause_expiry_loop() -> None:
     """Every 15 minutes: clear submission pauses whose expiry time has passed."""
     from app.models.reporter import Reporter
@@ -222,6 +233,47 @@ ON CONFLICT DO NOTHING""",
     "ALTER TABLE dashboard_users ADD COLUMN IF NOT EXISTS created_by_user_id UUID REFERENCES dashboard_users(id)",
     "ALTER TABLE reports ADD COLUMN IF NOT EXISTS property_id VARCHAR(50)",
     "ALTER TABLE reports ADD COLUMN IF NOT EXISTS ip_address_hash VARCHAR(64)",
+    # Chapter 12 Part 2 — Translation governance
+    """CREATE TABLE IF NOT EXISTS languages (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        code VARCHAR(10) NOT NULL UNIQUE,
+        name VARCHAR(100) NOT NULL,
+        status VARCHAR(20) NOT NULL DEFAULT 'active',
+        is_protected BOOLEAN NOT NULL DEFAULT FALSE,
+        deprecated_at TIMESTAMPTZ,
+        removal_scheduled_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+    )""",
+    "CREATE UNIQUE INDEX IF NOT EXISTS ix_languages_code_unique ON languages(code)",
+    # Seed 6 UN languages (idempotent)
+    """INSERT INTO languages (code, name, status, is_protected)
+       VALUES
+         ('ar', 'Arabic',  'active', TRUE),
+         ('zh', 'Chinese', 'active', TRUE),
+         ('en', 'English', 'active', TRUE),
+         ('fr', 'French',  'active', TRUE),
+         ('ru', 'Russian', 'active', TRUE),
+         ('es', 'Spanish', 'active', TRUE)
+       ON CONFLICT (code) DO NOTHING""",
+    # Ensure protected flag is set for UN languages
+    "UPDATE languages SET is_protected = TRUE WHERE code IN ('ar', 'zh', 'en', 'fr', 'ru', 'es')",
+    # Translation reject fields
+    "ALTER TABLE translations ADD COLUMN IF NOT EXISTS rejected_at TIMESTAMPTZ",
+    "ALTER TABLE translations ADD COLUMN IF NOT EXISTS rejection_reason TEXT",
+    # Audit log table
+    """CREATE TABLE IF NOT EXISTS translation_audit_log (
+        id SERIAL PRIMARY KEY,
+        event_type VARCHAR(100) NOT NULL,
+        lang_code VARCHAR(10),
+        string_key VARCHAR(255),
+        details JSONB,
+        performed_by VARCHAR(255),
+        dashboard_user_id VARCHAR(255),
+        created_at TIMESTAMPTZ DEFAULT NOW()
+    )""",
+    "CREATE INDEX IF NOT EXISTS idx_translation_audit_event ON translation_audit_log(event_type)",
+    "CREATE INDEX IF NOT EXISTS idx_translation_audit_lang ON translation_audit_log(lang_code)",
+    "CREATE INDEX IF NOT EXISTS idx_translation_audit_created ON translation_audit_log(created_at DESC)",
     # Chapter 12 — App Configuration structural fixes
     "ALTER TABLE questions ADD COLUMN IF NOT EXISTS is_core BOOLEAN NOT NULL DEFAULT FALSE",
     "ALTER TABLE countries ADD COLUMN IF NOT EXISTS dialling_code VARCHAR(10)",
@@ -305,10 +357,12 @@ async def lifespan(app: FastAPI):
     task_stuck = asyncio.create_task(_stuck_report_loop())
     task_autoblock = asyncio.create_task(_auto_block_confirmation_loop())
     task_pause_expiry = asyncio.create_task(_pause_expiry_loop())
+    task_lang_cleanup = asyncio.create_task(_remove_expired_deprecated_languages_loop())
     yield
     task_stuck.cancel()
     task_autoblock.cancel()
     task_pause_expiry.cancel()
+    task_lang_cleanup.cancel()
     await app.state.redis.aclose()
     await engine.dispose()
 
@@ -353,6 +407,7 @@ app.include_router(analytics.router)
 app.include_router(exports.router)
 app.include_router(question_packages.router)
 app.include_router(flag_rules.router)
+app.include_router(language_packages.languages_router)
 app.include_router(language_packages.packages_router)
 app.include_router(language_packages.keys_router)
 app.include_router(language_packages.translations_router)

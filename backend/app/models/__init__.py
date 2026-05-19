@@ -7,7 +7,8 @@ from app.models.flag_event import FlagEvent
 from app.models.dashboard_user import DashboardUser
 from app.models.push_token import PushToken
 from app.models.question_package import QuestionPackage, Question, QuestionOption
-from app.models.language_package import StringKey, Translation, LanguagePackage
+from app.models.language_package import Language, StringKey, Translation, LanguagePackage
+from app.models.translation_audit_log import TranslationAuditLog
 from app.models.role import Role
 from app.models.app_setting import AppSetting
 from app.models.health_incident import HealthIncident
@@ -30,9 +31,11 @@ __all__ = [
     "QuestionPackage",
     "Question",
     "QuestionOption",
+    "Language",
     "StringKey",
     "Translation",
     "LanguagePackage",
+    "TranslationAuditLog",
     "Role",
     "AppSetting",
     "HealthIncident",

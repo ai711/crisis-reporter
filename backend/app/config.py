@@ -68,6 +68,10 @@ class Settings(BaseSettings):
     # Map settings
     REPORTING_RADIUS_DEFAULT_MILES: int = 50
 
+    # Translation governance
+    LANGUAGE_DEPRECATION_WINDOW_DAYS: int = 90
+    TRANSLATION_LOCK_MINUTES: int = 30
+
     # Review Queue
     REVIEW_SOFT_LOCK_MINUTES: int = 15
     AUTO_BLOCK_CONFIRMATION_HOURS: int = 72

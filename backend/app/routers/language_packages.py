@@ -1,35 +1,42 @@
 """
 language_packages.py
 
-Three router prefixes live in this file because the feature spans three
-top-level URL namespaces:
-
-    /api/language-packages   — package lifecycle (active fetch, publish)
-    /api/string-keys         — key catalogue management
-    /api/translations        — per-language translation workflow
-
-Register all three in main.py:
-    app.include_router(language_packages.packages_router)
-    app.include_router(language_packages.keys_router)
-    app.include_router(language_packages.translations_router)
+Four router prefixes:
+    /api/languages            — language lifecycle management
+    /api/language-packages    — package lifecycle (active fetch, publish)
+    /api/string-keys          — key catalogue management
+    /api/translations         — per-language translation workflow (edit locks, audit)
 """
 
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from pydantic import BaseModel, field_validator
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.config import settings
 from app.database import AsyncSessionLocal, get_db
-from app.models.language_package import LanguagePackage, StringKey, Translation
-from app.services.dependencies import get_current_dashboard_user, require_admin
+from app.models.language_package import Language, LanguagePackage, StringKey, Translation
+from app.models.translation_audit_log import TranslationAuditLog
+from app.services.dependencies import (
+    get_current_dashboard_user,
+    require_admin,
+    require_superadmin,
+)
+from app.services.translation_audit_service import write_translation_audit
+from app.services.translation_lock_service import (
+    acquire_translation_lock,
+    get_translation_lock,
+    refresh_translation_lock_ttl,
+    release_translation_lock,
+    release_translation_lock_admin,
+)
 
 log = logging.getLogger(__name__)
 
@@ -38,8 +45,9 @@ VALID_CATEGORIES = {
     "content", "safety", "onboarding", "tc",
 }
 
-# ── Three routers ─────────────────────────────────────────────────────────────
+# ── Four routers ───────────────────────────────────────────────────────────────
 
+languages_router = APIRouter(prefix="/api/languages", tags=["Language Packages"])
 packages_router = APIRouter(prefix="/api/language-packages", tags=["Language Packages"])
 keys_router = APIRouter(prefix="/api/string-keys", tags=["Language Packages"])
 translations_router = APIRouter(prefix="/api/translations", tags=["Language Packages"])
@@ -47,13 +55,27 @@ translations_router = APIRouter(prefix="/api/translations", tags=["Language Pack
 
 # ── Shared schemas ────────────────────────────────────────────────────────────
 
+class LanguageOut(BaseModel):
+    id: str
+    code: str
+    name: str
+    status: str
+    is_protected: bool
+    deprecated_at: Optional[datetime]
+    removal_scheduled_at: Optional[datetime]
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 class StringKeyOut(BaseModel):
     id: str
     key: str
     category: str
     english_text: str
     is_active: bool
-    translations: dict[str, str]   # language_code → status
+    translations: dict[str, str]
     created_at: datetime
 
     class Config:
@@ -68,6 +90,8 @@ class TranslationOut(BaseModel):
     status: str
     translated_by: str
     reviewed_by: Optional[str]
+    rejected_at: Optional[datetime]
+    rejection_reason: Optional[str]
     created_at: datetime
     updated_at: datetime
 
@@ -100,6 +124,135 @@ class LanguagePackageListOut(BaseModel):
         from_attributes = True
 
 
+# ── /api/languages ────────────────────────────────────────────────────────────
+
+@languages_router.get("", response_model=list[LanguageOut])
+async def list_languages(
+    db: AsyncSession = Depends(get_db),
+    _=Depends(get_current_dashboard_user),
+) -> list[LanguageOut]:
+    result = await db.execute(select(Language).order_by(Language.name))
+    langs = result.scalars().all()
+    return [
+        LanguageOut(
+            id=str(l.id),
+            code=l.code,
+            name=l.name,
+            status=l.status,
+            is_protected=l.is_protected,
+            deprecated_at=l.deprecated_at,
+            removal_scheduled_at=l.removal_scheduled_at,
+            created_at=l.created_at,
+        )
+        for l in langs
+    ]
+
+
+class LanguageStatusUpdate(BaseModel):
+    status: str
+
+    @field_validator("status")
+    @classmethod
+    def validate_status(cls, v: str) -> str:
+        if v not in ("active", "deprecated", "pending"):
+            raise ValueError("status must be active, deprecated, or pending")
+        return v
+
+
+@languages_router.patch("/{code}/status", response_model=LanguageOut)
+async def update_language_status(
+    code: str,
+    body: LanguageStatusUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(require_admin),
+) -> LanguageOut:
+    result = await db.execute(select(Language).where(Language.code == code))
+    lang = result.scalar_one_or_none()
+    if not lang:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Language not found")
+    if lang.is_protected:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="The 6 UN languages cannot be deactivated or deprecated.",
+        )
+
+    now = datetime.now(timezone.utc)
+    old_status = lang.status
+
+    if body.status == "deprecated":
+        lang.status = "deprecated"
+        lang.deprecated_at = now
+        lang.removal_scheduled_at = now + timedelta(days=settings.LANGUAGE_DEPRECATION_WINDOW_DAYS)
+        event = "language_deprecated"
+    elif body.status == "active" and old_status == "deprecated":
+        lang.status = "active"
+        lang.deprecated_at = None
+        lang.removal_scheduled_at = None
+        event = "language_activated"
+    else:
+        lang.status = body.status
+        event = "language_activated" if body.status == "active" else "language_deprecated"
+
+    await write_translation_audit(
+        db,
+        event_type=event,
+        lang_code=lang.code,
+        details={"old_status": old_status, "new_status": lang.status},
+        performed_by=current_user.full_name,
+        dashboard_user_id=str(current_user.id),
+    )
+    await db.commit()
+    await db.refresh(lang)
+
+    return LanguageOut(
+        id=str(lang.id),
+        code=lang.code,
+        name=lang.name,
+        status=lang.status,
+        is_protected=lang.is_protected,
+        deprecated_at=lang.deprecated_at,
+        removal_scheduled_at=lang.removal_scheduled_at,
+        created_at=lang.created_at,
+    )
+
+
+@languages_router.delete("/{code}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_language(
+    code: str,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(require_superadmin),
+) -> None:
+    result = await db.execute(select(Language).where(Language.code == code))
+    lang = result.scalar_one_or_none()
+    if not lang:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Language not found")
+    if lang.is_protected:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Protected languages cannot be removed.",
+        )
+    if lang.status != "deprecated":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only deprecated languages can be hard-removed.",
+        )
+    if lang.removal_scheduled_at and lang.removal_scheduled_at > datetime.now(timezone.utc):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Removal not yet scheduled — earliest removal: {lang.removal_scheduled_at.isoformat()}",
+        )
+    await write_translation_audit(
+        db,
+        event_type="language_removed",
+        lang_code=lang.code,
+        details={"name": lang.name},
+        performed_by=current_user.full_name,
+        dashboard_user_id=str(current_user.id),
+    )
+    await db.delete(lang)
+    await db.commit()
+
+
 # ── /api/language-packages ────────────────────────────────────────────────────
 
 @packages_router.get("/active/{language_code}", response_model=dict[str, str])
@@ -107,13 +260,6 @@ async def get_active_package(
     language_code: str,
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, str]:
-    """Return the full published translation package as a flat key→value map.
-
-    Called by the reporter app (PWA + Android) on startup.  No auth required.
-    Falls back gracefully — if no published package exists for this language,
-    returns an empty dict so the app can fall back to English.
-    """
-    # Confirm a published package exists for this language
     pkg_result = await db.execute(
         select(LanguagePackage).where(
             LanguagePackage.language_code == language_code,
@@ -124,7 +270,6 @@ async def get_active_package(
     if not pkg:
         return {}
 
-    # Return all published translations for this language
     result = await db.execute(
         select(StringKey.key, Translation.translated_text)
         .join(Translation, Translation.string_key_id == StringKey.id)
@@ -145,15 +290,27 @@ async def get_active_package(
 async def publish_language_package(
     language_code: str,
     db: AsyncSession = Depends(get_db),
-    _=Depends(require_admin),
+    current_user=Depends(require_superadmin),
 ) -> LanguagePackageOut:
     """Publish all approved translations for a language as a new package version.
 
-    Fails with 422 if any active string key has no approved translation for
-    this language — every key must be covered before publish.
-
-    Admin only.  Archives any previously published package for this language.
+    Superadmin only. Fails if any active string key has no approved translation
+    or if the review queue (draft/failed) is non-empty for this language.
     """
+    # Gate: review queue must be empty
+    pending_result = await db.execute(
+        select(func.count(Translation.id)).where(
+            Translation.language_code == language_code,
+            Translation.status.in_(["draft", "failed"]),
+        )
+    )
+    pending_count = pending_result.scalar() or 0
+    if pending_count > 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"review_queue_not_empty: {pending_count} draft/failed translations must be reviewed before publishing.",
+        )
+
     # Collect active string keys
     all_keys_result = await db.execute(
         select(StringKey).where(StringKey.is_active == True)
@@ -200,7 +357,7 @@ async def publish_language_package(
     for prev in prev_result.scalars().all():
         prev.status = "archived"
 
-    # Generate next version number (count of all packages for this language + 1)
+    # Generate next version number
     count_result = await db.execute(
         select(func.count(LanguagePackage.id)).where(
             LanguagePackage.language_code == language_code
@@ -215,6 +372,16 @@ async def publish_language_package(
         published_at=datetime.now(timezone.utc),
     )
     db.add(pkg)
+
+    await write_translation_audit(
+        db,
+        event_type="package_published",
+        lang_code=language_code,
+        details={"version": next_version, "string_count": len(approved)},
+        performed_by=current_user.full_name,
+        dashboard_user_id=str(current_user.id),
+    )
+
     await db.commit()
     await db.refresh(pkg)
 
@@ -233,17 +400,11 @@ async def list_language_packages(
     db: AsyncSession = Depends(get_db),
     _=Depends(get_current_dashboard_user),
 ) -> list[LanguagePackageListOut]:
-    """Return all language packages sorted newest first.
-
-    Includes a string_count derived from current published translations for
-    the package language.  Dashboard auth required.
-    """
     pkgs_result = await db.execute(
         select(LanguagePackage).order_by(LanguagePackage.published_at.desc())
     )
     pkgs = pkgs_result.scalars().all()
 
-    # Count currently-published translations per language for the string_count column
     counts_result = await db.execute(
         select(Translation.language_code, func.count(Translation.id))
         .where(Translation.status == "published")
@@ -278,10 +439,6 @@ async def list_string_keys(
     db: AsyncSession = Depends(get_db),
     _=Depends(get_current_dashboard_user),
 ) -> list[StringKeyOut]:
-    """Return all string keys with their English text and per-language translation status.
-
-    Dashboard auth required.
-    """
     result = await db.execute(
         select(StringKey)
         .options(selectinload(StringKey.translations))
@@ -309,7 +466,6 @@ async def create_string_key(
     db: AsyncSession = Depends(get_db),
     _=Depends(require_admin),
 ) -> StringKeyOut:
-    """Create a new translatable string key.  Admin only."""
     if body.category not in VALID_CATEGORIES:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -346,6 +502,115 @@ async def create_string_key(
 
 # ── /api/translations ─────────────────────────────────────────────────────────
 
+# ── Helper: check edit lock ───────────────────────────────────────────────────
+
+async def _assert_lock(request: Request, lang_code: str, caller_id: str) -> None:
+    """Raise 409 if the caller does not hold the edit lock for lang_code."""
+    redis = request.app.state.redis
+    lock = await get_translation_lock(redis, lang_code)
+    if not lock or lock["editor_id"] != caller_id:
+        locked_by = lock["editor_name"] if lock else None
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "detail": "edit_lock_required",
+                "locked_by": locked_by,
+            },
+        )
+    await refresh_translation_lock_ttl(redis, lang_code)
+
+
+# ── Translation lock endpoints ────────────────────────────────────────────────
+
+class LockResponse(BaseModel):
+    locked: bool
+    locked_by: Optional[str] = None
+    locked_at: Optional[str] = None
+
+
+@translations_router.post("/lock/{lang_code}", response_model=LockResponse)
+async def acquire_lang_lock(
+    lang_code: str,
+    request: Request,
+    current_user=Depends(get_current_dashboard_user),
+    db: AsyncSession = Depends(get_db),
+) -> LockResponse:
+    redis = request.app.state.redis
+    acquired = await acquire_translation_lock(
+        redis, lang_code, current_user.full_name, str(current_user.id)
+    )
+    if acquired:
+        await write_translation_audit(
+            db,
+            event_type="edit_lock_acquired",
+            lang_code=lang_code,
+            performed_by=current_user.full_name,
+            dashboard_user_id=str(current_user.id),
+        )
+        await db.commit()
+        return LockResponse(locked=True)
+
+    existing = await get_translation_lock(redis, lang_code)
+    raise HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail={
+            "locked": False,
+            "locked_by": existing["editor_name"] if existing else None,
+            "locked_at": existing["locked_at"] if existing else None,
+        },
+    )
+
+
+@translations_router.post("/unlock/{lang_code}", response_model=dict)
+async def release_lang_lock(
+    lang_code: str,
+    request: Request,
+    current_user=Depends(get_current_dashboard_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    redis = request.app.state.redis
+    released = await release_translation_lock(redis, lang_code, str(current_user.id))
+    if not released:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not hold the lock for this language.",
+        )
+    await write_translation_audit(
+        db,
+        event_type="edit_lock_released",
+        lang_code=lang_code,
+        performed_by=current_user.full_name,
+        dashboard_user_id=str(current_user.id),
+    )
+    await db.commit()
+    return {"released": True}
+
+
+@translations_router.post("/unlock/{lang_code}/admin", response_model=dict)
+async def admin_release_lang_lock(
+    lang_code: str,
+    request: Request,
+    current_user=Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    redis = request.app.state.redis
+    existing = await get_translation_lock(redis, lang_code)
+    locked_by = existing["editor_name"] if existing else None
+    await release_translation_lock_admin(redis, lang_code)
+    await write_translation_audit(
+        db,
+        event_type="edit_lock_force_released",
+        lang_code=lang_code,
+        details={"was_locked_by": locked_by},
+        performed_by=current_user.full_name,
+        dashboard_user_id=str(current_user.id),
+    )
+    await db.commit()
+    return {"released": True, "was_locked_by": locked_by}
+
+
+# ── Translation CRUD ──────────────────────────────────────────────────────────
+
 class AutoTranslateRequest(BaseModel):
     language_code: str
 
@@ -364,19 +629,197 @@ class ApproveResponse(BaseModel):
     reviewed_by: str
 
 
+class RejectRequest(BaseModel):
+    reason: str
+
+    @field_validator("reason")
+    @classmethod
+    def validate_reason(cls, v: str) -> str:
+        if len(v.strip()) < 5:
+            raise ValueError("Rejection reason must be at least 5 characters.")
+        return v.strip()
+
+
+class RejectResponse(BaseModel):
+    id: str
+    status: str
+    rejected_at: datetime
+    rejection_reason: str
+
+
+@translations_router.get("/queue-status")
+async def get_queue_status(
+    db: AsyncSession = Depends(get_db),
+    _=Depends(get_current_dashboard_user),
+) -> dict:
+    result = await db.execute(
+        select(
+            Translation.language_code,
+            Translation.status,
+            func.count(Translation.id),
+        )
+        .where(Translation.status.in_(["draft", "failed"]))
+        .group_by(Translation.language_code, Translation.status)
+    )
+    rows = result.all()
+
+    lang_data: dict[str, dict] = {}
+    for lang_code, st, count in rows:
+        if lang_code not in lang_data:
+            lang_data[lang_code] = {"draft_count": 0, "failed_count": 0}
+        if st == "draft":
+            lang_data[lang_code]["draft_count"] += count
+        elif st == "failed":
+            lang_data[lang_code]["failed_count"] += count
+
+    # Get language names
+    lang_result = await db.execute(select(Language))
+    lang_name_map = {l.code: l.name for l in lang_result.scalars().all()}
+
+    by_language = [
+        {
+            "lang_code": code,
+            "lang_name": lang_name_map.get(code, code),
+            "draft_count": data["draft_count"],
+            "failed_count": data["failed_count"],
+        }
+        for code, data in sorted(lang_data.items())
+    ]
+    total_pending = sum(d["draft_count"] + d["failed_count"] for d in by_language)
+
+    return {
+        "has_pending": total_pending > 0,
+        "total_pending": total_pending,
+        "by_language": by_language,
+    }
+
+
+@translations_router.get("/unified-queue")
+async def get_unified_queue(
+    status_filter: str = "draft,failed",
+    lang_code: Optional[str] = None,
+    string_key: Optional[str] = None,
+    cursor: Optional[str] = None,
+    limit: int = 50,
+    db: AsyncSession = Depends(get_db),
+    _=Depends(get_current_dashboard_user),
+) -> dict:
+    statuses = [s.strip() for s in status_filter.split(",") if s.strip()]
+    valid_statuses = {"draft", "failed", "approved", "published", "missing"}
+    statuses = [s for s in statuses if s in valid_statuses]
+    if not statuses:
+        statuses = ["draft", "failed"]
+
+    q = (
+        select(
+            Translation,
+            StringKey.key.label("string_key"),
+            StringKey.english_text.label("source_text"),
+        )
+        .join(StringKey, StringKey.id == Translation.string_key_id)
+        .where(Translation.status.in_(statuses))
+    )
+    if lang_code:
+        q = q.where(Translation.language_code == lang_code)
+    if string_key:
+        q = q.where(StringKey.key.ilike(f"%{string_key}%"))
+    if cursor:
+        try:
+            cursor_dt = datetime.fromisoformat(cursor)
+            q = q.where(Translation.updated_at < cursor_dt)
+        except ValueError:
+            pass
+
+    q = q.order_by(Translation.updated_at.desc()).limit(limit + 1)
+    result = await db.execute(q)
+    rows = result.all()
+
+    next_cursor = None
+    if len(rows) > limit:
+        rows = rows[:limit]
+        next_cursor = rows[-1].Translation.updated_at.isoformat()
+
+    items = [
+        {
+            "id": str(row.Translation.id),
+            "lang_code": row.Translation.language_code,
+            "string_key": row.string_key,
+            "source_text": row.source_text,
+            "translated_text": row.Translation.translated_text,
+            "status": row.Translation.status,
+            "updated_at": row.Translation.updated_at.isoformat(),
+        }
+        for row in rows
+    ]
+    return {"items": items, "next_cursor": next_cursor, "count": len(items)}
+
+
+@translations_router.get("/audit-log")
+async def get_audit_log(
+    event_type: Optional[str] = None,
+    lang_code: Optional[str] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    page: int = 1,
+    page_size: int = 50,
+    db: AsyncSession = Depends(get_db),
+    _=Depends(get_current_dashboard_user),
+) -> dict:
+    from sqlalchemy import and_
+    q = select(TranslationAuditLog)
+    filters = []
+    if event_type:
+        filters.append(TranslationAuditLog.event_type == event_type)
+    if lang_code:
+        filters.append(TranslationAuditLog.lang_code == lang_code)
+    if date_from:
+        try:
+            filters.append(TranslationAuditLog.created_at >= datetime.fromisoformat(date_from))
+        except ValueError:
+            pass
+    if date_to:
+        try:
+            filters.append(TranslationAuditLog.created_at <= datetime.fromisoformat(date_to))
+        except ValueError:
+            pass
+    if filters:
+        q = q.where(and_(*filters))
+
+    count_q = select(func.count()).select_from(q.subquery())
+    total_result = await db.execute(count_q)
+    total = total_result.scalar() or 0
+
+    q = q.order_by(TranslationAuditLog.created_at.desc())
+    q = q.offset((page - 1) * page_size).limit(page_size)
+    result = await db.execute(q)
+    entries = result.scalars().all()
+
+    return {
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "items": [
+            {
+                "id": e.id,
+                "event_type": e.event_type,
+                "lang_code": e.lang_code,
+                "string_key": e.string_key,
+                "details": e.details,
+                "performed_by": e.performed_by,
+                "dashboard_user_id": e.dashboard_user_id,
+                "created_at": e.created_at.isoformat(),
+            }
+            for e in entries
+        ],
+    }
+
+
 @translations_router.get("/{language_code}", response_model=list[TranslationOut])
 async def list_translations(
     language_code: str,
     db: AsyncSession = Depends(get_db),
     _=Depends(get_current_dashboard_user),
 ) -> list[TranslationOut]:
-    """Return all string keys with their translation state for one language.
-
-    Keys that have no translation record are included with placeholder values
-    so the dashboard can show the full coverage picture.
-
-    Dashboard auth required.
-    """
     keys_result = await db.execute(
         select(StringKey)
         .options(selectinload(StringKey.translations))
@@ -385,7 +828,6 @@ async def list_translations(
     )
     keys = keys_result.scalars().all()
 
-    # Index translations by string_key_id for this language
     trans_map: dict[uuid.UUID, Translation] = {}
     for k in keys:
         for t in k.translations:
@@ -404,6 +846,8 @@ async def list_translations(
                 status=t.status if t else "missing",
                 translated_by=t.translated_by if t else "",
                 reviewed_by=t.reviewed_by if t else None,
+                rejected_at=t.rejected_at if t else None,
+                rejection_reason=t.rejection_reason if t else None,
                 created_at=t.created_at if t else k.created_at,
                 updated_at=t.updated_at if t else k.updated_at,
             )
@@ -418,19 +862,8 @@ async def list_translations(
 async def auto_translate(
     body: AutoTranslateRequest,
     db: AsyncSession = Depends(get_db),
-    _=Depends(require_admin),
+    current_user=Depends(require_admin),
 ) -> AutoTranslateResult:
-    """Auto-translate all string keys that have no translation yet for this language.
-
-    For each untranslated key: POSTs to LibreTranslate and stores the result as a
-    Translation with status="draft" and translated_by="auto".
-
-    Keys that already have any translation record (draft/approved/published) are
-    skipped to avoid overwriting human-reviewed work.
-
-    Admin only.
-    """
-    # Find active keys with no translation record for this language
     existing_result = await db.execute(
         select(Translation.string_key_id).where(
             Translation.language_code == body.language_code
@@ -496,6 +929,14 @@ async def auto_translate(
                 log.warning("auto_translate failed for key %s: %s", sk.key, exc)
 
     if translated > 0:
+        await write_translation_audit(
+            db,
+            event_type="translation_auto_generated",
+            lang_code=body.language_code,
+            details={"translated": translated, "failed": failed},
+            performed_by=current_user.full_name,
+            dashboard_user_id=str(current_user.id),
+        )
         await db.commit()
 
     return AutoTranslateResult(
@@ -513,31 +954,40 @@ async def auto_translate(
 )
 async def approve_translation(
     translation_id: str,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_dashboard_user),
 ) -> ApproveResponse:
-    """Mark a translation as approved.
-
-    Sets status to "approved" and records the reviewing user's ID.
-    Dashboard auth required.
-    """
     result = await db.execute(
         select(Translation).where(Translation.id == translation_id)
     )
     translation = result.scalar_one_or_none()
     if not translation:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Translation not found",
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Translation not found")
     if translation.status == "published":
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Translation is already published — unpublish the package first to re-review",
         )
 
+    await _assert_lock(request, translation.language_code, str(current_user.id))
+
+    sk_result = await db.execute(
+        select(StringKey).where(StringKey.id == translation.string_key_id)
+    )
+    sk = sk_result.scalar_one_or_none()
+
     translation.status = "approved"
     translation.reviewed_by = str(current_user.id)
+
+    await write_translation_audit(
+        db,
+        event_type="translation_approved",
+        lang_code=translation.language_code,
+        string_key=sk.key if sk else None,
+        performed_by=current_user.full_name,
+        dashboard_user_id=str(current_user.id),
+    )
     await db.commit()
 
     return ApproveResponse(
@@ -547,12 +997,66 @@ async def approve_translation(
     )
 
 
+@translations_router.patch(
+    "/{translation_id}/reject",
+    response_model=RejectResponse,
+)
+async def reject_translation(
+    translation_id: str,
+    body: RejectRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_dashboard_user),
+) -> RejectResponse:
+    result = await db.execute(
+        select(Translation).where(Translation.id == translation_id)
+    )
+    translation = result.scalar_one_or_none()
+    if not translation:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Translation not found")
+    if translation.status == "published":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cannot reject a published translation",
+        )
+
+    await _assert_lock(request, translation.language_code, str(current_user.id))
+
+    sk_result = await db.execute(
+        select(StringKey).where(StringKey.id == translation.string_key_id)
+    )
+    sk = sk_result.scalar_one_or_none()
+
+    now = datetime.now(timezone.utc)
+    translation.status = "failed"
+    translation.rejected_at = now
+    translation.rejection_reason = body.reason
+
+    await write_translation_audit(
+        db,
+        event_type="translation_rejected",
+        lang_code=translation.language_code,
+        string_key=sk.key if sk else None,
+        details={"reason": body.reason, "reviewer": current_user.full_name},
+        performed_by=current_user.full_name,
+        dashboard_user_id=str(current_user.id),
+    )
+    await db.commit()
+
+    return RejectResponse(
+        id=str(translation.id),
+        status=translation.status,
+        rejected_at=translation.rejected_at,
+        rejection_reason=translation.rejection_reason,
+    )
+
+
 class TranslationUpdate(BaseModel):
     translated_text: str
 
 
 class TranslationCreate(BaseModel):
-    string_key: str          # the stable machine key string (e.g. "Q1_LABEL")
+    string_key: str
     language_code: str
     translated_text: str
 
@@ -564,16 +1068,10 @@ class TranslationCreate(BaseModel):
 async def update_translation(
     translation_id: str,
     body: TranslationUpdate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
-    _=Depends(get_current_dashboard_user),
+    current_user=Depends(get_current_dashboard_user),
 ) -> TranslationOut:
-    """Update the translated text of an existing translation.
-
-    Resets status from approved → draft so the change goes back through review.
-    Published translations cannot be edited — unpublish the package first.
-
-    Dashboard auth required.
-    """
     result = await db.execute(
         select(Translation).where(Translation.id == translation_id)
     )
@@ -585,6 +1083,8 @@ async def update_translation(
             status_code=status.HTTP_409_CONFLICT,
             detail="Cannot edit a published translation — unpublish the package first",
         )
+
+    await _assert_lock(request, translation.language_code, str(current_user.id))
 
     translation.translated_text = body.translated_text
     if translation.status == "approved":
@@ -605,6 +1105,8 @@ async def update_translation(
         status=translation.status,
         translated_by=translation.translated_by,
         reviewed_by=translation.reviewed_by,
+        rejected_at=translation.rejected_at,
+        rejection_reason=translation.rejection_reason,
         created_at=translation.created_at,
         updated_at=translation.updated_at,
     )
@@ -617,16 +1119,12 @@ async def update_translation(
 )
 async def create_translation(
     body: TranslationCreate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_dashboard_user),
 ) -> TranslationOut:
-    """Create a new translation record for a string key / language pair.
+    await _assert_lock(request, body.language_code, str(current_user.id))
 
-    Used when the dashboard user manually types a translation for a key that
-    has no translation record yet.  Stores as status="draft".
-
-    Dashboard auth required.
-    """
     sk_result = await db.execute(
         select(StringKey).where(StringKey.key == body.string_key)
     )
@@ -668,49 +1166,20 @@ async def create_translation(
         status=t.status,
         translated_by=t.translated_by,
         reviewed_by=t.reviewed_by,
+        rejected_at=t.rejected_at,
+        rejection_reason=t.rejection_reason,
         created_at=t.created_at,
         updated_at=t.updated_at,
     )
 
 
-# ── Translation queue status ──────────────────────────────────────────────────
-
-class QueueStatusOut(BaseModel):
-    has_pending: bool
-    pending_count: int
-
-
-@translations_router.get("/queue-status", response_model=QueueStatusOut)
-async def get_queue_status(
-    db: AsyncSession = Depends(get_db),
-    _=Depends(get_current_dashboard_user),
-) -> QueueStatusOut:
-    """
-    Return whether any translations are in draft or failed state across all languages.
-    Used by QuestionsTab to block publishing until all translated strings are reviewed.
-    """
-    result = await db.execute(
-        select(func.count(Translation.id)).where(
-            Translation.status.in_(["draft"])
-        )
-    )
-    count = result.scalar() or 0
-    return QueueStatusOut(has_pending=count > 0, pending_count=count)
-
-
 # ── Seed data ─────────────────────────────────────────────────────────────────
 
-# All 8 questions + options, keyed by stable machine key
 _SEED_KEYS: list[tuple[str, str, str]] = [
-    # (key, category, english_text)
-
-    # Q1 — Damage level
     ("Q1_LABEL",       "question", "How bad is the damage?"),
     ("Q1_OPT_MINIMAL", "answer",   "Minimal / No damage"),
     ("Q1_OPT_PARTIAL", "answer",   "Partially damaged"),
     ("Q1_OPT_COMPLETE","answer",   "Completely damaged"),
-
-    # Q2 — Infrastructure type
     ("Q2_LABEL",              "question", "What type of infrastructure is this?"),
     ("Q2_OPT_RESIDENTIAL",    "answer",   "Residential Infrastructure"),
     ("Q2_OPT_COMMERCIAL",     "answer",   "Commercial Infrastructure"),
@@ -720,11 +1189,7 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
     ("Q2_OPT_COMMUNITY",      "answer",   "Community Infrastructure"),
     ("Q2_OPT_PUBLIC_SPACES",  "answer",   "Public Spaces / Recreation Infrastructure"),
     ("Q2_OPT_OTHER",          "answer",   "Other (please specify)"),
-
-    # Q3 — Infrastructure name
     ("Q3_LABEL", "question", "What is the name of this infrastructure?"),
-
-    # Q4 — Disaster type
     ("Q4_LABEL",          "question", "What type of disaster caused this damage?"),
     ("Q4_OPT_EARTHQUAKE", "answer",   "Earthquake"),
     ("Q4_OPT_FLOOD",      "answer",   "Flood"),
@@ -733,14 +1198,10 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
     ("Q4_OPT_FIRE",       "answer",   "Fire"),
     ("Q4_OPT_CONFLICT",   "answer",   "Conflict / War"),
     ("Q4_OPT_OTHER",      "answer",   "Other"),
-
-    # Q5 — Debris blocking
     ("Q5_LABEL",         "question", "Is there debris blocking access?"),
     ("Q5_OPT_YES",       "answer",   "Yes"),
     ("Q5_OPT_NO",        "answer",   "No"),
     ("Q5_OPT_PARTIALLY", "answer",   "Partially"),
-
-    # Q6 — Electricity condition
     ("Q6_LABEL",           "question", "What is the current condition of electricity infrastructure in your community following the crisis?"),
     ("Q6_OPT_NO_DAMAGE",   "answer",   "No damage observed"),
     ("Q6_OPT_MINOR",       "answer",   "Minor damage — service disruptions but quickly repairable"),
@@ -748,16 +1209,12 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
     ("Q6_OPT_SEVERE",      "answer",   "Severe damage — major infrastructure damaged, prolonged outages"),
     ("Q6_OPT_DESTROYED",   "answer",   "Completely destroyed — no electricity infrastructure functioning"),
     ("Q6_OPT_UNKNOWN",     "answer",   "Unknown / cannot be assessed"),
-
-    # Q7 — Health services
     ("Q7_LABEL",                    "question", "How would you rate the overall functioning of health services in your community since the event?"),
     ("Q7_OPT_FULLY_FUNCTIONAL",     "answer",   "Fully functional"),
     ("Q7_OPT_PARTIALLY_FUNCTIONAL", "answer",   "Partially functional"),
     ("Q7_OPT_LARGELY_DISRUPTED",    "answer",   "Largely disrupted"),
     ("Q7_OPT_NOT_FUNCTIONING",      "answer",   "Not functioning at all"),
     ("Q7_OPT_UNKNOWN",              "answer",   "Unknown"),
-
-    # Q8 — Pressing needs
     ("Q8_LABEL",            "question", "What are the most pressing needs in your community right now?"),
     ("Q8_OPT_FOOD_WATER",   "answer",   "Food assistance and safe drinking water"),
     ("Q8_OPT_CASH",         "answer",   "Cash or financial assistance"),
@@ -773,15 +1230,10 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
 
 
 async def seed_string_keys() -> None:
-    """Insert string keys if the table is empty.
-
-    Called from the app lifespan after create_all.
-    Safe to call on every restart — no-ops if data already exists.
-    """
     async with AsyncSessionLocal() as session:
         result = await session.execute(select(StringKey).limit(1))
         if result.scalar_one_or_none() is not None:
-            return  # Already seeded
+            return
 
         for key, category, english_text in _SEED_KEYS:
             session.add(StringKey(key=key, category=category, english_text=english_text))
