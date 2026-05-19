@@ -1,20 +1,24 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
+import { Lock, ShieldOff } from "lucide-react";
 import { useAuthStore } from "../stores/authStore";
 import api from "../services/api";
+import type { Role } from "../types";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
 const BLUE = "#0468B1";
 
 // ── Section definitions ────────────────────────────────────────────────────────
+// Keys MUST match the backend require_section_access keys and seed permissions
 
 type SectionKey =
-  | "main_map"
-  | "reports"
-  | "location"
+  | "main_map_view"
+  | "reports_page"
+  | "location_page"
   | "review_queue"
-  | "analytics"
+  | "analytics_and_statistics"
   | "reporter_profiles"
   | "export"
   | "projects"
@@ -23,32 +27,23 @@ type SectionKey =
   | "app_configuration";
 
 const SECTIONS: Array<{ key: SectionKey; label: string }> = [
-  { key: "main_map",          label: "Main Map View" },
-  { key: "reports",           label: "Reports Page" },
-  { key: "location",          label: "Location Page" },
-  { key: "review_queue",      label: "Review Queue" },
-  { key: "analytics",         label: "Analytics and Statistics" },
-  { key: "reporter_profiles", label: "Reporter Profiles" },
-  { key: "export",            label: "Export" },
-  { key: "projects",          label: "Projects" },
-  { key: "manage_users",      label: "Manage Users" },
-  { key: "manage_roles",      label: "Manage Roles" },
-  { key: "app_configuration", label: "App Configuration" },
+  { key: "main_map_view",          label: "Main Map View" },
+  { key: "reports_page",           label: "Reports Page" },
+  { key: "location_page",          label: "Location Page" },
+  { key: "review_queue",           label: "Review Queue" },
+  { key: "analytics_and_statistics", label: "Analytics and Statistics" },
+  { key: "reporter_profiles",      label: "Reporter Profiles" },
+  { key: "export",                 label: "Export" },
+  { key: "projects",               label: "Projects" },
+  { key: "manage_users",           label: "Manage Users" },
+  { key: "manage_roles",           label: "Manage Roles" },
+  { key: "app_configuration",      label: "App Configuration" },
 ];
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
 interface SectionPerm { view: boolean; edit: boolean; }
 type Permissions = Record<SectionKey, SectionPerm>;
-
-interface RoleOut {
-  id: string;
-  name: string;
-  is_default: boolean;
-  permissions: Permissions;
-  created_at: string;
-  user_count: number;
-}
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -58,7 +53,7 @@ function emptyPermissions(): Permissions {
   ) as Permissions;
 }
 
-function mergePermissions(raw: Partial<Permissions>): Permissions {
+function mergePermissions(raw: Record<string, { view: boolean; edit: boolean }>): Permissions {
   const base = emptyPermissions();
   for (const s of SECTIONS) {
     const p = raw[s.key];
@@ -76,16 +71,9 @@ function formatDate(iso: string): string {
 // ── Subcomponents ──────────────────────────────────────────────────────────────
 
 function DefaultBadge() {
-  return (
-    <span style={s.defaultBadge}>Default</span>
-  );
+  return <span style={s.defaultBadge}>Default</span>;
 }
 
-function LockIcon() {
-  return <span style={{ fontSize: 13, color: "#718096" }}>🔒</span>;
-}
-
-// Styled checkbox cell
 function PermCheck({
   checked,
   disabled,
@@ -137,7 +125,7 @@ function PermissionsTable({
     if (type === "edit") {
       next = { view: checked ? true : section.view, edit: checked };
     } else {
-      if (section.edit) return; // view is locked when edit is on
+      if (section.edit) return;
       next = { ...section, view: checked };
     }
     onChange({ ...permissions, [key]: next });
@@ -145,22 +133,17 @@ function PermissionsTable({
 
   return (
     <div style={s.permTable}>
-      {/* Table header */}
       <div style={s.permHeaderRow}>
         <div style={{ ...s.permCell, flex: 1 }}>Section</div>
         <div style={s.permColHead}>View</div>
         <div style={s.permColHead}>Edit</div>
       </div>
-
       {SECTIONS.map((sec, i) => {
         const perm = permissions[sec.key];
         return (
           <div
             key={sec.key}
-            style={{
-              ...s.permRow,
-              background: i % 2 === 0 ? "#fff" : "#f9fafb",
-            }}
+            style={{ ...s.permRow, background: i % 2 === 0 ? "#fff" : "#f9fafb" }}
           >
             <div style={{ ...s.permCell, flex: 1, color: "#2d3748", fontWeight: 500 }}>
               {sec.label}
@@ -193,10 +176,21 @@ type PageView = "list" | "form";
 export default function ManageRolesPage() {
   const { user: currentUser } = useAuthStore();
   const queryClient = useQueryClient();
-  const isAdmin = currentUser?.role === "admin";
+  const navigate = useNavigate();
+  const isAdmin = currentUser?.role === "admin" || currentUser?.role === "superadmin";
 
   const [view, setView] = useState<PageView>("list");
-  const [editingRole, setEditingRole] = useState<RoleOut | null>(null);
+  const [editingRole, setEditingRole] = useState<Role | null>(null);
+
+  // Search
+  const [searchInput, setSearchInput] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
+
+  // Debounce search 300ms
+  useEffect(() => {
+    const t = setTimeout(() => setSearchTerm(searchInput.trim().toLowerCase()), 300);
+    return () => clearTimeout(t);
+  }, [searchInput]);
 
   // Form state
   const [formName, setFormName] = useState("");
@@ -211,7 +205,7 @@ export default function ManageRolesPage() {
     return (
       <div style={s.page}>
         <div style={s.accessDenied}>
-          <div style={s.accessIcon}>🔒</div>
+          <ShieldOff size={52} color="#718096" />
           <div style={s.accessTitle}>Admin access required</div>
           <div style={s.accessNote}>
             Manage Roles is restricted to Admin accounts. Contact your administrator if you need access.
@@ -223,25 +217,31 @@ export default function ManageRolesPage() {
 
   // ── Data ──────────────────────────────────────────────────────────────────────
 
-  const { data: roles = [], isLoading } = useQuery<RoleOut[]>({
+  const { data: allRoles = [], isLoading } = useQuery<Role[]>({
     queryKey: ["roles"],
     queryFn: async () => {
-      const res = await api.get<RoleOut[]>("/api/roles");
+      const res = await api.get<Role[]>("/api/roles");
       return res.data;
     },
     enabled: view === "list",
   });
 
+  const defaultRoles = allRoles.filter((r) => r.is_default);
+  const customRoles = allRoles.filter((r) => !r.is_default);
+  const filteredCustomRoles = searchTerm
+    ? customRoles.filter((r) => r.name.toLowerCase().includes(searchTerm))
+    : customRoles;
+
   const createMutation = useMutation({
     mutationFn: async (payload: { name: string; permissions: Permissions }) => {
-      const res = await api.post<RoleOut>("/api/roles", payload);
+      const res = await api.post<Role>("/api/roles", payload);
       return res.data;
     },
   });
 
   const updateMutation = useMutation({
     mutationFn: async (payload: { id: string; name: string; permissions: Permissions }) => {
-      const res = await api.patch<RoleOut>(`/api/roles/${payload.id}`, {
+      const res = await api.patch<Role>(`/api/roles/${payload.id}`, {
         name: payload.name,
         permissions: payload.permissions,
       });
@@ -266,7 +266,7 @@ export default function ManageRolesPage() {
     setView("form");
   }
 
-  function openEdit(role: RoleOut) {
+  function openEdit(role: Role) {
     setEditingRole(role);
     setFormName(role.name);
     setFormPermissions(mergePermissions(role.permissions));
@@ -294,11 +294,7 @@ export default function ManageRolesPage() {
 
     try {
       if (editingRole) {
-        await updateMutation.mutateAsync({
-          id: editingRole.id,
-          name,
-          permissions: formPermissions,
-        });
+        await updateMutation.mutateAsync({ id: editingRole.id, name, permissions: formPermissions });
         setSuccessBanner(`Role "${name}" updated successfully`);
       } else {
         await createMutation.mutateAsync({ name, permissions: formPermissions });
@@ -326,7 +322,6 @@ export default function ManageRolesPage() {
   if (view === "form") {
     return (
       <div style={s.page}>
-        {/* Header */}
         <div style={s.headerRow}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <button style={s.backBtn} onClick={backToList}>← Roles</button>
@@ -338,7 +333,6 @@ export default function ManageRolesPage() {
 
         <div style={s.formContent}>
           <div style={s.formCard}>
-            {/* Role name */}
             <div style={s.fieldGroup}>
               <label style={s.label}>
                 Role Name <span style={s.req}>*</span>
@@ -349,31 +343,22 @@ export default function ManageRolesPage() {
                 maxLength={100}
                 placeholder="e.g. Field Analyst"
                 onChange={(e) => { setFormName(e.target.value); setNameError(""); }}
-                style={{
-                  ...s.input,
-                  borderColor: nameError ? "#e53e3e" : "#e2e8f0",
-                  maxWidth: 400,
-                }}
+                style={{ ...s.input, borderColor: nameError ? "#e53e3e" : "#e2e8f0", maxWidth: 400 }}
               />
               {nameError && <span style={s.fieldErr}>{nameError}</span>}
             </div>
 
-            {/* Permissions table */}
             <div style={s.fieldGroup}>
               <label style={s.label}>Section Permissions</label>
               <p style={s.permHint}>
                 Checking <strong>Edit</strong> automatically grants View and locks it.
                 Uncheck Edit to allow independent View control.
               </p>
-              <PermissionsTable
-                permissions={formPermissions}
-                onChange={setFormPermissions}
-              />
+              <PermissionsTable permissions={formPermissions} onChange={setFormPermissions} />
             </div>
 
             {submitError && <div style={s.submitError}>{submitError}</div>}
 
-            {/* Footer buttons */}
             <div style={s.formFooter}>
               <button style={s.cancelBtn} type="button" onClick={backToList}>
                 Cancel
@@ -395,14 +380,17 @@ export default function ManageRolesPage() {
 
   // ── Render: list ──────────────────────────────────────────────────────────────
 
+  const totalCount = defaultRoles.length + customRoles.length;
+
   return (
     <div style={s.page}>
-      {/* Header */}
       <div style={s.headerRow}>
         <div>
           <h1 style={s.pageTitle}>Manage Roles</h1>
           <p style={s.pageSubtitle}>
-            {isLoading ? "Loading…" : `2 default + ${roles.length} custom role${roles.length !== 1 ? "s" : ""}`}
+            {isLoading
+              ? "Loading…"
+              : `${defaultRoles.length} default + ${customRoles.length} custom role${customRoles.length !== 1 ? "s" : ""}`}
           </p>
         </div>
         <button style={s.addBtn} onClick={openCreate}>
@@ -413,6 +401,17 @@ export default function ManageRolesPage() {
       {successBanner && <div style={s.successBanner}>{successBanner}</div>}
 
       <div style={s.content}>
+        {/* Search bar */}
+        <div style={s.searchWrap}>
+          <input
+            type="text"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder="Search by role name"
+            style={s.searchInput}
+          />
+        </div>
+
         <div style={s.tableWrap}>
           <table style={s.table}>
             <thead>
@@ -420,38 +419,65 @@ export default function ManageRolesPage() {
                 <th style={s.th}>Role Name</th>
                 <th style={s.th}>Users Assigned</th>
                 <th style={s.th}>Created</th>
+                <th style={s.th}>Created By</th>
                 <th style={s.th}>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {/* Default protected roles — hardcoded, always at top */}
-              <ProtectedRoleRow
-                name="Superadmin"
-                description="Full access to all sections. Cannot be modified."
-              />
-              <ProtectedRoleRow
-                name="Guest"
-                description="View-only access to assigned projects only. Cannot be modified."
-              />
+              {/* Default protected roles — always visible regardless of search */}
+              {defaultRoles.map((role) => (
+                <tr key={role.id} style={s.tr}>
+                  <td style={s.td}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <Lock size={14} color="#718096" />
+                      <button
+                        style={s.roleNameBtn}
+                        onClick={() => navigate(`/roles/${role.id}`)}
+                      >
+                        {role.name}
+                      </button>
+                      <DefaultBadge />
+                    </div>
+                    {role.description && (
+                      <div style={s.roleDesc}>{role.description}</div>
+                    )}
+                  </td>
+                  <td style={s.td}>
+                    <span style={s.userCount}>{role.user_count}</span>
+                  </td>
+                  <td style={s.td}>
+                    <span style={s.dateText}>Built-in</span>
+                  </td>
+                  <td style={s.td}>
+                    <span style={s.mutedText}>{role.created_by_name ?? "System"}</span>
+                  </td>
+                  <td style={s.td}>{/* No edit for default roles */}</td>
+                </tr>
+              ))}
 
               {/* Custom roles */}
               {isLoading ? (
                 <tr>
-                  <td colSpan={4} style={{ ...s.td, textAlign: "center", color: "#718096", padding: 32 }}>
+                  <td colSpan={5} style={{ ...s.td, textAlign: "center", color: "#718096", padding: 32 }}>
                     Loading roles…
                   </td>
                 </tr>
-              ) : roles.length === 0 ? (
+              ) : filteredCustomRoles.length === 0 ? (
                 <tr>
-                  <td colSpan={4} style={{ ...s.td, textAlign: "center", color: "#718096", padding: 32 }}>
-                    No custom roles yet. Create one to get started.
+                  <td colSpan={5} style={{ ...s.td, textAlign: "center", color: "#718096", padding: 32 }}>
+                    {searchTerm
+                      ? "No roles match your search."
+                      : "No custom roles yet. Create one to get started."}
                   </td>
                 </tr>
               ) : (
-                roles.map((role) => (
+                filteredCustomRoles.map((role) => (
                   <tr key={role.id} style={s.tr}>
                     <td style={s.td}>
-                      <button style={s.roleNameBtn} onClick={() => openEdit(role)}>
+                      <button
+                        style={s.roleNameBtn}
+                        onClick={() => navigate(`/roles/${role.id}`)}
+                      >
                         {role.name}
                       </button>
                     </td>
@@ -460,6 +486,18 @@ export default function ManageRolesPage() {
                     </td>
                     <td style={s.td}>
                       <span style={s.dateText}>{formatDate(role.created_at)}</span>
+                    </td>
+                    <td style={s.td}>
+                      {role.created_by_user_id ? (
+                        <button
+                          style={s.creatorLink}
+                          onClick={() => window.open(`/users/${role.created_by_user_id}`, "_blank")}
+                        >
+                          {role.created_by_name ?? "—"}
+                        </button>
+                      ) : (
+                        <span style={s.mutedText}>{role.created_by_name ?? "—"}</span>
+                      )}
                     </td>
                     <td style={s.td}>
                       <button style={s.editBtn} onClick={() => openEdit(role)}>
@@ -477,32 +515,6 @@ export default function ManageRolesPage() {
   );
 }
 
-// ── Protected role row ─────────────────────────────────────────────────────────
-
-function ProtectedRoleRow({ name, description }: { name: string; description: string }) {
-  return (
-    <tr style={s.tr}>
-      <td style={s.td}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <LockIcon />
-          <span style={{ fontWeight: 600, color: "#1A2B4A" }}>{name}</span>
-          <DefaultBadge />
-        </div>
-        <div style={s.roleDesc}>{description}</div>
-      </td>
-      <td style={s.td}>
-        <span style={s.userCount}>—</span>
-      </td>
-      <td style={s.td}>
-        <span style={s.dateText}>Built-in</span>
-      </td>
-      <td style={s.td}>
-        {/* No edit button for default roles */}
-      </td>
-    </tr>
-  );
-}
-
 // ── Styles ─────────────────────────────────────────────────────────────────────
 
 const s: Record<string, React.CSSProperties> = {
@@ -512,7 +524,6 @@ const s: Record<string, React.CSSProperties> = {
     height: "100vh",
     background: "#f4f6f9",
   },
-  // Access denied
   accessDenied: {
     flex: 1,
     display: "flex",
@@ -522,10 +533,8 @@ const s: Record<string, React.CSSProperties> = {
     gap: 14,
     padding: 60,
   },
-  accessIcon: { fontSize: 52 },
   accessTitle: { fontSize: 22, fontWeight: 700, color: "#1A2B4A" },
   accessNote: { fontSize: 14, color: "#718096", maxWidth: 400, textAlign: "center" },
-  // Header
   headerRow: {
     background: "#fff",
     borderBottom: "1px solid #e0e0e0",
@@ -559,7 +568,6 @@ const s: Record<string, React.CSSProperties> = {
     cursor: "pointer",
     padding: "4px 0",
   },
-  // Banner
   successBanner: {
     background: "#d4edda",
     color: "#155724",
@@ -568,11 +576,17 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: 14,
     fontWeight: 500,
   },
-  // List content
-  content: {
-    flex: 1,
-    padding: "28px 32px",
-    overflowY: "auto",
+  content: { flex: 1, padding: "28px 32px", overflowY: "auto" },
+  searchWrap: { marginBottom: 16 },
+  searchInput: {
+    padding: "9px 14px",
+    borderRadius: 7,
+    border: "1.5px solid #e2e8f0",
+    fontSize: 13,
+    color: "#2d3748",
+    outline: "none",
+    width: 320,
+    background: "#fff",
   },
   tableWrap: {
     background: "#fff",
@@ -608,6 +622,17 @@ const s: Record<string, React.CSSProperties> = {
   roleDesc: { fontSize: 12, color: "#718096", marginTop: 3 },
   userCount: { fontSize: 13, color: "#4a5568" },
   dateText: { fontSize: 13, color: "#718096" },
+  mutedText: { fontSize: 13, color: "#718096" },
+  creatorLink: {
+    background: "transparent",
+    border: "none",
+    color: BLUE,
+    fontSize: 13,
+    cursor: "pointer",
+    padding: 0,
+    textDecoration: "underline",
+    textUnderlineOffset: 2,
+  },
   editBtn: {
     background: "transparent",
     border: "none",
@@ -629,11 +654,7 @@ const s: Record<string, React.CSSProperties> = {
     letterSpacing: 0.2,
   },
   // Form
-  formContent: {
-    flex: 1,
-    overflowY: "auto",
-    padding: "28px 32px",
-  },
+  formContent: { flex: 1, overflowY: "auto", padding: "28px 32px" },
   formCard: {
     background: "#fff",
     borderRadius: 12,
@@ -660,12 +681,7 @@ const s: Record<string, React.CSSProperties> = {
   },
   fieldErr: { fontSize: 12, color: "#e53e3e", fontWeight: 500 },
   permHint: { fontSize: 13, color: "#718096", margin: "0 0 8px" },
-  // Permissions table
-  permTable: {
-    border: "1px solid #e2e8f0",
-    borderRadius: 8,
-    overflow: "hidden",
-  },
+  permTable: { border: "1px solid #e2e8f0", borderRadius: 8, overflow: "hidden" },
   permHeaderRow: {
     display: "flex",
     alignItems: "center",
@@ -689,13 +705,7 @@ const s: Record<string, React.CSSProperties> = {
     letterSpacing: 0.5,
     textAlign: "center" as const,
   },
-  permCheckCell: {
-    width: 80,
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  // Form footer
+  permCheckCell: { width: 80, display: "flex", justifyContent: "center", alignItems: "center" },
   formFooter: {
     display: "flex",
     justifyContent: "flex-end",

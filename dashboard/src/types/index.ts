@@ -1,3 +1,17 @@
+// ── Roles ─────────────────────────────────────────────────────────────────────
+
+export interface Role {
+  id: string;
+  name: string;
+  is_default: boolean;
+  description: string | null;
+  permissions: Record<string, { view: boolean; edit: boolean }>;
+  user_count: number;
+  created_at: string;
+  created_by_user_id: string | null;
+  created_by_name: string | null;
+}
+
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
 export interface DashboardUser {

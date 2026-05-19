@@ -21,7 +21,7 @@ from app.models.dashboard_user import DashboardUser
 from app.models.project_user import ProjectUser
 from app.models.crisis import Crisis
 from app.services.auth import hash_password
-from app.services.dependencies import get_current_dashboard_user, require_admin
+from app.services.dependencies import get_current_dashboard_user, require_admin, require_section_access
 from app.routers.app_settings import get_security_settings_dict
 
 
@@ -130,7 +130,7 @@ async def list_users(
     cursor: Optional[str] = Query(None),
     limit: int = Query(default=50, le=200),
     db: AsyncSession = Depends(get_db),
-    current_user: DashboardUser = Depends(get_current_dashboard_user),
+    current_user: DashboardUser = Depends(require_section_access("manage_users")),
 ):
     """List all dashboard users, sorted by created_at DESC, with optional search."""
     conditions = []
@@ -201,6 +201,7 @@ async def create_user(
     body: CreateUserRequest,
     db: AsyncSession = Depends(get_db),
     current_user: DashboardUser = Depends(require_admin),
+    _section: DashboardUser = Depends(require_section_access("manage_users", require_edit=True)),
 ):
     """Create a new dashboard user. Admin only. Superadmin role requires Superadmin caller."""
     if body.role == "superadmin" and current_user.role != "superadmin":
@@ -242,7 +243,7 @@ async def create_user(
 async def get_user(
     user_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: DashboardUser = Depends(get_current_dashboard_user),
+    current_user: DashboardUser = Depends(require_section_access("manage_users")),
 ):
     """Full user detail including project assignments."""
     user = await _resolve_user(user_id, db)
@@ -287,6 +288,7 @@ async def update_user(
     body: UpdateUserRequest,
     db: AsyncSession = Depends(get_db),
     current_user: DashboardUser = Depends(require_admin),
+    _section: DashboardUser = Depends(require_section_access("manage_users", require_edit=True)),
 ):
     """Update a dashboard user. Email cannot be changed after creation."""
     raw_body = await request.json()
@@ -346,6 +348,7 @@ async def update_user_status(
     body: StatusUpdateRequest,
     db: AsyncSession = Depends(get_db),
     current_user: DashboardUser = Depends(require_admin),
+    _section: DashboardUser = Depends(require_section_access("manage_users", require_edit=True)),
 ):
     """Activate or deactivate a dashboard user account."""
     user = await _resolve_user(user_id, db)

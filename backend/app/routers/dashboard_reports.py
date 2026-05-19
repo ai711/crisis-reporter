@@ -16,7 +16,7 @@ from app.models.reporter import Reporter
 from app.models.photo import Photo
 from app.models.flag_event import FlagEvent
 from app.models.dashboard_user import DashboardUser
-from app.services.dependencies import get_current_dashboard_user, require_superadmin
+from app.services.dependencies import get_current_dashboard_user, require_superadmin, require_section_access
 from app.services.storage import storage_service
 from app.config import settings
 
@@ -364,7 +364,7 @@ async def get_report_detail(
             flag_to=f.flag_to,
             changed_by=f.changed_by,
             reason=f.reason,
-            metadata=f.metadata,
+            metadata=f.flag_metadata,
             dashboard_user_id=str(f.dashboard_user_id) if f.dashboard_user_id else None,
             is_emergency_override=f.is_emergency_override,
             created_at=f.created_at,
@@ -468,7 +468,7 @@ async def update_report_flag(
     report_id: str,
     request: FlagUpdateRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: DashboardUser = Depends(get_current_dashboard_user),
+    current_user: DashboardUser = Depends(require_section_access("reports_page", require_edit=True)),
 ):
     """Manually update a report flag status. Enforces strict transition matrix."""
 

@@ -8,7 +8,7 @@ from app.config import settings as app_config
 from app.database import get_db
 from app.models.app_setting import AppSetting
 from app.models.dashboard_user import DashboardUser
-from app.services.dependencies import get_current_dashboard_user, require_admin, require_superadmin
+from app.services.dependencies import get_current_dashboard_user, require_admin, require_superadmin, require_section_access
 from app.services.storage import storage_service
 
 router = APIRouter(prefix="/api/settings", tags=["Settings"])
@@ -292,7 +292,7 @@ class MapSettingsPayload(BaseModel):
 @router.get("/map")
 async def get_map_settings(
     db: AsyncSession = Depends(get_db),
-    current_user: DashboardUser = Depends(get_current_dashboard_user),
+    current_user: DashboardUser = Depends(require_section_access("app_configuration")),
 ):
     """Return current map settings. Dashboard auth required."""
     defaults = {
@@ -312,6 +312,7 @@ async def patch_map_settings(
     payload: MapSettingsPayload,
     db: AsyncSession = Depends(get_db),
     current_user: DashboardUser = Depends(require_admin),
+    _section: DashboardUser = Depends(require_section_access("app_configuration", require_edit=True)),
 ):
     """Update map settings. Admin only."""
     defaults = {

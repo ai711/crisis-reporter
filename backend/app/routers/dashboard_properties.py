@@ -18,7 +18,7 @@ from app.models.property_comment import PropertyComment
 from app.models.report import Report
 from app.models.reporter import Reporter
 from app.models.dashboard_user import DashboardUser
-from app.services.dependencies import get_current_dashboard_user
+from app.services.dependencies import get_current_dashboard_user, require_section_access
 from app.services.property_service import update_conflict_warning
 from app.config import settings
 
@@ -548,7 +548,7 @@ async def set_confirmed_status(
     property_id: str,
     body: ConfirmedStatusRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: DashboardUser = Depends(get_current_dashboard_user),
+    current_user: DashboardUser = Depends(require_section_access("location_page", require_edit=True)),
 ):
     prop = await _get_property_or_404(db, property_id)
 
@@ -613,7 +613,7 @@ async def set_override(
     property_id: str,
     body: OverrideRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: DashboardUser = Depends(get_current_dashboard_user),
+    current_user: DashboardUser = Depends(require_section_access("location_page", require_edit=True)),
 ):
     prop = await _get_property_or_404(db, property_id)
 
@@ -747,7 +747,7 @@ async def flag_for_review(
     property_id: str,
     body: FlagForReviewRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: DashboardUser = Depends(get_current_dashboard_user),
+    current_user: DashboardUser = Depends(require_section_access("location_page", require_edit=True)),
 ):
     prop = await _get_property_or_404(db, property_id)
 

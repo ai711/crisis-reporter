@@ -10,7 +10,7 @@ from app.models.report import Report
 from app.models.crisis import Crisis
 from app.models.flag_event import FlagEvent
 from app.models.dashboard_user import DashboardUser
-from app.services.dependencies import get_current_dashboard_user
+from app.services.dependencies import get_current_dashboard_user, require_section_access
 
 router = APIRouter(prefix="/api/analytics", tags=["Analytics"])
 
@@ -169,7 +169,7 @@ async def get_summary(
     date_to: Optional[date] = Query(None),
     crisis_type: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
-    current_user: DashboardUser = Depends(get_current_dashboard_user),
+    current_user: DashboardUser = Depends(require_section_access("analytics_and_statistics")),
 ):
     conditions = _base_conditions(country, date_from, date_to, crisis_type)
     country_conds = _country_conditions(country)
@@ -215,7 +215,7 @@ async def get_reports_over_time(
     crisis_type: Optional[str] = Query(None),
     granularity: str = Query("daily"),
     db: AsyncSession = Depends(get_db),
-    current_user: DashboardUser = Depends(get_current_dashboard_user),
+    current_user: DashboardUser = Depends(require_section_access("analytics_and_statistics")),
 ):
     conditions = _base_conditions(country, date_from, date_to, crisis_type)
     country_conds = _country_conditions(country)
@@ -246,7 +246,7 @@ async def get_damage_distribution(
     date_to: Optional[date] = Query(None),
     crisis_type: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
-    current_user: DashboardUser = Depends(get_current_dashboard_user),
+    current_user: DashboardUser = Depends(require_section_access("analytics_and_statistics")),
 ):
     conditions = _base_conditions(country, date_from, date_to, crisis_type)
     country_conds = _country_conditions(country)
@@ -289,7 +289,7 @@ async def get_infrastructure_breakdown(
     date_to: Optional[date] = Query(None),
     crisis_type: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
-    current_user: DashboardUser = Depends(get_current_dashboard_user),
+    current_user: DashboardUser = Depends(require_section_access("analytics_and_statistics")),
 ):
     sql_params: dict = {"flags": list(VERIFIED_FLAGS)}
     where_parts = ["r.flag_status = ANY(:flags)"]
@@ -350,7 +350,7 @@ async def get_country_breakdown(
     date_to: Optional[date] = Query(None),
     crisis_type: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
-    current_user: DashboardUser = Depends(get_current_dashboard_user),
+    current_user: DashboardUser = Depends(require_section_access("analytics_and_statistics")),
 ):
     conditions = _base_conditions(None, date_from, date_to, crisis_type)
 
@@ -377,7 +377,7 @@ async def get_crisis_type_breakdown(
     date_to: Optional[date] = Query(None),
     crisis_type: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
-    current_user: DashboardUser = Depends(get_current_dashboard_user),
+    current_user: DashboardUser = Depends(require_section_access("analytics_and_statistics")),
 ):
     conditions = _base_conditions(country, date_from, date_to, crisis_type)
     country_conds = _country_conditions(country)
@@ -413,7 +413,7 @@ async def get_flag_quality(
     date_to: Optional[date] = Query(None),
     crisis_type: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
-    current_user: DashboardUser = Depends(get_current_dashboard_user),
+    current_user: DashboardUser = Depends(require_section_access("analytics_and_statistics")),
 ):
     flag_conditions: list = [
         FlagEvent.changed_by == "manual",

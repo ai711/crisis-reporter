@@ -24,7 +24,7 @@ from app.models.report import Report
 from app.models.reporter import Reporter
 from app.models.property import Property
 from app.models.dashboard_user import DashboardUser
-from app.services.dependencies import get_current_dashboard_user
+from app.services.dependencies import get_current_dashboard_user, require_section_access
 
 log = logging.getLogger(__name__)
 
@@ -144,7 +144,7 @@ async def list_projects(
     cursor: Optional[str] = Query(None),
     limit: int = Query(default=50, le=200),
     db: AsyncSession = Depends(get_db),
-    current_user: DashboardUser = Depends(get_current_dashboard_user),
+    current_user: DashboardUser = Depends(require_section_access("projects")),
 ):
     """List projects with cursor-based pagination and all filters."""
     conditions = []
@@ -266,7 +266,7 @@ async def list_projects(
 async def create_project(
     body: ProjectCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: DashboardUser = Depends(get_current_dashboard_user),
+    current_user: DashboardUser = Depends(require_section_access("projects", require_edit=True)),
 ):
     # Name uniqueness check
     existing = await db.execute(
@@ -337,7 +337,7 @@ async def _run_import(serial_id, crisis_uuid, countries, start_date, end_date):
 async def get_project(
     serial_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: DashboardUser = Depends(get_current_dashboard_user),
+    current_user: DashboardUser = Depends(require_section_access("projects")),
 ):
     """Full project detail including creator info and import status."""
     crisis = await _resolve_serial(serial_id, db)
@@ -382,7 +382,7 @@ async def update_project(
     request: Request,
     body: ProjectUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: DashboardUser = Depends(get_current_dashboard_user),
+    current_user: DashboardUser = Depends(require_section_access("projects", require_edit=True)),
 ):
     """Update a project. Countries and start_date are immutable after creation."""
     # Guard: check raw JSON body before Pydantic strips unknown/immutable fields.

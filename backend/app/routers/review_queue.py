@@ -31,7 +31,7 @@ from app.models.flag_event import FlagEvent
 from app.models.property import Property
 from app.models.property_comment import PropertyComment
 from app.models.dashboard_user import DashboardUser
-from app.services.dependencies import get_current_dashboard_user, get_redis
+from app.services.dependencies import get_current_dashboard_user, get_redis, require_section_access
 from app.services.soft_lock_service import acquire_soft_lock, get_soft_lock, release_soft_lock
 from app.config import settings
 
@@ -740,7 +740,7 @@ async def get_tab4(
 async def acquire_report_lock(
     report_id: str,
     redis=Depends(get_redis),
-    current_user: DashboardUser = Depends(get_current_dashboard_user),
+    current_user: DashboardUser = Depends(require_section_access("review_queue", require_edit=True)),
 ):
     """Acquire a soft lock on a report before reviewing it."""
     acquired = await acquire_soft_lock(
@@ -772,7 +772,7 @@ async def force_resolution(
     body: ForceResolutionRequest,
     db: AsyncSession = Depends(get_db),
     redis=Depends(get_redis),
-    current_user: DashboardUser = Depends(get_current_dashboard_user),
+    current_user: DashboardUser = Depends(require_section_access("review_queue", require_edit=True)),
 ):
     """Force a stuck Grey report to Green or Red."""
     result = await db.execute(
@@ -876,7 +876,7 @@ async def dismiss_property(
     body: DismissRequest,
     db: AsyncSession = Depends(get_db),
     redis=Depends(get_redis),
-    current_user: DashboardUser = Depends(get_current_dashboard_user),
+    current_user: DashboardUser = Depends(require_section_access("review_queue", require_edit=True)),
 ):
     """Dismiss a property from the review queue. Does NOT clear conflict warning."""
     result = await db.execute(select(Property).where(Property.id == property_id))
@@ -923,7 +923,7 @@ async def confirm_auto_block(
     body: ConfirmBlockRequest,
     db: AsyncSession = Depends(get_db),
     redis=Depends(get_redis),
-    current_user: DashboardUser = Depends(get_current_dashboard_user),
+    current_user: DashboardUser = Depends(require_section_access("review_queue", require_edit=True)),
 ):
     """Confirm a pending auto-block — reporter remains blocked permanently."""
     result = await db.execute(select(Reporter).where(Reporter.id == reporter_id))
@@ -998,7 +998,7 @@ async def reverse_auto_block(
     body: ConfirmBlockRequest,
     db: AsyncSession = Depends(get_db),
     redis=Depends(get_redis),
-    current_user: DashboardUser = Depends(get_current_dashboard_user),
+    current_user: DashboardUser = Depends(require_section_access("review_queue", require_edit=True)),
 ):
     """Reverse a pending auto-block — reporter is unblocked. Reports discarded during the
     block period are NOT automatically reinstated."""
@@ -1073,7 +1073,7 @@ async def submit_review_decision(
     body: ReviewDecisionRequest,
     db: AsyncSession = Depends(get_db),
     redis=Depends(get_redis),
-    current_user: DashboardUser = Depends(get_current_dashboard_user),
+    current_user: DashboardUser = Depends(require_section_access("review_queue", require_edit=True)),
 ):
     """Submit a review decision on a Red-flagged report.
 

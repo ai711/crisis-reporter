@@ -8,6 +8,7 @@ from app.database import get_db
 from app.services.auth import decode_token
 from app.models.dashboard_user import DashboardUser
 from app.models.reporter import Reporter
+from app.models.role import Role
 
 # Bearer token extractor
 security = HTTPBearer()
@@ -83,6 +84,52 @@ async def require_superadmin(
             detail="Superadmin role required",
         )
     return current_user
+
+
+def require_section_access(section_key: str, require_edit: bool = False):
+    """
+    Returns a FastAPI dependency that checks the current user has access
+    to the given section based on their role's permissions.
+    Superadmin and Admin always pass. Custom roles are checked against the
+    role's permissions dict stored in the roles table.
+    """
+    async def _check(
+        current_user: DashboardUser = Depends(get_current_dashboard_user),
+        db: AsyncSession = Depends(get_db),
+    ) -> DashboardUser:
+        if current_user.role in ("superadmin", "admin"):
+            return current_user
+
+        role_result = await db.execute(
+            select(Role).where(Role.name == current_user.role)
+        )
+        role = role_result.scalar_one_or_none()
+
+        if not role:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Role not found or has been deleted.",
+            )
+
+        section_perms = role.permissions.get(section_key, {})
+        has_view = section_perms.get("view", False)
+        has_edit = section_perms.get("edit", False)
+
+        if require_edit and not has_edit:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Your role does not have edit access to this section.",
+            )
+
+        if not has_view:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Your role does not have access to this section.",
+            )
+
+        return current_user
+
+    return _check
 
 
 async def get_current_reporter(

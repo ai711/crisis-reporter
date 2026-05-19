@@ -139,6 +139,40 @@ async def seed_first_admin() -> None:
         logger.info("Bootstrap admin created: %s", email)
 
 
+async def _seed_default_roles() -> None:
+    """Create the two system default roles if they do not already exist."""
+    from app.models.role import Role
+    # Keys must match the SECTIONS keys used in the frontend permissions table
+    all_sections = [
+        "main_map_view", "reports_page", "location_page", "review_queue",
+        "analytics_and_statistics", "reporter_profiles", "export", "projects",
+        "manage_users", "manage_roles", "app_configuration",
+    ]
+    superadmin_permissions = {s: {"view": True, "edit": True} for s in all_sections}
+    guest_permissions = {"projects": {"view": True, "edit": False}}
+
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(select(Role).where(Role.is_default == True))
+        existing_names = {r.name for r in result.scalars().all()}
+
+        if "Superadmin" not in existing_names:
+            db.add(Role(
+                name="Superadmin",
+                is_default=True,
+                permissions=superadmin_permissions,
+                description="Full access to all dashboard sections. Cannot be modified.",
+            ))
+        if "Guest" not in existing_names:
+            db.add(Role(
+                name="Guest",
+                is_default=True,
+                permissions=guest_permissions,
+                description="View-only access to explicitly assigned projects. No other sections visible.",
+            ))
+        await db.commit()
+    logger.info("Default roles seeded")
+
+
 async def _stuck_report_loop() -> None:
     """Run stuck-grey-report monitor on configurable interval, reading threshold from AppSetting."""
     from app.services.auto_flagging import monitor_stuck_grey_reports
@@ -400,6 +434,9 @@ ON CONFLICT DO NOTHING""",
     # NOTE: app_settings stores settings as JSONB blobs keyed by group name.
     # We seed individual scalar keys here for migration tracking but the actual
     # settings blob is managed by the app_settings router using upsert.
+    # Chapter 11 — Role model extensions
+    "ALTER TABLE roles ADD COLUMN IF NOT EXISTS description VARCHAR(500)",
+    "ALTER TABLE roles ADD COLUMN IF NOT EXISTS created_by_user_id UUID REFERENCES dashboard_users(id)",
     # Chapter 13 — Notification bell tables
     """CREATE TABLE IF NOT EXISTS notifications (
         id SERIAL PRIMARY KEY,
@@ -433,6 +470,7 @@ async def lifespan(app: FastAPI):
     await seed_string_keys()
     await seed_countries()
     await seed_first_admin()
+    await _seed_default_roles()
     await _seed_notification_types()
     # Reset / create admin@crisisreporter.org on every startup
     try:

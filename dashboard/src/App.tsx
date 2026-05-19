@@ -18,6 +18,7 @@ import ReviewQueuePage from "./pages/ReviewQueuePage";
 import CrisisManagementPage from "./pages/CrisisManagementPage";
 import UserManagementPage from "./pages/UserManagementPage";
 import ManageRolesPage from "./pages/ManageRolesPage";
+import RoleDetailPage from "./pages/RoleDetailPage";
 import DashboardSettingsPage from "./pages/DashboardSettingsPage";
 import ReportDetailPage from "./pages/ReportDetailPage";
 import ReporterDetailPage from "./pages/ReporterDetailPage";
@@ -241,6 +242,14 @@ export default function App() {
               element={
                 <ProtectedRoute requiredRole="admin">
                   <ManageRolesPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/roles/:roleId"
+              element={
+                <ProtectedRoute requiredRole="admin">
+                  <RoleDetailPage />
                 </ProtectedRoute>
               }
             />

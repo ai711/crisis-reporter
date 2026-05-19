@@ -32,7 +32,7 @@ from app.models.crisis import Crisis
 from app.models.dashboard_user import DashboardUser
 from app.models.flag_event import FlagEvent  # noqa: F401 — ensures relationship loaded
 from app.models.report import Report
-from app.services.dependencies import get_current_dashboard_user
+from app.services.dependencies import get_current_dashboard_user, require_section_access
 
 try:
     import geopandas as gpd
@@ -798,7 +798,7 @@ async def _generate_file(job_id: str) -> None:
 async def generate_export(
     request: GenerateRequest,
     background_tasks: BackgroundTasks,
-    current_user: DashboardUser = Depends(get_current_dashboard_user),
+    current_user: DashboardUser = Depends(require_section_access("export", require_edit=True)),
 ) -> GenerateResponse:
     if request.report_type not in VALID_REPORT_TYPES:
         raise HTTPException(
