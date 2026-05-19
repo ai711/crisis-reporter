@@ -75,6 +75,12 @@ export default function MainMapPage() {
     green: true,
     orange: true,
   });
+  const [damageLevel, setDamageLevel] = useState<string[]>([]);
+  const [crisisType, setCrisisType] = useState<string[]>([]);
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [country, setCountry] = useState("");
+  const [showRecovered, setShowRecovered] = useState(false);
 
   // Keep setter ref current every render.
   setSelectedPinRef.current = setSelectedPin;
@@ -96,7 +102,14 @@ export default function MainMapPage() {
   // Pass a single flag_status param only when filtering to one flag;
   // omit it (use backend default green+orange) when both are active.
   const flagParam = activeFlags.length === 1 ? activeFlags[0] : undefined;
-  const activeFilterCount = flagParam ? 1 : 0;
+  const activeFilterCount = [
+    flagParam ? 1 : 0,
+    damageLevel.length > 0 ? 1 : 0,
+    crisisType.length > 0 ? 1 : 0,
+    (dateFrom || dateTo) ? 1 : 0,
+    country.trim() ? 1 : 0,
+    showRecovered ? 1 : 0,
+  ].reduce((a, b) => a + b, 0);
 
   const handleFlagFilter = (flag: "green" | "orange") => {
     setFlagFilters((prev) => {
@@ -117,11 +130,27 @@ export default function MainMapPage() {
   });
 
   const { data: pinsData } = useQuery({
-    queryKey: ["map-pins", activeCrisisId, flagParam],
+    queryKey: [
+      "map-pins",
+      activeCrisisId,
+      flagParam,
+      damageLevel.join(","),
+      crisisType.join(","),
+      dateFrom,
+      dateTo,
+      country,
+      showRecovered,
+    ],
     queryFn: async () => {
       if (!activeCrisisId) return { pins: [], total: 0 };
       const params: Record<string, string> = { crisis_id: activeCrisisId };
       if (flagParam) params.flag_status = flagParam;
+      if (damageLevel.length > 0) params.damage_level = damageLevel.join(",");
+      if (crisisType.length > 0) params.crisis_type = crisisType.join(",");
+      if (dateFrom) params.date_from = dateFrom;
+      if (dateTo) params.date_to = dateTo;
+      if (country.trim()) params.country = country.trim();
+      if (showRecovered) params.show_recovered = "true";
       const res = await api.get("/api/dashboard/map/pins", { params });
       return res.data as { pins: MapPin[]; total: number };
     },
@@ -168,6 +197,8 @@ export default function MainMapPage() {
           queryKey: ["dashboard-stats", activeCrisisId],
         });
         setLastUpdated(new Date());
+      } else if (event.type === "property_updated") {
+        queryClient.invalidateQueries({ queryKey: ["map-pins"] });
       } else if (event.type === "error") {
         setLiveStatus("disconnected");
       }
@@ -557,24 +588,146 @@ export default function MainMapPage() {
                 </label>
               </div>
 
-              {/* ── Disabled filters — backend support pending ── */}
-              {[
-                "Damage Level",
-                "Crisis Type",
-                "Date Range",
-                "Country",
-                "Show Recovered Properties",
-              ].map((name) => (
-                <div key={name} style={styles.filterGroup}>
-                  <div style={styles.filterGroupLabel}>{name}</div>
-                  <div
-                    style={styles.filterDisabled}
-                    title="Available after backend update"
-                  >
-                    Available after backend update
+              {/* ── Damage Level ── */}
+              <div style={styles.filterGroup}>
+                <div style={styles.filterGroupLabel}>Damage Level</div>
+                {[
+                  { value: "complete", label: "Completely Destroyed" },
+                  { value: "partial", label: "Partially Damaged" },
+                  { value: "minimal", label: "Minimal or No Damage" },
+                ].map(({ value, label }) => (
+                  <label key={value} style={styles.filterCheckLabel}>
+                    <input
+                      type="checkbox"
+                      checked={damageLevel.includes(value)}
+                      onChange={() =>
+                        setDamageLevel((prev) =>
+                          prev.includes(value)
+                            ? prev.filter((v) => v !== value)
+                            : [...prev, value]
+                        )
+                      }
+                      style={styles.filterCheck}
+                    />
+                    <span
+                      style={{
+                        ...styles.filterFlagDot,
+                        background: DAMAGE_COLORS[value],
+                      }}
+                    />
+                    {label}
+                  </label>
+                ))}
+              </div>
+
+              {/* ── Crisis Type ── */}
+              <div style={styles.filterGroup}>
+                <div style={styles.filterGroupLabel}>Crisis Type</div>
+                {[
+                  "earthquake",
+                  "flood",
+                  "cyclone",
+                  "wildfire",
+                  "landslide",
+                  "tsunami",
+                  "conflict",
+                  "drought",
+                  "other",
+                ].map((type) => (
+                  <label key={type} style={styles.filterCheckLabel}>
+                    <input
+                      type="checkbox"
+                      checked={crisisType.includes(type)}
+                      onChange={() =>
+                        setCrisisType((prev) =>
+                          prev.includes(type)
+                            ? prev.filter((t) => t !== type)
+                            : [...prev, type]
+                        )
+                      }
+                      style={styles.filterCheck}
+                    />
+                    {type.charAt(0).toUpperCase() + type.slice(1)}
+                  </label>
+                ))}
+              </div>
+
+              {/* ── Date Range ── */}
+              <div style={styles.filterGroup}>
+                <div style={styles.filterGroupLabel}>Date Range</div>
+                <div style={styles.filterDateRow}>
+                  <div style={{ flex: 1 }}>
+                    <div style={styles.filterDateLabel}>From</div>
+                    <input
+                      type="date"
+                      value={dateFrom}
+                      onChange={(e) => setDateFrom(e.target.value)}
+                      style={styles.filterInput}
+                    />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={styles.filterDateLabel}>To</div>
+                    <input
+                      type="date"
+                      value={dateTo}
+                      onChange={(e) => setDateTo(e.target.value)}
+                      style={styles.filterInput}
+                    />
                   </div>
                 </div>
-              ))}
+              </div>
+
+              {/* ── Country ── */}
+              <div style={styles.filterGroup}>
+                <div style={styles.filterGroupLabel}>Country</div>
+                <input
+                  type="text"
+                  value={country}
+                  onChange={(e) => setCountry(e.target.value)}
+                  placeholder="e.g. TR, UA"
+                  style={styles.filterInput}
+                />
+              </div>
+
+              {/* ── Show Recovered Properties ── */}
+              <div style={styles.filterGroup}>
+                <div style={styles.filterGroupLabel}>Recovered Properties</div>
+                <label style={{ ...styles.filterCheckLabel, alignItems: "flex-start", gap: 10 }}>
+                  <div
+                    style={{
+                      ...styles.filterToggle,
+                      background: showRecovered ? "#0468B1" : "#ccc",
+                      marginTop: 2,
+                      flexShrink: 0,
+                    }}
+                    onClick={() => setShowRecovered((v) => !v)}
+                    role="switch"
+                    aria-checked={showRecovered}
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === " " || e.key === "Enter")
+                        setShowRecovered((v) => !v);
+                    }}
+                  >
+                    <div
+                      style={{
+                        ...styles.filterToggleThumb,
+                        transform: showRecovered
+                          ? "translateX(18px)"
+                          : "translateX(2px)",
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 13, color: "#1A2B4A" }}>
+                      Show recovered properties
+                    </div>
+                    <div style={{ fontSize: 11, color: "#9aa5b4", marginTop: 2 }}>
+                      Recovered properties are hidden by default.
+                    </div>
+                  </div>
+                </label>
+              </div>
             </div>
           )}
         </div>
@@ -727,7 +880,9 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 10,
     boxShadow: "0 4px 20px rgba(0,0,0,0.13)",
     padding: "14px 16px",
-    width: 260,
+    width: 300,
+    maxHeight: "calc(100vh - 180px)",
+    overflowY: "auto",
   },
   filterPanelTitle: {
     fontSize: 12,
@@ -777,6 +932,47 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 6,
     border: "1px dashed #e0e0e0",
     cursor: "not-allowed",
+  },
+  filterInput: {
+    width: "100%",
+    padding: "6px 8px",
+    border: "1.5px solid #d0dce8",
+    borderRadius: 6,
+    fontSize: 12,
+    color: "#1A2B4A",
+    outline: "none",
+    background: "#fff",
+    boxSizing: "border-box" as const,
+  },
+  filterDateRow: {
+    display: "flex",
+    gap: 8,
+  },
+  filterDateLabel: {
+    fontSize: 10,
+    color: "#9aa5b4",
+    fontWeight: 600,
+    textTransform: "uppercase" as const,
+    letterSpacing: 0.4,
+    marginBottom: 3,
+  },
+  filterToggle: {
+    width: 36,
+    height: 20,
+    borderRadius: 10,
+    position: "relative" as const,
+    cursor: "pointer",
+    transition: "background 0.2s",
+  },
+  filterToggleThumb: {
+    position: "absolute" as const,
+    top: 2,
+    width: 16,
+    height: 16,
+    borderRadius: "50%",
+    background: "#fff",
+    boxShadow: "0 1px 3px rgba(0,0,0,0.25)",
+    transition: "transform 0.2s",
   },
   // Legend — bottom-left of canvas
   legend: {

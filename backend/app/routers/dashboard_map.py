@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, cast, String
+from sqlalchemy import select, func, cast, String, or_, and_, exists
 from pydantic import BaseModel
 from typing import Optional
 
@@ -10,6 +10,7 @@ from app.models.report_project import ReportProject
 from app.models.crisis import Crisis
 from app.models.property import Property
 from app.models.dashboard_user import DashboardUser
+from app.models.reporter import Reporter
 from app.services.dependencies import get_current_dashboard_user
 
 router = APIRouter(prefix="/api/dashboard/map", tags=["Dashboard Map"])
@@ -48,6 +49,12 @@ async def get_map_pins(
     crisis_id: str = Query(...),
     flag_status: Optional[str] = Query(None),
     project_serial_id: Optional[str] = Query(None),
+    damage_level: Optional[str] = Query(None),
+    crisis_type: Optional[str] = Query(None),
+    date_from: Optional[str] = Query(None),
+    date_to: Optional[str] = Query(None),
+    country: Optional[str] = Query(None),
+    show_recovered: bool = Query(False),
     db: AsyncSession = Depends(get_db),
     current_user: DashboardUser = Depends(get_current_dashboard_user),
 ):
@@ -96,6 +103,41 @@ async def get_map_pins(
     ]
     if project_report_ids is not None:
         base_conditions.append(Report.id.in_(project_report_ids))
+
+    # Optional filters ─────────────────────────────────────────────────────────
+
+    if damage_level:
+        levels = [l.strip() for l in damage_level.split(",")]
+        base_conditions.append(Report.damage_level.in_(levels))
+
+    if crisis_type:
+        types = [t.strip() for t in crisis_type.split(",")]
+        base_conditions.append(Report.disaster_type.in_(types))
+
+    if date_from:
+        base_conditions.append(Report.created_at >= date_from)
+    if date_to:
+        base_conditions.append(Report.created_at <= date_to)
+
+    if country:
+        countries_list = [c.strip() for c in country.split(",")]
+        reporter_ids_subq = select(Reporter.id).where(
+            Reporter.country_code.in_(countries_list)
+        )
+        base_conditions.append(Report.reporter_id.in_(reporter_ids_subq))
+
+    if not show_recovered:
+        base_conditions.append(
+            or_(
+                Report.property_id == None,
+                ~exists().where(
+                    and_(
+                        Property.id == Report.property_id,
+                        Property.is_recovered == True
+                    )
+                )
+            )
+        )
 
     # Subquery: rank reports within each property group (most recent first)
     # and count total qualifying reports per group via window functions.
