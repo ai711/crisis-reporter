@@ -19,6 +19,37 @@ const FLAG_COLORS: Record<FlagStatus, string> = {
 
 const PAGE_SIZE_OPTIONS = [100, 200, 300, 400, 500];
 
+// ── Constants ─────────────────────────────────────────────────────────────────
+
+const DAMAGE_LEVEL_OPTIONS = [
+  { label: "Completely Destroyed", value: "completely_destroyed" },
+  { label: "Partially Damaged",    value: "partially_damaged" },
+  { label: "Minimal or No Damage", value: "minimal_or_no_damage" },
+];
+
+const INFRASTRUCTURE_TYPE_OPTIONS = [
+  "Residential Infrastructure",
+  "Commercial Infrastructure",
+  "Government Building",
+  "Utility Infrastructure",
+  "Transport and Communication Infrastructure",
+  "Community Infrastructure",
+  "Public Spaces and Recreation Infrastructure",
+  "Other",
+];
+
+const CRISIS_TYPE_OPTIONS = [
+  "Earthquake",
+  "Flood",
+  "Tsunami",
+  "Hurricane or Cyclone",
+  "Wildfire",
+  "Explosion",
+  "Chemical Incident",
+  "Conflict",
+  "Civil Unrest",
+];
+
 // ── Filter state ──────────────────────────────────────────────────────────────
 
 interface FilterState {
@@ -26,6 +57,9 @@ interface FilterState {
   dateFrom: string;
   dateTo: string;
   country: string;
+  damageLevels: string[];
+  infrastructureTypes: string[];
+  crisisTypes: string[];
 }
 
 const EMPTY_FILTERS: FilterState = {
@@ -33,6 +67,9 @@ const EMPTY_FILTERS: FilterState = {
   dateFrom: "",
   dateTo: "",
   country: "",
+  damageLevels: [],
+  infrastructureTypes: [],
+  crisisTypes: [],
 };
 
 function countActiveFilters(f: FilterState): number {
@@ -41,6 +78,9 @@ function countActiveFilters(f: FilterState): number {
   if (f.dateFrom) n++;
   if (f.dateTo) n++;
   if (f.country) n++;
+  if (f.damageLevels.length > 0) n++;
+  if (f.infrastructureTypes.length > 0) n++;
+  if (f.crisisTypes.length > 0) n++;
   return n;
 }
 
@@ -68,6 +108,9 @@ export default function ReportsPage() {
     if (filters.dateFrom) p.date_from = filters.dateFrom;
     if (filters.dateTo) p.date_to = filters.dateTo;
     if (filters.country) p.country = filters.country;
+    if (filters.damageLevels.length > 0) p.damage_level = filters.damageLevels.join(",");
+    if (filters.infrastructureTypes.length > 0) p.infrastructure_type = filters.infrastructureTypes.join(",");
+    if (filters.crisisTypes.length > 0) p.crisis_type = filters.crisisTypes.join(",");
     if (cursor) p.cursor = cursor;
     return p;
   }, [activeCrisisId, filters, pageSize, cursor]);
@@ -133,6 +176,36 @@ export default function ReportsPage() {
         flagStatuses: has
           ? prev.flagStatuses.filter((f) => f !== flag)
           : [...prev.flagStatuses, flag],
+      };
+    });
+  }
+
+  function toggleDamageLevel(value: string) {
+    setPendingFilters((prev) => {
+      const has = prev.damageLevels.includes(value);
+      return {
+        ...prev,
+        damageLevels: has ? prev.damageLevels.filter((v) => v !== value) : [...prev.damageLevels, value],
+      };
+    });
+  }
+
+  function toggleInfrastructureType(value: string) {
+    setPendingFilters((prev) => {
+      const has = prev.infrastructureTypes.includes(value);
+      return {
+        ...prev,
+        infrastructureTypes: has ? prev.infrastructureTypes.filter((v) => v !== value) : [...prev.infrastructureTypes, value],
+      };
+    });
+  }
+
+  function toggleCrisisType(value: string) {
+    setPendingFilters((prev) => {
+      const has = prev.crisisTypes.includes(value);
+      return {
+        ...prev,
+        crisisTypes: has ? prev.crisisTypes.filter((v) => v !== value) : [...prev.crisisTypes, value],
       };
     });
   }
@@ -283,23 +356,64 @@ export default function ReportsPage() {
                 />
               </div>
 
-              {/* Disabled filters */}
-              {[
-                "Project (use header dropdown)",
-                "Damage Level",
-                "Infrastructure Type",
-                "Crisis Type",
-              ].map((label) => (
-                <div key={label} style={styles.filterSection}>
-                  <div
-                    style={{ ...styles.filterSectionLabel, color: "#bbb" }}
-                    title="Available after backend update"
-                  >
+              {/* Damage Level */}
+              <div style={styles.filterSection}>
+                <div style={styles.filterSectionLabel}>Damage Level</div>
+                {DAMAGE_LEVEL_OPTIONS.map(({ label, value }) => (
+                  <label key={value} style={styles.checkboxRow}>
+                    <input
+                      type="checkbox"
+                      checked={pendingFilters.damageLevels.includes(value)}
+                      onChange={() => toggleDamageLevel(value)}
+                      style={{ marginRight: 8 }}
+                    />
                     {label}
-                    <span style={styles.disabledTag}>Coming soon</span>
-                  </div>
+                  </label>
+                ))}
+              </div>
+
+              {/* Infrastructure Type */}
+              <div style={styles.filterSection}>
+                <div style={styles.filterSectionLabel}>Infrastructure Type</div>
+                {INFRASTRUCTURE_TYPE_OPTIONS.map((type) => (
+                  <label key={type} style={styles.checkboxRow}>
+                    <input
+                      type="checkbox"
+                      checked={pendingFilters.infrastructureTypes.includes(type)}
+                      onChange={() => toggleInfrastructureType(type)}
+                      style={{ marginRight: 8 }}
+                    />
+                    {type}
+                  </label>
+                ))}
+              </div>
+
+              {/* Crisis Type */}
+              <div style={styles.filterSection}>
+                <div style={styles.filterSectionLabel}>Crisis Type</div>
+                {CRISIS_TYPE_OPTIONS.map((type) => (
+                  <label key={type} style={styles.checkboxRow}>
+                    <input
+                      type="checkbox"
+                      checked={pendingFilters.crisisTypes.includes(type)}
+                      onChange={() => toggleCrisisType(type)}
+                      style={{ marginRight: 8 }}
+                    />
+                    {type}
+                  </label>
+                ))}
+              </div>
+
+              {/* Project — disabled; handled by header dropdown */}
+              <div style={styles.filterSection}>
+                <div
+                  style={{ ...styles.filterSectionLabel, color: "#bbb" }}
+                  title="Use the project dropdown in the header to filter by project."
+                >
+                  Project
+                  <span style={styles.disabledTag}>Use header dropdown</span>
                 </div>
-              ))}
+              </div>
 
               <div style={styles.filterActions}>
                 <button style={styles.applyBtn} onClick={applyFilters}>

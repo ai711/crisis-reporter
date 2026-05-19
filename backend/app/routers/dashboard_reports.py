@@ -171,7 +171,9 @@ async def list_reports(
     crisis_id: Optional[str] = Query(None),
     flag_status: Optional[str] = Query(None),
     platform: Optional[str] = Query(None),
-    damage_level: Optional[str] = Query(None),
+    damage_level: Optional[str] = Query(None),        # comma-separated
+    infrastructure_type: Optional[str] = Query(None), # comma-separated
+    crisis_type: Optional[str] = Query(None),         # comma-separated
     country: Optional[str] = Query(None),
     date_from: Optional[str] = Query(None),
     date_to: Optional[str] = Query(None),
@@ -191,7 +193,11 @@ async def list_reports(
     if platform:
         conditions.append(Report.platform == platform)
     if damage_level:
-        conditions.append(Report.damage_level == damage_level)
+        conditions.append(Report.damage_level.in_(damage_level.split(",")))
+    if infrastructure_type:
+        conditions.append(Report.infrastructure_type.in_(infrastructure_type.split(",")))
+    if crisis_type:
+        conditions.append(Report.disaster_type.in_(crisis_type.split(",")))
 
     # Date range filters
     if date_from:
