@@ -2026,7 +2026,7 @@ function MapSettingsTab() {
             <div>
               <div style={s.settingsCardTitle}>Building Footprints Source</div>
               <div style={s.settingsCardDesc}>
-                Data source used to load building footprints on the map
+                Data source used to load building footprints on the reporter map
               </div>
             </div>
           </div>
@@ -2037,7 +2037,7 @@ function MapSettingsTab() {
                 onChange={(e) => setBuildingSource(e.target.value)}
                 style={{ ...s.select, minWidth: 280 }}
               >
-                <option value="osm">OpenStreetMap (Overpass API)</option>
+                <option value="osm">OpenStreetMap (OSM) — default</option>
                 <option value="microsoft">Microsoft Building Footprints</option>
               </select>
               <button
@@ -2049,6 +2049,24 @@ function MapSettingsTab() {
               </button>
               {sourceSaved && <span style={s.savedTick}>✓ Saved</span>}
             </div>
+            {buildingSource === "microsoft" && (
+              <div style={{ marginTop: 10, fontSize: 13, color: "#744210" }}>
+                Requires Microsoft Building Footprint dataset to be loaded. Contact your system administrator.
+              </div>
+            )}
+            {buildingSource === "microsoft" && (
+              <div style={{
+                marginTop: 12,
+                background: "#FFFBEB",
+                border: "1px solid #F6AD55",
+                borderRadius: 8,
+                padding: "10px 14px",
+                fontSize: 13,
+                color: "#744210",
+              }}>
+                <strong>Microsoft Building Footprints selected.</strong> This dataset must be separately loaded into the database before it takes effect. Reporters will continue using OSM footprints until the dataset is available.
+              </div>
+            )}
           </div>
         </div>
       </div>

@@ -228,6 +228,9 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
   const [crisisError, setCrisisError] = useState(false);
   const [questionPackage, setQuestionPackage] = useState<ActivePackage | null>(null);
 
+  // Building footprint source — fetched once from public settings
+  const [footprintSource, setFootprintSource] = useState<string>("osm");
+
   // Map refs
   const cameraRef = useRef<CameraRef | null>(null);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -248,6 +251,10 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
       } catch {
         // silent — hardcoded question text and options remain active as fallback
       }
+      try {
+        const settingsRes = await api.get("/api/settings/public");
+        setFootprintSource(settingsRes.data?.building_footprint_source ?? "osm");
+      } catch { /* silent — OSM fallback remains active */ }
       setCrisisLoading(false);
     };
     init();
@@ -704,6 +711,15 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
             {mapZoom < 14 && (
               <View style={styles.zoomHint} pointerEvents="none">
                 <Text style={styles.zoomHintText}>Zoom in to see and select buildings</Text>
+              </View>
+            )}
+
+            {/* Microsoft Building Footprints active note */}
+            {footprintSource === "microsoft" && (
+              <View style={styles.microsoftNote} pointerEvents="none">
+                <Text style={styles.microsoftNoteText}>
+                  Microsoft Building Footprints active — building selection uses ML-detected footprints.
+                </Text>
               </View>
             )}
           </View>
@@ -1214,6 +1230,20 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   zoomHintText: { color: "#fff", fontSize: 12, fontWeight: "500" },
+  microsoftNote: {
+    position: "absolute",
+    bottom: 46,
+    left: 8,
+    right: 8,
+    backgroundColor: "rgba(235, 248, 255, 0.95)",
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    zIndex: 10,
+    borderWidth: 1,
+    borderColor: "#63B3ED",
+  },
+  microsoftNoteText: { color: "#2B6CB0", fontSize: 11 },
   selectionCard: {
     backgroundColor: "#E8F4FD",
     borderWidth: 1.5,

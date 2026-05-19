@@ -19,7 +19,14 @@ async def get_public_settings(db: AsyncSession = Depends(get_db)):
     """Returns non-sensitive settings readable without authentication."""
     setting = await _get_setting(db, "general")
     support_email = setting.get("support_email", "") if isinstance(setting, dict) else ""
-    return {"support_email": support_email}
+    map_setting = await _get_setting(db, "map")
+    building_footprint_source = "osm"
+    if isinstance(map_setting, dict):
+        building_footprint_source = map_setting.get("building_source", "osm")
+    return {
+        "support_email": support_email,
+        "building_footprint_source": building_footprint_source,
+    }
 
 # ── Default values ────────────────────────────────────────────────────────────
 
@@ -115,6 +122,23 @@ async def get_security_settings_dict(db: AsyncSession) -> dict:
         return dict(DEFAULTS["security"])
     merged = dict(DEFAULTS["security"])
     merged.update(setting)
+    return merged
+
+
+async def get_map_settings_dict(db: AsyncSession) -> dict:
+    """Public helper — returns current map settings with building_footprint_source derived from building_source."""
+    defaults = {
+        "reporting_radius_miles": app_config.REPORTING_RADIUS_DEFAULT_MILES,
+        "building_source": "osm",
+        "building_footprint_source": "osm",
+        "country_overrides": {},
+    }
+    current = await _get_setting(db, "map")
+    if not isinstance(current, dict):
+        return defaults
+    merged = dict(defaults)
+    merged.update(current)
+    merged["building_footprint_source"] = merged.get("building_source", "osm")
     return merged
 
 
@@ -295,16 +319,8 @@ async def get_map_settings(
     current_user: DashboardUser = Depends(require_section_access("app_configuration")),
 ):
     """Return current map settings. Dashboard auth required."""
-    defaults = {
-        "reporting_radius_miles": app_config.REPORTING_RADIUS_DEFAULT_MILES,
-        "building_source": "osm",
-        "country_overrides": {},
-    }
-    current = await _get_setting(db, "map")
-    if not isinstance(current, dict):
-        return defaults
-    defaults.update(current)
-    return defaults
+    result = await get_map_settings_dict(db)
+    return result
 
 
 @router.patch("/map")

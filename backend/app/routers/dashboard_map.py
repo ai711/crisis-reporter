@@ -12,6 +12,7 @@ from app.models.property import Property
 from app.models.dashboard_user import DashboardUser
 from app.models.reporter import Reporter
 from app.services.dependencies import get_current_dashboard_user
+from app.routers.app_settings import get_map_settings_dict
 
 router = APIRouter(prefix="/api/dashboard/map", tags=["Dashboard Map"])
 
@@ -31,6 +32,7 @@ class MapPin(BaseModel):
 class MapPinsResponse(BaseModel):
     pins: list[MapPin]
     total: int
+    footprint_source: str = "osm"
 
 
 class DashboardStats(BaseModel):
@@ -190,7 +192,10 @@ async def get_map_pins(
         for row in rows
     ]
 
-    return MapPinsResponse(pins=pins, total=len(pins))
+    map_cfg = await get_map_settings_dict(db)
+    footprint_source = map_cfg.get("building_footprint_source", "osm")
+
+    return MapPinsResponse(pins=pins, total=len(pins), footprint_source=footprint_source)
 
 
 @router.get("/stats", response_model=DashboardStats)

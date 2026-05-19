@@ -358,6 +358,9 @@ export default function ReportPage() {
     () => `CR-WEB-TMP-${crypto.randomUUID()}`
   );
 
+  // Building footprint source — fetched once from public settings, cached for session
+  const [footprintSource, setFootprintSource] = useState<string>("osm");
+
   // C22 — submission timestamp captured at exact tap moment, stored in state so modal can reuse it
   const [submissionSubmittedAt, setSubmissionSubmittedAt] = useState<string>("");
 
@@ -394,6 +397,10 @@ export default function ReportPage() {
       } catch {
         setCrisisError(true);
       }
+      try {
+        const settingsRes = await api.get("/api/settings/public");
+        setFootprintSource(settingsRes.data?.building_footprint_source ?? "osm");
+      } catch { /* silent — OSM fallback remains active */ }
       setCrisisLoading(false);
     };
     init();
@@ -1654,6 +1661,26 @@ export default function ReportPage() {
               <div ref={mapContainerRef} style={{ position: "absolute", inset: 0 }} />
               {locationMapZoom < 14 && (
                 <div style={styles.zoomHint}>Zoom in to see and select buildings</div>
+              )}
+
+              {/* Microsoft Building Footprints active note */}
+              {footprintSource === "microsoft" && (
+                <div style={{
+                  position: "absolute",
+                  bottom: 8,
+                  left: 8,
+                  right: 8,
+                  background: "rgba(235, 248, 255, 0.95)",
+                  border: "1px solid #63B3ED",
+                  borderRadius: 6,
+                  padding: "6px 10px",
+                  fontSize: "0.75rem",
+                  color: "#2B6CB0",
+                  zIndex: 10,
+                  pointerEvents: "none",
+                }}>
+                  Microsoft Building Footprints active — building selection uses ML-detected footprints.
+                </div>
               )}
 
               {/* B3/B11 — Desktop: floating confirmation card */}
