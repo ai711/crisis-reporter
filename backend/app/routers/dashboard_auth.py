@@ -55,7 +55,7 @@ from fastapi import (
     UploadFile,
     status,
 )
-from pydantic import BaseModel
+from pydantic import BaseModel, validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -269,6 +269,16 @@ async def login(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="account_deactivated",
         )
+
+    # Check password expiry (expiry_days = 0 means disabled)
+    expiry_days = int(_sec_cache.get("password_expiry_days", 0))
+    if expiry_days > 0 and user.password_changed_at:
+        days_since_change = (datetime.now(timezone.utc) - user.password_changed_at).days
+        if days_since_change >= expiry_days:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="password_expired",
+            )
 
     # Successful login — reset rate limiter and update last login timestamp
     _reset_rate_limit(ip)
@@ -496,6 +506,7 @@ async def create_dashboard_user(
         first_name=request.first_name.strip() if request.first_name else None,
         last_name=request.last_name.strip() if request.last_name else None,
         password_hash=hash_password(request.password),
+        password_changed_at=datetime.now(timezone.utc),
         role=request.role,
         is_active=request.is_active,
         contact_number=request.contact_number,
@@ -507,3 +518,72 @@ async def create_dashboard_user(
     await db.refresh(user)
 
     return await _user_response(user, db)
+
+
+# ── Reset expired password (no auth required — identity proved via current password) ──
+
+
+class ResetExpiredPasswordRequest(BaseModel):
+    email: str
+    current_password: str
+    new_password: str
+
+    @validator("new_password")
+    def new_password_different(cls, v, values):
+        if "current_password" in values and v == values["current_password"]:
+            raise ValueError("New password must be different from the current password.")
+        return v
+
+
+@router.post("/reset-expired-password", response_model=TokenResponse)
+async def reset_expired_password(
+    body: ResetExpiredPasswordRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Reset a password that has expired without requiring an active session.
+
+    Identity is proved by supplying the correct current password.
+    Returns a fresh token pair — the user is immediately logged in after reset.
+    """
+    from app.routers.dashboard_users import _validate_password
+
+    result = await db.execute(
+        select(DashboardUser).where(
+            DashboardUser.email == body.email.lower().strip()
+        )
+    )
+    user = result.scalar_one_or_none()
+
+    if not user or not verify_password(body.current_password, user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="invalid_credentials",
+        )
+
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="account_deactivated",
+        )
+
+    await _validate_password(body.new_password, db)
+
+    user.password_hash = hash_password(body.new_password)
+    user.password_changed_at = datetime.now(timezone.utc)
+    user.last_login_at = datetime.now(timezone.utc)
+    await db.commit()
+    await db.refresh(user)
+
+    tokens = create_token_pair(
+        subject=str(user.id),
+        role=user.role,
+        context="dashboard",
+        extra_claims={"email": user.email, "name": user.full_name},
+    )
+
+    inactivity = _sec_cache.get("session_timeout", settings.INACTIVITY_TIMEOUT_MINUTES)
+    return {
+        **tokens,
+        "inactivity_timeout_minutes": inactivity,
+        "user": await _user_response(user, db),
+    }

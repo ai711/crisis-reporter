@@ -225,6 +225,7 @@ async def create_user(
         first_name=body.first_name.strip(),
         last_name=body.last_name.strip(),
         password_hash=hash_password(body.password),
+        password_changed_at=datetime.now(timezone.utc),
         role=body.role,
         is_active=body.is_active,
         contact_number=body.contact_number,
@@ -319,6 +320,7 @@ async def update_user(
     if body.password is not None:
         await _validate_password(body.password, db)
         user.password_hash = hash_password(body.password)
+        user.password_changed_at = datetime.now(timezone.utc)
 
     # Recompute full_name if either name part changed
     fn = user.first_name or ""

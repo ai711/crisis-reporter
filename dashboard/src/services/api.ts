@@ -298,5 +298,17 @@ export const getDashboardUserProjects = (userId: string) =>
 export const getRolesList = () =>
   api.get('/api/roles');
 
+// ── Auth ──────────────────────────────────────────────────────────────────────
+
+export const resetExpiredPassword = (
+  email: string,
+  currentPassword: string,
+  newPassword: string
+) => api.post('/api/dashboard/auth/reset-expired-password', {
+  email,
+  current_password: currentPassword,
+  new_password: newPassword,
+});
+
 export const API_BASE = BASE_URL;
 export default api;

@@ -456,6 +456,9 @@ ON CONFLICT DO NOTHING""",
     )""",
     "CREATE INDEX IF NOT EXISTS idx_notifications_triggered_at ON notifications(triggered_at DESC)",
     "CREATE INDEX IF NOT EXISTS idx_notification_reads_user ON notification_reads(dashboard_user_id)",
+    # Chapter 18 — Password expiry enforcement
+    "ALTER TABLE dashboard_users ADD COLUMN IF NOT EXISTS password_changed_at TIMESTAMPTZ",
+    "UPDATE dashboard_users SET password_changed_at = created_at WHERE password_changed_at IS NULL",
 ]
 
 

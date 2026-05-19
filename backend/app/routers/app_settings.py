@@ -48,7 +48,7 @@ DEFAULTS: dict[str, Any] = {
         "require_number": True,
         "require_uppercase": True,
         "require_lowercase": True,
-        "password_expiry_days": 90,
+        "password_expiry_days": 0,  # 0 = disabled — prevents prototype demo account from expiring
     },
     "notifications": {
         "types": [
