@@ -792,7 +792,7 @@ export default function ProjectsPage() {
                   <td style={{ padding: "10px 14px" }}>
                     {row.created_by_name && row.created_by_user_id ? (
                       <button
-                        onClick={() => window.open(`/dashboard-users/${row.created_by_user_id}`, "_blank")}
+                        onClick={() => window.open(`/users/${row.created_by_user_id}`, "_blank")}
                         style={{ background: "none", border: "none", cursor: "pointer", color: "#0468B1", fontSize: 13, padding: 0 }}
                       >
                         {row.created_by_name}

@@ -747,7 +747,7 @@ export default function ProjectDetailPage() {
                     style={ss.metaLink}
                     onClick={() =>
                       project.created_by_user_id &&
-                      window.open("/dashboard-users/" + project.created_by_user_id, "_blank")
+                      window.open("/users/" + project.created_by_user_id, "_blank")
                     }
                   >
                     {project.created_by_name ?? "—"}
@@ -1166,7 +1166,7 @@ export default function ProjectDetailPage() {
                   {projectUsers.map((u) => (
                     <tr key={u.dashboard_user_id} style={ss.tr}>
                       <td style={ss.td}>
-                        <span style={ss.idLink} onClick={() => window.open("/dashboard-users/" + u.dashboard_user_id, "_blank")}>
+                        <span style={ss.idLink} onClick={() => window.open("/users/" + u.dashboard_user_id, "_blank")}>
                           {u.full_name}
                         </span>
                       </td>
