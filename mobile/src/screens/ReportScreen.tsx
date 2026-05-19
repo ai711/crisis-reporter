@@ -2,13 +2,16 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useState, useRef } from "react";
 import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView,
-  TextInput, Alert, ActivityIndicator, Image, Modal,
+  TextInput, Alert, ActivityIndicator, Image, Modal, Linking, Platform,
   type NativeSyntheticEvent,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTranslation } from "react-i18next";
 import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
+import * as Notifications from "expo-notifications";
+import * as SecureStore from "expo-secure-store";
+import Constants from "expo-constants";
 import {
   Map as MLMap,
   Camera,
@@ -284,6 +287,51 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
     return fallback;
   };
 
+  // ── Push token registration ───────────────────────────────────────────────────
+
+  const registerPushToken = async () => {
+    try {
+      const { status: existingStatus } = await Notifications.getPermissionsAsync();
+      let finalStatus = existingStatus;
+
+      if (existingStatus !== "granted") {
+        const { status } = await Notifications.requestPermissionsAsync();
+        finalStatus = status;
+      }
+
+      if (finalStatus !== "granted") {
+        console.log("Notification permission denied — report will sync on next app open");
+        return;
+      }
+
+      const tokenData = await Notifications.getExpoPushTokenAsync({
+        projectId: Constants.expoConfig?.extra?.eas?.projectId as string,
+      });
+      const pushToken = tokenData.data;
+
+      const reporterId = await SecureStore.getItemAsync("cr_reporter_id");
+      if (reporterId) {
+        await api.post("/api/push-tokens", {
+          reporter_id: reporterId,
+          token: pushToken,
+          platform: "android",
+        });
+      }
+
+      if (Platform.OS === "android") {
+        await Notifications.setNotificationChannelAsync("crisis-reports", {
+          name: "Crisis Reports",
+          importance: Notifications.AndroidImportance.HIGH,
+          vibrationPattern: [0, 250, 250, 250],
+          lightColor: "#0468B1",
+        });
+      }
+    } catch (err) {
+      // Non-blocking — push token failure never prevents report submission
+      console.log("Push token registration failed:", err);
+    }
+  };
+
   // ── Map handlers ─────────────────────────────────────────────────────────────
 
   const handleMapLoaded = async () => {
@@ -340,7 +388,18 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
     setGpsCapturing(true);
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") return;
+      if (status !== "granted") {
+        Alert.alert(
+          "Location Access Needed",
+          "Location access is not available. You can enable it in your phone settings. You can still continue by entering your location manually below.",
+          [
+            { text: "Open Settings", onPress: () => Linking.openSettings() },
+            { text: "OK", style: "cancel" },
+          ]
+        );
+        setManualExpanded(true);
+        return;
+      }
       const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
       const lat = loc.coords.latitude;
       const lng = loc.coords.longitude;
@@ -367,7 +426,14 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
     try {
       const permission = await ImagePicker.requestCameraPermissionsAsync();
       if (permission.status !== "granted") {
-        Alert.alert("Permission needed", "Please allow camera access in settings.");
+        Alert.alert(
+          "Camera Access Needed",
+          "Camera access is not available. You can enable it in your phone settings, or upload a photo from your gallery instead.",
+          [
+            { text: "Open Settings", onPress: () => Linking.openSettings() },
+            { text: "OK", style: "cancel" },
+          ]
+        );
         return;
       }
       const result = await ImagePicker.launchCameraAsync({ mediaTypes: ["images"], quality: 0.8 });
@@ -384,7 +450,14 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
     try {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (permission.status !== "granted") {
-        Alert.alert("Permission needed", "Please allow photo library access in settings.");
+        Alert.alert(
+          "Gallery Access Needed",
+          "Gallery access is not available. You can enable it in your phone settings, or take a new photo using your camera instead.",
+          [
+            { text: "Open Settings", onPress: () => Linking.openSettings() },
+            { text: "OK", style: "cancel" },
+          ]
+        );
         return;
       }
       const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.8 });
@@ -509,6 +582,8 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
     setShowDupeWarning(false);
     setSubmitting(true);
 
+    // TODO: MCC reading requires expo-cellular — install with: expo install expo-cellular
+    // mcc, mnc, carrier_name are intentionally omitted until expo-cellular is added
     const reportPayload = {
       crisis_id: crisisId!,
       damage_level: damageLevel as DamageLevel,
@@ -556,6 +631,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
       setWasQueued(false);
       setSubmitted(true);
     } catch {
+      await registerPushToken();
       const queuedPhotos: QueuedPhoto[] = photos.map((p, i) => ({
         uri: p.uri,
         filename: p.filename,
