@@ -1,5 +1,6 @@
 import hashlib
 from datetime import datetime, timezone
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, text
@@ -26,6 +27,8 @@ class AnonymousSessionRequest(BaseModel):
     platform: str  # android, pwa, web
     country_code: str
     language_code: str = "en"
+    os_device_id: Optional[str] = None
+    t_and_c_accepted_at: Optional[datetime] = None
 
 
 class AnonymousSessionResponse(BaseModel):
@@ -85,6 +88,10 @@ async def create_anonymous_session(
         reporter.country_code = request.country_code
         reporter.language_code = request.language_code
         reporter.last_active_at = datetime.now(timezone.utc)
+        if request.os_device_id is not None:
+            reporter.os_device_id = request.os_device_id
+        if request.t_and_c_accepted_at is not None:
+            reporter.t_and_c_accepted_at = request.t_and_c_accepted_at
         await db.commit()
         return AnonymousSessionResponse(
             reporter_id=reporter.display_id,
@@ -100,6 +107,8 @@ async def create_anonymous_session(
         language_code=request.language_code,
         is_verified=False,
         last_active_at=datetime.now(timezone.utc),
+        os_device_id=request.os_device_id,
+        t_and_c_accepted_at=request.t_and_c_accepted_at,
     )
     db.add(reporter)
     await db.flush()

@@ -59,6 +59,14 @@ export default function OnboardingScreen() {
     c.name.toLowerCase().includes(search.toLowerCase())
   );
 
+  const handleCountryContinue = async () => {
+    if (!selectedCountry) return;
+    await AsyncStorage.setItem("cr_country_code", selectedCountry);
+    const country = COUNTRIES.find((c) => c.code === selectedCountry);
+    if (country) await AsyncStorage.setItem("cr_country_name", country.name);
+    setStep("language");
+  };
+
     const handleFinish = async () => {
     setLoading(true);
     try {
@@ -130,7 +138,7 @@ export default function OnboardingScreen() {
               styles.primaryButton,
               !selectedCountry && styles.buttonDisabled,
             ]}
-            onPress={() => selectedCountry && setStep("language")}
+            onPress={handleCountryContinue}
             disabled={!selectedCountry}
           >
             <Text style={styles.primaryButtonText}>

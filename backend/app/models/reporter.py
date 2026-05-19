@@ -107,6 +107,14 @@ class Reporter(Base):
         Boolean, default=False, nullable=False, index=True
     )
 
+    # OS-level device identifier (Android ID) — stored plain (non-PII on Android)
+    os_device_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+    # T&C acceptance timestamp — set when reporter accepts on-device
+    t_and_c_accepted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
     # Profile photo
     photo_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
 

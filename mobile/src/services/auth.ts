@@ -3,8 +3,45 @@ import type { AnonymousSession, AuthTokens } from "../types";
 import * as SecureStore from "expo-secure-store";
 import * as Application from "expo-application";
 import { Platform } from "react-native";
+import { useAuthStore } from "../stores/authStore";
 
 // ── Device ID ─────────────────────────────────────────────────────────────────
+
+/**
+ * Called once at app launch. Generates a CR-DEV-prefixed device ID on first
+ * install and reads the OS-level Android ID. Both are written to SecureStore
+ * and reflected into the auth store. Idempotent — no-op if already generated.
+ */
+export async function initDeviceId(): Promise<void> {
+  const existing = await SecureStore.getItemAsync("cr_device_id");
+  if (existing) {
+    useAuthStore.getState().setDeviceId(existing);
+    const osId = await SecureStore.getItemAsync("cr_os_device_id");
+    if (osId) useAuthStore.getState().setOsDeviceId(osId);
+    return;
+  }
+
+  const rand = Math.random().toString(36).substring(2, 10) +
+               Math.random().toString(36).substring(2, 10);
+  const deviceId = `CR-DEV-${rand}`;
+
+  let osDeviceId: string | null = null;
+  try {
+    if (Platform.OS === "android") {
+      osDeviceId = Application.getAndroidId();
+    }
+  } catch {
+    osDeviceId = null;
+  }
+
+  await SecureStore.setItemAsync("cr_device_id", deviceId);
+  if (osDeviceId) {
+    await SecureStore.setItemAsync("cr_os_device_id", osDeviceId);
+  }
+
+  useAuthStore.getState().setDeviceId(deviceId);
+  useAuthStore.getState().setOsDeviceId(osDeviceId);
+}
 
 export async function getOrCreateDeviceId(): Promise<string> {
   const stored = await SecureStore.getItemAsync("cr_device_id");
