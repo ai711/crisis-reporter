@@ -1,4 +1,5 @@
 import asyncio
+import platform
 import uuid
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -124,12 +125,24 @@ async def health_check(db: AsyncSession = Depends(get_db)):
     elif any(c["status"] == "degraded" for c in components):
         overall = "degraded"
 
+    db_version = None
+    try:
+        ver_result = await db.execute(text("SELECT version()"))
+        db_version = (ver_result.scalar() or "").split(" ")[0:2]
+        db_version = " ".join(db_version) if db_version else None
+    except Exception:
+        pass
+
     return {
         "overall": overall,
         "components": components,
         "checked_at": checked_at,
         "app": settings.APP_NAME,
+        "app_version": settings.APP_VERSION,
         "version": settings.APP_VERSION,
+        "python_version": platform.python_version(),
+        "database_version": db_version,
+        "environment": getattr(settings, "ENVIRONMENT", "production"),
     }
 
 

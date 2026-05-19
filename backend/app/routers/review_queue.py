@@ -134,6 +134,40 @@ async def get_review_queue_counts(
     )
     tab1_count = tab1_res.scalar() or 0
 
+    # Check review_queue_threshold notification — insert if threshold exceeded and
+    # no notification was triggered in the last hour.
+    try:
+        from app.models.app_setting import AppSetting
+        from sqlalchemy import text as _text
+        threshold = 50
+        notif_row = await db.execute(select(AppSetting).where(AppSetting.key == "notifications"))
+        notif_rec = notif_row.scalar_one_or_none()
+        if notif_rec and isinstance(notif_rec.value, dict):
+            for t in notif_rec.value.get("types", []):
+                if t.get("key") == "review_queue_threshold" and t.get("active", True):
+                    threshold = t.get("threshold") or 50
+        if tab1_count >= threshold:
+            cutoff = now - timedelta(hours=1)
+            recent = await db.execute(
+                _text(
+                    "SELECT id FROM notifications WHERE notification_type_key = 'review_queue_threshold'"
+                    " AND triggered_at >= :cutoff LIMIT 1"
+                ),
+                {"cutoff": cutoff},
+            )
+            if not recent.scalar_one_or_none():
+                await db.execute(
+                    _text(
+                        "INSERT INTO notifications (notification_type_key, message, triggered_at, is_global)"
+                        " VALUES ('review_queue_threshold',"
+                        " :msg, NOW(), TRUE)"
+                    ),
+                    {"msg": f"Review Queue Alert — {tab1_count} Red-flagged reports are pending review."},
+                )
+                await db.commit()
+    except Exception as _e:
+        log.debug("review_queue threshold notification check failed: %s", _e)
+
     tab2_res = await db.execute(
         select(func.count(Property.id)).where(
             or_(Property.has_conflict_warning == True, Property.is_flagged_for_review == True)

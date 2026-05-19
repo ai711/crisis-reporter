@@ -440,11 +440,24 @@ async def auto_flag_report(report_id: str) -> None:
 # publishes SSE events + logs warnings so ops can investigate.
 
 async def monitor_stuck_grey_reports() -> None:
-    """Periodic task: find and alert on reports stuck in Grey for > 10 minutes."""
+    """Periodic task: find and alert on reports stuck in Grey for > threshold minutes.
+    Reads stuck_report_threshold_minutes from AppSetting, falling back to config."""
     from app.models.report import Report
     from app.config import settings
 
-    stuck_threshold = datetime.now(timezone.utc) - timedelta(minutes=settings.STUCK_REPORT_THRESHOLD_MINUTES)
+    threshold_minutes = settings.STUCK_REPORT_THRESHOLD_MINUTES
+    try:
+        from app.models.app_setting import AppSetting
+        from sqlalchemy import select as _sel
+        async with AsyncSessionLocal() as _db:
+            row = await _db.execute(_sel(AppSetting).where(AppSetting.key == "thresholds"))
+            rec = row.scalar_one_or_none()
+            if rec and isinstance(rec.value, dict):
+                threshold_minutes = rec.value.get("stuck_report_threshold_minutes", threshold_minutes)
+    except Exception:
+        pass
+
+    stuck_threshold = datetime.now(timezone.utc) - timedelta(minutes=threshold_minutes)
 
     async with AsyncSessionLocal() as db:
         try:

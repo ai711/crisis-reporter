@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, File, Form, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from pydantic import BaseModel
@@ -9,6 +9,7 @@ from app.database import get_db
 from app.models.app_setting import AppSetting
 from app.models.dashboard_user import DashboardUser
 from app.services.dependencies import get_current_dashboard_user, require_admin, require_superadmin
+from app.services.storage import storage_service
 
 router = APIRouter(prefix="/api/settings", tags=["Settings"])
 
@@ -29,58 +30,60 @@ DEFAULTS: dict[str, Any] = {
         "support_email": "",
         "timezone": "UTC+0",
         "date_format": "DD/MM/YYYY",
+        "logo_url": None,
     },
     "security": {
-        "session_timeout": 60,
+        "session_timeout": 30,
         "max_login_attempts": 5,
-        "lockout_duration": 30,
-        "password_min_length": 8,
+        "lockout_duration": 15,
+        "password_min_length": 10,
         "require_special_char": True,
         "require_number": True,
+        "require_uppercase": True,
+        "require_lowercase": True,
+        "password_expiry_days": 90,
     },
     "notifications": {
         "types": [
             {
-                "key": "new_report",
-                "label": "New Report Received",
-                "description": "Notify when a new report is submitted",
+                "key": "review_queue_threshold",
+                "label": "Review Queue — Red flagged reports threshold exceeded",
+                "description": "Triggers when the number of Red-flagged reports in Review Queue Tab 1 exceeds the configured threshold.",
                 "active": True,
                 "subscribers": [],
+                "threshold": 50,
+                "delivery_mode": "immediate",
+                "summary_interval_minutes": None,
             },
             {
-                "key": "report_flagged_red",
-                "label": "Report Flagged Red",
-                "description": "Notify when a report is auto-flagged red",
+                "key": "new_red_flagged_report",
+                "label": "New Red-flagged report received",
+                "description": "Triggers when any new report receives a Red flag from the automatic check system.",
                 "active": True,
                 "subscribers": [],
+                "threshold": None,
+                "delivery_mode": "summary",
+                "summary_interval_minutes": 15,
             },
             {
-                "key": "reporter_blocked",
-                "label": "Reporter Blocked",
-                "description": "Notify when a reporter is blocked",
-                "active": False,
-                "subscribers": [],
-            },
-            {
-                "key": "crisis_activated",
-                "label": "Crisis Activated",
-                "description": "Notify when a new crisis is set as active",
+                "key": "reporter_auto_paused",
+                "label": "Reporter automatically paused",
+                "description": "Triggers when a reporter is automatically paused due to exceeding the submission rate limit.",
                 "active": True,
                 "subscribers": [],
+                "threshold": None,
+                "delivery_mode": "immediate",
+                "summary_interval_minutes": None,
             },
             {
-                "key": "export_completed",
-                "label": "Export Completed",
-                "description": "Notify when a data export is ready to download",
-                "active": False,
-                "subscribers": [],
-            },
-            {
-                "key": "system_error",
-                "label": "System Error",
-                "description": "Notify when a backend error is detected",
+                "key": "high_volume_processing_delay",
+                "label": "High volume processing delay",
+                "description": "Triggers when the system is processing a high volume of reports and map updates may be delayed.",
                 "active": True,
                 "subscribers": [],
+                "threshold": None,
+                "delivery_mode": "immediate",
+                "summary_interval_minutes": None,
             },
         ]
     },
@@ -105,14 +108,19 @@ async def _upsert_setting(db: AsyncSession, key: str, value: Any) -> None:
     await db.commit()
 
 
+async def get_security_settings_dict(db: AsyncSession) -> dict:
+    """Public helper — returns current security settings, falling back to DEFAULTS."""
+    setting = await _get_setting(db, "security")
+    if not isinstance(setting, dict):
+        return dict(DEFAULTS["security"])
+    merged = dict(DEFAULTS["security"])
+    merged.update(setting)
+    return merged
+
+
 # ── General settings ──────────────────────────────────────────────────────────
 
-class GeneralSettingsPayload(BaseModel):
-    org_name: str | None = None
-    dashboard_title: str | None = None
-    support_email: str | None = None
-    timezone: str | None = None
-    date_format: str | None = None
+_ALLOWED_LOGO_TYPES = {"image/jpeg", "image/png", "image/svg+xml"}
 
 
 @router.get("/general")
@@ -120,18 +128,54 @@ async def get_general_settings(
     db: AsyncSession = Depends(get_db),
     current_user: DashboardUser = Depends(require_superadmin),
 ):
-    return await _get_setting(db, "general")
+    setting = await _get_setting(db, "general")
+    if not isinstance(setting, dict):
+        setting = dict(DEFAULTS["general"])
+    if "logo_url" not in setting:
+        setting["logo_url"] = None
+    return setting
 
 
 @router.patch("/general")
 async def patch_general_settings(
-    payload: GeneralSettingsPayload,
+    org_name: Optional[str] = Form(None),
+    dashboard_title: Optional[str] = Form(None),
+    support_email: Optional[str] = Form(None),
+    timezone: Optional[str] = Form(None),
+    date_format: Optional[str] = Form(None),
+    logo: Optional[UploadFile] = File(None),
     db: AsyncSession = Depends(get_db),
     current_user: DashboardUser = Depends(require_superadmin),
 ):
     current = await _get_setting(db, "general")
-    updates = payload.model_dump(exclude_none=True)
-    current.update(updates)
+    if not isinstance(current, dict):
+        current = dict(DEFAULTS["general"])
+    if "logo_url" not in current:
+        current["logo_url"] = None
+
+    if org_name is not None:
+        current["org_name"] = org_name
+    if dashboard_title is not None:
+        current["dashboard_title"] = dashboard_title
+    if support_email is not None:
+        current["support_email"] = support_email
+    if timezone is not None:
+        current["timezone"] = timezone
+    if date_format is not None:
+        current["date_format"] = date_format
+
+    if logo and logo.filename:
+        if logo.content_type not in _ALLOWED_LOGO_TYPES:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Logo must be JPEG, PNG, or SVG.",
+            )
+        logo_bytes = await logo.read()
+        storage_path = await storage_service.save(
+            logo_bytes, logo.filename, logo.content_type
+        )
+        current["logo_url"] = storage_service.get_url(storage_path)
+
     await _upsert_setting(db, "general", current)
     return current
 
@@ -145,6 +189,9 @@ class SecuritySettingsPayload(BaseModel):
     password_min_length: int | None = None
     require_special_char: bool | None = None
     require_number: bool | None = None
+    require_uppercase: bool | None = None
+    require_lowercase: bool | None = None
+    password_expiry_days: int | None = None
 
 
 @router.get("/security")
@@ -152,7 +199,7 @@ async def get_security_settings(
     db: AsyncSession = Depends(get_db),
     current_user: DashboardUser = Depends(require_superadmin),
 ):
-    return await _get_setting(db, "security")
+    return await get_security_settings_dict(db)
 
 
 @router.patch("/security")
@@ -161,15 +208,17 @@ async def patch_security_settings(
     db: AsyncSession = Depends(get_db),
     current_user: DashboardUser = Depends(require_superadmin),
 ):
-    current = await _get_setting(db, "security")
+    current = await get_security_settings_dict(db)
     updates = payload.model_dump(exclude_none=True)
 
-    if "session_timeout" in updates and not (15 <= updates["session_timeout"] <= 480):
-        raise HTTPException(status_code=400, detail="session_timeout must be 15–480 minutes")
+    if "session_timeout" in updates and not (5 <= updates["session_timeout"] <= 480):
+        raise HTTPException(status_code=400, detail="session_timeout must be 5–480 minutes")
     if "max_login_attempts" in updates and not (3 <= updates["max_login_attempts"] <= 10):
         raise HTTPException(status_code=400, detail="max_login_attempts must be 3–10")
     if "password_min_length" in updates and not (6 <= updates["password_min_length"] <= 32):
         raise HTTPException(status_code=400, detail="password_min_length must be 6–32")
+    if "password_expiry_days" in updates and updates["password_expiry_days"] < 0:
+        raise HTTPException(status_code=400, detail="password_expiry_days must be >= 0")
 
     current.update(updates)
     await _upsert_setting(db, "security", current)
@@ -182,6 +231,9 @@ class NotificationTypeUpdate(BaseModel):
     key: str
     active: bool | None = None
     subscribers: list[str] | None = None
+    threshold: int | None = None
+    delivery_mode: str | None = None
+    summary_interval_minutes: int | None = None
 
 
 class NotificationSettingsPayload(BaseModel):
@@ -213,6 +265,16 @@ async def patch_notification_settings(
             entry["active"] = update.active
         if update.subscribers is not None:
             entry["subscribers"] = update.subscribers
+        if update.threshold is not None:
+            entry["threshold"] = update.threshold
+        if update.delivery_mode is not None:
+            if update.delivery_mode not in ("immediate", "summary"):
+                raise HTTPException(status_code=400, detail="delivery_mode must be 'immediate' or 'summary'")
+            entry["delivery_mode"] = update.delivery_mode
+        if update.summary_interval_minutes is not None:
+            if update.summary_interval_minutes < 5:
+                raise HTTPException(status_code=400, detail="summary_interval_minutes must be >= 5")
+            entry["summary_interval_minutes"] = update.summary_interval_minutes
 
     current["types"] = list(existing_types.values())
     await _upsert_setting(db, "notifications", current)
@@ -224,7 +286,7 @@ async def patch_notification_settings(
 class MapSettingsPayload(BaseModel):
     reporting_radius_miles: Optional[int] = None
     building_source: Optional[str] = None
-    country_overrides: Optional[dict] = None  # country_code → radius in miles
+    country_overrides: Optional[dict] = None
 
 
 @router.get("/map")
@@ -268,4 +330,63 @@ async def patch_map_settings(
     updates = payload.model_dump(exclude_none=True)
     current.update(updates)
     await _upsert_setting(db, "map", current)
+    return current
+
+
+# ── System thresholds ─────────────────────────────────────────────────────────
+
+class ThresholdsPayload(BaseModel):
+    stuck_report_threshold_minutes: int | None = None
+    auto_block_confirmation_hours: int | None = None
+    language_deprecation_window_days: int | None = None
+
+
+def _threshold_defaults() -> dict:
+    return {
+        "stuck_report_threshold_minutes": app_config.STUCK_REPORT_THRESHOLD_MINUTES,
+        "auto_block_confirmation_hours": app_config.AUTO_BLOCK_CONFIRMATION_HOURS,
+        "language_deprecation_window_days": app_config.LANGUAGE_DEPRECATION_WINDOW_DAYS,
+    }
+
+
+@router.get("/thresholds")
+async def get_thresholds(
+    db: AsyncSession = Depends(get_db),
+    current_user: DashboardUser = Depends(require_superadmin),
+):
+    defaults = _threshold_defaults()
+    current = await _get_setting(db, "thresholds")
+    if not isinstance(current, dict):
+        return defaults
+    merged = dict(defaults)
+    merged.update(current)
+    return merged
+
+
+@router.patch("/thresholds")
+async def patch_thresholds(
+    payload: ThresholdsPayload,
+    db: AsyncSession = Depends(get_db),
+    current_user: DashboardUser = Depends(require_superadmin),
+):
+    defaults = _threshold_defaults()
+    current = await _get_setting(db, "thresholds")
+    if not isinstance(current, dict):
+        current = dict(defaults)
+    else:
+        merged = dict(defaults)
+        merged.update(current)
+        current = merged
+
+    updates = payload.model_dump(exclude_none=True)
+
+    if "stuck_report_threshold_minutes" in updates and not (1 <= updates["stuck_report_threshold_minutes"] <= 60):
+        raise HTTPException(status_code=400, detail="stuck_report_threshold_minutes must be 1–60")
+    if "auto_block_confirmation_hours" in updates and not (24 <= updates["auto_block_confirmation_hours"] <= 168):
+        raise HTTPException(status_code=400, detail="auto_block_confirmation_hours must be 24–168")
+    if "language_deprecation_window_days" in updates and not (30 <= updates["language_deprecation_window_days"] <= 365):
+        raise HTTPException(status_code=400, detail="language_deprecation_window_days must be 30–365")
+
+    current.update(updates)
+    await _upsert_setting(db, "thresholds", current)
     return current

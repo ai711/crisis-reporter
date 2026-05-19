@@ -16,6 +16,35 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Any
 
+# ── Security settings cache (module-level, refreshed every 60 s) ──────────────
+# Avoids a DB hit on every login attempt while still reacting to admin changes.
+
+_sec_cache: dict[str, Any] = {
+    "session_timeout": 30,
+    "max_login_attempts": 5,
+    "lockout_duration": 15,
+}
+_sec_cache_ts: float = 0.0
+_SEC_CACHE_TTL = 60.0  # seconds
+
+
+async def _refresh_sec_cache_if_stale(db) -> None:
+    """Fetch security settings from AppSetting and update the module-level cache."""
+    global _sec_cache, _sec_cache_ts
+    now = time.monotonic()
+    if now - _sec_cache_ts < _SEC_CACHE_TTL:
+        return
+    try:
+        from app.models.app_setting import AppSetting
+        from sqlalchemy import select as _sel
+        result = await db.execute(_sel(AppSetting).where(AppSetting.key == "security"))
+        row = result.scalar_one_or_none()
+        if row and isinstance(row.value, dict):
+            _sec_cache = row.value
+        _sec_cache_ts = now
+    except Exception:
+        pass
+
 from fastapi import (
     APIRouter,
     Depends,
@@ -67,14 +96,12 @@ def _check_rate_limit(ip: str) -> None:
         state = _rl_store[ip]
         locked_until = state.get("locked_until")
 
-        # Still in lockout window?
         if locked_until and now < locked_until:
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail="too_many_attempts",
             )
 
-        # Sliding window expired — reset counter
         if now - state["window_start"] > window_secs:
             state["attempts"] = 0
             state["window_start"] = now
@@ -82,15 +109,16 @@ def _check_rate_limit(ip: str) -> None:
 
 
 def _record_failure(ip: str) -> None:
-    """Increment the failure counter for an IP; apply lockout if threshold reached."""
+    """Increment the failure counter for an IP; apply lockout if threshold reached.
+    Reads max_login_attempts and lockout_duration from the module-level settings cache."""
     now = time.monotonic()
     window_secs = settings.LOGIN_RATE_LIMIT_WINDOW_MINUTES * 60
-    lockout_secs = settings.LOGIN_LOCKOUT_MINUTES * 60
+    max_attempts = _sec_cache.get("max_login_attempts", settings.LOGIN_RATE_LIMIT_ATTEMPTS)
+    lockout_secs = _sec_cache.get("lockout_duration", settings.LOGIN_LOCKOUT_MINUTES) * 60
 
     with _rl_lock:
         state = _rl_store[ip]
 
-        # Reset window if expired before incrementing
         if now - state["window_start"] > window_secs:
             state["attempts"] = 0
             state["window_start"] = now
@@ -98,7 +126,7 @@ def _record_failure(ip: str) -> None:
 
         state["attempts"] += 1
 
-        if state["attempts"] >= settings.LOGIN_RATE_LIMIT_ATTEMPTS:
+        if state["attempts"] >= max_attempts:
             state["locked_until"] = now + lockout_secs
 
 
@@ -150,6 +178,7 @@ class DashboardUserResponse(BaseModel):
 
 def _user_response(user: DashboardUser) -> DashboardUserResponse:
     """Build the standard user response dict, injecting the inactivity timeout."""
+    inactivity = _sec_cache.get("session_timeout", settings.INACTIVITY_TIMEOUT_MINUTES)
     return DashboardUserResponse(
         id=str(user.id),
         email=user.email,
@@ -160,7 +189,7 @@ def _user_response(user: DashboardUser) -> DashboardUserResponse:
         profile_photo_url=user.profile_photo_url,
         role=user.role,
         last_login_at=user.last_login_at,
-        inactivity_timeout_minutes=settings.INACTIVITY_TIMEOUT_MINUTES,
+        inactivity_timeout_minutes=inactivity,
     )
 
 
@@ -181,6 +210,9 @@ async def login(
       429 too_many_attempts    — IP has exceeded the failed-attempt threshold
     """
     ip = request.client.host if request.client else "unknown"
+
+    # Refresh security settings cache (async, at most once per 60 s)
+    await _refresh_sec_cache_if_stale(db)
 
     # Enforce rate limit before touching the database
     _check_rate_limit(ip)
@@ -220,9 +252,10 @@ async def login(
         extra_claims={"email": user.email, "name": user.full_name},
     )
 
+    inactivity = _sec_cache.get("session_timeout", settings.INACTIVITY_TIMEOUT_MINUTES)
     return {
         **tokens,
-        "inactivity_timeout_minutes": settings.INACTIVITY_TIMEOUT_MINUTES,
+        "inactivity_timeout_minutes": inactivity,
     }
 
 
@@ -283,9 +316,10 @@ async def refresh_token(
         extra_claims={"email": user.email, "name": user.full_name},
     )
 
+    inactivity = _sec_cache.get("session_timeout", settings.INACTIVITY_TIMEOUT_MINUTES)
     return {
         **tokens,
-        "inactivity_timeout_minutes": settings.INACTIVITY_TIMEOUT_MINUTES,
+        "inactivity_timeout_minutes": inactivity,
     }
 
 

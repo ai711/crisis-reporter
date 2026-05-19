@@ -41,10 +41,76 @@ from app.routers import (
     content,
     countries,
     review_queue,
+    notifications as notifications_router,
 )
 from app.routers.question_packages import seed_initial_package
 from app.routers.language_packages import seed_string_keys
 from app.routers.countries import seed_countries
+
+
+async def _seed_notification_types() -> None:
+    """Ensure the notifications AppSetting has the 4 correct Chapter 13 types.
+    Replaces any old notification types from previous chapters."""
+    from app.models.app_setting import AppSetting
+    correct_keys = {
+        "review_queue_threshold", "new_red_flagged_report",
+        "reporter_auto_paused", "high_volume_processing_delay",
+    }
+    correct_types = [
+        {
+            "key": "review_queue_threshold",
+            "label": "Review Queue — Red flagged reports threshold exceeded",
+            "description": "Triggers when the number of Red-flagged reports in Review Queue Tab 1 exceeds the configured threshold.",
+            "active": True, "subscribers": [], "threshold": 50,
+            "delivery_mode": "immediate", "summary_interval_minutes": None,
+        },
+        {
+            "key": "new_red_flagged_report",
+            "label": "New Red-flagged report received",
+            "description": "Triggers when any new report receives a Red flag from the automatic check system.",
+            "active": True, "subscribers": [], "threshold": None,
+            "delivery_mode": "summary", "summary_interval_minutes": 15,
+        },
+        {
+            "key": "reporter_auto_paused",
+            "label": "Reporter automatically paused",
+            "description": "Triggers when a reporter is automatically paused due to exceeding the submission rate limit.",
+            "active": True, "subscribers": [], "threshold": None,
+            "delivery_mode": "immediate", "summary_interval_minutes": None,
+        },
+        {
+            "key": "high_volume_processing_delay",
+            "label": "High volume processing delay",
+            "description": "Triggers when the system is processing a high volume of reports and map updates may be delayed.",
+            "active": True, "subscribers": [], "threshold": None,
+            "delivery_mode": "immediate", "summary_interval_minutes": None,
+        },
+    ]
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(select(AppSetting).where(AppSetting.key == "notifications"))
+        row = result.scalar_one_or_none()
+        if row is None:
+            db.add(AppSetting(key="notifications", value={"types": correct_types}))
+            await db.commit()
+            return
+        existing = row.value if isinstance(row.value, dict) else {}
+        old_types = {t["key"]: t for t in existing.get("types", [])}
+        # Remove old keys not in correct set; preserve subscriber/active state for existing correct keys
+        merged = []
+        for ct in correct_types:
+            if ct["key"] in old_types:
+                kept = dict(ct)
+                # Preserve user-configured fields
+                old = old_types[ct["key"]]
+                for field in ("active", "subscribers", "threshold", "delivery_mode", "summary_interval_minutes"):
+                    if field in old and old[field] is not None:
+                        kept[field] = old[field]
+                merged.append(kept)
+            else:
+                merged.append(ct)
+        row.value = {"types": merged}
+        await db.commit()
+        logger.info("Notification types seeded/updated to Chapter 13 spec")
 
 
 async def seed_first_admin() -> None:
@@ -74,21 +140,46 @@ async def seed_first_admin() -> None:
 
 
 async def _stuck_report_loop() -> None:
-    """Run stuck-grey-report monitor on configurable interval."""
+    """Run stuck-grey-report monitor on configurable interval, reading threshold from AppSetting."""
     from app.services.auto_flagging import monitor_stuck_grey_reports
+    from app.models.app_setting import AppSetting
     while True:
-        await asyncio.sleep(settings.STUCK_REPORT_THRESHOLD_MINUTES * 60)
+        interval = settings.STUCK_REPORT_THRESHOLD_MINUTES
+        try:
+            async with AsyncSessionLocal() as db:
+                from sqlalchemy import select as _select
+                row = await db.execute(_select(AppSetting).where(AppSetting.key == "thresholds"))
+                rec = row.scalar_one_or_none()
+                if rec and isinstance(rec.value, dict):
+                    interval = rec.value.get("stuck_report_threshold_minutes", interval)
+        except Exception:
+            pass
+        await asyncio.sleep(interval * 60)
         await monitor_stuck_grey_reports()
 
 
 async def _auto_block_confirmation_loop() -> None:
-    """Auto-confirm auto-blocks whose 72-hour window has expired with no action."""
+    """Auto-confirm auto-blocks whose review window has expired with no action.
+    Reads auto_block_confirmation_hours from AppSetting, falling back to config."""
     from app.models.reporter import Reporter
+    from app.models.app_setting import AppSetting
     interval = settings.AUTO_BLOCK_CHECK_INTERVAL_MINUTES * 60
     while True:
         await asyncio.sleep(interval)
         try:
             async with AsyncSessionLocal() as db:
+                # Read configurable window from AppSetting
+                confirmation_hours = settings.AUTO_BLOCK_CONFIRMATION_HOURS
+                try:
+                    row = await db.execute(
+                        select(AppSetting).where(AppSetting.key == "thresholds")
+                    )
+                    rec = row.scalar_one_or_none()
+                    if rec and isinstance(rec.value, dict):
+                        confirmation_hours = rec.value.get("auto_block_confirmation_hours", confirmation_hours)
+                except Exception:
+                    pass
+
                 now = datetime.now(timezone.utc)
                 expired = await db.execute(
                     select(Reporter).where(
@@ -114,7 +205,7 @@ async def _auto_block_confirmation_loop() -> None:
                             new_value="blocked",
                             comment=(
                                 f"Auto-block automatically confirmed after "
-                                f"{settings.AUTO_BLOCK_CONFIRMATION_HOURS}-hour review window "
+                                f"{confirmation_hours}-hour review window "
                                 f"with no action taken."
                             ),
                         )
@@ -122,7 +213,7 @@ async def _auto_block_confirmation_loop() -> None:
                         logger.warning("Activity log write failed in auto_block_confirmation_loop: %s", e)
                     logger.info(
                         "Auto-block automatically confirmed for reporter %s after %d-hour window",
-                        reporter.id, settings.AUTO_BLOCK_CONFIRMATION_HOURS,
+                        reporter.id, confirmation_hours,
                     )
                 await db.commit()
         except Exception as e:
@@ -305,6 +396,26 @@ ON CONFLICT DO NOTHING""",
     "UPDATE reporters SET profile_type = 'named_profile' WHERE is_verified = TRUE AND profile_type = 'anonymous_no_reports'",
     # Sync anonymous reporters who have reports to profile_type='anonymous_with_reports'
     "UPDATE reporters SET profile_type = 'anonymous_with_reports' WHERE is_verified = FALSE AND report_count > 0 AND profile_type = 'anonymous_no_reports'",
+    # Chapter 13 — Security setting defaults (idempotent via ON CONFLICT DO NOTHING on unique key)
+    # NOTE: app_settings stores settings as JSONB blobs keyed by group name.
+    # We seed individual scalar keys here for migration tracking but the actual
+    # settings blob is managed by the app_settings router using upsert.
+    # Chapter 13 — Notification bell tables
+    """CREATE TABLE IF NOT EXISTS notifications (
+        id SERIAL PRIMARY KEY,
+        notification_type_key VARCHAR(100) NOT NULL,
+        message TEXT NOT NULL,
+        triggered_at TIMESTAMPTZ DEFAULT NOW(),
+        is_global BOOLEAN DEFAULT TRUE
+    )""",
+    """CREATE TABLE IF NOT EXISTS notification_reads (
+        notification_id INTEGER REFERENCES notifications(id),
+        dashboard_user_id UUID REFERENCES dashboard_users(id),
+        read_at TIMESTAMPTZ DEFAULT NOW(),
+        PRIMARY KEY (notification_id, dashboard_user_id)
+    )""",
+    "CREATE INDEX IF NOT EXISTS idx_notifications_triggered_at ON notifications(triggered_at DESC)",
+    "CREATE INDEX IF NOT EXISTS idx_notification_reads_user ON notification_reads(dashboard_user_id)",
 ]
 
 
@@ -322,6 +433,7 @@ async def lifespan(app: FastAPI):
     await seed_string_keys()
     await seed_countries()
     await seed_first_admin()
+    await _seed_notification_types()
     # Reset / create admin@crisisreporter.org on every startup
     try:
         from app.models.dashboard_user import DashboardUser
@@ -420,3 +532,4 @@ app.include_router(countries.router)
 app.include_router(review_queue.router)
 app.include_router(dashboard_projects.router, prefix="/api")
 app.include_router(dashboard_users.router, prefix="/api")
+app.include_router(notifications_router.router)

@@ -22,6 +22,28 @@ from app.models.project_user import ProjectUser
 from app.models.crisis import Crisis
 from app.services.auth import hash_password
 from app.services.dependencies import get_current_dashboard_user, require_admin
+from app.routers.app_settings import get_security_settings_dict
+
+
+async def _validate_password(password: str, db: AsyncSession) -> None:
+    """Raise 400 with a specific message if the password fails complexity rules."""
+    sec = await get_security_settings_dict(db)
+    min_len = sec.get("password_min_length", 10)
+    req_upper = sec.get("require_uppercase", True)
+    req_lower = sec.get("require_lowercase", True)
+    req_number = sec.get("require_number", True)
+    req_special = sec.get("require_special_char", True)
+
+    if len(password) < min_len:
+        raise HTTPException(status_code=400, detail=f"Password must be at least {min_len} characters.")
+    if req_upper and not any(c.isupper() for c in password):
+        raise HTTPException(status_code=400, detail="Password must contain at least one uppercase letter.")
+    if req_lower and not any(c.islower() for c in password):
+        raise HTTPException(status_code=400, detail="Password must contain at least one lowercase letter.")
+    if req_number and not any(c.isdigit() for c in password):
+        raise HTTPException(status_code=400, detail="Password must contain at least one number.")
+    if req_special and not any(c in "!@#$%^&*()_+-=[]{}|;':\",./<>?" for c in password):
+        raise HTTPException(status_code=400, detail="Password must contain at least one special character.")
 
 router = APIRouter(prefix="/dashboard/users", tags=["Dashboard Users"])
 
@@ -193,6 +215,8 @@ async def create_user(
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=409, detail="email_taken")
 
+    await _validate_password(body.password, db)
+
     full_name = f"{body.first_name.strip()} {body.last_name.strip()}".strip()
     user = DashboardUser(
         email=body.email,
@@ -291,6 +315,7 @@ async def update_user(
     if body.is_active is not None:
         user.is_active = body.is_active
     if body.password is not None:
+        await _validate_password(body.password, db)
         user.password_hash = hash_password(body.password)
 
     # Recompute full_name if either name part changed
