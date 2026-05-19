@@ -192,8 +192,72 @@ async def auto_flag_report(report_id: str) -> None:
                             current_reporter.id, matched_blocked.id,
                         )
 
-            # ── Rule 2: Photo validation ──────────────────────────────────────
-            # (was Rule 1 before blocked-device check was added above)
+            # ── Rule 2: IP blocked reporter match ────────────────────────────
+            # If this report's ip_address_hash matches the ip_address_hash of any
+            # currently blocked reporter, flag Red and apply a soft block pending
+            # superadmin confirmation.
+            if new_flag == "green" and report.ip_address_hash and report.reporter_id:
+                ip_blocked_result = await db.execute(
+                    select(Reporter).where(
+                        and_(
+                            Reporter.ip_address_hash == report.ip_address_hash,
+                            Reporter.is_blocked == True,
+                            Reporter.id != report.reporter_id,
+                        )
+                    ).limit(1)
+                )
+                ip_blocked_match = ip_blocked_result.scalar_one_or_none()
+
+                if ip_blocked_match:
+                    new_flag = "red"
+                    flag_reason = "rule_2_ip_blocked_reporter_match"
+                    matched_display = (
+                        str(ip_blocked_match.display_id)
+                        if ip_blocked_match.display_id
+                        else str(ip_blocked_match.id)
+                    )
+                    flag_metadata = {
+                        "matched_blocked_reporter_id": matched_display,
+                        "submission_ip_hash": report.ip_address_hash,
+                    }
+                    reporter_r2 = await db.get(Reporter, report.reporter_id)
+                    if reporter_r2 and not reporter_r2.is_blocked:
+                        reporter_r2.profile_status = "flagged"
+                        reporter_r2.auto_blocked_at = datetime.now(timezone.utc)
+                        reporter_r2.auto_block_expires_at = (
+                            datetime.now(timezone.utc)
+                            + timedelta(hours=settings.AUTO_BLOCK_CONFIRMATION_HOURS)
+                        )
+                        reporter_r2.pending_auto_block_confirmation = True
+                        reporter_r2.matched_blocked_reporter_id = matched_display
+                        reporter_r2.auto_block_confirmed = False
+                        db.add(reporter_r2)
+                    try:
+                        from app.services.reporter_activity_service import write_activity_log
+                        await write_activity_log(
+                            db,
+                            reporter_id=report.reporter_id,
+                            action="auto_flagged",
+                            source="System",
+                            previous_value="active",
+                            new_value="flagged",
+                            matched_reporter_id=matched_display,
+                            comment=(
+                                f"IP address matches blocked reporter {matched_display}. "
+                                "Report flagged for review."
+                            ),
+                        )
+                    except Exception:
+                        log.exception(
+                            "auto_flag_report: activity log write failed for ip_blocked_match %s",
+                            report.reporter_id,
+                        )
+                    log.info(
+                        "auto_flag_report: reporter %s flagged — ip_address_hash matches blocked reporter %s",
+                        report.reporter_id, ip_blocked_match.id,
+                    )
+
+            # ── Rule 3: Photo validation ──────────────────────────────────────
             async def _photo_count() -> int:
                 r = await db.execute(
                     select(func.count(Photo.id)).where(Photo.report_id == report.id)
@@ -210,7 +274,7 @@ async def auto_flag_report(report_id: str) -> None:
                     new_flag = "red"
                     flag_reason = "No photos attached"
 
-            # ── Rule 2: Location validation ───────────────────────────────────
+            # ── Rule 4: Location validation ───────────────────────────────────
             if new_flag == "green":
                 has_gps = report.gps_latitude is not None and report.gps_longitude is not None
                 has_address = bool(report.location_address and report.location_address.strip())
@@ -218,7 +282,7 @@ async def auto_flag_report(report_id: str) -> None:
                     new_flag = "red"
                     flag_reason = "No location provided"
 
-            # ── Rule 3: Coordinated spam detection ────────────────────────────
+            # ── Rule 5: Coordinated spam detection ────────────────────────────
             if (
                 new_flag == "green"
                 and report.reporter_id is not None
@@ -245,7 +309,7 @@ async def auto_flag_report(report_id: str) -> None:
                     new_flag = "red"
                     flag_reason = "Possible coordinated duplicate — different reporter, same location"
 
-            # ── Rule 4: Rapid submission detection ────────────────────────────
+            # ── Rule 6: Rapid submission detection ────────────────────────────
             if new_flag == "green" and report.reporter_id is not None:
                 rapid_window = datetime.now(timezone.utc) - timedelta(
                     hours=_thresholds["rapid_submission_window_hours"]
@@ -288,7 +352,7 @@ async def auto_flag_report(report_id: str) -> None:
                     except Exception:
                         log.exception("auto_flag_report: pause apply failed for reporter %s", report.reporter_id)
 
-            # ── Rule 5 (new): IP country mismatch ────────────────────────────
+            # ── Rule 7: IP country mismatch ──────────────────────────────────
             if new_flag == "green" and report.ip_address_hash:
                 try:
                     # Decrypt the IP to geolocate it
@@ -322,7 +386,7 @@ async def auto_flag_report(report_id: str) -> None:
                 except Exception:
                     log.debug("auto_flag_report: IP country check skipped for %s", report_id)
 
-            # ── Rule 6 (new): Same IP, multiple device IDs ────────────────────
+            # ── Rule 8: Same IP, multiple device IDs ──────────────────────────
             if new_flag == "green" and report.ip_address_hash:
                 ip_window = datetime.now(timezone.utc) - timedelta(hours=24)
                 same_ip_result = await db.execute(
@@ -346,7 +410,7 @@ async def auto_flag_report(report_id: str) -> None:
                         "window_hours": 24,
                     }
 
-            # ── Rule 7 (new): Duplicate image detection ───────────────────────
+            # ── Rule 9: Duplicate image detection ─────────────────────────────
             if new_flag == "green":
                 photos_r = await db.execute(
                     select(Photo).where(Photo.report_id == report.id)

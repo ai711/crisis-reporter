@@ -317,6 +317,33 @@ function FlagReasonDetail({
       );
     }
 
+    if (reason === "rule_2_ip_blocked_reporter_match") {
+      const matchedReporterId = String(meta?.matched_blocked_reporter_id ?? "");
+      return (
+        <div style={styles.flagContextCard}>
+          <p style={styles.flagContextHeader}>
+            IP address matches a known blocked reporter profile.
+          </p>
+          {matchedReporterId && (
+            <p style={{ fontSize: 13, margin: "6px 0 0" }}>
+              Matched blocked reporter:{" "}
+              <button
+                style={styles.flagContextLink}
+                onClick={() => window.open(`/reporters/${matchedReporterId}`, "_blank")}
+              >
+                {matchedReporterId}
+              </button>
+            </p>
+          )}
+          <p style={styles.flagContextNote}>
+            Note: IP address matching may produce false positives in shared network
+            environments (offices, hotels, cafes). Review the reporter profile before
+            confirming the block.
+          </p>
+        </div>
+      );
+    }
+
     // Fallback — show raw reason
     return (
       <div style={styles.flagContextCard}>
