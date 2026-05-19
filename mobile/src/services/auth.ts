@@ -4,6 +4,7 @@ import * as SecureStore from "expo-secure-store";
 import * as Application from "expo-application";
 import { Platform } from "react-native";
 import { useAuthStore } from "../stores/authStore";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // ── Device ID ─────────────────────────────────────────────────────────────────
 
@@ -129,4 +130,60 @@ export async function loginReporter(
 export async function logoutReporter(): Promise<void> {
   await tokenStorage.clearTokens();
   await SecureStore.deleteItemAsync("cr_reporter_id");
+}
+
+// ── Anonymous registration with offline queue fallback ────────────────────────
+
+export async function registerAnonymously(): Promise<string> {
+  const deviceId = await SecureStore.getItemAsync("cr_device_id");
+  const osDeviceId = await SecureStore.getItemAsync("cr_os_device_id");
+  const tAndCAcceptedAt = await AsyncStorage.getItem("cr_tandc_accepted_at");
+  const countryCode = await AsyncStorage.getItem("cr_country_code");
+  const languageCode = await AsyncStorage.getItem("cr_language");
+
+  const payload = {
+    device_id: deviceId,
+    os_device_id: osDeviceId,
+    platform: "android",
+    country_code: countryCode,
+    language_code: languageCode,
+    t_and_c_accepted_at: tAndCAcceptedAt,
+  };
+
+  try {
+    const response = await api.post("/api/reporter/auth/anonymous", payload);
+    const reporterId: string = response.data.reporter_id;
+    await SecureStore.setItemAsync("cr_reporter_id", reporterId);
+    useAuthStore.getState().setReporterId(reporterId);
+    return reporterId;
+  } catch {
+    const existing = await AsyncStorage.getItem("cr_registration_queue");
+    if (!existing) {
+      await AsyncStorage.setItem("cr_registration_queue", JSON.stringify(payload));
+    }
+    const suffix = (deviceId ?? "unknown").substring(7, 15);
+    const tempId = `CR-PENDING-${suffix}`;
+    await SecureStore.setItemAsync("cr_reporter_id", tempId);
+    useAuthStore.getState().setReporterId(tempId);
+    return tempId;
+  }
+}
+
+export async function syncRegistrationQueue(): Promise<void> {
+  const queued = await AsyncStorage.getItem("cr_registration_queue");
+  if (!queued) return;
+
+  const currentId = await SecureStore.getItemAsync("cr_reporter_id");
+  if (currentId && !currentId.startsWith("CR-PENDING-")) return;
+
+  try {
+    const payload = JSON.parse(queued);
+    const response = await api.post("/api/reporter/auth/anonymous", payload);
+    const reporterId: string = response.data.reporter_id;
+    await SecureStore.setItemAsync("cr_reporter_id", reporterId);
+    useAuthStore.getState().setReporterId(reporterId);
+    await AsyncStorage.removeItem("cr_registration_queue");
+  } catch {
+    // Still offline — leave queue in place, retry next time
+  }
 }

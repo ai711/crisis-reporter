@@ -14,6 +14,7 @@ interface AuthState {
   tAndCAcceptedAt: string | null;
 
   setReporter: (reporterId: string, isVerified: boolean) => void;
+  setReporterId: (reporterId: string) => void;
   setCountry: (countryCode: string) => void;
   setLanguage: (languageCode: string) => void;
   setOnboarded: () => void;
@@ -39,6 +40,7 @@ export const useAuthStore = create<AuthState>()(
 
       setReporter: (reporterId: string, isVerified: boolean) =>
         set({ reporterId, isVerified }),
+      setReporterId: (reporterId: string) => set({ reporterId }),
       setCountry: (countryCode: string) => set({ countryCode }),
       setLanguage: (languageCode: string) => set({ languageCode }),
       setOnboarded: () => set({ isOnboarded: true }),

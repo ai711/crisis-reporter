@@ -68,5 +68,41 @@
     "required": "此字段为必填项",
     "networkError": "网络错误，请检查您的连接。",
     "unknownError": "出现错误，请重试。"
+  },
+  "tandc": {
+    "title": "Terms & Conditions",
+    "subtitle": "Please read and accept to continue",
+    "body": "By using Crisis Reporter, you agree to our Terms and Conditions and Privacy Policy.\n\nCrisis Reporter collects location data, photos, and description information to support UNDP crisis response operations. Your data is stored securely and shared only with authorised UNDP staff.\n\nYou may submit reports anonymously or with a verified profile. Your Reporter ID is assigned to your device and persists across sessions.\n\nBy tapping I Agree, you confirm that you have read and understood these terms and consent to the collection and use of your data as described.\n\nYou may withdraw at any time by uninstalling the app.",
+    "agreeButton": "I Agree",
+    "declineButton": "Decline",
+    "declineAlertTitle": "Cannot Proceed",
+    "declineAlertMessage": "You are unable to access Crisis Reporter without accepting the Terms and Conditions and Privacy Policy. If you change your mind, please reopen the app and try again.",
+    "declineAlertButton": "OK"
+  },
+  "loginPopup": {
+    "title": "Welcome to Crisis Reporter",
+    "body": "Have you used Crisis Reporter before? If you have an existing verified account, log in to restore your reports, badges, and profile.",
+    "loginButton": "Log In",
+    "createButton": "Create Account",
+    "skipButton": "Skip for now"
+  },
+  "login": {
+    "title": "Log In",
+    "emailPlaceholder": "Email address",
+    "passwordPlaceholder": "Password",
+    "loginButton": "Log In",
+    "forgotPassword": "Forgot password?",
+    "forgotPasswordMessage": "Please contact your UNDP coordinator to reset your password.",
+    "errorInvalid": "Invalid email or password. Please try again.",
+    "errorGeneric": "Something went wrong. Please try again."
+  },
+  "profile": {
+    "title": "Create Account",
+    "namePlaceholder": "Your name (optional)",
+    "emailPlaceholder": "Email address (optional)",
+    "phonePlaceholder": "Phone number (optional)",
+    "saveButton": "Save Profile",
+    "reporterIdLabel": "Your Reporter ID",
+    "validationMessage": "Please fill in at least one field to continue."
   }
 }

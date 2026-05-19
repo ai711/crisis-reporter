@@ -1,12 +1,16 @@
 import { useEffect, useState } from "react";
 import {
-  View, Text, TouchableOpacity, StyleSheet, ScrollView
+  View, Text, TouchableOpacity, StyleSheet, ScrollView,
+  Modal, ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
 import { useAuthStore } from "../stores/authStore";
 import { getQueueCount, syncQueue } from "../utils/offlineQueue";
+import { registerAnonymously } from "../services/auth";
 import NetInfo from "@react-native-community/netinfo";
+import * as SecureStore from "expo-secure-store";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const API_URL = "https://crisis-reporter-production.up.railway.app";
 
@@ -20,6 +24,44 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
   const { isVerified } = useAuthStore();
   const [queueCount, setQueueCount] = useState(0);
   const [isOnline, setIsOnline] = useState(true);
+  const [showLoginPopup, setShowLoginPopup] = useState(false);
+  const [popupLoading, setPopupLoading] = useState(false);
+
+  useEffect(() => {
+    const checkPopup = async () => {
+      const reporterId = await SecureStore.getItemAsync("cr_reporter_id");
+      const popupShown = await AsyncStorage.getItem("cr_popup_shown");
+      if (!reporterId && !popupShown) {
+        setShowLoginPopup(true);
+      }
+    };
+    checkPopup();
+  }, []);
+
+  const dismissPopup = async () => {
+    await AsyncStorage.setItem("cr_popup_shown", "true");
+    setShowLoginPopup(false);
+  };
+
+  const handleSkip = async () => {
+    setPopupLoading(true);
+    await dismissPopup();
+    await registerAnonymously();
+    setPopupLoading(false);
+  };
+
+  const handleLogIn = async () => {
+    await dismissPopup();
+    navigation.navigate("LoginScreen");
+  };
+
+  const handleCreateAccount = async () => {
+    setPopupLoading(true);
+    await dismissPopup();
+    await registerAnonymously();
+    setPopupLoading(false);
+    navigation.navigate("ReporterProfileScreen");
+  };
 
   useEffect(() => {
     getQueueCount().then(setQueueCount);
@@ -127,6 +169,38 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
           <Text style={styles.navLabel}>Reports</Text>
         </TouchableOpacity>
       </View>
+
+      <Modal
+        visible={showLoginPopup}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+      >
+        <View style={styles.popupOverlay}>
+          <View style={styles.popupCard}>
+            <Text style={styles.popupTitle}>{t("loginPopup.title")}</Text>
+            <Text style={styles.popupBody}>{t("loginPopup.body")}</Text>
+
+            {popupLoading ? (
+              <ActivityIndicator color="#0468B1" style={{ marginTop: 24 }} />
+            ) : (
+              <View style={styles.popupButtons}>
+                <TouchableOpacity style={styles.popupBtnPrimary} onPress={handleLogIn}>
+                  <Text style={styles.popupBtnPrimaryText}>{t("loginPopup.loginButton")}</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity style={styles.popupBtnSecondary} onPress={handleCreateAccount}>
+                  <Text style={styles.popupBtnSecondaryText}>{t("loginPopup.createButton")}</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity style={styles.popupBtnSkip} onPress={handleSkip}>
+                  <Text style={styles.popupBtnSkipText}>{t("loginPopup.skipButton")}</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -213,4 +287,74 @@ const styles = StyleSheet.create({
   navItem: { alignItems: "center", padding: 8 },
   navIcon: { fontSize: 20 },
   navLabel: { fontSize: 11, color: "#666", marginTop: 4 },
+
+  popupOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  popupCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    padding: 24,
+    marginHorizontal: 24,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  popupTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#333333",
+    textAlign: "center",
+    marginBottom: 8,
+  },
+  popupBody: {
+    fontSize: 14,
+    color: "#666666",
+    textAlign: "center",
+    lineHeight: 20,
+  },
+  popupButtons: {
+    marginTop: 20,
+    gap: 12,
+  },
+  popupBtnPrimary: {
+    backgroundColor: "#0468B1",
+    borderRadius: 28,
+    height: 52,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  popupBtnPrimaryText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  popupBtnSecondary: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 28,
+    height: 52,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1.5,
+    borderColor: "#0468B1",
+  },
+  popupBtnSecondaryText: {
+    color: "#0468B1",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  popupBtnSkip: {
+    height: 44,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  popupBtnSkipText: {
+    color: "#888888",
+    fontSize: 15,
+  },
 });
