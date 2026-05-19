@@ -13,9 +13,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_
 
 from app.database import get_db
+from app.models.crisis import Crisis
 from app.models.property import Property
 from app.models.property_comment import PropertyComment
 from app.models.report import Report
+from app.models.report_project import ReportProject
 from app.models.reporter import Reporter
 from app.models.dashboard_user import DashboardUser
 from app.services.dependencies import get_current_dashboard_user, require_section_access
@@ -28,6 +30,17 @@ DAMAGE_LABELS = {
     "complete": "Completely Destroyed",
     "partial": "Partially Damaged",
     "minimal": "Minimal or No Damage",
+}
+
+# Maps frontend display keys → backend Report.damage_level codes
+_DAMAGE_KEY_TO_CODE: dict[str, str] = {
+    "completely_destroyed": "complete",
+    "partially_damaged": "partial",
+    "minimal_or_no_damage": "minimal",
+    # pass-through for callers that already use backend codes
+    "complete": "complete",
+    "partial": "partial",
+    "minimal": "minimal",
 }
 
 VALID_CONFIRMED = {"complete", "partial", "minimal"}
@@ -271,6 +284,7 @@ async def list_properties(
     property_status: Optional[str] = Query(None),  # "active" | "recovered"
     country: Optional[str] = Query(None),
     project_id: Optional[str] = Query(None),
+    project_serial_id: Optional[str] = Query(None),
     date_from: Optional[datetime] = Query(None),
     date_to: Optional[datetime] = Query(None),
     search: Optional[str] = Query(None),
@@ -321,21 +335,24 @@ async def list_properties(
         )
         filters.append(Property.id.in_(qualifying_sq))
 
-    # Damage level filter — compare against most recent green/orange report
+    # Damage level filter — multi-value, maps display keys to backend codes
     if damage_level:
-        damage_sq = (
-            select(Report.property_id)
-            .where(
-                and_(
-                    Report.flag_status.in_(["green", "orange"]),
-                    Report.damage_level == damage_level,
-                    Report.property_id.isnot(None),
+        raw_levels = [l.strip() for l in damage_level.split(",") if l.strip()]
+        codes = list({_DAMAGE_KEY_TO_CODE[l] for l in raw_levels if l in _DAMAGE_KEY_TO_CODE})
+        if codes:
+            damage_sq = (
+                select(Report.property_id)
+                .where(
+                    and_(
+                        Report.flag_status.in_(["green", "orange"]),
+                        Report.damage_level.in_(codes),
+                        Report.property_id.isnot(None),
+                    )
                 )
+                .distinct()
+                .scalar_subquery()
             )
-            .distinct()
-            .scalar_subquery()
-        )
-        filters.append(Property.id.in_(damage_sq))
+            filters.append(Property.id.in_(damage_sq))
 
     # Country filter via reporter
     if country:
@@ -353,7 +370,7 @@ async def list_properties(
         )
         filters.append(Property.id.in_(country_sq))
 
-    # Project / crisis filter
+    # Project / crisis filter by UUID
     if project_id:
         proj_sq = (
             select(Report.property_id)
@@ -367,6 +384,29 @@ async def list_properties(
             .scalar_subquery()
         )
         filters.append(Property.id.in_(proj_sq))
+
+    # Project filter by serial_id — finds properties whose reports are linked to the project
+    if project_serial_id:
+        crisis_result = await db.execute(
+            select(Crisis.id).where(Crisis.serial_id == project_serial_id)
+        )
+        crisis_uuid = crisis_result.scalar_one_or_none()
+        if crisis_uuid:
+            serial_proj_sq = (
+                select(Report.property_id)
+                .join(ReportProject, ReportProject.report_id == Report.id)
+                .where(
+                    and_(
+                        Report.property_id.isnot(None),
+                        ReportProject.crisis_id == crisis_uuid,
+                    )
+                )
+                .distinct()
+                .scalar_subquery()
+            )
+            filters.append(Property.id.in_(serial_proj_sq))
+        else:
+            return PropertyListResponse(items=[], total=0, cursor=None, has_more=False)
 
     # Date range filter on most recent report
     if date_from or date_to:

@@ -1,9 +1,9 @@
 import { useState, useRef, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import Header from "../components/Header";
-import { getProperties } from "../services/api";
+import { getProperties, getDashboardProjects } from "../services/api";
 import { formatDamageLevel, formatDateTime } from "../utils/formatters";
-import type { Property, PropertiesListResponse } from "../types";
+import type { Property, PropertiesListResponse, ProjectListRow, ProjectsListResponse } from "../types";
 
 // ── Damage colours ────────────────────────────────────────────────────────────
 
@@ -80,6 +80,8 @@ interface Filters {
   country: string;
   date_from: string;
   date_to: string;
+  damage_level: string[];
+  project_serial_id: string;
 }
 
 const DEFAULT_FILTERS: Filters = {
@@ -89,7 +91,15 @@ const DEFAULT_FILTERS: Filters = {
   country: "",
   date_from: "",
   date_to: "",
+  damage_level: [],
+  project_serial_id: "",
 };
+
+const DAMAGE_LEVEL_OPTIONS: { value: string; label: string }[] = [
+  { value: "completely_destroyed", label: "Completely Destroyed" },
+  { value: "partially_damaged",    label: "Partially Damaged" },
+  { value: "minimal_or_no_damage", label: "Minimal or No Damage" },
+];
 
 const PAGE_SIZES = [100, 200, 300, 400, 500];
 
@@ -107,7 +117,20 @@ export default function LocationsPage() {
   const [filterOpen, setFilterOpen] = useState(false);
   const [filters, setFilters] = useState<Filters>({ ...DEFAULT_FILTERS });
   const [pendingFilters, setPendingFilters] = useState<Filters>({ ...DEFAULT_FILTERS });
+  const [fetchProjects, setFetchProjects] = useState(false);
   const filterRef = useRef<HTMLDivElement>(null);
+
+  // Fetch projects when filter panel is first opened
+  const { data: projectsData } = useQuery<ProjectsListResponse>({
+    queryKey: ["locations-filter-projects"],
+    queryFn: async () => {
+      const res = await getDashboardProjects({ status: "active,closed", limit: 200 });
+      return res.data as ProjectsListResponse;
+    },
+    enabled: fetchProjects,
+    staleTime: 1000 * 60 * 5,
+  });
+  const projectOptions: ProjectListRow[] = projectsData?.items ?? [];
 
   // Close filter panel on outside click
   useEffect(() => {
@@ -139,6 +162,8 @@ export default function LocationsPage() {
     if (filters.country.trim()) p.country = filters.country.trim();
     if (filters.date_from) p.date_from = filters.date_from;
     if (filters.date_to) p.date_to = filters.date_to;
+    if (filters.damage_level.length > 0) p.damage_level = filters.damage_level.join(",");
+    if (filters.project_serial_id) p.project_serial_id = filters.project_serial_id;
     return p;
   };
 
@@ -194,7 +219,9 @@ export default function LocationsPage() {
     (filters.confirmed_status_filter !== "all" ? 1 : 0) +
     (!filters.property_status.active || !filters.property_status.recovered ? 1 : 0) +
     (filters.country.trim() ? 1 : 0) +
-    (filters.date_from || filters.date_to ? 1 : 0);
+    (filters.date_from || filters.date_to ? 1 : 0) +
+    (filters.damage_level.length > 0 ? 1 : 0) +
+    (filters.project_serial_id ? 1 : 0);
 
   const applyFilters = () => {
     setFilters({ ...pendingFilters });
@@ -243,6 +270,7 @@ export default function LocationsPage() {
               }}
               onClick={() => {
                 setPendingFilters({ ...filters });
+                setFetchProjects(true);
                 setFilterOpen((o) => !o);
               }}
             >
@@ -364,33 +392,56 @@ export default function LocationsPage() {
                   </div>
                 </div>
 
-                {/* Disabled filters */}
+                {/* Damage level */}
                 <div style={styles.filterSection}>
-                  <div style={styles.filterLabel}>
-                    Damage Level Filter{" "}
-                    <span style={styles.disabledBadge} title="Available after backend update">
-                      Coming soon
-                    </span>
-                  </div>
-                  <input
-                    style={{ ...styles.filterInput, opacity: 0.4, cursor: "not-allowed" }}
-                    disabled
-                    placeholder="All damage levels"
-                  />
+                  <div style={styles.filterLabel}>Damage Level</div>
+                  {DAMAGE_LEVEL_OPTIONS.map((opt) => (
+                    <label key={opt.value} style={styles.filterCheckLabel}>
+                      <input
+                        type="checkbox"
+                        checked={pendingFilters.damage_level.includes(opt.value)}
+                        onChange={(e) =>
+                          setPendingFilters((f) => ({
+                            ...f,
+                            damage_level: e.target.checked
+                              ? [...f.damage_level, opt.value]
+                              : f.damage_level.filter((v) => v !== opt.value),
+                          }))
+                        }
+                        style={{ marginRight: 8 }}
+                      />
+                      <span style={{
+                        color: opt.value === "completely_destroyed" ? "#c62828"
+                          : opt.value === "partially_damaged" ? "#e65100"
+                          : "#2e7d32",
+                        fontWeight: 500,
+                      }}>
+                        {opt.label}
+                      </span>
+                    </label>
+                  ))}
                 </div>
 
+                {/* Project */}
                 <div style={styles.filterSection}>
-                  <div style={styles.filterLabel}>
-                    Project Filter{" "}
-                    <span style={styles.disabledBadge} title="Available after backend update">
-                      Coming soon
-                    </span>
+                  <div style={styles.filterLabel}>Project</div>
+                  <select
+                    style={styles.filterInput}
+                    value={pendingFilters.project_serial_id}
+                    onChange={(e) =>
+                      setPendingFilters((f) => ({ ...f, project_serial_id: e.target.value }))
+                    }
+                  >
+                    <option value="">All projects</option>
+                    {projectOptions.map((proj) => (
+                      <option key={proj.serial_id} value={proj.serial_id}>
+                        {proj.name} ({proj.serial_id})
+                      </option>
+                    ))}
+                  </select>
+                  <div style={{ fontSize: 11, color: "#9aa5b4", marginTop: 6 }}>
+                    Filtering by project shows only properties with reports linked to that project.
                   </div>
-                  <input
-                    style={{ ...styles.filterInput, opacity: 0.4, cursor: "not-allowed" }}
-                    disabled
-                    placeholder="All projects"
-                  />
                 </div>
 
                 <div style={styles.filterActions}>
