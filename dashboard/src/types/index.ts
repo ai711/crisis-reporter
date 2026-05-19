@@ -23,6 +23,7 @@ export interface DashboardUser {
   contact_number: string | null;
   profile_photo_url: string | null;
   role: string;
+  role_permissions?: Record<string, { view: boolean; edit: boolean }>;
   // Auth-only fields (present on /me responses)
   last_login_at?: string | null;
   inactivity_timeout_minutes?: number;

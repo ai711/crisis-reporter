@@ -62,6 +62,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database import get_db
 from app.models.dashboard_user import DashboardUser
+from app.models.role import Role
 from app.services.auth import (
     create_token_pair,
     decode_token,
@@ -72,6 +73,32 @@ from app.services.dependencies import get_current_dashboard_user
 from app.services.storage import storage_service
 
 router = APIRouter(prefix="/api/dashboard/auth", tags=["Dashboard Auth"])
+
+# ── Role permissions helper ───────────────────────────────────────────────────
+
+_ALL_SECTIONS = [
+    "main_map_view", "reports_page", "location_page", "review_queue",
+    "analytics_and_statistics", "reporter_profiles", "export", "projects",
+    "manage_users", "manage_roles", "app_configuration",
+]
+
+
+async def get_role_permissions(db: AsyncSession, role_name: str) -> dict:
+    """Returns the permissions dict for a given role name."""
+    if role_name in ("superadmin", "admin"):
+        return {s: {"view": True, "edit": True} for s in _ALL_SECTIONS}
+
+    result = await db.execute(select(Role).where(Role.name == role_name))
+    role = result.scalar_one_or_none()
+
+    if not role or not role.permissions:
+        return {s: {"view": False, "edit": False} for s in _ALL_SECTIONS}
+
+    permissions = {}
+    for section in _ALL_SECTIONS:
+        permissions[section] = role.permissions.get(section, {"view": False, "edit": False})
+    return permissions
+
 
 # ── Allowed content types for profile photos ──────────────────────────────────
 
@@ -154,6 +181,7 @@ class TokenResponse(BaseModel):
     token_type: str
     expires_in: int
     inactivity_timeout_minutes: int
+    user: DashboardUserResponse | None = None
 
 
 class RefreshRequest(BaseModel):
@@ -169,6 +197,7 @@ class DashboardUserResponse(BaseModel):
     contact_number: str | None
     profile_photo_url: str | None
     role: str
+    role_permissions: dict
     last_login_at: datetime | None
     inactivity_timeout_minutes: int
 
@@ -176,8 +205,8 @@ class DashboardUserResponse(BaseModel):
         from_attributes = True
 
 
-def _user_response(user: DashboardUser) -> DashboardUserResponse:
-    """Build the standard user response dict, injecting the inactivity timeout."""
+async def _user_response(user: DashboardUser, db: AsyncSession) -> DashboardUserResponse:
+    """Build the standard user response dict, injecting the inactivity timeout and role permissions."""
     inactivity = _sec_cache.get("session_timeout", settings.INACTIVITY_TIMEOUT_MINUTES)
     return DashboardUserResponse(
         id=str(user.id),
@@ -188,6 +217,7 @@ def _user_response(user: DashboardUser) -> DashboardUserResponse:
         contact_number=user.contact_number,
         profile_photo_url=user.profile_photo_url,
         role=user.role,
+        role_permissions=await get_role_permissions(db, user.role),
         last_login_at=user.last_login_at,
         inactivity_timeout_minutes=inactivity,
     )
@@ -256,6 +286,7 @@ async def login(
     return {
         **tokens,
         "inactivity_timeout_minutes": inactivity,
+        "user": await _user_response(user, db),
     }
 
 
@@ -342,9 +373,10 @@ async def logout(
 @router.get("/me", response_model=DashboardUserResponse)
 async def get_me(
     current_user: DashboardUser = Depends(get_current_dashboard_user),
+    db: AsyncSession = Depends(get_db),
 ):
     """Return the currently authenticated dashboard user's full profile."""
-    return _user_response(current_user)
+    return await _user_response(current_user, db)
 
 
 @router.patch("/me", response_model=DashboardUserResponse)
@@ -397,7 +429,7 @@ async def update_me(
     await db.commit()
     await db.refresh(current_user)
 
-    return _user_response(current_user)
+    return await _user_response(current_user, db)
 
 
 # ── Admin only — create dashboard users ───────────────────────────────────────
@@ -474,4 +506,4 @@ async def create_dashboard_user(
     await db.commit()
     await db.refresh(user)
 
-    return _user_response(user)
+    return await _user_response(user, db)

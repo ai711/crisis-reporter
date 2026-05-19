@@ -45,36 +45,33 @@ const queryClient = new QueryClient({
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
-  /** When set, the user must have this role (or higher) to view the page. */
   requiredRole?: "admin" | "superadmin";
+  requiredSection?: string;
 }
 
-function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) {
-  // Not logged in → send to login
+function ProtectedRoute({ children, requiredRole, requiredSection }: ProtectedRouteProps) {
   if (!isAuthenticated()) {
     return <Navigate to="/login" replace />;
   }
 
-  // Role check — read user from Zustand store
-  // We read it here rather than inside the hook so ProtectedRoute can be called
-  // at render time without hooks-ordering issues.
   // eslint-disable-next-line react-hooks/rules-of-hooks
   const { user } = useAuthStore();
 
   if (requiredRole) {
     const isSuperadmin = user?.role === "superadmin";
     const isAdmin = user?.role === "admin" || isSuperadmin;
-
-    const permitted =
-      requiredRole === "superadmin" ? isSuperadmin : isAdmin;
-
+    const permitted = requiredRole === "superadmin" ? isSuperadmin : isAdmin;
     if (!permitted) {
-      // Authenticated but not authorised — show access denied inside the shell
-      return (
-        <Layout>
-          <AccessDeniedPage />
-        </Layout>
-      );
+      return <Layout><AccessDeniedPage /></Layout>;
+    }
+  }
+
+  if (requiredSection) {
+    const isAdminOrAbove = user?.role === "superadmin" || user?.role === "admin";
+    const perms = user?.role_permissions?.[requiredSection];
+    const hasAccess = isAdminOrAbove || perms?.view === true;
+    if (!hasAccess) {
+      return <Layout><AccessDeniedPage /></Layout>;
     }
   }
 
@@ -102,12 +99,12 @@ export default function App() {
               element={<Navigate to="/map" replace />}
             />
 
-            {/* ── Authenticated routes (all roles) ─────────────────────── */}
+            {/* ── Authenticated routes ──────────────────────────────────── */}
 
             <Route
               path="/map"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredSection="main_map_view">
                   <MainMapPage />
                 </ProtectedRoute>
               }
@@ -115,7 +112,7 @@ export default function App() {
             <Route
               path="/reports"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredSection="reports_page">
                   <ReportsPage />
                 </ProtectedRoute>
               }
@@ -123,7 +120,7 @@ export default function App() {
             <Route
               path="/reports/:reportId"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredSection="reports_page">
                   <ReportDetailPage />
                 </ProtectedRoute>
               }
@@ -131,7 +128,7 @@ export default function App() {
             <Route
               path="/locations"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredSection="location_page">
                   <LocationsPage />
                 </ProtectedRoute>
               }
@@ -139,7 +136,7 @@ export default function App() {
             <Route
               path="/locations/:propertyId"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredSection="location_page">
                   <PropertyDetailPage />
                 </ProtectedRoute>
               }
@@ -147,7 +144,7 @@ export default function App() {
             <Route
               path="/review-queue"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredSection="review_queue">
                   <ReviewQueuePage />
                 </ProtectedRoute>
               }
@@ -155,7 +152,7 @@ export default function App() {
             <Route
               path="/analytics"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredSection="analytics_and_statistics">
                   <AnalyticsPage />
                 </ProtectedRoute>
               }
@@ -163,7 +160,7 @@ export default function App() {
             <Route
               path="/reporters"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredSection="reporter_profiles">
                   <ReportersPage />
                 </ProtectedRoute>
               }
@@ -171,7 +168,7 @@ export default function App() {
             <Route
               path="/reporters/:reporterId"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredSection="reporter_profiles">
                   <ReporterDetailPage />
                 </ProtectedRoute>
               }
@@ -179,7 +176,7 @@ export default function App() {
             <Route
               path="/export"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredSection="export">
                   <ExportPage />
                 </ProtectedRoute>
               }
@@ -187,7 +184,7 @@ export default function App() {
             <Route
               path="/projects"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredSection="projects">
                   <ProjectsPage />
                 </ProtectedRoute>
               }
@@ -195,8 +192,48 @@ export default function App() {
             <Route
               path="/projects/:serialId"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredSection="projects">
                   <ProjectDetailPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/users"
+              element={
+                <ProtectedRoute requiredSection="manage_users">
+                  <UserManagementPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/users/:userId"
+              element={
+                <ProtectedRoute requiredSection="manage_users">
+                  <UserDetailPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/roles"
+              element={
+                <ProtectedRoute requiredSection="manage_roles">
+                  <ManageRolesPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/roles/:roleId"
+              element={
+                <ProtectedRoute requiredSection="manage_roles">
+                  <RoleDetailPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/settings"
+              element={
+                <ProtectedRoute requiredSection="app_configuration">
+                  <SystemSettingsPage />
                 </ProtectedRoute>
               }
             />
@@ -215,49 +252,6 @@ export default function App() {
               element={
                 <ProtectedRoute>
                   <CrisisManagementPage />
-                </ProtectedRoute>
-              }
-            />
-
-            {/* ── Admin-only routes ─────────────────────────────────────── */}
-
-            <Route
-              path="/users"
-              element={
-                <ProtectedRoute requiredRole="admin">
-                  <UserManagementPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/users/:userId"
-              element={
-                <ProtectedRoute requiredRole="admin">
-                  <UserDetailPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/roles"
-              element={
-                <ProtectedRoute requiredRole="admin">
-                  <ManageRolesPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/roles/:roleId"
-              element={
-                <ProtectedRoute requiredRole="admin">
-                  <RoleDetailPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/settings"
-              element={
-                <ProtectedRoute requiredRole="admin">
-                  <SystemSettingsPage />
                 </ProtectedRoute>
               }
             />

@@ -600,6 +600,8 @@ export default function ProjectsPage() {
   const [countries, setCountries] = useState<string[]>([]);
   useEffect(() => { fetchCountries().then(setCountries); }, []);
 
+  const isGuest = user?.role === "Guest";
+
   // Build query params
   const queryParams: Record<string, string | number> = { limit: 50 };
   if (search) queryParams.search = search;
@@ -609,9 +611,10 @@ export default function ProjectsPage() {
   if (filters.dateTo) queryParams.date_to = filters.dateTo;
   if (filters.createdBy) queryParams.created_by = filters.createdBy;
   if (cursor) queryParams.cursor = cursor;
+  if (isGuest && user?.id) queryParams.assigned_to_user = user.id;
 
   const { data, isLoading, isError } = useQuery<ProjectsListResponse>({
-    queryKey: ["dashboard-projects", search, filters, cursor],
+    queryKey: ["dashboard-projects", search, filters, cursor, isGuest],
     queryFn: async () => {
       const res = await getDashboardProjects(queryParams);
       return res.data as ProjectsListResponse;

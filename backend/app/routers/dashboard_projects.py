@@ -143,6 +143,7 @@ async def list_projects(
     search: Optional[str] = Query(None),
     cursor: Optional[str] = Query(None),
     limit: int = Query(default=50, le=200),
+    assigned_to_user: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
     current_user: DashboardUser = Depends(require_section_access("projects")),
 ):
@@ -207,6 +208,25 @@ async def list_projects(
         .order_by(Crisis.created_at.desc())
         .limit(limit + 1)
     )
+
+    if assigned_to_user:
+        try:
+            _assigned_uuid = uuid.UUID(assigned_to_user)
+            crises_q = (
+                select(Crisis)
+                .join(
+                    ProjectUser,
+                    and_(
+                        ProjectUser.crisis_id == Crisis.id,
+                        ProjectUser.dashboard_user_id == _assigned_uuid,
+                    ),
+                )
+                .where(and_(*conditions) if conditions else True)
+                .order_by(Crisis.created_at.desc())
+                .limit(limit + 1)
+            )
+        except ValueError:
+            pass
     result = await db.execute(crises_q)
     crises = result.scalars().all()
 

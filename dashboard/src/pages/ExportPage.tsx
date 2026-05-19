@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useLocation } from "react-router-dom";
 import Header from "../components/Header";
 import api from "../services/api";
+import { useHasAccess } from "../hooks/useHasAccess";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -575,7 +576,10 @@ export default function ExportPage() {
 
   // ── Derived state ─────────────────────────────────────────────────────────────
 
+  const canExport = useHasAccess("export", true);
+
   const canGenerate =
+    canExport &&
     !!selectedId &&
     !!dateFrom &&
     !!dateTo &&

@@ -21,40 +21,27 @@ import {
 
 // ── Navigation item definitions ───────────────────────────────────────────────
 
-type NavRole = "admin" | "superadmin" | null;
-
 type NavItem = {
   path: string;
   icon: LucideIcon;
   label: string;
-  requiredRole: NavRole;
+  sectionKey: string | null;
 };
 
 const NAV_ITEMS: NavItem[] = [
-  { path: "/map",              icon: Map,              label: "Main Map View",           requiredRole: null        },
-  { path: "/reports",          icon: FileText,         label: "Reports Page",            requiredRole: null        },
-  { path: "/locations",        icon: MapPin,           label: "Location Page",           requiredRole: null        },
-  { path: "/review-queue",     icon: AlertCircle,      label: "Review Queue",            requiredRole: null        },
-  { path: "/analytics",        icon: BarChart2,        label: "Analytics and Statistics",requiredRole: null        },
-  { path: "/reporters",        icon: Users,            label: "Reporter Profiles",       requiredRole: null        },
-  { path: "/export",           icon: Download,         label: "Export",                  requiredRole: null        },
-  { path: "/projects",         icon: Folder,           label: "Projects",                requiredRole: null        },
-  { path: "/users",            icon: UserCog,          label: "Manage Users",            requiredRole: "admin"     },
-  { path: "/roles",            icon: Shield,           label: "Manage Roles",            requiredRole: "admin"     },
-  { path: "/settings",         icon: Settings,         label: "App Configuration",       requiredRole: "admin"     },
-  { path: "/dashboard-settings", icon: SlidersHorizontal, label: "Dashboard Settings",  requiredRole: "superadmin"},
+  { path: "/map",               icon: Map,               label: "Main Map View",            sectionKey: "main_map_view"            },
+  { path: "/reports",           icon: FileText,          label: "Reports Page",             sectionKey: "reports_page"             },
+  { path: "/locations",         icon: MapPin,            label: "Location Page",            sectionKey: "location_page"            },
+  { path: "/review-queue",      icon: AlertCircle,       label: "Review Queue",             sectionKey: "review_queue"             },
+  { path: "/analytics",         icon: BarChart2,         label: "Analytics and Statistics", sectionKey: "analytics_and_statistics" },
+  { path: "/reporters",         icon: Users,             label: "Reporter Profiles",        sectionKey: "reporter_profiles"        },
+  { path: "/export",            icon: Download,          label: "Export",                   sectionKey: "export"                   },
+  { path: "/projects",          icon: Folder,            label: "Projects",                 sectionKey: "projects"                 },
+  { path: "/users",             icon: UserCog,           label: "Manage Users",             sectionKey: "manage_users"             },
+  { path: "/roles",             icon: Shield,            label: "Manage Roles",             sectionKey: "manage_roles"             },
+  { path: "/settings",          icon: Settings,          label: "App Configuration",        sectionKey: "app_configuration"        },
+  { path: "/dashboard-settings",icon: SlidersHorizontal, label: "Dashboard Settings",       sectionKey: null                       },
 ];
-
-// ── Role visibility helper ────────────────────────────────────────────────────
-
-type Role = "admin" | "analyst" | "superadmin";
-
-function canSee(requiredRole: NavRole, userRole: Role | undefined): boolean {
-  if (!requiredRole) return true;
-  if (!userRole) return false;
-  if (requiredRole === "superadmin") return userRole === "superadmin";
-  return userRole === "admin" || userRole === "superadmin";
-}
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -89,9 +76,19 @@ export default function Sidebar() {
 
   const activeProjectCount = activeProjectsData?.total ?? 0;
 
-  const visibleItems = NAV_ITEMS.filter((item) =>
-    canSee(item.requiredRole, user?.role)
-  );
+  const isAdminOrAbove = user?.role === "superadmin" || user?.role === "admin";
+
+  const visibleItems = NAV_ITEMS.filter((item) => {
+    // Dashboard Settings — Superadmin only
+    if (item.path === "/dashboard-settings") return user?.role === "superadmin";
+    // Unknown section key — show by default
+    if (!item.sectionKey) return true;
+    // Superadmin and Admin see everything
+    if (isAdminOrAbove) return true;
+    // Custom roles: check view permission
+    const perms = user?.role_permissions?.[item.sectionKey];
+    return perms?.view === true;
+  });
 
   return (
     <div style={styles.sidebar}>

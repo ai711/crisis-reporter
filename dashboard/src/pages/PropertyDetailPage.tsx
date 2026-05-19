@@ -13,6 +13,7 @@ import {
   getReporterVersionHistory,
 } from "../services/api";
 import { formatDamageLevel, formatDateTime } from "../utils/formatters";
+import { useHasAccess } from "../hooks/useHasAccess";
 import type { PropertyDetail, PropertyComment, VersionHistoryEntry, ReporterRow } from "../types";
 
 // ── Colours ───────────────────────────────────────────────────────────────────
@@ -489,6 +490,7 @@ export default function PropertyDetailPage() {
   const [searchParams] = useSearchParams();
   const projectId = searchParams.get("project_id") ?? undefined;
   const queryClient = useQueryClient();
+  const canEditLocations = useHasAccess("location_page", true);
 
   // ── Confirmed status state
   const [confirmDropOpen, setConfirmDropOpen] = useState(false);
@@ -731,72 +733,78 @@ export default function PropertyDetailPage() {
                 )
               )}
 
-              {/* Set Confirmed Status dropdown */}
-              <div style={{ position: "relative", marginBottom: 10 }}>
+              {/* Set Confirmed Status dropdown — edit access only */}
+              {canEditLocations && (
+                <div style={{ position: "relative", marginBottom: 10 }}>
+                  <button
+                    style={s.confirmedBtn}
+                    onClick={() => setConfirmDropOpen((o) => !o)}
+                  >
+                    {property.confirmed_status
+                      ? "Update Confirmed Status ▾"
+                      : "NOT YET CONFIRMED ▾"}
+                  </button>
+                  {confirmDropOpen && (
+                    <div style={s.dropdown}>
+                      {CONFIRM_OPTIONS.map((opt) => (
+                        <button
+                          key={opt.value ?? "clear"}
+                          style={s.dropdownItem}
+                          onClick={() => {
+                            setConfirmTarget(opt.value ?? null);
+                            setConfirmDropOpen(false);
+                            setConfirmError(null);
+                            setConfirmModalOpen(true);
+                          }}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Property status + recovery — edit access only */}
+              {canEditLocations && (
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                  <span style={{
+                    fontWeight: 700,
+                    fontSize: 13,
+                    color: property.property_status === "Active" ? "#2e7d32" : "#9aa5b4",
+                    padding: "4px 12px",
+                    borderRadius: 12,
+                    background: property.property_status === "Active" ? "#e8f5e9" : "#f0f4f8",
+                  }}>
+                    {property.property_status}
+                  </span>
+                  {property.property_status === "Active" ? (
+                    <button
+                      style={s.secondaryBtn}
+                      onClick={() => { setRecoveryAction("recover"); setRecoveryError(null); setRecoveryModalOpen(true); }}
+                    >
+                      Mark as Recovered
+                    </button>
+                  ) : (
+                    <button
+                      style={s.secondaryBtn}
+                      onClick={() => { setRecoveryAction("reinstate"); setRecoveryError(null); setRecoveryModalOpen(true); }}
+                    >
+                      Reinstate
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* Flag for review — edit access only */}
+              {canEditLocations && (
                 <button
-                  style={s.confirmedBtn}
-                  onClick={() => setConfirmDropOpen((o) => !o)}
+                  style={{ ...s.secondaryBtn, borderColor: "#ff9800", color: "#e65100" }}
+                  onClick={() => setFlagPanelOpen((o) => !o)}
                 >
-                  {property.confirmed_status
-                    ? "Update Confirmed Status ▾"
-                    : "NOT YET CONFIRMED ▾"}
+                  {property.is_flagged_for_review ? "Flagged for Review" : "Flag for Review"}
                 </button>
-                {confirmDropOpen && (
-                  <div style={s.dropdown}>
-                    {CONFIRM_OPTIONS.map((opt) => (
-                      <button
-                        key={opt.value ?? "clear"}
-                        style={s.dropdownItem}
-                        onClick={() => {
-                          setConfirmTarget(opt.value ?? null);
-                          setConfirmDropOpen(false);
-                          setConfirmError(null);
-                          setConfirmModalOpen(true);
-                        }}
-                      >
-                        {opt.label}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Property status + recovery */}
-              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-                <span style={{
-                  fontWeight: 700,
-                  fontSize: 13,
-                  color: property.property_status === "Active" ? "#2e7d32" : "#9aa5b4",
-                  padding: "4px 12px",
-                  borderRadius: 12,
-                  background: property.property_status === "Active" ? "#e8f5e9" : "#f0f4f8",
-                }}>
-                  {property.property_status}
-                </span>
-                {property.property_status === "Active" ? (
-                  <button
-                    style={s.secondaryBtn}
-                    onClick={() => { setRecoveryAction("recover"); setRecoveryError(null); setRecoveryModalOpen(true); }}
-                  >
-                    Mark as Recovered
-                  </button>
-                ) : (
-                  <button
-                    style={s.secondaryBtn}
-                    onClick={() => { setRecoveryAction("reinstate"); setRecoveryError(null); setRecoveryModalOpen(true); }}
-                  >
-                    Reinstate
-                  </button>
-                )}
-              </div>
-
-              {/* Flag for review */}
-              <button
-                style={{ ...s.secondaryBtn, borderColor: "#ff9800", color: "#e65100" }}
-                onClick={() => setFlagPanelOpen((o) => !o)}
-              >
-                {property.is_flagged_for_review ? "Flagged for Review" : "Flag for Review"}
-              </button>
+              )}
 
               {flagPanelOpen && (
                 <div style={s.flagPanel}>

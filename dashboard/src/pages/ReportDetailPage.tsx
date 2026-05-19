@@ -14,6 +14,7 @@ import FlagChangeModal from "../components/FlagChangeModal";
 import ReviewPanel from "../components/ReviewPanel";
 import api from "../services/api";
 import { useAuthStore } from "../stores/authStore";
+import { useHasAccess } from "../hooks/useHasAccess";
 import type { ReportDetail, FlagStatus, FlagEvent, VersionHistoryItem, QuestionAnswer } from "../types";
 import { formatDamageLevel, formatDateTime } from "../utils/formatters";
 
@@ -472,6 +473,7 @@ export default function ReportDetailPage() {
   const queryClient = useQueryClient();
   const { user } = useAuthStore();
   const isSuperadmin = user?.role === "superadmin";
+  const canEditReports = useHasAccess("reports_page", true);
   const isFromQueue = searchParams.get("from") === "queue";
 
   const [translating, setTranslating] = useState(false);
@@ -668,8 +670,8 @@ export default function ReportDetailPage() {
           Back to Reports
         </button>
 
-        {/* Review panel — shown for all Red-flagged reports */}
-        {report.flag_status === "red" && (
+        {/* Review panel — shown for red-flagged reports only if user can edit */}
+        {report.flag_status === "red" && canEditReports && (
           <ReviewPanel
             reportId={report.id}
             flagReasons={flagReasons}
@@ -694,17 +696,19 @@ export default function ReportDetailPage() {
           </div>
         </div>
 
-        {/* Flag action controls (FIX 4) */}
-        <div style={styles.flagControls}>
-          <span style={styles.flagControlLabel}>Actions:</span>
-          <FlagActionButtons
-            flagStatus={report.flag_status}
-            isSuperadmin={isSuperadmin}
-            onAction={openActionModal}
-            onEmergencyOverride={openEmergencyModal}
-            isPending={isActionPending}
-          />
-        </div>
+        {/* Flag action controls — only shown if user has edit access */}
+        {canEditReports && (
+          <div style={styles.flagControls}>
+            <span style={styles.flagControlLabel}>Actions:</span>
+            <FlagActionButtons
+              flagStatus={report.flag_status}
+              isSuperadmin={isSuperadmin}
+              onAction={openActionModal}
+              onEmergencyOverride={openEmergencyModal}
+              isPending={isActionPending}
+            />
+          </div>
+        )}
 
         {/* Main two-column grid */}
         <div style={styles.grid}>
