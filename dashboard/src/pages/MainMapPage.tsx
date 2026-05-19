@@ -178,6 +178,10 @@ export default function MainMapPage() {
     }
   }, [crises, activeCrisisId, setActiveCrisis]);
 
+  // Stable ref so SSE handler always sees the current selectedPin without stale closure.
+  const selectedPinRef = useRef<MapPin | null>(null);
+  selectedPinRef.current = selectedPin;
+
   // ── SSE real-time updates ─────────────────────────────────────────────────
   const handleSSEEvent = useCallback(
     (event: SSEEvent) => {
@@ -199,6 +203,15 @@ export default function MainMapPage() {
         setLastUpdated(new Date());
       } else if (event.type === "property_updated") {
         queryClient.invalidateQueries({ queryKey: ["map-pins"] });
+        const pin = selectedPinRef.current;
+        if (pin?.property_id && event.property_id === pin.property_id) {
+          queryClient.invalidateQueries({ queryKey: ["property-comments", pin.property_id] });
+        }
+      } else if (event.type === "property_comment_added") {
+        const pin = selectedPinRef.current;
+        if (pin?.property_id && event.property_id === pin.property_id) {
+          queryClient.invalidateQueries({ queryKey: ["property-comments", pin.property_id] });
+        }
       } else if (event.type === "error") {
         setLiveStatus("disconnected");
       }

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Header from "../components/Header";
@@ -14,7 +14,8 @@ import {
 } from "../services/api";
 import { formatDamageLevel, formatDateTime } from "../utils/formatters";
 import { useHasAccess } from "../hooks/useHasAccess";
-import type { PropertyDetail, PropertyComment, VersionHistoryEntry, ReporterRow } from "../types";
+import { useSSE } from "../hooks/useSSE";
+import type { PropertyDetail, PropertyComment, VersionHistoryEntry, ReporterRow, SSEEvent } from "../types";
 
 // ── Colours ───────────────────────────────────────────────────────────────────
 
@@ -369,7 +370,7 @@ function ReporterVersionRow({
 
 // ── Comments Thread ───────────────────────────────────────────────────────────
 
-function CommentsThread({ propertyId }: { propertyId: string }) {
+function CommentsThread({ propertyId, crisisId }: { propertyId: string; crisisId: string | null | undefined }) {
   const queryClient = useQueryClient();
   const [commentText, setCommentText] = useState("");
   const [posting, setPosting] = useState(false);
@@ -383,8 +384,21 @@ function CommentsThread({ propertyId }: { propertyId: string }) {
       const res = await getPropertyComments(propertyId);
       return res.data;
     },
-    refetchInterval: 15000,
+    refetchInterval: 60000,
   });
+
+  const handleSSEEvent = useCallback(
+    (event: SSEEvent) => {
+      if (event.type === "property_comment_added" && event.property_id === propertyId) {
+        queryClient.invalidateQueries({ queryKey: ["property-comments", propertyId] });
+      } else if (event.type === "property_updated" && event.property_id === propertyId) {
+        queryClient.invalidateQueries({ queryKey: ["property-comments", propertyId] });
+      }
+    },
+    [propertyId, queryClient]
+  );
+
+  useSSE({ crisisId: crisisId ?? null, onEvent: handleSSEEvent, enabled: !!crisisId });
 
   // Auto-scroll only when NEW comments arrive
   useEffect(() => {
@@ -1013,7 +1027,7 @@ export default function PropertyDetailPage() {
         </div>
 
         {/* ── Section 5: Comments Thread ── */}
-        <CommentsThread propertyId={propertyId!} />
+        <CommentsThread propertyId={propertyId!} crisisId={property.crisis_id} />
 
       </div>
 

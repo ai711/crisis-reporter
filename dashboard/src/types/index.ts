@@ -280,6 +280,7 @@ export interface Property {
   display_name: string;
   address: string | null;
   country: string | null;
+  crisis_id?: string | null;
   current_damage_level: string | null;
   confirmed_status: string | null;
   confirmed_by: string | null;
@@ -478,10 +479,13 @@ export interface SSEEvent {
     | "flag_changed"
     | "reporter_status_changed"
     | "review_queue_updated"
+    | "property_comment_added"
+    | "property_updated"
     | "stuck_report"
     | "error";
   crisis_id?: string;
   report_id?: string;
+  property_id?: string;
   flag_status?: FlagStatus;
   flag_from?: FlagStatus;
   flag_to?: FlagStatus;

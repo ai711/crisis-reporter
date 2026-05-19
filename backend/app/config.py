@@ -78,6 +78,12 @@ class Settings(BaseSettings):
     AUTO_BLOCK_CHECK_INTERVAL_MINUTES: int = 15
     STUCK_REPORT_THRESHOLD_MINUTES: int = 10
 
+    # Export signed URLs
+    # IMPORTANT: Set EXPORT_URL_SIGN_SECRET to a long random string in production
+    # Generate with: python -c "import secrets; print(secrets.token_hex(32))"
+    EXPORT_URL_SIGN_SECRET: str = "dev-secret-change-in-production"
+    EXPORT_DOWNLOAD_EXPIRY_MINUTES: int = 15
+
     # CORS — origins allowed to call the API
     ALLOWED_ORIGINS: list[str] = [
         "http://localhost:5173",

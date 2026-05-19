@@ -97,6 +97,7 @@ class PropertyDetail(BaseModel):
     longitude: float
     address: Optional[str]
     country: Optional[str]
+    crisis_id: Optional[str]
     confirmed_status: Optional[str]
     has_conflict_warning: bool
     conflict_warning_details: Optional[ConflictWarningDetail]
@@ -525,6 +526,13 @@ async def get_property_detail(
             minority_percentage=minority_pct,
         )
 
+    # Crisis ID — taken from any report linked to this property
+    crisis_id_result = await db.execute(
+        select(Report.crisis_id).where(Report.property_id == prop.id).limit(1)
+    )
+    crisis_id_row = crisis_id_result.scalar_one_or_none()
+    crisis_id_str = str(crisis_id_row) if crisis_id_row else None
+
     # Reporter rows — one per unique reporter (most recent qualifying report)
     reporter_sq = (
         select(
@@ -566,6 +574,7 @@ async def get_property_detail(
         longitude=prop.longitude,
         address=address,
         country=country,
+        crisis_id=crisis_id_str,
         confirmed_status=DAMAGE_LABELS.get(prop.confirmed_status) if prop.confirmed_status else None,
         has_conflict_warning=prop.has_conflict_warning,
         conflict_warning_details=conflict_details,

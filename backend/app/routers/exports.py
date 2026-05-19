@@ -12,21 +12,25 @@ RAPIDA field mappings:
 """
 
 import csv
+import hashlib
+import hmac
 import json
 import os
 import pathlib
 import tempfile
+import time
 import uuid
 import zipfile
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, field_validator, model_validator
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
+from app.config import settings
 from app.database import AsyncSessionLocal
 from app.models.crisis import Crisis
 from app.models.dashboard_user import DashboardUser
@@ -42,6 +46,33 @@ except ImportError:
     GEOPANDAS_AVAILABLE = False
 
 router = APIRouter(prefix="/api/exports", tags=["Exports"])
+
+# ── Signed URL helpers ────────────────────────────────────────────────────────
+
+
+def generate_signed_download_url(job_id: str) -> str:
+    """Generate a signed download URL that expires in EXPORT_DOWNLOAD_EXPIRY_MINUTES."""
+    expires_at = int(time.time()) + (settings.EXPORT_DOWNLOAD_EXPIRY_MINUTES * 60)
+    payload = f"{job_id}:{expires_at}"
+    signature = hmac.new(
+        settings.EXPORT_URL_SIGN_SECRET.encode(),
+        payload.encode(),
+        hashlib.sha256,
+    ).hexdigest()
+    return f"/api/exports/{job_id}/download?expires={expires_at}&sig={signature}"
+
+
+def verify_signed_download_url(job_id: str, expires: int, sig: str) -> bool:
+    """Return True if the signature is valid and the URL has not expired."""
+    if time.time() > expires:
+        return False
+    payload = f"{job_id}:{expires}"
+    expected = hmac.new(
+        settings.EXPORT_URL_SIGN_SECRET.encode(),
+        payload.encode(),
+        hashlib.sha256,
+    ).hexdigest()
+    return hmac.compare_digest(expected, sig)
 
 # ── Storage ───────────────────────────────────────────────────────────────────
 
@@ -780,7 +811,7 @@ async def _generate_file(job_id: str) -> None:
 
         _jobs[job_id]["status"] = "complete"
         _jobs[job_id]["file_path"] = str(file_path)
-        _jobs[job_id]["download_url"] = f"/api/exports/{job_id}/download"
+        _jobs[job_id]["download_url"] = generate_signed_download_url(job_id)
 
     except Exception as exc:
         _jobs[job_id]["status"] = "failed"
@@ -940,8 +971,15 @@ async def redownload_export(
 @router.get("/{job_id}/download")
 async def download_export(
     job_id: str,
+    expires: int = Query(...),
+    sig: str = Query(...),
     current_user: DashboardUser = Depends(get_current_dashboard_user),
 ) -> FileResponse:
+    if not verify_signed_download_url(job_id, expires, sig):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Download link has expired or is invalid. Please generate a new export.",
+        )
     job = _jobs.get(job_id)
     if not job:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Export job not found")

@@ -51,6 +51,11 @@ const TOP_COUNTRIES = 10;
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
+interface ActiveProject {
+  serial_id: string;
+  name: string;
+}
+
 interface Filters {
   country: string[];
   dateFrom: string;
@@ -417,6 +422,16 @@ export default function AnalyticsPage() {
     staleTime: 0,
   });
 
+  // Active projects — for the project analytics shortcut strip
+  const { data: activeProjects = [] } = useQuery<ActiveProject[]>({
+    queryKey: ["analytics-active-projects"],
+    queryFn: () =>
+      api
+        .get<ActiveProject[]>("/api/dashboard/projects", { params: { status: "active", limit: 10 } })
+        .then((r) => r.data),
+    staleTime: 60000,
+  });
+
   // Flag quality
   const { data: flagQuality, isLoading: flagQualityLoading } = useQuery<FlagQualityResponse>({
     queryKey: ["analytics-flag-quality", applied],
@@ -569,6 +584,29 @@ export default function AnalyticsPage() {
             </div>
           ))}
         </div>
+
+        {/* ── Project Analytics shortcut strip ── */}
+        {activeProjects.length > 0 && (
+          <div style={s.projectStripWrap}>
+            <div style={s.projectStripLabel}>Project Analytics</div>
+            <div style={s.projectStrip}>
+              {activeProjects.map((project) => (
+                <button
+                  key={project.serial_id}
+                  onClick={() => navigate("/projects/" + project.serial_id)}
+                  style={s.projectCard}
+                >
+                  <span style={s.projectSerial}>{project.serial_id}</span>
+                  <span style={s.projectName}>{project.name}</span>
+                  <span style={s.projectArrow}>→</span>
+                </button>
+              ))}
+            </div>
+            <div style={s.projectStripNote}>
+              Each project page includes analytics scoped to that project's reports.
+            </div>
+          </div>
+        )}
 
         {/* ── Compact breakdowns ── */}
         <div style={s.twoCol}>
@@ -1227,6 +1265,53 @@ const s: Record<string, React.CSSProperties> = {
   actionSub: {
     fontSize: 12,
     color: "#718096",
+  },
+  // Project analytics strip
+  projectStripWrap: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 8,
+  },
+  projectStripLabel: {
+    fontSize: 11,
+    fontWeight: 700,
+    color: "#9E9E9E",
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+  },
+  projectStrip: {
+    display: "flex",
+    gap: 12,
+    flexWrap: "wrap",
+  },
+  projectCard: {
+    padding: "8px 16px",
+    background: "white",
+    border: "1px solid #E0E0E0",
+    borderRadius: 6,
+    cursor: "pointer",
+    fontSize: 13,
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+  },
+  projectSerial: {
+    color: "#0468B1",
+    fontWeight: 600,
+    fontFamily: "monospace",
+  },
+  projectName: {
+    color: "#424242",
+  },
+  projectArrow: {
+    color: "#9E9E9E",
+    fontSize: 11,
+  },
+  projectStripNote: {
+    fontSize: 12,
+    color: "#a0aec0",
+    fontStyle: "italic",
   },
   // Export
   exportBtn: {

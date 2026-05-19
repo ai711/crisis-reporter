@@ -88,7 +88,7 @@ export default function PropertySummaryPanel({ pin, onClose }: Props) {
       return res.data;
     },
     enabled: !!propertyId,
-    refetchInterval: 15000,
+    refetchInterval: 60000,
   });
 
   // Show 5 most recent in panel (newest first)
