@@ -25,6 +25,7 @@ import { useEffect } from "react";
 import { useAuthStore } from "../stores/authStore";
 import api from "../services/api";
 import { addToQueue } from "../utils/offlineQueue";
+import StepIndicator from "../components/StepIndicator";
 import type { DamageLevel, QueuedPhoto } from "../types";
 
 const MAPTILER_KEY = process.env.EXPO_PUBLIC_MAPTILER_KEY ?? "";
@@ -221,6 +222,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
   const [mapZoom, setMapZoom] = useState(2);
 
   // Submit
+  const [flowStartedAt, setFlowStartedAt] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [wasQueued, setWasQueued] = useState(false);
@@ -237,6 +239,10 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
   // Map refs
   const cameraRef = useRef<CameraRef | null>(null);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    setFlowStartedAt(new Date().toISOString());
+  }, []);
 
   useEffect(() => {
     const init = async () => {
@@ -586,6 +592,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
     // mcc, mnc, carrier_name are intentionally omitted until expo-cellular is added
     const reportPayload = {
       crisis_id: crisisId!,
+      flow_started_at: flowStartedAt ?? new Date().toISOString(),
       damage_level: damageLevel as DamageLevel,
       infrastructure_types: infrastructureTypes,
       ...(infrastructureTypes.includes("other") && { infrastructure_other: infrastructureOther }),
@@ -714,7 +721,17 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
     );
   }
 
-  const stepNumber = step === "photos" ? 1 : step === "location" ? 2 : step === "damage" ? 3 : 4;
+  const getStepNumber = (s: string): number => {
+    switch (s) {
+      case 'photos':    return 1;
+      case 'location':  return 2;
+      case 'damage':
+      case 'questions': return 3;
+      case 'review':    return 4;
+      case 'submit':    return 5;
+      default:          return 1;
+    }
+  };
 
   // ── Render ─────────────────────────────────────────────────────────────────────
 
@@ -726,13 +743,9 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
           <Text style={styles.backBtn}>←</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{t("report.title")}</Text>
-        <Text style={styles.stepIndicator}>{stepNumber}/4</Text>
       </View>
 
-      {/* Progress bar */}
-      <View style={styles.progressBar}>
-        <View style={[styles.progressFill, { width: `${stepNumber * 25}%` as any }]} />
-      </View>
+      <StepIndicator currentStep={getStepNumber(step)} />
 
       {/* Step 2 — Location (map-based, outside ScrollView) */}
       {step === "location" && (
@@ -950,6 +963,22 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                   </TouchableOpacity>
                 </View>
               )}
+
+              {/* Photo guidelines */}
+              <View style={styles.guidelinesContainer}>
+                <Text style={styles.guidelinesTitle}>{t('photoScreen.guidelines.title')}</Text>
+                {[
+                  t('photoScreen.guidelines.g1'),
+                  t('photoScreen.guidelines.g2'),
+                  t('photoScreen.guidelines.g3'),
+                  t('photoScreen.guidelines.g4'),
+                ].map((guideline, index) => (
+                  <View key={index} style={styles.guidelineRow}>
+                    <Text style={styles.guidelineBullet}>•</Text>
+                    <Text style={styles.guidelineText}>{guideline}</Text>
+                  </View>
+                ))}
+              </View>
 
               <TouchableOpacity
                 style={[styles.primaryButton, photos.length === 0 && styles.buttonDisabled]}
@@ -1276,17 +1305,16 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#f4f6f9" },
   header: {
-    backgroundColor: "#1A2B4A",
+    backgroundColor: "#FFFFFF",
     padding: 16,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    borderBottomWidth: 1,
+    borderBottomColor: "#E8EDF2",
   },
-  backBtn: { color: "#fff", fontSize: 22 },
-  headerTitle: { color: "#fff", fontSize: 18, fontWeight: "700", flex: 1, textAlign: "center" },
-  stepIndicator: { color: "#A0B4CC", fontSize: 14 },
-  progressBar: { height: 4, backgroundColor: "#e0e0e0" },
-  progressFill: { height: 4, backgroundColor: "#0468B1" },
+  backBtn: { color: "#0468B1", fontSize: 22 },
+  headerTitle: { color: "#0468B1", fontSize: 18, fontWeight: "700", flex: 1, textAlign: "center" },
   content: { flex: 1 },
   contentPadding: { padding: 16 },
   step: { gap: 12 },
@@ -1537,4 +1565,38 @@ const styles = StyleSheet.create({
   addPhotoIcon: { fontSize: 32 },
   addPhotoText: { fontSize: 11, color: "#666" },
   fieldLabel: { fontSize: 14, fontWeight: "500", color: "#666" },
+
+  // Photo guidelines
+  guidelinesContainer: {
+    marginTop: 20,
+    marginHorizontal: 24,
+    padding: 16,
+    backgroundColor: '#F8F9FA',
+    borderRadius: 12,
+  },
+  guidelinesTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#555555',
+    marginBottom: 10,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  guidelineRow: {
+    flexDirection: 'row',
+    marginBottom: 8,
+    alignItems: 'flex-start',
+  },
+  guidelineBullet: {
+    fontSize: 14,
+    color: '#0468B1',
+    marginRight: 8,
+    lineHeight: 20,
+  },
+  guidelineText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#555555',
+    lineHeight: 20,
+  },
 });

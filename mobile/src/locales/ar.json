@@ -124,5 +124,32 @@
       "conflict": { "name": "Conflict", "description": "Damage from armed conflict or military activity." },
       "civilUnrest": { "name": "Civil Unrest", "description": "Damage from protests, riots, or civil disturbance." }
     }
+  },
+  "photoScreen": {
+    "guidelines": {
+      "title": "Photo guidelines",
+      "g1": "Make sure the damage is clearly visible in the photo",
+      "g2": "Avoid photos that are too dark or blurry",
+      "g3": "Take the photo from a safe distance — do not put yourself at risk",
+      "g4": "Include the full structure in the frame where possible"
+    },
+    "photoAdded": "Photo added",
+    "maxPhotos": "Maximum 3 photos reached",
+    "removeTitle": "Remove this photo?",
+    "removeConfirm": "Remove",
+    "removeCancel": "Cancel",
+    "validationEmpty": "No photo was selected. Please try again.",
+    "validationFormat": "This file type cannot be used. Please take a new photo or select a JPG, PNG, or similar image from your gallery.",
+    "validationGif": "Animated or GIF files cannot be used. Please select a standard photo.",
+    "validationTooSmall": "This image is too small to use. Please take a new photo.",
+    "validationDuplicate": "This photo is already added to your report.",
+    "validationBlank": "This photo appears to be blank. Please take a new photo."
+  },
+  "steps": {
+    "photo": "Photo",
+    "location": "Location",
+    "questions": "Questions",
+    "review": "Review",
+    "submit": "Submit"
   }
 }
