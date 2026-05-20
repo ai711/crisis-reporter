@@ -27,6 +27,7 @@ import api from "../services/api";
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as FileSystem from 'expo-file-system';
 import { addToQueue } from "../utils/offlineQueue";
+import NetInfo from "@react-native-community/netinfo";
 import StepIndicator from "../components/StepIndicator";
 import type { DamageLevel, QueuedPhoto, ProcessedPhoto } from "../types";
 
@@ -223,6 +224,21 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
   const [gpsCapturing, setGpsCapturing] = useState(false);
   const [mapZoom, setMapZoom] = useState(2);
 
+  // Location screen scenario state
+  const [locationScenario, setLocationScenario] = useState<
+    'loading' | 'online_gps' | 'online_no_gps' | 'offline_gps' | 'offline_no_gps'
+  >('loading');
+  const [locationGpsCoords, setLocationGpsCoords] = useState<{
+    lat: number;
+    lng: number;
+    accuracy: number;
+  } | null>(null);
+  const [isOnlineAtLocation, setIsOnlineAtLocation] = useState(true);
+  const [locationNote, setLocationNote] = useState('');
+  const [locationMethod, setLocationMethod] = useState<
+    'map_selection' | 'pin_drop' | 'manual' | null
+  >(null);
+
   // Submit
   const [flowStartedAt, setFlowStartedAt] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -280,6 +296,62 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
       if (debounceTimer.current) clearTimeout(debounceTimer.current);
     };
   }, []);
+
+  // Scenario detection — runs each time the reporter arrives at the location step
+  useEffect(() => {
+    if (step !== 'location') return;
+
+    const detectScenario = async () => {
+      setLocationScenario('loading');
+
+      // Check 1: Internet connectivity
+      let online = false;
+      try {
+        const netState = await NetInfo.fetch();
+        online = !!(netState.isConnected && netState.isInternetReachable);
+      } catch {
+        online = false;
+      }
+      setIsOnlineAtLocation(online);
+
+      // Check 2: GPS — attempt to get current position (8 s timeout so UI is not blocked)
+      let gpsResult: { lat: number; lng: number; accuracy: number } | null = null;
+      try {
+        const { status } = await Location.getForegroundPermissionsAsync();
+        if (status === 'granted') {
+          const pos = await Promise.race([
+            Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+            new Promise<null>((resolve) => setTimeout(() => resolve(null), 8000)),
+          ]);
+          if (pos && 'coords' in pos) {
+            gpsResult = {
+              lat: pos.coords.latitude,
+              lng: pos.coords.longitude,
+              accuracy: pos.coords.accuracy ?? 0,
+            };
+          }
+        }
+      } catch {
+        gpsResult = null;
+      }
+
+      if (gpsResult) {
+        setLocationGpsCoords(gpsResult);
+      }
+
+      if (online && gpsResult) {
+        setLocationScenario('online_gps');
+      } else if (online && !gpsResult) {
+        setLocationScenario('online_no_gps');
+      } else if (!online && gpsResult) {
+        setLocationScenario('offline_gps');
+      } else {
+        setLocationScenario('offline_no_gps');
+      }
+    };
+
+    detectScenario();
+  }, [step]);
 
   // ── Question package helpers ──────────────────────────────────────────────────
 
@@ -425,11 +497,19 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
     }
   };
 
-  const isLocationValid = (): boolean =>
-    !!gpsCoords ||
-    locationAddress.trim().length > 0 ||
-    locationLandmark.trim().length > 0 ||
-    locationBuildingName.trim().length > 0;
+  const isLocationValid = (): boolean => {
+    if (locationScenario === 'online_gps' || locationScenario === 'online_no_gps') {
+      return !!(selectedBuilding || gpsCoords || locationGpsCoords);
+    }
+    if (locationScenario === 'offline_gps' || locationScenario === 'offline_no_gps') {
+      return !!(
+        locationAddress?.trim() ||
+        locationLandmark?.trim() ||
+        locationBuildingName?.trim()
+      );
+    }
+    return false;
+  };
 
   // ── Photo handlers ────────────────────────────────────────────────────────────
 
@@ -843,6 +923,11 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
     setLocationLandmark("");
     setLocationBuildingName("");
     setManualExpanded(false);
+    setLocationScenario('loading');
+    setLocationGpsCoords(null);
+    setIsOnlineAtLocation(true);
+    setLocationNote('');
+    setLocationMethod(null);
     setSubmitted(false);
     setWasQueued(false);
     setSubmittedReportId(null);
@@ -885,12 +970,23 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
       location: {
         gps_latitude: gpsCoords?.lat ?? null,
         gps_longitude: gpsCoords?.lng ?? null,
-        gps_accuracy_meters: null,
-        gps_available: !!gpsCoords,
+        gps_accuracy_meters: locationGpsCoords?.accuracy ?? null,
+        gps_available: !!gpsCoords || !!locationGpsCoords,
         location_address: buildLocationAddress(),
         location_landmark: locationLandmark || null,
         location_building_name: locationBuildingName || null,
       },
+      location_note: locationNote || undefined,
+      location_method: locationMethod ?? (
+        selectedBuilding ? 'map_selection' :
+        (locationAddress || locationLandmark || locationBuildingName) ? 'manual' :
+        undefined
+      ),
+      internet_available_at_location: isOnlineAtLocation,
+      offline_map_pack_used: false,
+      building_name_osm: selectedBuilding?.name ?? undefined,
+      building_type: selectedBuilding?.building ?? undefined,
+      gps_accuracy: locationGpsCoords?.accuracy ?? undefined,
       reporter_id: reporterId || undefined,
       language_code: languageCode,
       question_package_version: questionPackage?.version ?? null,
@@ -1035,160 +1131,250 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
 
       <StepIndicator currentStep={getStepNumber(step)} />
 
-      {/* Step 2 — Location (map-based, outside ScrollView) */}
+      {/* Step 2 — Location */}
       {step === "location" && (
-        <View style={{ flex: 1 }}>
-          {/* Map fills most of the screen */}
-          <View style={{ flex: 1 }}>
-            <MLMap
-              mapStyle={MAP_STYLE_URL}
-              style={{ flex: 1 }}
-              onRegionDidChange={handleRegionChange}
-              onDidFinishLoadingMap={handleMapLoaded}
-            >
-              <Camera
-                ref={cameraRef}
-                initialViewState={{ center: [0, 20], zoom: 2 }}
+        <View style={styles.locationContainer}>
+
+          {/* Loading — scenario detection in progress */}
+          {locationScenario === 'loading' && (
+            <View style={styles.locationLoadingContainer}>
+              <ActivityIndicator color="#0468B1" size="large" />
+            </View>
+          )}
+
+          {/* Online scenarios — show map */}
+          {(locationScenario === 'online_gps' || locationScenario === 'online_no_gps') && (
+            <View style={{ flex: 1 }}>
+              {/* GPS unavailable inline note — Scenario 2 only */}
+              {locationScenario === 'online_no_gps' && (
+                <View style={styles.gpsUnavailableNote}>
+                  <Text style={styles.gpsUnavailableNoteText}>
+                    {t('locationScreen.gpsUnavailableOnline')}
+                  </Text>
+                </View>
+              )}
+
+              {/* Map fills most of the screen */}
+              <View style={{ flex: 1 }}>
+                <MLMap
+                  mapStyle={MAP_STYLE_URL}
+                  style={{ flex: 1 }}
+                  onRegionDidChange={handleRegionChange}
+                  onDidFinishLoadingMap={handleMapLoaded}
+                >
+                  <Camera
+                    ref={cameraRef}
+                    initialViewState={{ center: [0, 20], zoom: 2 }}
+                  />
+
+                  {/* Default building footprints */}
+                  {buildingsFC && (
+                    <GeoJSONSource id="buildings" data={buildingsFC} onPress={handleBuildingPress}>
+                      <Layer
+                        id="buildings-fill"
+                        type="fill"
+                        paint={{ "fill-color": "#CBD5E0", "fill-opacity": 0.5 }}
+                      />
+                      <Layer
+                        id="buildings-outline"
+                        type="line"
+                        paint={{ "line-color": "#718096", "line-width": 0.6 }}
+                      />
+                    </GeoJSONSource>
+                  )}
+
+                  {/* Selected building highlight */}
+                  {selectedBuildingFC && (
+                    <GeoJSONSource id="selected-building" data={selectedBuildingFC}>
+                      <Layer
+                        id="selected-building-fill"
+                        type="fill"
+                        paint={{ "fill-color": "#0468B1", "fill-opacity": 0.7 }}
+                      />
+                      <Layer
+                        id="selected-building-outline"
+                        type="line"
+                        paint={{ "line-color": "#0468B1", "line-width": 2 }}
+                      />
+                    </GeoJSONSource>
+                  )}
+                </MLMap>
+
+                {/* Zoom hint overlay */}
+                {mapZoom < 14 && (
+                  <View style={styles.zoomHint} pointerEvents="none">
+                    <Text style={styles.zoomHintText}>Zoom in to see and select buildings</Text>
+                  </View>
+                )}
+
+                {/* Microsoft Building Footprints active note */}
+                {footprintSource === "microsoft" && (
+                  <View style={styles.microsoftNote} pointerEvents="none">
+                    <Text style={styles.microsoftNoteText}>
+                      Microsoft Building Footprints active — building selection uses ML-detected footprints.
+                    </Text>
+                  </View>
+                )}
+              </View>
+
+              {/* Bottom panel */}
+              <ScrollView
+                style={styles.locationPanel}
+                contentContainerStyle={styles.locationPanelContent}
+                keyboardShouldPersistTaps="handled"
+              >
+                <Text style={styles.stepTitle}>{t("report.location")}</Text>
+
+                {/* Building selection info card */}
+                {selectedBuilding && (
+                  <View style={styles.selectionCard}>
+                    <Text style={styles.selectionCardTitle}>Building Selected</Text>
+                    <Text style={styles.selectionCardName}>
+                      {selectedBuilding.name || "Unnamed building"}
+                    </Text>
+                    {selectedBuilding.building !== "yes" && (
+                      <Text style={styles.selectionCardMeta}>Type: {selectedBuilding.building}</Text>
+                    )}
+                    <Text style={styles.selectionCardCoords}>
+                      {selectedBuilding.centroid[1].toFixed(6)}, {selectedBuilding.centroid[0].toFixed(6)}
+                    </Text>
+                  </View>
+                )}
+
+                {/* GPS-only info card (when GPS captured without building) */}
+                {gpsCoords && !selectedBuilding && (
+                  <View style={styles.selectionCard}>
+                    <Text style={styles.selectionCardTitle}>GPS Location Captured</Text>
+                    <Text style={styles.selectionCardCoords}>
+                      {gpsCoords.lat.toFixed(6)}, {gpsCoords.lng.toFixed(6)}
+                    </Text>
+                  </View>
+                )}
+
+                {/* GPS capture button */}
+                <TouchableOpacity
+                  style={[styles.gpsButton, gpsCapturing && styles.buttonDisabled]}
+                  onPress={handleGetGPS}
+                  disabled={gpsCapturing}
+                >
+                  <Text style={styles.gpsButtonText}>
+                    {gpsCapturing ? "Getting location…" : "📍 Use My GPS Location"}
+                  </Text>
+                </TouchableOpacity>
+
+                {/* Manual location toggle */}
+                <TouchableOpacity onPress={() => setManualExpanded(!manualExpanded)}>
+                  <Text style={styles.manualToggle}>
+                    {manualExpanded ? "Hide manual entry ▲" : "Enter location manually instead ▼"}
+                  </Text>
+                </TouchableOpacity>
+
+                {manualExpanded && (
+                  <View style={{ gap: 8 }}>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Address"
+                      value={locationAddress}
+                      onChangeText={setLocationAddress}
+                    />
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Landmark (e.g. Near central market)"
+                      value={locationLandmark}
+                      onChangeText={setLocationLandmark}
+                    />
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Building Name"
+                      value={locationBuildingName}
+                      onChangeText={setLocationBuildingName}
+                    />
+                  </View>
+                )}
+              </ScrollView>
+            </View>
+          )}
+
+          {/* Offline scenarios — hide map, show manual entry */}
+          {(locationScenario === 'offline_gps' || locationScenario === 'offline_no_gps') && (
+            <ScrollView style={styles.manualContainer} contentContainerStyle={styles.manualContent}>
+              {/* Amber offline banner */}
+              <View style={styles.offlineBanner}>
+                <Text style={styles.offlineBannerText}>
+                  {t('locationScreen.offlineBanner')}
+                </Text>
+              </View>
+
+              {/* GPS status indicator */}
+              {locationScenario === 'offline_gps' && locationGpsCoords && (
+                <View style={styles.gpsIndicator}>
+                  <Text style={styles.gpsIndicatorText}>
+                    📍 {t('locationScreen.gpsRecorded')}
+                  </Text>
+                </View>
+              )}
+              {locationScenario === 'offline_no_gps' && (
+                <View style={styles.gpsIndicator}>
+                  <Text style={[styles.gpsIndicatorText, styles.gpsIndicatorUnavailable]}>
+                    ⚠️ {t('locationScreen.gpsUnavailable')}
+                  </Text>
+                </View>
+              )}
+
+              {/* Manual entry fields */}
+              <Text style={styles.manualFieldLabel}>{t('locationScreen.manualAddress')}</Text>
+              <TextInput
+                style={styles.manualInput}
+                placeholder={t('locationScreen.manualAddressPlaceholder')}
+                value={locationAddress}
+                onChangeText={setLocationAddress}
+                multiline={false}
               />
 
-              {/* Default building footprints */}
-              {buildingsFC && (
-                <GeoJSONSource id="buildings" data={buildingsFC} onPress={handleBuildingPress}>
-                  <Layer
-                    id="buildings-fill"
-                    type="fill"
-                    paint={{ "fill-color": "#CBD5E0", "fill-opacity": 0.5 }}
-                  />
-                  <Layer
-                    id="buildings-outline"
-                    type="line"
-                    paint={{ "line-color": "#718096", "line-width": 0.6 }}
-                  />
-                </GeoJSONSource>
+              <Text style={styles.manualFieldLabel}>{t('locationScreen.manualLandmark')}</Text>
+              <TextInput
+                style={styles.manualInput}
+                placeholder={t('locationScreen.manualLandmarkPlaceholder')}
+                value={locationLandmark}
+                onChangeText={setLocationLandmark}
+                multiline={false}
+              />
+
+              <Text style={styles.manualFieldLabel}>{t('locationScreen.manualBuildingName')}</Text>
+              <TextInput
+                style={styles.manualInput}
+                placeholder={t('locationScreen.manualBuildingNamePlaceholder')}
+                value={locationBuildingName}
+                onChangeText={setLocationBuildingName}
+                multiline={false}
+              />
+
+              {/* At least one field required note */}
+              {!locationAddress && !locationLandmark && !locationBuildingName && (
+                <Text style={styles.manualRequiredNote}>
+                  {t('locationScreen.manualAtLeastOne')}
+                </Text>
               )}
+            </ScrollView>
+          )}
 
-              {/* Selected building highlight */}
-              {selectedBuildingFC && (
-                <GeoJSONSource id="selected-building" data={selectedBuildingFC}>
-                  <Layer
-                    id="selected-building-fill"
-                    type="fill"
-                    paint={{ "fill-color": "#0468B1", "fill-opacity": 0.7 }}
-                  />
-                  <Layer
-                    id="selected-building-outline"
-                    type="line"
-                    paint={{ "line-color": "#0468B1", "line-width": 2 }}
-                  />
-                </GeoJSONSource>
-              )}
-            </MLMap>
-
-            {/* Zoom hint overlay */}
-            {mapZoom < 14 && (
-              <View style={styles.zoomHint} pointerEvents="none">
-                <Text style={styles.zoomHintText}>Zoom in to see and select buildings</Text>
+          {/* Footer — Back and Next for all non-loading scenarios */}
+          {locationScenario !== 'loading' && (
+            <View style={[styles.locationNextContainer, { paddingBottom: insets.bottom + 16 }]}>
+              <View style={styles.navButtons}>
+                <TouchableOpacity style={styles.secondaryButton} onPress={() => setStep("photos")}>
+                  <Text style={styles.secondaryButtonText}>← Back</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.primaryButton, !isLocationValid() && styles.buttonDisabled]}
+                  onPress={() => isLocationValid() && setStep("damage")}
+                  disabled={!isLocationValid()}
+                >
+                  <Text style={styles.primaryButtonText}>Next →</Text>
+                </TouchableOpacity>
               </View>
-            )}
-
-            {/* Microsoft Building Footprints active note */}
-            {footprintSource === "microsoft" && (
-              <View style={styles.microsoftNote} pointerEvents="none">
-                <Text style={styles.microsoftNoteText}>
-                  Microsoft Building Footprints active — building selection uses ML-detected footprints.
-                </Text>
-              </View>
-            )}
-          </View>
-
-          {/* Bottom panel */}
-          <ScrollView
-            style={styles.locationPanel}
-            contentContainerStyle={styles.locationPanelContent}
-            keyboardShouldPersistTaps="handled"
-          >
-            <Text style={styles.stepTitle}>{t("report.location")}</Text>
-
-            {/* Building selection info card */}
-            {selectedBuilding && (
-              <View style={styles.selectionCard}>
-                <Text style={styles.selectionCardTitle}>Building Selected</Text>
-                <Text style={styles.selectionCardName}>
-                  {selectedBuilding.name || "Unnamed building"}
-                </Text>
-                {selectedBuilding.building !== "yes" && (
-                  <Text style={styles.selectionCardMeta}>Type: {selectedBuilding.building}</Text>
-                )}
-                <Text style={styles.selectionCardCoords}>
-                  {selectedBuilding.centroid[1].toFixed(6)}, {selectedBuilding.centroid[0].toFixed(6)}
-                </Text>
-              </View>
-            )}
-
-            {/* GPS-only info card (when GPS captured without building) */}
-            {gpsCoords && !selectedBuilding && (
-              <View style={styles.selectionCard}>
-                <Text style={styles.selectionCardTitle}>GPS Location Captured</Text>
-                <Text style={styles.selectionCardCoords}>
-                  {gpsCoords.lat.toFixed(6)}, {gpsCoords.lng.toFixed(6)}
-                </Text>
-              </View>
-            )}
-
-            {/* GPS capture button */}
-            <TouchableOpacity
-              style={[styles.gpsButton, gpsCapturing && styles.buttonDisabled]}
-              onPress={handleGetGPS}
-              disabled={gpsCapturing}
-            >
-              <Text style={styles.gpsButtonText}>
-                {gpsCapturing ? "Getting location…" : "📍 Use My GPS Location"}
-              </Text>
-            </TouchableOpacity>
-
-            {/* Manual location toggle */}
-            <TouchableOpacity onPress={() => setManualExpanded(!manualExpanded)}>
-              <Text style={styles.manualToggle}>
-                {manualExpanded ? "Hide manual entry ▲" : "Enter location manually instead ▼"}
-              </Text>
-            </TouchableOpacity>
-
-            {manualExpanded && (
-              <View style={{ gap: 8 }}>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Address"
-                  value={locationAddress}
-                  onChangeText={setLocationAddress}
-                />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Landmark (e.g. Near central market)"
-                  value={locationLandmark}
-                  onChangeText={setLocationLandmark}
-                />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Building Name"
-                  value={locationBuildingName}
-                  onChangeText={setLocationBuildingName}
-                />
-              </View>
-            )}
-
-            <View style={styles.navButtons}>
-              <TouchableOpacity style={styles.secondaryButton} onPress={() => setStep("photos")}>
-                <Text style={styles.secondaryButtonText}>← Back</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.primaryButton, !isLocationValid() && styles.buttonDisabled]}
-                onPress={() => setStep("damage")}
-                disabled={!isLocationValid()}
-              >
-                <Text style={styles.primaryButtonText}>Next →</Text>
-              </TouchableOpacity>
             </View>
-          </ScrollView>
+          )}
         </View>
       )}
 
@@ -2062,6 +2248,93 @@ const styles = StyleSheet.create({
   modalBody: { fontSize: 15, color: "#444", lineHeight: 22, marginBottom: 20 },
   modalButtons: { flexDirection: "row", gap: 12 },
   questionProgress: { fontSize: 13, fontWeight: "600", color: "#0468B1", textAlign: "center" },
+
+  // Location screen scenario styles
+  locationContainer: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  locationLoadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  gpsUnavailableNote: {
+    backgroundColor: '#FFF8E1',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#FFE082',
+  },
+  gpsUnavailableNoteText: {
+    fontSize: 13,
+    color: '#F57F17',
+    lineHeight: 18,
+  },
+  offlineBanner: {
+    backgroundColor: '#F5A623',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    marginBottom: 8,
+  },
+  offlineBannerText: {
+    fontSize: 14,
+    color: '#FFFFFF',
+    fontWeight: '600',
+    lineHeight: 20,
+  },
+  gpsIndicator: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    marginBottom: 8,
+  },
+  gpsIndicatorText: {
+    fontSize: 13,
+    color: '#2E7D32',
+    lineHeight: 18,
+  },
+  gpsIndicatorUnavailable: {
+    color: '#E65100',
+  },
+  manualContainer: {
+    flex: 1,
+  },
+  manualContent: {
+    paddingHorizontal: 24,
+    paddingTop: 8,
+    paddingBottom: 24,
+  },
+  manualFieldLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333333',
+    marginTop: 16,
+    marginBottom: 6,
+  },
+  manualInput: {
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: '#333333',
+    minHeight: 48,
+    backgroundColor: '#FFFFFF',
+  },
+  manualRequiredNote: {
+    fontSize: 13,
+    color: '#E65100',
+    marginTop: 12,
+    textAlign: 'center',
+  },
+  locationNextContainer: {
+    paddingHorizontal: 24,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E0E0E0',
+    backgroundColor: '#FFFFFF',
+  },
 
   // Unused legacy keys kept to avoid StyleSheet warnings if referenced elsewhere
   typeGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },

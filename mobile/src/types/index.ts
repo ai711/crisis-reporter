@@ -54,6 +54,13 @@ export interface ReportSubmitRequest {
   mcc?: string;
   mnc?: string;
   carrier_name?: string;
+  location_note?: string;
+  location_method?: 'map_selection' | 'pin_drop' | 'manual';
+  internet_available_at_location?: boolean;
+  offline_map_pack_used?: boolean;
+  building_name_osm?: string;
+  building_type?: string;
+  gps_accuracy?: number;
 }
 
 export interface ReportSubmitResponse {
