@@ -16,6 +16,9 @@ import SettingsScreen from "./src/screens/SettingsScreen";
 import MyReportsScreen from "./src/screens/MyReportsScreen";
 import LoginScreen from "./src/screens/LoginScreen";
 import ReporterProfileScreen from "./src/screens/ReporterProfileScreen";
+import SafetyTipsScreen from "./src/screens/SafetyTipsScreen";
+import BadgesScreen from "./src/screens/BadgesScreen";
+import FAQScreen from "./src/screens/FAQScreen";
 
 const Stack = createNativeStackNavigator();
 
@@ -54,10 +57,13 @@ function Navigation() {
             <Stack.Screen name="Home" component={HomeScreen} />
             <Stack.Screen name="Report" component={ReportScreen} />
             <Stack.Screen name="Map" component={MapScreen} />
-            <Stack.Screen name="Settings" component={SettingsScreen} />
+            <Stack.Screen name="SettingsScreen" component={SettingsScreen} options={{ headerShown: false }} />
             <Stack.Screen name="MyReports" component={MyReportsScreen} />
             <Stack.Screen name="LoginScreen" component={LoginScreen} options={{ headerShown: false }} />
             <Stack.Screen name="ReporterProfileScreen" component={ReporterProfileScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="SafetyTipsScreen" component={SafetyTipsScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="BadgesScreen" component={BadgesScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="FAQScreen" component={FAQScreen} options={{ headerShown: false }} />
           </>
         )}
       </Stack.Navigator>

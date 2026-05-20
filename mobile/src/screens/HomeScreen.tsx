@@ -12,6 +12,7 @@ import api from "../services/api";
 import NetInfo from "@react-native-community/netinfo";
 import * as SecureStore from "expo-secure-store";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import SideMenu from "../components/SideMenu";
 
 const API_URL = "https://crisis-reporter-production.up.railway.app";
 
@@ -165,7 +166,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
         </TouchableOpacity>
         <Text style={styles.appName}>{t("app.name")}</Text>
         <TouchableOpacity
-          onPress={() => navigation.navigate("Settings")}
+          onPress={() => navigation.navigate("SettingsScreen")}
           style={styles.menuBtn}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
@@ -300,6 +301,9 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
           </View>
         </View>
       </Modal>
+
+      {/* Side menu drawer */}
+      <SideMenu visible={menuOpen} onClose={() => setMenuOpen(false)} />
 
       {/* "What can I report?" bottom sheet modal */}
       <Modal
