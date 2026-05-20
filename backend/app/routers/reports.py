@@ -374,6 +374,53 @@ async def submit_report(
         message="Report received — verification in progress",
     )
 
+@router.get("", response_model=List[ReportResponse])
+async def list_reports(
+    limit: int = Query(200, le=500),
+    cursor: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db),
+):
+    """List recent geo-located reports for the mobile map screen."""
+    query = select(Report).where(Report.gps_latitude.isnot(None), Report.gps_longitude.isnot(None))
+    if cursor:
+        query = query.where(Report.id < cursor)
+    query = query.order_by(Report.created_at.desc()).limit(limit)
+    result = await db.execute(query)
+    reports_list = result.scalars().all()
+    return [
+        ReportResponse(
+            id=str(r.id),
+            crisis_id=str(r.crisis_id),
+            reporter_id=str(r.reporter_id) if r.reporter_id else None,
+            building_id=r.building_id,
+            building_name=r.building_name,
+            damage_level=r.damage_level,
+            infrastructure_type=r.infrastructure_type,
+            infrastructure_types=r.infrastructure_types,
+            infrastructure_other=r.infrastructure_other,
+            infrastructure_name=r.infrastructure_name,
+            disaster_type=r.disaster_type,
+            debris_blocking=r.debris_blocking,
+            electricity_condition=r.electricity_condition,
+            health_services_condition=r.health_services_condition,
+            pressing_needs=r.pressing_needs,
+            pressing_needs_other=r.pressing_needs_other,
+            flag_status=r.flag_status,
+            platform=r.platform,
+            language_code=r.language_code,
+            gps_latitude=r.gps_latitude,
+            gps_longitude=r.gps_longitude,
+            gps_available=r.gps_available,
+            location_address=r.location_address,
+            location_landmark=r.location_landmark,
+            was_queued=r.was_queued,
+            submitted_at=r.submitted_at,
+            created_at=r.created_at,
+        )
+        for r in reports_list
+    ]
+
+
 @router.get("/duplicate-check")
 async def check_duplicate_report(
     lat: Optional[float] = Query(None),
