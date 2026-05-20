@@ -227,6 +227,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
 
   // Step
   const [step, setStep] = useState<"photos" | "location" | "damage" | "review">("photos");
+  const [fromReview, setFromReview] = useState(false);
 
   // Damage form
   const [damageLevel, setDamageLevel] = useState<DamageLevel | "">("");
@@ -1232,6 +1233,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
     setSearchQuery('');
     setSearchResults([]);
     setShowSearchResults(false);
+    setFromReview(false);
     setSubmitted(false);
     setWasQueued(false);
     setSubmittedReportId(null);
@@ -1445,7 +1447,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
         <Text style={styles.headerTitle}>{t("report.title")}</Text>
       </View>
 
-      <StepIndicator currentStep={getStepNumber(step)} />
+      {step !== 'review' && <StepIndicator currentStep={getStepNumber(step)} />}
 
       {/* Step 2 — Location */}
       {step === "location" && (
@@ -2049,7 +2051,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
       </Modal>
 
       {/* All other steps inside ScrollView */}
-      {step !== "location" && (
+      {step !== "location" && step !== "review" && (
         <ScrollView style={styles.content} contentContainerStyle={styles.contentPadding}>
 
           {/* Step 1 — Photos */}
@@ -2479,104 +2481,255 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
             </View>
           )}
 
-          {/* Step 4 — Review and Submit */}
-          {step === "review" && (
-            <View style={styles.step}>
-              <Text style={styles.stepTitle}>Review Your Report</Text>
+        </ScrollView>
+      )}
 
-              <View style={styles.reviewCard}>
-                <View style={styles.reviewRow}>
-                  <Text style={styles.reviewLabel}>Damage Level</Text>
-                  <Text style={styles.reviewValue}>{DAMAGE_LABELS[damageLevel] ?? damageLevel}</Text>
-                </View>
-                <View style={styles.reviewRow}>
-                  <Text style={styles.reviewLabel}>Infrastructure</Text>
-                  <Text style={styles.reviewValue}>
-                    {infrastructureTypes.map((v) => INFRA_LABELS[v] ?? v).join(", ")}
-                  </Text>
-                </View>
-                <View style={styles.reviewRow}>
-                  <Text style={styles.reviewLabel}>Infrastructure Name</Text>
-                  <Text style={styles.reviewValue}>{infrastructureName}</Text>
-                </View>
-                <View style={styles.reviewRow}>
-                  <Text style={styles.reviewLabel}>Disaster Type</Text>
-                  <Text style={styles.reviewValue}>{DISASTER_LABELS[disasterType] ?? disasterType}</Text>
-                </View>
-                <View style={styles.reviewRow}>
-                  <Text style={styles.reviewLabel}>Debris Blocking</Text>
-                  <Text style={styles.reviewValue}>{DEBRIS_LABELS[debrisBlocking] ?? debrisBlocking}</Text>
-                </View>
-                <View style={styles.reviewRow}>
-                  <Text style={styles.reviewLabel}>Electricity</Text>
-                  <Text style={styles.reviewValue}>{ELECTRICITY_LABELS[electricityCondition] ?? electricityCondition}</Text>
-                </View>
-                <View style={styles.reviewRow}>
-                  <Text style={styles.reviewLabel}>Health Services</Text>
-                  <Text style={styles.reviewValue}>{HEALTH_LABELS[healthServicesCondition] ?? healthServicesCondition}</Text>
-                </View>
-                <View style={styles.reviewRow}>
-                  <Text style={styles.reviewLabel}>Pressing Needs</Text>
-                  <Text style={styles.reviewValue}>
-                    {pressingNeeds.map((v) => PRESSING_NEEDS_LABELS[v] ?? v).join(", ")}
-                    {pressingNeeds.includes("other") && pressingNeedsOther ? ` (${pressingNeedsOther})` : ""}
-                  </Text>
-                </View>
-                <View style={styles.reviewRow}>
-                  <Text style={styles.reviewLabel}>Photos</Text>
-                  <Text style={styles.reviewValue}>{photos.length} photo(s)</Text>
-                </View>
-                {selectedBuilding && (
-                  <View style={styles.reviewRow}>
-                    <Text style={styles.reviewLabel}>Location</Text>
-                    <Text style={styles.reviewValue}>
-                      {selectedBuilding.name || "Building selected"}
-                    </Text>
-                  </View>
-                )}
-                {gpsCoords && !selectedBuilding && (
-                  <View style={styles.reviewRow}>
-                    <Text style={styles.reviewLabel}>GPS</Text>
-                    <Text style={styles.reviewValue}>
-                      {gpsCoords.lat.toFixed(4)}, {gpsCoords.lng.toFixed(4)}
-                    </Text>
-                  </View>
-                )}
-                {locationAddress && !gpsCoords ? (
-                  <View style={styles.reviewRow}>
-                    <Text style={styles.reviewLabel}>Address</Text>
-                    <Text style={styles.reviewValue}>{locationAddress}</Text>
-                  </View>
-                ) : null}
-              </View>
+      {/* Step 4 — Review */}
+      {step === 'review' && (
+        <View style={styles.reviewContainer}>
+          <StepIndicator currentStep={4} />
 
-              <View style={styles.navButtons}>
+          {/* Scrollable content */}
+          <ScrollView
+            style={styles.reviewScroll}
+            contentContainerStyle={styles.reviewScrollContent}
+            showsVerticalScrollIndicator={false}
+          >
+            <Text style={styles.reviewTitle}>{t('review.title')}</Text>
+
+            {/* ── SECTION 1: PHOTOS ── */}
+            <View style={styles.reviewSection}>
+              <View style={styles.reviewSectionHeader}>
+                <Text style={styles.reviewSectionTitle}>{t('review.photosSection')}</Text>
                 <TouchableOpacity
-                  style={styles.secondaryButton}
                   onPress={() => {
-                    const lastQ = 8 + additionalQuestions.length;
-                    setDamageQuestion(lastQ);
-                    if (additionalQuestions.length > 0) setAdditionalQuestion(additionalQuestions.length);
-                    setStep("damage");
+                    setFromReview(true);
+                    setStep('photos');
                   }}
                 >
-                  <Text style={styles.secondaryButtonText}>← Back</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.primaryButton, submitting && styles.buttonDisabled]}
-                  onPress={handleSubmit}
-                  disabled={submitting}
-                >
-                  {submitting ? (
-                    <ActivityIndicator color="#fff" />
-                  ) : (
-                    <Text style={styles.primaryButtonText}>{t("report.submit")}</Text>
-                  )}
+                  <Text style={styles.reviewEditLink}>{t('review.editLink')}</Text>
                 </TouchableOpacity>
               </View>
+
+              {/* Photo thumbnails row */}
+              {photos.length > 0 ? (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}
+                  style={styles.reviewPhotoRow}>
+                  {photos.map((photo, index) => (
+                    <TouchableOpacity
+                      key={index}
+                      onPress={() => setViewerPhoto(photo.uri)}
+                      style={styles.reviewPhotoThumb}
+                    >
+                      <Image
+                        source={{ uri: photo.uri }}
+                        style={styles.reviewPhotoThumbImage}
+                      />
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              ) : (
+                <Text style={styles.reviewPhotoRequired}>
+                  {t('review.photoRequired')}
+                </Text>
+              )}
             </View>
-          )}
-        </ScrollView>
+
+            {/* ── SECTION 2: LOCATION ── */}
+            <View style={styles.reviewSection}>
+              <View style={styles.reviewSectionHeader}>
+                <Text style={styles.reviewSectionTitle}>{t('review.locationSection')}</Text>
+                <TouchableOpacity
+                  onPress={() => {
+                    setFromReview(true);
+                    setStep('location');
+                  }}
+                >
+                  <Text style={styles.reviewEditLink}>{t('review.editLink')}</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Map selection path */}
+              {selectedBuilding && (
+                <>
+                  <View style={styles.reviewRow}>
+                    <Text style={styles.reviewLabel}>{t('review.locationBuilding')}</Text>
+                    <Text style={styles.reviewValue}>
+                      {editableBuildingName || selectedBuilding.name || '—'}
+                    </Text>
+                  </View>
+                  {selectedBuilding.building ? (
+                    <View style={styles.reviewRow}>
+                      <Text style={styles.reviewLabel}>{t('review.locationBuildingType')}</Text>
+                      <Text style={styles.reviewValue}>{selectedBuilding.building}</Text>
+                    </View>
+                  ) : null}
+                  {selectedBuilding.id ? (
+                    <View style={styles.reviewRow}>
+                      <Text style={styles.reviewLabel}>{t('review.locationFootprintId')}</Text>
+                      <Text style={[styles.reviewValue, styles.reviewMono]}>
+                        {String(selectedBuilding.id).substring(0, 16)}
+                      </Text>
+                    </View>
+                  ) : null}
+                </>
+              )}
+
+              {/* Pin drop path */}
+              {!selectedBuilding && pinDropActive && pinCoords && (
+                <View style={styles.reviewRow}>
+                  <Text style={styles.reviewLabel}>{t('review.locationPinDrop')}</Text>
+                  <Text style={styles.reviewValue}>
+                    {pinCoords.lat.toFixed(5)}, {pinCoords.lng.toFixed(5)}
+                  </Text>
+                </View>
+              )}
+
+              {/* Manual entry path */}
+              {!selectedBuilding && !pinDropActive && (
+                <>
+                  <Text style={styles.reviewManualNote}>
+                    {t('review.locationManualNote')}
+                  </Text>
+                  {locationAddress ? (
+                    <View style={styles.reviewRow}>
+                      <Text style={styles.reviewLabel}>{t('review.locationAddress')}</Text>
+                      <Text style={styles.reviewValue}>{locationAddress}</Text>
+                    </View>
+                  ) : null}
+                  {locationLandmark ? (
+                    <View style={styles.reviewRow}>
+                      <Text style={styles.reviewLabel}>{t('review.locationLandmark')}</Text>
+                      <Text style={styles.reviewValue}>{locationLandmark}</Text>
+                    </View>
+                  ) : null}
+                  {locationBuildingName ? (
+                    <View style={styles.reviewRow}>
+                      <Text style={styles.reviewLabel}>{t('review.locationBuildingName')}</Text>
+                      <Text style={styles.reviewValue}>{locationBuildingName}</Text>
+                    </View>
+                  ) : null}
+                </>
+              )}
+
+              {/* Location note (all paths) */}
+              {locationNote ? (
+                <View style={styles.reviewRow}>
+                  <Text style={styles.reviewLabel}>{t('review.locationNote')}</Text>
+                  <Text style={styles.reviewValue}>{locationNote}</Text>
+                </View>
+              ) : null}
+
+              {/* GPS indicator (all paths) */}
+              <View style={styles.reviewRow}>
+                <Text style={styles.reviewLabel}>{t('review.locationGPS')}</Text>
+                <Text style={[
+                  styles.reviewValue,
+                  (gpsCoords || locationGpsCoords)
+                    ? styles.reviewGPSCaptured
+                    : styles.reviewGPSUnavailable
+                ]}>
+                  {(gpsCoords || locationGpsCoords)
+                    ? `${t('review.locationGPSCaptured')} (${
+                        (locationGpsCoords?.lat ?? gpsCoords?.lat ?? 0).toFixed(4)
+                      }, ${
+                        (locationGpsCoords?.lng ?? gpsCoords?.lng ?? 0).toFixed(4)
+                      })`
+                    : t('review.locationGPSUnavailable')
+                  }
+                </Text>
+              </View>
+            </View>
+
+            {/* ── SECTION 3: QUESTIONS ── */}
+            <View style={styles.reviewSection}>
+              <View style={styles.reviewSectionHeader}>
+                <Text style={styles.reviewSectionTitle}>{t('review.questionsSection')}</Text>
+                <TouchableOpacity
+                  onPress={() => {
+                    setFromReview(true);
+                    setDamageQuestion(1);
+                    setStep('damage');
+                  }}
+                >
+                  <Text style={styles.reviewEditLink}>{t('review.editLink')}</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Core questions Q1–Q8 */}
+              {[
+                { label: t('review.q1Label'), value: damageLevel },
+                { label: t('review.q2Label'), value: [
+                  ...infrastructureTypes,
+                  ...(infrastructureOther ? [`Other: ${infrastructureOther}`] : [])
+                ].join(', ') },
+                { label: t('review.q3Label'), value: infrastructureName },
+                { label: t('review.q4Label'), value: disasterType },
+                { label: t('review.q5Label'), value: debrisBlocking },
+                { label: t('review.q6Label'), value: electricityCondition },
+                { label: t('review.q7Label'), value: healthServicesCondition },
+                { label: t('review.q8Label'), value: [
+                  ...pressingNeeds,
+                  ...(pressingNeedsOther ? [`Other: ${pressingNeedsOther}`] : [])
+                ].join(', ') },
+              ].map((item, index) => (
+                item.value ? (
+                  <View key={index} style={styles.reviewRow}>
+                    <Text style={styles.reviewLabel}>{item.label}</Text>
+                    <Text style={styles.reviewValue}>{item.value}</Text>
+                  </View>
+                ) : null
+              ))}
+
+              {/* Additional question answers */}
+              {additionalQuestions.length > 0 &&
+                Object.entries(additionalAnswers).map(([qId, answer]) => {
+                  const aq = additionalQuestions.find((q: any) => q.id === qId);
+                  if (!aq) return null;
+                  const displayValue = Array.isArray(answer)
+                    ? answer.join(', ')
+                    : String(answer);
+                  return (
+                    <View key={qId} style={styles.reviewRow}>
+                      <Text style={styles.reviewLabel}>
+                        {(aq as any).text ?? (aq as any).question_text ?? qId}
+                      </Text>
+                      <Text style={styles.reviewValue}>{displayValue}</Text>
+                    </View>
+                  );
+                })
+              }
+            </View>
+
+            {/* Bottom padding so content clears the sticky Submit button */}
+            <View style={{ height: 100 }} />
+          </ScrollView>
+
+          {/* ── STICKY SUBMIT BUTTON ── always visible at bottom */}
+          <View style={[styles.reviewSubmitContainer, { paddingBottom: insets.bottom + 16 }]}>
+            {/* Show error if no photos */}
+            {photos.length === 0 && (
+              <Text style={styles.reviewPhotoRequired}>
+                {t('review.photoRequired')}
+              </Text>
+            )}
+            <TouchableOpacity
+              style={[
+                styles.reviewSubmitBtn,
+                (submitting || photos.length === 0) && styles.reviewSubmitBtnDisabled,
+              ]}
+              onPress={handleSubmit}
+              disabled={submitting || photos.length === 0}
+            >
+              {submitting
+                ? <ActivityIndicator color="#FFFFFF" />
+                : <Text style={styles.reviewSubmitBtnText}>
+                    {t('review.submitButton')}
+                  </Text>
+              }
+            </TouchableOpacity>
+          </View>
+        </View>
       )}
     </View>
   );
@@ -2857,24 +3010,132 @@ const styles = StyleSheet.create({
   photoOptionText: { fontSize: 13, color: "#0468B1", fontWeight: "500" },
 
   // Review
-  reviewCard: {
-    backgroundColor: "#fff",
+  reviewContainer: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  reviewScroll: {
+    flex: 1,
+  },
+  reviewScrollContent: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 8,
+  },
+  reviewTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333333',
+    marginBottom: 20,
+  },
+  reviewSection: {
+    backgroundColor: '#F8F9FA',
     borderRadius: 12,
-    overflow: "hidden",
-    shadowColor: "#000",
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#EEEEEE',
+  },
+  reviewSectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  reviewSectionTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#888888',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  reviewEditLink: {
+    fontSize: 14,
+    color: '#0468B1',
+    fontWeight: '600',
   },
   reviewRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    padding: 14,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingVertical: 6,
     borderBottomWidth: 1,
-    borderBottomColor: "#f0f0f0",
+    borderBottomColor: '#EEEEEE',
   },
-  reviewLabel: { fontSize: 14, color: "#666" },
-  reviewValue: { fontSize: 14, fontWeight: "500", color: "#1A2B4A", maxWidth: "60%", textAlign: "right" },
+  reviewLabel: {
+    fontSize: 13,
+    color: '#888888',
+    flex: 1,
+    marginRight: 8,
+  },
+  reviewValue: {
+    fontSize: 14,
+    color: '#333333',
+    flex: 2,
+    textAlign: 'right',
+  },
+  reviewMono: {
+    fontFamily: 'monospace',
+    fontSize: 12,
+    color: '#666666',
+  },
+  reviewGPSCaptured: {
+    color: '#2E7D32',
+    fontSize: 12,
+  },
+  reviewGPSUnavailable: {
+    color: '#E65100',
+    fontSize: 12,
+  },
+  reviewManualNote: {
+    fontSize: 12,
+    color: '#888888',
+    fontStyle: 'italic',
+    marginBottom: 8,
+  },
+  reviewPhotoRow: {
+    flexDirection: 'row',
+    marginTop: 4,
+  },
+  reviewPhotoThumb: {
+    width: 80,
+    height: 80,
+    borderRadius: 10,
+    marginRight: 10,
+    overflow: 'hidden',
+  },
+  reviewPhotoThumbImage: {
+    width: '100%',
+    height: '100%',
+  },
+  reviewPhotoRequired: {
+    fontSize: 13,
+    color: '#D32F2F',
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  reviewSubmitContainer: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E0E0E0',
+    backgroundColor: '#FFFFFF',
+  },
+  reviewSubmitBtn: {
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#0468B1',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  reviewSubmitBtnDisabled: {
+    backgroundColor: '#B0C4D8',
+  },
+  reviewSubmitBtnText: {
+    color: '#FFFFFF',
+    fontSize: 17,
+    fontWeight: '700',
+  },
 
   // Nav
   navButtons: { flexDirection: "row", gap: 12, marginTop: 8 },

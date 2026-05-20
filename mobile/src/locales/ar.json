@@ -270,5 +270,38 @@
       "opt_other": "Other — please specify",
       "otherLimit": "100 characters maximum"
     }
+  },
+  "review": {
+    "title": "Review your report",
+    "editLink": "Edit",
+    "photosSection": "Photos",
+    "photosCount": "{{count}} photo added",
+    "photosCountPlural": "{{count}} photos added",
+    "photoRequired": "At least one photo is required. Please add a photo before submitting.",
+    "locationSection": "Location",
+    "locationBuilding": "Building",
+    "locationBuildingType": "Type",
+    "locationFootprintId": "Footprint ID",
+    "locationNote": "Note",
+    "locationGPS": "GPS",
+    "locationGPSCaptured": "GPS coordinates captured",
+    "locationGPSUnavailable": "GPS not available for this submission",
+    "locationAddress": "Address",
+    "locationLandmark": "Landmark",
+    "locationBuildingName": "Building name",
+    "locationManualNote": "Map was not available — manual entry used",
+    "locationMapSelection": "Building selected on map",
+    "locationPinDrop": "Pin dropped on map",
+    "questionsSection": "Questions",
+    "submitButton": "Submit",
+    "submitButtonOffline": "Save and Send Later",
+    "q1Label": "Damage level",
+    "q2Label": "Infrastructure type",
+    "q3Label": "Infrastructure name",
+    "q4Label": "Disaster type",
+    "q5Label": "Debris clearing needed",
+    "q6Label": "Electricity condition",
+    "q7Label": "Health services",
+    "q8Label": "Pressing needs"
   }
 }
