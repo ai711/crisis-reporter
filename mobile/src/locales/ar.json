@@ -302,6 +302,9 @@
     "q5Label": "Debris clearing needed",
     "q6Label": "Electricity condition",
     "q7Label": "Health services",
-    "q8Label": "Pressing needs"
+    "q8Label": "Pressing needs",
+    "locationChangedNote": "لقد تغير موقعك. يرجى تأكيد اسم البنية التحتية أو تحديثه.",
+    "submitTimeout": "يستغرق هذا وقتاً أطول من المتوقع. يرجى المحاولة مرة أخرى.",
+    "submitRetry": "إعادة المحاولة"
   }
 }

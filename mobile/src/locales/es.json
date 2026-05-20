@@ -302,6 +302,9 @@
     "q5Label": "Debris clearing needed",
     "q6Label": "Electricity condition",
     "q7Label": "Health services",
-    "q8Label": "Pressing needs"
+    "q8Label": "Pressing needs",
+    "locationChangedNote": "Su ubicación ha cambiado. Por favor confirme o actualice el nombre de la infraestructura.",
+    "submitTimeout": "Esto está tardando más de lo esperado. Por favor, inténtelo de nuevo.",
+    "submitRetry": "Reintentar"
   }
 }

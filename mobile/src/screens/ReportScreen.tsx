@@ -228,6 +228,8 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
   // Step
   const [step, setStep] = useState<"photos" | "location" | "damage" | "review">("photos");
   const [fromReview, setFromReview] = useState(false);
+  const [locationChangedForReview, setLocationChangedForReview] = useState(false);
+  const [showLocationChangedNote, setShowLocationChangedNote] = useState(false);
 
   // Damage form
   const [damageLevel, setDamageLevel] = useState<DamageLevel | "">("");
@@ -306,6 +308,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [wasQueued, setWasQueued] = useState(false);
+  const [submitTimedOut, setSubmitTimedOut] = useState(false);
   const [showPhotoOptions, setShowPhotoOptions] = useState(false);
   const [activeThumbnailIndex, setActiveThumbnailIndex] = useState<number | null>(null);
   const [viewerPhoto, setViewerPhoto] = useState<string | null>(null);
@@ -1130,11 +1133,22 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
 
   const handleDamageBack = () => {
     setShowQuestionHint(false);
-    if (damageQuestion === 1) setStep("location");
-    else setDamageQuestion((q) => q - 1);
+    if (damageQuestion === 1) {
+      if (fromReview) {
+        setFromReview(false);
+        setStep('review');
+        return;
+      }
+      setStep("location");
+      return;
+    }
+    setDamageQuestion((q) => q - 1);
   };
 
   const handleDamageNext = async () => {
+    if (damageQuestion === 3) {
+      setShowLocationChangedNote(false);
+    }
     if (damageQuestion < 8) {
       setDamageQuestion((q) => q + 1);
     } else if (additionalQuestions.length > 0) {
@@ -1234,6 +1248,9 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
     setSearchResults([]);
     setShowSearchResults(false);
     setFromReview(false);
+    setLocationChangedForReview(false);
+    setShowLocationChangedNote(false);
+    setSubmitTimedOut(false);
     setSubmitted(false);
     setWasQueued(false);
     setSubmittedReportId(null);
@@ -1251,7 +1268,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
     return locationAddress || null;
   };
 
-  const doSubmit = async () => {
+  const doSubmit = async (submitTappedAt: string, isCurrentlyOnline: boolean) => {
     setShowDupeWarning(false);
     setSubmitting(true);
 
@@ -1271,7 +1288,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
       pressing_needs: pressingNeeds,
       ...(pressingNeeds.includes("other") && { pressing_needs_other: pressingNeedsOther }),
       platform: "android" as const,
-      submitted_at: new Date().toISOString(),
+      submitted_at: submitTappedAt,
       building_id: selectedBuilding ? String(selectedBuilding.id) : null,
       location: {
         gps_latitude: selectedBuilding
@@ -1323,23 +1340,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
       was_queued: false,
     };
 
-    try {
-      const response = await api.post("/api/reports", reportPayload);
-      const reportId = response.data.report_id;
-
-      for (let i = 0; i < photos.length; i++) {
-        const formData = new FormData();
-        formData.append("report_id", reportId);
-        formData.append("display_order", String(i));
-        formData.append("file", { uri: photos[i].uri, name: `photo_${i}.jpg`, type: photos[i].mimeType } as any);
-        await api.post("/api/photos", formData, { headers: { "Content-Type": "multipart/form-data" } });
-      }
-
-      await saveSubmittedLocation();
-      setSubmittedReportId(reportId as string);
-      setWasQueued(false);
-      setSubmitted(true);
-    } catch {
+    const queueReport = async () => {
       await registerPushToken();
       const queuedPhotos: QueuedPhoto[] = photos.map((p, i) => ({
         uri: p.uri,
@@ -1353,22 +1354,116 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
       setSubmittedReportId(null);
       setWasQueued(true);
       setSubmitted(true);
+    };
+
+    try {
+      if (!isCurrentlyOnline) {
+        await queueReport();
+        return;
+      }
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+      try {
+        const response = await api.post("/api/reports", reportPayload, {
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+        const reportId = response.data.report_id;
+
+        for (let i = 0; i < photos.length; i++) {
+          const formData = new FormData();
+          formData.append("report_id", reportId);
+          formData.append("display_order", String(i));
+          formData.append("file", { uri: photos[i].uri, name: `photo_${i}.jpg`, type: photos[i].mimeType } as any);
+          await api.post("/api/photos", formData, { headers: { "Content-Type": "multipart/form-data" } });
+        }
+
+        await saveSubmittedLocation();
+        setSubmittedReportId(reportId as string);
+        setWasQueued(false);
+        setSubmitted(true);
+      } catch (error: any) {
+        clearTimeout(timeoutId);
+        const isTimeout = error.code === 'ERR_CANCELED' || error.name === 'AbortError';
+        if (isTimeout) {
+          setSubmitTimedOut(true);
+          return;
+        }
+        await queueReport();
+      }
     } finally {
       setSubmitting(false);
     }
   };
 
   const handleSubmit = async () => {
+    const submitTappedAt = new Date().toISOString();
     if (!damageLevel || infrastructureTypes.length === 0 || !infrastructureName.trim() || !disasterType || !debrisBlocking || !electricityCondition || !healthServicesCondition || pressingNeeds.length === 0 || photos.length === 0) {
       Alert.alert("Required Fields", "Please complete all required fields.");
       return;
     }
+
+    let isCurrentlyOnline = false;
+    try {
+      const netState = await NetInfo.fetch();
+      isCurrentlyOnline = !!(netState.isConnected && netState.isInternetReachable);
+    } catch {
+      isCurrentlyOnline = false;
+    }
+
     const isDupe = await checkDuplicate();
     if (isDupe) {
       setShowDupeWarning(true);
       return;
     }
-    await doSubmit();
+
+    if (isCurrentlyOnline) {
+      try {
+        const params = new URLSearchParams();
+        if (selectedBuilding?.id) {
+          params.append('building_id', String(selectedBuilding.id));
+        }
+        if (gpsCoords?.lat) {
+          params.append('lat', String(gpsCoords.lat));
+          params.append('lng', String(gpsCoords.lng));
+        } else if (locationGpsCoords?.lat) {
+          params.append('lat', String(locationGpsCoords.lat));
+          params.append('lng', String(locationGpsCoords.lng));
+        }
+
+        if (params.toString()) {
+          const dupRes = await api.get(`/api/reports/duplicate-check?${params.toString()}`);
+          if (dupRes.data?.is_duplicate) {
+            const confirmed = await new Promise<boolean>((resolve) => {
+              Alert.alert(
+                t('locationScreen.duplicateWarningTitle'),
+                t('locationScreen.duplicateWarningBody'),
+                [
+                  {
+                    text: t('locationScreen.duplicateWarningGoBack'),
+                    style: 'cancel',
+                    onPress: () => resolve(false),
+                  },
+                  {
+                    text: t('locationScreen.duplicateWarningContinue'),
+                    onPress: () => resolve(true),
+                  },
+                ]
+              );
+            });
+            if (!confirmed) {
+              return;
+            }
+          }
+        }
+      } catch {
+        // Duplicate check failed — proceed without warning
+      }
+    }
+
+    await doSubmit(submitTappedAt, isCurrentlyOnline);
   };
 
   // ── Early returns ─────────────────────────────────────────────────────────────
@@ -1805,7 +1900,23 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.primaryButton, !isLocationValid() && styles.buttonDisabled]}
-                  onPress={() => isLocationValid() && setStep("damage")}
+                  onPress={() => {
+                    if (!isLocationValid()) return;
+                    if (fromReview) {
+                      setFromReview(false);
+                      if (locationChangedForReview) {
+                        setLocationChangedForReview(false);
+                        setDamageQuestion(3);
+                        setInfrastructureName('');
+                        setShowLocationChangedNote(true);
+                        setStep('damage');
+                        return;
+                      }
+                      setStep('review');
+                      return;
+                    }
+                    setStep('damage');
+                  }}
                   disabled={!isLocationValid()}
                 >
                   <Text style={styles.primaryButtonText}>Next →</Text>
@@ -1831,7 +1942,19 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
               >
                 <Text style={styles.secondaryButtonText}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.primaryButton, { flex: 1 }]} onPress={doSubmit}>
+              <TouchableOpacity
+                style={[styles.primaryButton, { flex: 1 }]}
+                onPress={async () => {
+                  setShowDupeWarning(false);
+                  const t2 = new Date().toISOString();
+                  let online = false;
+                  try {
+                    const netState = await NetInfo.fetch();
+                    online = !!(netState.isConnected && netState.isInternetReachable);
+                  } catch { online = false; }
+                  await doSubmit(t2, online);
+                }}
+              >
                 <Text style={styles.primaryButtonText}>Submit Anyway</Text>
               </TouchableOpacity>
             </View>
@@ -1971,6 +2094,9 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                   setGpsCoords({ lat: pendingBuilding.centroid[1], lng: pendingBuilding.centroid[0] });
                   setSelectedBuildingFC({ type: "FeatureCollection", features: [pendingBuilding.feature] });
                   setLocationMethod('map_selection');
+                  if (fromReview && infrastructureName) {
+                    setLocationChangedForReview(true);
+                  }
                   cameraRef.current?.easeTo({
                     center: pendingBuilding.centroid,
                     zoom: 17,
@@ -2126,7 +2252,15 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
 
               <TouchableOpacity
                 style={[styles.primaryButton, photos.length === 0 && styles.buttonDisabled]}
-                onPress={() => photos.length > 0 && setStep("location")}
+                onPress={() => {
+                  if (!photos.length) return;
+                  if (fromReview) {
+                    setFromReview(false);
+                    setStep('review');
+                    return;
+                  }
+                  setStep('location');
+                }}
                 disabled={photos.length === 0}
               >
                 <Text style={styles.primaryButtonText}>Next →</Text>
@@ -2205,6 +2339,13 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
               {damageQuestion === 3 && (
                 <>
                   <Text style={styles.stepTitle}>{qTitle(3, t('questions.q3.title'))}</Text>
+                  {showLocationChangedNote && (
+                    <View style={styles.locationChangedNote}>
+                      <Text style={styles.locationChangedNoteText}>
+                        {t('review.locationChangedNote')}
+                      </Text>
+                    </View>
+                  )}
                   <TextInput
                     style={styles.input}
                     placeholder={t('questions.q3.placeholder')}
@@ -2713,6 +2854,22 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                 {t('review.photoRequired')}
               </Text>
             )}
+            {submitTimedOut && (
+              <View style={styles.submitTimeoutBox}>
+                <Text style={styles.submitTimeoutText}>
+                  {t('review.submitTimeout')}
+                </Text>
+                <TouchableOpacity
+                  style={styles.submitRetryBtn}
+                  onPress={() => {
+                    setSubmitTimedOut(false);
+                    handleSubmit();
+                  }}
+                >
+                  <Text style={styles.submitRetryBtnText}>{t('review.submitRetry')}</Text>
+                </TouchableOpacity>
+              </View>
+            )}
             <TouchableOpacity
               style={[
                 styles.reviewSubmitBtn,
@@ -3135,6 +3292,45 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 17,
     fontWeight: '700',
+  },
+  locationChangedNote: {
+    backgroundColor: '#FFF8E1',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+    borderLeftWidth: 3,
+    borderLeftColor: '#FFB300',
+  },
+  locationChangedNoteText: {
+    fontSize: 13,
+    color: '#F57F17',
+    lineHeight: 18,
+  },
+  submitTimeoutBox: {
+    backgroundColor: '#FFF3E0',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+    borderLeftWidth: 3,
+    borderLeftColor: '#FF6D00',
+  },
+  submitTimeoutText: {
+    fontSize: 13,
+    color: '#E65100',
+    lineHeight: 18,
+    marginBottom: 8,
+  },
+  submitRetryBtn: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#0468B1',
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  submitRetryBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '600',
   },
 
   // Nav
