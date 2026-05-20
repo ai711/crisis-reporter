@@ -116,7 +116,36 @@ async function fetchBuildingsForBounds(
 
 interface ApiOption { option_text: string; option_value: string; }
 interface ApiQuestion { question_text: string; order_index: number; options: ApiOption[]; }
-interface ActivePackage { version: string; questions: ApiQuestion[]; }
+interface ActivePackage { version: string; translation_version?: string; questions: ApiQuestion[]; }
+
+// ── Q4 grouped disaster type options ──────────────────────────────────────────
+
+const Q4_GROUPS = [
+  {
+    groupLabel: 'Natural hazards',
+    options: [
+      { value: 'earthquake', label: 'Earthquake' },
+      { value: 'flood', label: 'Flood' },
+      { value: 'tsunami', label: 'Tsunami' },
+      { value: 'hurricane_cyclone', label: 'Hurricane or Cyclone' },
+      { value: 'wildfire', label: 'Wildfire' },
+    ],
+  },
+  {
+    groupLabel: 'Technological or industrial hazards',
+    options: [
+      { value: 'explosion', label: 'Explosion' },
+      { value: 'chemical_incident', label: 'Chemical Incident' },
+    ],
+  },
+  {
+    groupLabel: 'Human-made crises',
+    options: [
+      { value: 'conflict', label: 'Conflict' },
+      { value: 'civil_unrest', label: 'Civil Unrest' },
+    ],
+  },
+] as const;
 
 // ── Label maps ────────────────────────────────────────────────────────────────
 
@@ -150,7 +179,6 @@ const DISASTER_LABELS: Record<string, string> = {
 const DEBRIS_LABELS: Record<string, string> = {
   yes: "Yes",
   no: "No",
-  partially: "Partially",
 };
 
 const ELECTRICITY_LABELS: Record<string, string> = {
@@ -302,18 +330,41 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
         setCrisisError(true);
       }
       try {
-        const pkgRes = await api.get<ActivePackage>("/api/question-packages/active");
-        setQuestionPackage(pkgRes.data);
-      } catch {
-        // silent — hardcoded question text and options remain active as fallback
-      }
-      try {
         const settingsRes = await api.get("/api/settings/public");
         setFootprintSource(settingsRes.data?.building_footprint_source ?? "osm");
       } catch { /* silent — OSM fallback remains active */ }
       setCrisisLoading(false);
     };
     init();
+  }, []);
+
+  // Cache-first question package loading — AsyncStorage first, then API for latest
+  useEffect(() => {
+    const loadQuestionPackage = async () => {
+      // Step 1: read from AsyncStorage cache written by HomeScreen on every app open
+      try {
+        const cached = await AsyncStorage.getItem('cr_question_package');
+        if (cached) {
+          setQuestionPackage(JSON.parse(cached));
+        }
+      } catch {
+        // cache read failed — continue to API fetch
+      }
+
+      // Step 2: fetch latest from API (non-blocking, updates cache if newer)
+      try {
+        const langCode = (await AsyncStorage.getItem('cr_language')) ?? 'en';
+        const response = await api.get<ActivePackage>(`/api/question-packages/active?lang=${langCode}`);
+        if (response.data) {
+          setQuestionPackage(response.data);
+          await AsyncStorage.setItem('cr_question_package', JSON.stringify(response.data));
+        }
+      } catch {
+        // API unavailable — cached package or hardcoded fallbacks remain active
+      }
+    };
+
+    loadQuestionPackage();
   }, []);
 
   // Cleanup debounce timer on unmount
@@ -410,6 +461,17 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
 
     return () => unsubscribe();
   }, [step, locationScenario, locationGpsCoords]);
+
+  // Pre-fill Q3 infrastructure name from OSM building name when entering questions step
+  useEffect(() => {
+    if (step === 'damage' && infrastructureName === '') {
+      const prefill = editableBuildingName?.trim() || selectedBuilding?.name?.trim() || '';
+      if (prefill) {
+        setInfrastructureName(prefill.slice(0, 200));
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
 
   // ── Question package helpers ──────────────────────────────────────────────────
 
@@ -1122,6 +1184,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
       reporter_id: reporterId || undefined,
       language_code: languageCode,
       question_package_version: questionPackage?.version ?? null,
+      question_package_translation_version: questionPackage?.translation_version ?? null,
       photos: photos.map((photo, index) => ({
         uri: photo.uri,
         index,
@@ -1959,7 +2022,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                   {qOptions(1, [
                     { value: "minimal", label: "Minimal / No damage" },
                     { value: "partial", label: "Partially damaged" },
-                    { value: "complete", label: "Completely damaged" },
+                    { value: "complete", label: "Completely destroyed" },
                   ]).map(({ value, label }) => (
                     <TouchableOpacity
                       key={value}
@@ -1980,14 +2043,15 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                   <Text style={styles.stepTitle}>{qTitle(2, "What type of infrastructure is this? *")}</Text>
                   <Text style={styles.hintText}>Select all that apply.</Text>
                   {qOptions(2, [
-                    { value: "residential", label: "Residential Infrastructure" },
-                    { value: "commercial", label: "Commercial Infrastructure" },
-                    { value: "government", label: "Government Building" },
-                    { value: "utility", label: "Utility Infrastructure" },
-                    { value: "transport_communication", label: "Transport and Communication Infrastructure" },
-                    { value: "community", label: "Community Infrastructure" },
-                    { value: "public_spaces", label: "Public Spaces / Recreation Infrastructure" },
-                    { value: "other", label: "Other (please specify)" },
+                    { value: "residential", label: "Residential housing" },
+                    { value: "commercial", label: "Commercial or business premises" },
+                    { value: "government", label: "Government or public administration buildings" },
+                    { value: "educational", label: "Educational facilities" },
+                    { value: "healthcare", label: "Healthcare facilities" },
+                    { value: "critical_infrastructure", label: "Critical infrastructure (water, power, transport)" },
+                    { value: "agricultural", label: "Agricultural or food production facilities" },
+                    { value: "public_spaces", label: "Public spaces / Recreation infrastructure" },
+                    { value: "other", label: "Other — please specify" },
                   ]).map(({ value, label }) => (
                     <TouchableOpacity key={value} style={styles.checkRow} onPress={() => toggleInfraType(value)}>
                       <View style={[styles.checkbox, infrastructureTypes.includes(value) && styles.checkboxSelected]}>
@@ -2025,22 +2089,19 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
               {damageQuestion === 4 && (
                 <>
                   <Text style={styles.stepTitle}>{qTitle(4, "What type of disaster caused this damage? *")}</Text>
-                  {qOptions(4, [
-                    { value: "earthquake", label: "Earthquake" },
-                    { value: "flood", label: "Flood" },
-                    { value: "cyclone", label: "Cyclone / Typhoon / Hurricane" },
-                    { value: "landslide", label: "Landslide" },
-                    { value: "fire", label: "Fire" },
-                    { value: "conflict", label: "Conflict / War" },
-                    { value: "other", label: "Other" },
-                  ]).map(({ value, label }) => (
-                    <TouchableOpacity
-                      key={value}
-                      style={[styles.optionBtn, disasterType === value && styles.optionBtnSelected]}
-                      onPress={() => setDisasterType(value)}
-                    >
-                      <Text style={styles.optionText}>{label}</Text>
-                    </TouchableOpacity>
+                  {Q4_GROUPS.map((group) => (
+                    <View key={group.groupLabel}>
+                      <Text style={styles.q4GroupLabel}>{group.groupLabel}</Text>
+                      {group.options.map(({ value, label }) => (
+                        <TouchableOpacity
+                          key={value}
+                          style={[styles.optionBtn, disasterType === value && styles.optionBtnSelected]}
+                          onPress={() => setDisasterType(value)}
+                        >
+                          <Text style={styles.optionText}>{label}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
                   ))}
                 </>
               )}
@@ -2051,7 +2112,6 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                   {qOptions(5, [
                     { value: "yes", label: "Yes" },
                     { value: "no", label: "No" },
-                    { value: "partially", label: "Partially" },
                   ]).map(({ value, label }) => (
                     <TouchableOpacity
                       key={value}
@@ -2361,6 +2421,16 @@ const styles = StyleSheet.create({
   checkmark: { color: "#fff", fontSize: 13, fontWeight: "700" },
   checkRowText: { flex: 1, fontSize: 15, color: "#1A2B4A" },
   charCounter: { fontSize: 12, color: "#999", textAlign: "right" },
+  q4GroupLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#888888',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginTop: 12,
+    marginBottom: 6,
+    paddingHorizontal: 4,
+  },
   input: {
     backgroundColor: "#fff",
     borderRadius: 8,
