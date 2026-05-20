@@ -1,5 +1,5 @@
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useState, useRef } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView,
   TextInput, Alert, ActivityIndicator, Image, Modal, Linking, Platform,
@@ -23,7 +23,6 @@ import {
   type ViewStateChangeEvent,
   type PressEventWithFeatures,
 } from "@maplibre/maplibre-react-native";
-import { useEffect } from "react";
 import { useAuthStore } from "../stores/authStore";
 import api from "../services/api";
 import * as ImageManipulator from 'expo-image-manipulator';
@@ -35,6 +34,7 @@ import type { DamageLevel, QueuedPhoto, ProcessedPhoto } from "../types";
 
 const MAPTILER_KEY = process.env.EXPO_PUBLIC_MAPTILER_KEY ?? "";
 const MAP_STYLE_URL = `https://api.maptiler.com/maps/dataviz-light/style.json?key=${MAPTILER_KEY}`;
+const ANSWERS_KEY = 'cr_draft_answers';
 
 // ── Overpass types ─────────────────────────────────────────────────────────────
 
@@ -115,7 +115,14 @@ async function fetchBuildingsForBounds(
 // ── Question package types ────────────────────────────────────────────────────
 
 interface ApiOption { option_text: string; option_value: string; }
-interface ApiQuestion { question_text: string; order_index: number; options: ApiOption[]; }
+interface ApiQuestion {
+  question_text: string;
+  order_index: number;
+  options: ApiOption[];
+  type?: 'single_select' | 'multi_select' | 'free_text';
+  is_mandatory?: boolean;
+  max_length?: number;
+}
 interface ActivePackage { version: string; translation_version?: string; questions: ApiQuestion[]; }
 
 // ── Q4 grouped disaster type options ──────────────────────────────────────────
@@ -235,6 +242,9 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
   const [pressingNeeds, setPressingNeeds] = useState<string[]>([]);
   const [pressingNeedsOther, setPressingNeedsOther] = useState("");
   const [damageQuestion, setDamageQuestion] = useState(1);
+  const [showQuestionHint, setShowQuestionHint] = useState(false);
+  const [additionalAnswers, setAdditionalAnswers] = useState<Record<string, string | string[]>>({});
+  const [additionalQuestion, setAdditionalQuestion] = useState(0);
   const [photos, setPhotos] = useState<ProcessedPhoto[]>([]);
 
   // Location
@@ -473,6 +483,54 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step]);
 
+  // Answer crash-recovery — runs once on mount
+  useEffect(() => {
+    const checkDraftRecovery = async () => {
+      try {
+        const saved = await AsyncStorage.getItem(ANSWERS_KEY);
+        if (!saved) return;
+        const draft = JSON.parse(saved);
+        if (!draft.damageLevel) {
+          await AsyncStorage.removeItem(ANSWERS_KEY);
+          return;
+        }
+        Alert.alert(
+          'Resume previous report?',
+          'You have an unfinished report from a previous session. Would you like to continue where you left off?',
+          [
+            {
+              text: 'Start fresh',
+              style: 'destructive',
+              onPress: async () => { await AsyncStorage.removeItem(ANSWERS_KEY); },
+            },
+            {
+              text: 'Continue',
+              onPress: () => {
+                if (draft.damageLevel) setDamageLevel(draft.damageLevel);
+                if (draft.infrastructureTypes) setInfrastructureTypes(draft.infrastructureTypes);
+                if (draft.infrastructureOther) setInfrastructureOther(draft.infrastructureOther);
+                if (draft.infrastructureName) setInfrastructureName(draft.infrastructureName);
+                if (draft.disasterType) setDisasterType(draft.disasterType);
+                if (draft.debrisBlocking) setDebrisBlocking(draft.debrisBlocking);
+                if (draft.electricityCondition) setElectricityCondition(draft.electricityCondition);
+                if (draft.healthServicesCondition) setHealthServicesCondition(draft.healthServicesCondition);
+                if (draft.pressingNeeds) setPressingNeeds(draft.pressingNeeds);
+                if (draft.pressingNeedsOther) setPressingNeedsOther(draft.pressingNeedsOther);
+                if (draft.additionalAnswers) setAdditionalAnswers(draft.additionalAnswers);
+                setStep('damage');
+                if (draft.damageQuestion) setDamageQuestion(draft.damageQuestion);
+                if (draft.additionalQuestion) setAdditionalQuestion(draft.additionalQuestion);
+              },
+            },
+          ]
+        );
+      } catch {
+        // Recovery check failed — proceed normally
+      }
+    };
+    checkDraftRecovery();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Question package helpers ──────────────────────────────────────────────────
 
   const qTitle = (n: number, fallback: string): string => {
@@ -488,6 +546,37 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
     if (found?.options?.length)
       return found.options.map((o) => ({ value: o.option_value, label: o.option_text }));
     return fallback;
+  };
+
+  // Additional questions — those beyond the 8 core questions (order_index > 8)
+  const additionalQuestions = useMemo(() => {
+    if (!questionPackage?.questions) return [];
+    return questionPackage.questions.filter((q) => q.order_index > 8);
+  }, [questionPackage]);
+
+  // Per-question answer persistence — called after each successful Next tap
+  const saveDraftAnswers = async () => {
+    try {
+      const draft = {
+        damageQuestion,
+        damageLevel,
+        infrastructureTypes,
+        infrastructureOther,
+        infrastructureName,
+        disasterType,
+        debrisBlocking,
+        electricityCondition,
+        healthServicesCondition,
+        pressingNeeds,
+        pressingNeedsOther,
+        additionalAnswers,
+        additionalQuestion,
+        savedAt: new Date().toISOString(),
+      };
+      await AsyncStorage.setItem(ANSWERS_KEY, JSON.stringify(draft));
+    } catch {
+      // Non-blocking — if save fails, continue
+    }
   };
 
   // ── Push token registration ───────────────────────────────────────────────────
@@ -1041,13 +1130,38 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
   };
 
   const handleDamageBack = () => {
+    setShowQuestionHint(false);
     if (damageQuestion === 1) setStep("location");
     else setDamageQuestion((q) => q - 1);
   };
 
-  const handleDamageNext = () => {
-    if (damageQuestion < 8) setDamageQuestion((q) => q + 1);
-    else setStep("review");
+  const handleDamageNext = async () => {
+    if (damageQuestion < 8) {
+      setDamageQuestion((q) => q + 1);
+    } else if (additionalQuestions.length > 0) {
+      setAdditionalQuestion(1);
+      setDamageQuestion(9);
+    } else {
+      setStep("review");
+    }
+    await saveDraftAnswers();
+  };
+
+  const handleAdditionalNext = async () => {
+    const aq = additionalQuestions[additionalQuestion - 1];
+    const qKey = String(aq?.order_index ?? additionalQuestion);
+    if (aq?.is_mandatory && !additionalAnswers[qKey]) {
+      setShowQuestionHint(true);
+      return;
+    }
+    setShowQuestionHint(false);
+    if (additionalQuestion < additionalQuestions.length) {
+      setAdditionalQuestion((q) => q + 1);
+      setDamageQuestion((q) => q + 1);
+    } else {
+      setStep("review");
+    }
+    await saveDraftAnswers();
   };
 
   // ── Submit ────────────────────────────────────────────────────────────────────
@@ -1094,6 +1208,10 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
     setPressingNeeds([]);
     setPressingNeedsOther("");
     setDamageQuestion(1);
+    setShowQuestionHint(false);
+    setAdditionalAnswers({});
+    setAdditionalQuestion(0);
+    AsyncStorage.removeItem(ANSWERS_KEY).catch(() => {});
     setPhotos([]);
     setGpsCoords(null);
     setSelectedBuilding(null);
@@ -1196,6 +1314,11 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
         exif_date_taken: photo.exif.dateTaken,
         exif_width: photo.exif.width,
         exif_height: photo.exif.height,
+      })),
+      additional_answers: Object.entries(additionalAnswers).map(([questionId, answer]) => ({
+        question_id: questionId,
+        answer: Array.isArray(answer) ? undefined : answer,
+        answers: Array.isArray(answer) ? answer : undefined,
       })),
       was_queued: false,
     };
@@ -2014,7 +2137,9 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
           {/* Step 3 — Damage Assessment */}
           {step === "damage" && (
             <View style={styles.step}>
-              <Text style={styles.questionProgress}>Question {damageQuestion} of 8</Text>
+              <Text style={styles.questionProgress}>
+                Question {damageQuestion} of {8 + additionalQuestions.length}
+              </Text>
 
               {damageQuestion === 1 && (
                 <>
@@ -2023,18 +2148,23 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                     { value: "minimal", label: "Minimal / No damage" },
                     { value: "partial", label: "Partially damaged" },
                     { value: "complete", label: "Completely destroyed" },
-                  ]).map(({ value, label }) => (
-                    <TouchableOpacity
-                      key={value}
-                      style={[styles.optionBtn, damageLevel === value && styles.optionBtnSelected]}
-                      onPress={() => setDamageLevel(value as DamageLevel)}
-                    >
-                      <Text style={styles.optionIcon}>
-                        {value === "minimal" ? "🟢" : value === "partial" ? "🟠" : "🔴"}
-                      </Text>
-                      <Text style={styles.optionText}>{label}</Text>
-                    </TouchableOpacity>
-                  ))}
+                  ]).map(({ value, label }) => {
+                    const isSelected = damageLevel === value;
+                    return (
+                      <TouchableOpacity
+                        key={value}
+                        style={styles.radioRow}
+                        onPress={() => { setDamageLevel(value as DamageLevel); setShowQuestionHint(false); }}
+                      >
+                        <View style={[styles.radioCircle, isSelected && styles.radioCircleSelected]}>
+                          {isSelected && <View style={styles.radioDot} />}
+                        </View>
+                        <Text style={[styles.radioLabel, isSelected && styles.radioLabelSelected]}>
+                          {label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
                 </>
               )}
 
@@ -2053,7 +2183,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                     { value: "public_spaces", label: "Public spaces / Recreation infrastructure" },
                     { value: "other", label: "Other — please specify" },
                   ]).map(({ value, label }) => (
-                    <TouchableOpacity key={value} style={styles.checkRow} onPress={() => toggleInfraType(value)}>
+                    <TouchableOpacity key={value} style={styles.checkRow} onPress={() => { toggleInfraType(value); setShowQuestionHint(false); }}>
                       <View style={[styles.checkbox, infrastructureTypes.includes(value) && styles.checkboxSelected]}>
                         {infrastructureTypes.includes(value) && <Text style={styles.checkmark}>✓</Text>}
                       </View>
@@ -2092,15 +2222,23 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                   {Q4_GROUPS.map((group) => (
                     <View key={group.groupLabel}>
                       <Text style={styles.q4GroupLabel}>{group.groupLabel}</Text>
-                      {group.options.map(({ value, label }) => (
-                        <TouchableOpacity
-                          key={value}
-                          style={[styles.optionBtn, disasterType === value && styles.optionBtnSelected]}
-                          onPress={() => setDisasterType(value)}
-                        >
-                          <Text style={styles.optionText}>{label}</Text>
-                        </TouchableOpacity>
-                      ))}
+                      {group.options.map(({ value, label }) => {
+                        const isSelected = disasterType === value;
+                        return (
+                          <TouchableOpacity
+                            key={value}
+                            style={styles.radioRow}
+                            onPress={() => { setDisasterType(value); setShowQuestionHint(false); }}
+                          >
+                            <View style={[styles.radioCircle, isSelected && styles.radioCircleSelected]}>
+                              {isSelected && <View style={styles.radioDot} />}
+                            </View>
+                            <Text style={[styles.radioLabel, isSelected && styles.radioLabelSelected]}>
+                              {label}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
                     </View>
                   ))}
                 </>
@@ -2112,15 +2250,23 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                   {qOptions(5, [
                     { value: "yes", label: "Yes" },
                     { value: "no", label: "No" },
-                  ]).map(({ value, label }) => (
-                    <TouchableOpacity
-                      key={value}
-                      style={[styles.optionBtn, debrisBlocking === value && styles.optionBtnSelected]}
-                      onPress={() => setDebrisBlocking(value)}
-                    >
-                      <Text style={styles.optionText}>{label}</Text>
-                    </TouchableOpacity>
-                  ))}
+                  ]).map(({ value, label }) => {
+                    const isSelected = debrisBlocking === value;
+                    return (
+                      <TouchableOpacity
+                        key={value}
+                        style={styles.radioRow}
+                        onPress={() => { setDebrisBlocking(value); setShowQuestionHint(false); }}
+                      >
+                        <View style={[styles.radioCircle, isSelected && styles.radioCircleSelected]}>
+                          {isSelected && <View style={styles.radioDot} />}
+                        </View>
+                        <Text style={[styles.radioLabel, isSelected && styles.radioLabelSelected]}>
+                          {label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
                 </>
               )}
 
@@ -2134,15 +2280,23 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                     { value: "severe", label: "Severe damage — major infrastructure damaged, prolonged outages" },
                     { value: "destroyed", label: "Completely destroyed — no electricity infrastructure functioning" },
                     { value: "unknown", label: "Unknown / cannot be assessed" },
-                  ]).map(({ value, label }) => (
-                    <TouchableOpacity
-                      key={value}
-                      style={[styles.optionBtn, electricityCondition === value && styles.optionBtnSelected]}
-                      onPress={() => setElectricityCondition(value)}
-                    >
-                      <Text style={styles.optionText}>{label}</Text>
-                    </TouchableOpacity>
-                  ))}
+                  ]).map(({ value, label }) => {
+                    const isSelected = electricityCondition === value;
+                    return (
+                      <TouchableOpacity
+                        key={value}
+                        style={styles.radioRow}
+                        onPress={() => { setElectricityCondition(value); setShowQuestionHint(false); }}
+                      >
+                        <View style={[styles.radioCircle, isSelected && styles.radioCircleSelected]}>
+                          {isSelected && <View style={styles.radioDot} />}
+                        </View>
+                        <Text style={[styles.radioLabel, isSelected && styles.radioLabelSelected]}>
+                          {label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
                 </>
               )}
 
@@ -2155,15 +2309,23 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                     { value: "largely_disrupted", label: "Largely disrupted" },
                     { value: "not_functioning", label: "Not functioning at all" },
                     { value: "unknown", label: "Unknown" },
-                  ]).map(({ value, label }) => (
-                    <TouchableOpacity
-                      key={value}
-                      style={[styles.optionBtn, healthServicesCondition === value && styles.optionBtnSelected]}
-                      onPress={() => setHealthServicesCondition(value)}
-                    >
-                      <Text style={styles.optionText}>{label}</Text>
-                    </TouchableOpacity>
-                  ))}
+                  ]).map(({ value, label }) => {
+                    const isSelected = healthServicesCondition === value;
+                    return (
+                      <TouchableOpacity
+                        key={value}
+                        style={styles.radioRow}
+                        onPress={() => { setHealthServicesCondition(value); setShowQuestionHint(false); }}
+                      >
+                        <View style={[styles.radioCircle, isSelected && styles.radioCircleSelected]}>
+                          {isSelected && <View style={styles.radioDot} />}
+                        </View>
+                        <Text style={[styles.radioLabel, isSelected && styles.radioLabelSelected]}>
+                          {label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
                 </>
               )}
 
@@ -2183,7 +2345,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                     { value: "local_support", label: "Support from local authorities and community organizations" },
                     { value: "other", label: "Other — please specify" },
                   ]).map(({ value, label }) => (
-                    <TouchableOpacity key={value} style={styles.checkRow} onPress={() => togglePressingNeed(value)}>
+                    <TouchableOpacity key={value} style={styles.checkRow} onPress={() => { togglePressingNeed(value); setShowQuestionHint(false); }}>
                       <View style={[styles.checkbox, pressingNeeds.includes(value) && styles.checkboxSelected]}>
                         {pressingNeeds.includes(value) && <Text style={styles.checkmark}>✓</Text>}
                       </View>
@@ -2205,14 +2367,113 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                 </>
               )}
 
+              {/* Additional dashboard-configured questions (order_index > 8) */}
+              {damageQuestion > 8 && (() => {
+                const aq = additionalQuestions[additionalQuestion - 1];
+                if (!aq) return null;
+                const qKey = String(aq.order_index);
+                const qType = aq.type ?? 'single_select';
+                return (
+                  <View style={styles.questionBlock}>
+                    <Text style={styles.questionTitle}>{aq.question_text}</Text>
+
+                    {/* Single select */}
+                    {qType === 'single_select' && (aq.options ?? []).map((opt) => {
+                      const isSelected = additionalAnswers[qKey] === opt.option_value;
+                      return (
+                        <TouchableOpacity
+                          key={opt.option_value}
+                          style={styles.radioRow}
+                          onPress={() => {
+                            setAdditionalAnswers((prev) => ({ ...prev, [qKey]: opt.option_value }));
+                            setShowQuestionHint(false);
+                          }}
+                        >
+                          <View style={[styles.radioCircle, isSelected && styles.radioCircleSelected]}>
+                            {isSelected && <View style={styles.radioDot} />}
+                          </View>
+                          <Text style={[styles.radioLabel, isSelected && styles.radioLabelSelected]}>
+                            {opt.option_text}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+
+                    {/* Multi select */}
+                    {qType === 'multi_select' && (aq.options ?? []).map((opt) => {
+                      const current = (additionalAnswers[qKey] as string[]) ?? [];
+                      const selected = current.includes(opt.option_value);
+                      return (
+                        <TouchableOpacity
+                          key={opt.option_value}
+                          style={styles.checkRow}
+                          onPress={() => {
+                            const updated = selected
+                              ? current.filter((v) => v !== opt.option_value)
+                              : [...current, opt.option_value];
+                            setAdditionalAnswers((prev) => ({ ...prev, [qKey]: updated }));
+                            setShowQuestionHint(false);
+                          }}
+                        >
+                          <View style={[styles.checkbox, selected && styles.checkboxSelected]}>
+                            {selected && <Text style={styles.checkmark}>✓</Text>}
+                          </View>
+                          <Text style={styles.checkRowText}>{opt.option_text}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+
+                    {/* Free text */}
+                    {qType === 'free_text' && (
+                      <TextInput
+                        style={styles.input}
+                        value={(additionalAnswers[qKey] as string) ?? ''}
+                        onChangeText={(text) => {
+                          setAdditionalAnswers((prev) => ({
+                            ...prev,
+                            [qKey]: text.slice(0, aq.max_length ?? 200),
+                          }));
+                        }}
+                        multiline
+                        maxLength={aq.max_length ?? 200}
+                        placeholder="Enter your answer..."
+                        placeholderTextColor="#999999"
+                      />
+                    )}
+
+                    {showQuestionHint && !additionalAnswers[qKey] && aq.is_mandatory && (
+                      <Text style={styles.questionHint}>
+                        Please answer this question to continue.
+                      </Text>
+                    )}
+                  </View>
+                );
+              })()}
+
+              {showQuestionHint && damageQuestion <= 8 && !isDamageQuestionAnswered() && (
+                <Text style={styles.questionHint}>
+                  Please answer this question to continue.
+                </Text>
+              )}
+
               <View style={styles.navButtons}>
                 <TouchableOpacity style={styles.secondaryButton} onPress={handleDamageBack}>
                   <Text style={styles.secondaryButtonText}>← Back</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.primaryButton, !isDamageQuestionAnswered() && styles.buttonDisabled]}
-                  onPress={handleDamageNext}
-                  disabled={!isDamageQuestionAnswered()}
+                  style={styles.primaryButton}
+                  onPress={() => {
+                    if (damageQuestion > 8) {
+                      handleAdditionalNext();
+                      return;
+                    }
+                    if (!isDamageQuestionAnswered()) {
+                      setShowQuestionHint(true);
+                      return;
+                    }
+                    setShowQuestionHint(false);
+                    handleDamageNext();
+                  }}
                 >
                   <Text style={styles.primaryButtonText}>Next →</Text>
                 </TouchableOpacity>
@@ -2294,7 +2555,12 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
               <View style={styles.navButtons}>
                 <TouchableOpacity
                   style={styles.secondaryButton}
-                  onPress={() => { setDamageQuestion(8); setStep("damage"); }}
+                  onPress={() => {
+                    const lastQ = 8 + additionalQuestions.length;
+                    setDamageQuestion(lastQ);
+                    if (additionalQuestions.length > 0) setAdditionalQuestion(additionalQuestions.length);
+                    setStep("damage");
+                  }}
                 >
                   <Text style={styles.secondaryButtonText}>← Back</Text>
                 </TouchableOpacity>
@@ -2692,6 +2958,65 @@ const styles = StyleSheet.create({
   modalBody: { fontSize: 15, color: "#444", lineHeight: 22, marginBottom: 20 },
   modalButtons: { flexDirection: "row", gap: 12 },
   questionProgress: { fontSize: 13, fontWeight: "600", color: "#0468B1", textAlign: "center" },
+
+  // Radio button single-select styles
+  radioRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 4,
+    minHeight: 44,
+  },
+  radioCircle: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    borderColor: '#CCCCCC',
+    marginRight: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  radioCircleSelected: {
+    borderColor: '#0468B1',
+    backgroundColor: '#0468B1',
+  },
+  radioDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#FFFFFF',
+  },
+  radioLabel: {
+    flex: 1,
+    fontSize: 15,
+    color: '#333333',
+    lineHeight: 21,
+  },
+  radioLabelSelected: {
+    color: '#0468B1',
+    fontWeight: '500',
+  },
+
+  // Inline validation hint
+  questionHint: {
+    fontSize: 13,
+    color: '#D32F2F',
+    textAlign: 'center',
+    marginTop: 8,
+    marginBottom: 4,
+  },
+
+  // Additional questions block
+  questionBlock: {
+    gap: 4,
+  },
+  questionTitle: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#1A2B4A',
+    marginBottom: 4,
+  },
 
   // Location screen scenario styles
   locationContainer: {
