@@ -104,5 +104,25 @@
     "saveButton": "Save Profile",
     "reporterIdLabel": "Your Reporter ID",
     "validationMessage": "Please fill in at least one field to continue."
+  },
+  "welcomeCard": {
+    "body": "Crisis Reporter helps you document damage to buildings and infrastructure after a disaster. You can report earthquakes, floods, conflicts, and other crises. Your reports help UNDP get help to the right places faster.",
+    "dismiss": "Got it"
+  },
+  "whatCanIReport": {
+    "link": "What can I report?",
+    "title": "What can I report?",
+    "close": "Close",
+    "types": {
+      "earthquake": { "name": "Earthquake", "description": "Structural damage from ground shaking and tremors." },
+      "flood": { "name": "Flood", "description": "Water damage from overflow, heavy rain, or storm surge." },
+      "tsunami": { "name": "Tsunami", "description": "Coastal damage from large ocean waves following seismic events." },
+      "hurricane": { "name": "Hurricane or Cyclone", "description": "Wind and rain damage from tropical storms." },
+      "wildfire": { "name": "Wildfire", "description": "Fire damage to buildings and infrastructure." },
+      "explosion": { "name": "Explosion", "description": "Blast damage from industrial or other explosive events." },
+      "chemical": { "name": "Chemical Incident", "description": "Damage or hazard from chemical spill or release." },
+      "conflict": { "name": "Conflict", "description": "Damage from armed conflict or military activity." },
+      "civilUnrest": { "name": "Civil Unrest", "description": "Damage from protests, riots, or civil disturbance." }
+    }
   }
 }
