@@ -125,35 +125,6 @@ interface ApiQuestion {
 }
 interface ActivePackage { version: string; translation_version?: string; questions: ApiQuestion[]; }
 
-// ── Q4 grouped disaster type options ──────────────────────────────────────────
-
-const Q4_GROUPS = [
-  {
-    groupLabel: 'Natural hazards',
-    options: [
-      { value: 'earthquake', label: 'Earthquake' },
-      { value: 'flood', label: 'Flood' },
-      { value: 'tsunami', label: 'Tsunami' },
-      { value: 'hurricane_cyclone', label: 'Hurricane or Cyclone' },
-      { value: 'wildfire', label: 'Wildfire' },
-    ],
-  },
-  {
-    groupLabel: 'Technological or industrial hazards',
-    options: [
-      { value: 'explosion', label: 'Explosion' },
-      { value: 'chemical_incident', label: 'Chemical Incident' },
-    ],
-  },
-  {
-    groupLabel: 'Human-made crises',
-    options: [
-      { value: 'conflict', label: 'Conflict' },
-      { value: 'civil_unrest', label: 'Civil Unrest' },
-    ],
-  },
-] as const;
-
 // ── Label maps ────────────────────────────────────────────────────────────────
 
 const DAMAGE_LABELS: Record<string, string> = {
@@ -225,6 +196,33 @@ interface ReportScreenProps { navigation: any; }
 export default function ReportScreen({ navigation }: ReportScreenProps) {
   const { t } = useTranslation();
   const { reporterId, languageCode } = useAuthStore();
+
+  const Q4_GROUPS = [
+    {
+      groupLabel: t('questions.q4.group_natural'),
+      options: [
+        { value: 'earthquake', label: t('questions.q4.opt_earthquake') },
+        { value: 'flood', label: t('questions.q4.opt_flood') },
+        { value: 'tsunami', label: t('questions.q4.opt_tsunami') },
+        { value: 'hurricane_cyclone', label: t('questions.q4.opt_hurricane_cyclone') },
+        { value: 'wildfire', label: t('questions.q4.opt_wildfire') },
+      ],
+    },
+    {
+      groupLabel: t('questions.q4.group_technological'),
+      options: [
+        { value: 'explosion', label: t('questions.q4.opt_explosion') },
+        { value: 'chemical_incident', label: t('questions.q4.opt_chemical_incident') },
+      ],
+    },
+    {
+      groupLabel: t('questions.q4.group_humanmade'),
+      options: [
+        { value: 'conflict', label: t('questions.q4.opt_conflict') },
+        { value: 'civil_unrest', label: t('questions.q4.opt_civil_unrest') },
+      ],
+    },
+  ];
   const insets = useSafeAreaInsets();
 
   // Step
@@ -495,16 +493,16 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
           return;
         }
         Alert.alert(
-          'Resume previous report?',
-          'You have an unfinished report from a previous session. Would you like to continue where you left off?',
+          t('questions.recoveryTitle'),
+          t('questions.recoveryMessage'),
           [
             {
-              text: 'Start fresh',
+              text: t('questions.recoveryStartFresh'),
               style: 'destructive',
               onPress: async () => { await AsyncStorage.removeItem(ANSWERS_KEY); },
             },
             {
-              text: 'Continue',
+              text: t('questions.recoveryContinue'),
               onPress: () => {
                 if (draft.damageLevel) setDamageLevel(draft.damageLevel);
                 if (draft.infrastructureTypes) setInfrastructureTypes(draft.infrastructureTypes);
@@ -2138,16 +2136,16 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
           {step === "damage" && (
             <View style={styles.step}>
               <Text style={styles.questionProgress}>
-                Question {damageQuestion} of {8 + additionalQuestions.length}
+                {t('questions.progressLabel', { current: damageQuestion, total: 8 + additionalQuestions.length })}
               </Text>
 
               {damageQuestion === 1 && (
                 <>
-                  <Text style={styles.stepTitle}>{qTitle(1, "How bad is the damage? *")}</Text>
+                  <Text style={styles.stepTitle}>{qTitle(1, t('questions.q1.title'))}</Text>
                   {qOptions(1, [
-                    { value: "minimal", label: "Minimal / No damage" },
-                    { value: "partial", label: "Partially damaged" },
-                    { value: "complete", label: "Completely destroyed" },
+                    { value: "minimal", label: t('questions.q1.opt_minimal') },
+                    { value: "partial", label: t('questions.q1.opt_partial') },
+                    { value: "complete", label: t('questions.q1.opt_complete') },
                   ]).map(({ value, label }) => {
                     const isSelected = damageLevel === value;
                     return (
@@ -2170,18 +2168,18 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
 
               {damageQuestion === 2 && (
                 <>
-                  <Text style={styles.stepTitle}>{qTitle(2, "What type of infrastructure is this? *")}</Text>
-                  <Text style={styles.hintText}>Select all that apply.</Text>
+                  <Text style={styles.stepTitle}>{qTitle(2, t('questions.q2.title'))}</Text>
+                  <Text style={styles.hintText}>{t('questions.q2.hint')}</Text>
                   {qOptions(2, [
-                    { value: "residential", label: "Residential housing" },
-                    { value: "commercial", label: "Commercial or business premises" },
-                    { value: "government", label: "Government or public administration buildings" },
-                    { value: "educational", label: "Educational facilities" },
-                    { value: "healthcare", label: "Healthcare facilities" },
-                    { value: "critical_infrastructure", label: "Critical infrastructure (water, power, transport)" },
-                    { value: "agricultural", label: "Agricultural or food production facilities" },
-                    { value: "public_spaces", label: "Public spaces / Recreation infrastructure" },
-                    { value: "other", label: "Other — please specify" },
+                    { value: "residential", label: t('questions.q2.opt_residential') },
+                    { value: "commercial", label: t('questions.q2.opt_commercial') },
+                    { value: "government", label: t('questions.q2.opt_government') },
+                    { value: "educational", label: t('questions.q2.opt_educational') },
+                    { value: "healthcare", label: t('questions.q2.opt_healthcare') },
+                    { value: "critical_infrastructure", label: t('questions.q2.opt_critical_infrastructure') },
+                    { value: "agricultural", label: t('questions.q2.opt_agricultural') },
+                    { value: "public_spaces", label: t('questions.q2.opt_public_spaces') },
+                    { value: "other", label: t('questions.q2.opt_other') },
                   ]).map(({ value, label }) => (
                     <TouchableOpacity key={value} style={styles.checkRow} onPress={() => { toggleInfraType(value); setShowQuestionHint(false); }}>
                       <View style={[styles.checkbox, infrastructureTypes.includes(value) && styles.checkboxSelected]}>
@@ -2193,7 +2191,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                   {infrastructureTypes.includes("other") && (
                     <TextInput
                       style={[styles.input, { marginTop: 8 }]}
-                      placeholder="Please specify (max 100 characters)"
+                      placeholder={t('questions.otherSpecifyPlaceholder')}
                       value={infrastructureOther}
                       onChangeText={(t) => setInfrastructureOther(t.slice(0, 100))}
                       maxLength={100}
@@ -2204,10 +2202,10 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
 
               {damageQuestion === 3 && (
                 <>
-                  <Text style={styles.stepTitle}>{qTitle(3, "What is the name of this infrastructure? *")}</Text>
+                  <Text style={styles.stepTitle}>{qTitle(3, t('questions.q3.title'))}</Text>
                   <TextInput
                     style={styles.input}
-                    placeholder="e.g. Main Street Bridge"
+                    placeholder={t('questions.q3.placeholder')}
                     value={infrastructureName}
                     onChangeText={(t) => setInfrastructureName(t.slice(0, 200))}
                     maxLength={200}
@@ -2218,7 +2216,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
 
               {damageQuestion === 4 && (
                 <>
-                  <Text style={styles.stepTitle}>{qTitle(4, "What type of disaster caused this damage? *")}</Text>
+                  <Text style={styles.stepTitle}>{qTitle(4, t('questions.q4.title'))}</Text>
                   {Q4_GROUPS.map((group) => (
                     <View key={group.groupLabel}>
                       <Text style={styles.q4GroupLabel}>{group.groupLabel}</Text>
@@ -2246,10 +2244,10 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
 
               {damageQuestion === 5 && (
                 <>
-                  <Text style={styles.stepTitle}>{qTitle(5, "Is there debris blocking access? *")}</Text>
+                  <Text style={styles.stepTitle}>{qTitle(5, t('questions.q5.title'))}</Text>
                   {qOptions(5, [
-                    { value: "yes", label: "Yes" },
-                    { value: "no", label: "No" },
+                    { value: "yes", label: t('questions.q5.opt_yes') },
+                    { value: "no", label: t('questions.q5.opt_no') },
                   ]).map(({ value, label }) => {
                     const isSelected = debrisBlocking === value;
                     return (
@@ -2272,14 +2270,14 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
 
               {damageQuestion === 6 && (
                 <>
-                  <Text style={styles.stepTitle}>{qTitle(6, "What is the current condition of electricity infrastructure in your community following the crisis? *")}</Text>
+                  <Text style={styles.stepTitle}>{qTitle(6, t('questions.q6.title'))}</Text>
                   {qOptions(6, [
-                    { value: "no_damage", label: "No damage observed" },
-                    { value: "minor", label: "Minor damage — service disruptions but quickly repairable" },
-                    { value: "moderate", label: "Moderate damage — partial outages requiring repairs" },
-                    { value: "severe", label: "Severe damage — major infrastructure damaged, prolonged outages" },
-                    { value: "destroyed", label: "Completely destroyed — no electricity infrastructure functioning" },
-                    { value: "unknown", label: "Unknown / cannot be assessed" },
+                    { value: "no_damage", label: t('questions.q6.opt_no_damage') },
+                    { value: "minor", label: t('questions.q6.opt_minor') },
+                    { value: "moderate", label: t('questions.q6.opt_moderate') },
+                    { value: "severe", label: t('questions.q6.opt_severe') },
+                    { value: "destroyed", label: t('questions.q6.opt_destroyed') },
+                    { value: "unknown", label: t('questions.q6.opt_unknown') },
                   ]).map(({ value, label }) => {
                     const isSelected = electricityCondition === value;
                     return (
@@ -2302,13 +2300,13 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
 
               {damageQuestion === 7 && (
                 <>
-                  <Text style={styles.stepTitle}>{qTitle(7, "How would you rate the overall functioning of health services in your community since the event? *")}</Text>
+                  <Text style={styles.stepTitle}>{qTitle(7, t('questions.q7.title'))}</Text>
                   {qOptions(7, [
-                    { value: "fully_functional", label: "Fully functional" },
-                    { value: "partially_functional", label: "Partially functional" },
-                    { value: "largely_disrupted", label: "Largely disrupted" },
-                    { value: "not_functioning", label: "Not functioning at all" },
-                    { value: "unknown", label: "Unknown" },
+                    { value: "fully_functional", label: t('questions.q7.opt_fully') },
+                    { value: "partially_functional", label: t('questions.q7.opt_partially') },
+                    { value: "largely_disrupted", label: t('questions.q7.opt_largely') },
+                    { value: "not_functioning", label: t('questions.q7.opt_not_functioning') },
+                    { value: "unknown", label: t('questions.q7.opt_unknown') },
                   ]).map(({ value, label }) => {
                     const isSelected = healthServicesCondition === value;
                     return (
@@ -2331,19 +2329,19 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
 
               {damageQuestion === 8 && (
                 <>
-                  <Text style={styles.stepTitle}>{qTitle(8, "What are the most pressing needs in your community right now? *")}</Text>
-                  <Text style={styles.hintText}>Select all that apply. At least one required.</Text>
+                  <Text style={styles.stepTitle}>{qTitle(8, t('questions.q8.title'))}</Text>
+                  <Text style={styles.hintText}>{t('questions.q8.hint')}</Text>
                   {qOptions(8, [
-                    { value: "food_water", label: "Food assistance and safe drinking water" },
-                    { value: "cash_financial", label: "Cash or financial assistance" },
-                    { value: "healthcare", label: "Access to healthcare and essential medicines" },
-                    { value: "shelter", label: "Shelter, housing repair, or temporary accommodation" },
-                    { value: "livelihoods", label: "Restoration of livelihoods or income sources" },
-                    { value: "wash", label: "Water, sanitation, and hygiene (toilets, washing facilities)" },
-                    { value: "basic_services", label: "Restoration of basic services and infrastructure (electricity, roads, schools)" },
-                    { value: "protection", label: "Protection services and psychosocial support" },
-                    { value: "local_support", label: "Support from local authorities and community organizations" },
-                    { value: "other", label: "Other — please specify" },
+                    { value: "food_water", label: t('questions.q8.opt_food_water') },
+                    { value: "cash_financial", label: t('questions.q8.opt_cash') },
+                    { value: "healthcare", label: t('questions.q8.opt_healthcare') },
+                    { value: "shelter", label: t('questions.q8.opt_shelter') },
+                    { value: "livelihoods", label: t('questions.q8.opt_livelihoods') },
+                    { value: "wash", label: t('questions.q8.opt_wash') },
+                    { value: "basic_services", label: t('questions.q8.opt_basic_services') },
+                    { value: "protection", label: t('questions.q8.opt_protection') },
+                    { value: "local_support", label: t('questions.q8.opt_local_support') },
+                    { value: "other", label: t('questions.q8.opt_other') },
                   ]).map(({ value, label }) => (
                     <TouchableOpacity key={value} style={styles.checkRow} onPress={() => { togglePressingNeed(value); setShowQuestionHint(false); }}>
                       <View style={[styles.checkbox, pressingNeeds.includes(value) && styles.checkboxSelected]}>
@@ -2356,7 +2354,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                     <View>
                       <TextInput
                         style={[styles.input, { marginTop: 8 }]}
-                        placeholder="Please specify (max 100 characters)"
+                        placeholder={t('questions.otherSpecifyPlaceholder')}
                         value={pressingNeedsOther}
                         onChangeText={(txt) => setPressingNeedsOther(txt.slice(0, 100))}
                         maxLength={100}
@@ -2443,7 +2441,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
 
                     {showQuestionHint && !additionalAnswers[qKey] && aq.is_mandatory && (
                       <Text style={styles.questionHint}>
-                        Please answer this question to continue.
+                        {t('questions.answerHint')}
                       </Text>
                     )}
                   </View>

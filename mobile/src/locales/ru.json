@@ -180,5 +180,95 @@
     "duplicateWarningBody": "A report for this location was recently submitted. Do you want to continue with a new report?",
     "duplicateWarningContinue": "Continue",
     "duplicateWarningGoBack": "Go Back"
+  },
+  "questions": {
+    "progressLabel": "Question {{current}} of {{total}}",
+    "nextButton": "Next",
+    "backButton": "Back",
+    "answerHint": "Please answer this question to continue.",
+    "charCounter": "{{count}}/{{max}} characters",
+    "otherSpecifyPlaceholder": "Please specify...",
+    "otherSpecifyLabel": "Please specify",
+    "recoveryTitle": "Resume previous report?",
+    "recoveryMessage": "You have an unfinished report from a previous session. Would you like to continue where you left off?",
+    "recoveryStartFresh": "Start fresh",
+    "recoveryContinue": "Continue",
+    "q1": {
+      "title": "What is the level of damage to this infrastructure?",
+      "opt_minimal": "Minimal / No damage — structurally sound and functional",
+      "opt_partial": "Partially damaged — repairable and remains usable with caution",
+      "opt_complete": "Completely destroyed — structurally unsafe or destroyed"
+    },
+    "q2": {
+      "title": "What type of infrastructure is this?",
+      "hint": "Select all that apply",
+      "opt_residential": "Residential housing",
+      "opt_commercial": "Commercial or business premises",
+      "opt_government": "Government or public administration buildings",
+      "opt_educational": "Educational facilities",
+      "opt_healthcare": "Healthcare facilities",
+      "opt_critical_infrastructure": "Critical infrastructure (water, power, transport)",
+      "opt_agricultural": "Agricultural or food production facilities",
+      "opt_public_spaces": "Public spaces / Recreation infrastructure",
+      "opt_other": "Other — please specify",
+      "otherLimit": "100 characters maximum"
+    },
+    "q3": {
+      "title": "What is the name or details of the infrastructure?",
+      "placeholder": "Enter the name or description of the building or structure",
+      "charLimit": "200 characters maximum"
+    },
+    "q4": {
+      "title": "What type of disaster is this?",
+      "group_natural": "Natural hazards",
+      "group_technological": "Technological or industrial hazards",
+      "group_humanmade": "Human-made crises",
+      "opt_earthquake": "Earthquake",
+      "opt_flood": "Flood",
+      "opt_tsunami": "Tsunami",
+      "opt_hurricane_cyclone": "Hurricane or Cyclone",
+      "opt_wildfire": "Wildfire",
+      "opt_explosion": "Explosion",
+      "opt_chemical_incident": "Chemical Incident",
+      "opt_conflict": "Conflict",
+      "opt_civil_unrest": "Civil Unrest"
+    },
+    "q5": {
+      "title": "Is there debris that needs clearing near this location?",
+      "opt_yes": "Yes",
+      "opt_no": "No"
+    },
+    "q6": {
+      "title": "What is the current condition of electricity infrastructure in your community following the crisis?",
+      "opt_no_damage": "No damage observed",
+      "opt_minor": "Minor damage — service disruptions but quickly repairable",
+      "opt_moderate": "Moderate damage — partial outages requiring repairs",
+      "opt_severe": "Severe damage — major infrastructure damaged, prolonged outages",
+      "opt_destroyed": "Completely destroyed — no electricity infrastructure functioning",
+      "opt_unknown": "Unknown / cannot be assessed"
+    },
+    "q7": {
+      "title": "How would you rate the overall functioning of health services in your community since the event?",
+      "opt_fully": "Fully functional",
+      "opt_partially": "Partially functional",
+      "opt_largely": "Largely disrupted",
+      "opt_not_functioning": "Not functioning at all",
+      "opt_unknown": "Unknown"
+    },
+    "q8": {
+      "title": "What are the most pressing needs?",
+      "hint": "Select all that apply",
+      "opt_food_water": "Food assistance and safe drinking water",
+      "opt_cash": "Cash or financial assistance",
+      "opt_healthcare": "Access to healthcare and essential medicines",
+      "opt_shelter": "Shelter, housing repair, or temporary accommodation",
+      "opt_livelihoods": "Restoration of livelihoods or income sources",
+      "opt_wash": "Water, sanitation, and hygiene (toilets, washing facilities)",
+      "opt_basic_services": "Restoration of basic services and infrastructure (electricity, roads, schools)",
+      "opt_protection": "Protection services and psychosocial support",
+      "opt_local_support": "Support from local authorities and community organisations",
+      "opt_other": "Other — please specify",
+      "otherLimit": "100 characters maximum"
+    }
   }
 }
