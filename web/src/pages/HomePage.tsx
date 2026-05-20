@@ -12,8 +12,8 @@ const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface ReportsListResponse {
-  reports: unknown[];
-  total_count: number;
+  items: unknown[];
+  total: number;
   next_cursor: string | null;
 }
 
@@ -162,8 +162,8 @@ export default function HomePage() {
   const { data: reportsData, isLoading: reportsLoading, isError: reportsError } = useQuery({
     queryKey: ["homeReportCount", reporterId],
     queryFn: async () => {
-      const res = await api.get<ReportsListResponse>("/api/reports", {
-        params: { reporter_id: reporterId, limit: 1 },
+      const res = await api.get<ReportsListResponse>("/api/reports/my", {
+        params: { limit: 1 },
       });
       return res.data;
     },
@@ -177,7 +177,7 @@ export default function HomePage() {
     return () => clearTimeout(timer);
   }, [reporterId, reportsLoading]);
 
-  const reportCount = reportsData?.total_count ?? null;
+  const reportCount = reportsData?.total ?? null;
 
   return (
     <div style={s.page}>

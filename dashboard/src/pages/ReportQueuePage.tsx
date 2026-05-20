@@ -96,13 +96,13 @@ export default function ReportQueuePage() {
   const fetchPage = useCallback(
     async (pageCursor?: string) => {
       const params: Record<string, string> = {
-        flag: "grey",
+        flag_status: "grey",
         limit: String(PAGE_SIZE),
       };
       if (activeCrisisId) params.crisis_id = activeCrisisId;
       if (pageCursor) params.cursor = pageCursor;
 
-      const res = await api.get<QueueResponse>("/api/reports", { params });
+      const res = await api.get<QueueResponse>("/api/dashboard/reports", { params });
       return res.data;
     },
     [activeCrisisId]

@@ -88,13 +88,11 @@ interface OverpassResponse {
 }
 
 interface ReportMapItem {
-  report_id: string;
+  id: string;
   damage_level: string;
   created_at: string;
-  location?: {
-    gps_latitude?: number | null;
-    gps_longitude?: number | null;
-  };
+  gps_latitude: number;
+  gps_longitude: number;
 }
 
 interface ReportsListResponse {
@@ -154,12 +152,12 @@ function reportsGeoJSON(reports: ReportMapItem[]): Parameters<maplibregl.GeoJSON
   }> = [];
 
   for (const r of reports) {
-    const lat = r.location?.gps_latitude;
-    const lng = r.location?.gps_longitude;
+    const lat = r.gps_latitude;
+    const lng = r.gps_longitude;
     if (!lat || !lng) continue;
     features.push({
       type: "Feature",
-      properties: { report_id: r.report_id, damage_level: r.damage_level, created_at: r.created_at },
+      properties: { report_id: r.id, damage_level: r.damage_level, created_at: r.created_at },
       geometry: { type: "Point", coordinates: [lng, lat] },
     });
   }
@@ -377,7 +375,7 @@ export default function MapPage() {
           : (crisisRes.data?.items ?? []);
         if (list.length > 0) {
           const crisisId: string = (list[0] as { id: string }).id;
-          const reportsRes = await api.get<ReportsListResponse>("/api/reports", {
+          const reportsRes = await api.get<ReportsListResponse>("/api/reports/map", {
             params: { crisis_id: crisisId, limit: 200 },
           });
           const source = mapInstance.getSource("reports") as maplibregl.GeoJSONSource | undefined;

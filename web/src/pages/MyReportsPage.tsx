@@ -8,18 +8,17 @@ interface ReporterReport {
   id: string;
   damage_level: "minimal" | "partial" | "complete";
   submitted_at: string;
-  location: {
-    location_address: string | null;
-    gps_latitude: number | null;
-    gps_longitude: number | null;
-  } | null;
+  gps_latitude?: number | null;
+  gps_longitude?: number | null;
+  location_address?: string | null;
+  location_landmark?: string | null;
+  building_name?: string | null;
   photo_count: number;
   first_photo_url: string | null;
   status?: string;
   flag_status?: string;
   disaster_type?: string;
   infrastructure_name?: string;
-  building_name?: string;
 }
 
 interface SessionReport {
@@ -54,11 +53,9 @@ function convertSessionReport(s: SessionReport): ReporterReport {
     id: s.id,
     damage_level: s.damage_level as ReporterReport["damage_level"],
     submitted_at: s.submitted_at,
-    location: {
-      location_address: s.location_address,
-      gps_latitude: s.gps_latitude,
-      gps_longitude: s.gps_longitude,
-    },
+    gps_latitude: s.gps_latitude,
+    gps_longitude: s.gps_longitude,
+    location_address: s.location_address,
     photo_count: 0,
     first_photo_url: null,
     status: "submitted",
@@ -66,9 +63,9 @@ function convertSessionReport(s: SessionReport): ReporterReport {
 }
 
 function formatLocation(report: ReporterReport): string {
-  if (report.location?.location_address) return report.location.location_address;
-  if (report.location?.gps_latitude != null && report.location?.gps_longitude != null) {
-    return `${report.location.gps_latitude.toFixed(4)}, ${report.location.gps_longitude.toFixed(4)}`;
+  if (report.location_address) return report.location_address;
+  if (report.gps_latitude != null && report.gps_longitude != null) {
+    return `${report.gps_latitude.toFixed(4)}, ${report.gps_longitude.toFixed(4)}`;
   }
   return "Location not recorded";
 }
@@ -141,12 +138,11 @@ export default function MyReportsPage() {
 
     try {
       const params: Record<string, string> = {
-        reporter_id: reporterId,
         limit: String(PAGE_SIZE),
       };
       if (cursor) params.cursor = cursor;
 
-      const res = await api.get<ReportsResponse>("/api/reports", { params });
+      const res = await api.get<ReportsResponse>("/api/reports/my", { params });
       const data = res.data;
 
       if (cursor) {

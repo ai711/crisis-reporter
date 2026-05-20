@@ -140,6 +140,45 @@ class ReportResponse(BaseModel):
         from_attributes = True
 
 
+class ReporterReportItem(BaseModel):
+    id: str
+    damage_level: Optional[str]
+    submitted_at: Optional[datetime]
+    gps_latitude: Optional[float]
+    gps_longitude: Optional[float]
+    location_address: Optional[str]
+    location_landmark: Optional[str]
+    building_name: Optional[str]
+    photo_count: int = 0
+    first_photo_url: Optional[str] = None
+    flag_status: Optional[str]
+
+    class Config:
+        from_attributes = True
+
+
+class ReporterReportsResponse(BaseModel):
+    items: List[ReporterReportItem]
+    next_cursor: Optional[str] = None
+    total: int = 0
+
+
+class MapReportItem(BaseModel):
+    id: str
+    damage_level: Optional[str]
+    gps_latitude: float
+    gps_longitude: float
+    created_at: Optional[datetime]
+
+    class Config:
+        from_attributes = True
+
+
+class MapReportsResponse(BaseModel):
+    reports: List[MapReportItem]
+    total_count: int
+
+
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 @router.post("", response_model=ReportSubmitResponse)
@@ -419,6 +458,109 @@ async def list_reports(
         )
         for r in reports_list
     ]
+
+
+@router.get("/my", response_model=ReporterReportsResponse)
+async def get_my_reports(
+    limit: int = Query(default=20, le=100),
+    cursor: Optional[str] = None,
+    current_reporter: Reporter = Depends(get_current_reporter),
+    db: AsyncSession = Depends(get_db),
+):
+    """Returns paginated reports for the authenticated reporter."""
+    from sqlalchemy.orm import joinedload
+    from app.models.photo import Photo
+    from app.services.storage import storage_service
+
+    conditions = [Report.reporter_id == current_reporter.id]
+    if cursor:
+        try:
+            cursor_dt = datetime.fromisoformat(cursor)
+            conditions.append(Report.submitted_at < cursor_dt)
+        except ValueError:
+            pass
+
+    query = (
+        select(Report)
+        .options(joinedload(Report.photos))
+        .where(*conditions)
+        .order_by(Report.submitted_at.desc())
+        .limit(limit + 1)
+    )
+    result = await db.execute(query)
+    reports_list = list(result.scalars().unique().all())
+
+    has_more = len(reports_list) > limit
+    if has_more:
+        reports_list = reports_list[:limit]
+
+    count_result = await db.execute(
+        select(func.count(Report.id)).where(Report.reporter_id == current_reporter.id)
+    )
+    total = count_result.scalar() or 0
+
+    items = []
+    for r in reports_list:
+        photos = sorted(r.photos, key=lambda p: p.display_order)
+        photo_count = len(photos)
+        first_photo_url = storage_service.get_url(photos[0].storage_path) if photos else None
+        items.append(ReporterReportItem(
+            id=str(r.id),
+            damage_level=r.damage_level,
+            submitted_at=r.submitted_at,
+            gps_latitude=r.gps_latitude,
+            gps_longitude=r.gps_longitude,
+            location_address=r.location_address,
+            location_landmark=r.location_landmark,
+            building_name=r.building_name,
+            photo_count=photo_count,
+            first_photo_url=first_photo_url,
+            flag_status=r.flag_status,
+        ))
+
+    next_cursor = None
+    if has_more and reports_list:
+        last = reports_list[-1]
+        next_cursor = last.submitted_at.isoformat() if last.submitted_at else None
+
+    return ReporterReportsResponse(items=items, next_cursor=next_cursor, total=total)
+
+
+@router.get("/map", response_model=MapReportsResponse)
+async def get_map_reports(
+    crisis_id: Optional[str] = None,
+    limit: int = Query(default=200, le=500),
+    db: AsyncSession = Depends(get_db),
+):
+    """Returns geolocated reports for map display. No authentication required."""
+    conditions = [
+        Report.gps_latitude.isnot(None),
+        Report.gps_longitude.isnot(None),
+    ]
+    if crisis_id:
+        conditions.append(Report.crisis_id == crisis_id)
+
+    query = (
+        select(Report)
+        .where(*conditions)
+        .order_by(Report.created_at.desc())
+        .limit(limit)
+    )
+    result = await db.execute(query)
+    reports_list = result.scalars().all()
+
+    items = [
+        MapReportItem(
+            id=str(r.id),
+            damage_level=r.damage_level,
+            gps_latitude=r.gps_latitude,
+            gps_longitude=r.gps_longitude,
+            created_at=r.created_at,
+        )
+        for r in reports_list
+    ]
+
+    return MapReportsResponse(reports=items, total_count=len(items))
 
 
 @router.get("/duplicate-check")
