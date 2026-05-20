@@ -69,6 +69,26 @@ export interface QueuedPhoto {
   display_order: number;
 }
 
+export type ProcessedPhoto = {
+  uri: string;
+  originalUri: string;
+  mimeType: string;
+  originalSize: number;
+  finalSize: number;
+  compressionApplied: boolean;
+  formatConverted: boolean;
+  exif: {
+    dateTaken: string | null;
+    dateDigitised: string | null;
+    gpsLat: number | null;
+    gpsLng: number | null;
+    make: string | null;
+    model: string | null;
+    width: number | null;
+    height: number | null;
+  };
+};
+
 export interface QueuedReport {
   local_id: string;
   report: ReportSubmitRequest;

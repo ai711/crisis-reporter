@@ -24,9 +24,11 @@ import {
 import { useEffect } from "react";
 import { useAuthStore } from "../stores/authStore";
 import api from "../services/api";
+import * as ImageManipulator from 'expo-image-manipulator';
+import * as FileSystem from 'expo-file-system';
 import { addToQueue } from "../utils/offlineQueue";
 import StepIndicator from "../components/StepIndicator";
-import type { DamageLevel, QueuedPhoto } from "../types";
+import type { DamageLevel, QueuedPhoto, ProcessedPhoto } from "../types";
 
 const MAPTILER_KEY = process.env.EXPO_PUBLIC_MAPTILER_KEY ?? "";
 const MAP_STYLE_URL = `https://api.maptiler.com/maps/streets/style.json?key=${MAPTILER_KEY}`;
@@ -202,7 +204,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
   const [pressingNeeds, setPressingNeeds] = useState<string[]>([]);
   const [pressingNeedsOther, setPressingNeedsOther] = useState("");
   const [damageQuestion, setDamageQuestion] = useState(1);
-  const [photos, setPhotos] = useState<{ uri: string; filename: string; type: string }[]>([]);
+  const [photos, setPhotos] = useState<ProcessedPhoto[]>([]);
 
   // Location
   const [gpsCoords, setGpsCoords] = useState<{ lat: number; lng: number } | null>(null);
@@ -428,6 +430,172 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
 
   // ── Photo handlers ────────────────────────────────────────────────────────────
 
+  const processPhoto = async (uri: string, mimeType?: string): Promise<ProcessedPhoto | null> => {
+
+    // --- STEP 1: Determine format ---
+    const uriLower = uri.toLowerCase();
+    const detectedType = mimeType?.toLowerCase() ?? '';
+
+    if (
+      uriLower.endsWith('.gif') ||
+      detectedType.includes('gif')
+    ) {
+      Alert.alert('Cannot Use This Photo', t('photoScreen.validationGif'));
+      return null;
+    }
+
+    if (
+      uriLower.endsWith('.dng') ||
+      uriLower.endsWith('.raw') ||
+      uriLower.endsWith('.cr2') ||
+      uriLower.endsWith('.nef') ||
+      uriLower.endsWith('.arw') ||
+      detectedType.includes('raw') ||
+      detectedType.includes('x-adobe-dng')
+    ) {
+      Alert.alert('Cannot Use This Photo', t('photoScreen.validationFormat'));
+      return null;
+    }
+
+    const needsConversion =
+      uriLower.endsWith('.heic') ||
+      uriLower.endsWith('.heif') ||
+      uriLower.endsWith('.bmp') ||
+      uriLower.endsWith('.tiff') ||
+      uriLower.endsWith('.tif') ||
+      detectedType.includes('heic') ||
+      detectedType.includes('heif') ||
+      detectedType.includes('bmp') ||
+      detectedType.includes('tiff');
+
+    // --- STEP 2: Get original file info ---
+    let workingUri = uri;
+    let originalSize = 0;
+
+    try {
+      const fileInfo = await FileSystem.getInfoAsync(uri);
+      if (!fileInfo.exists) {
+        Alert.alert('Cannot Use This Photo', t('photoScreen.validationEmpty'));
+        return null;
+      }
+      originalSize = (fileInfo as any).size ?? 0;
+    } catch {
+      // If we cannot read file info, continue — originalSize stays 0
+    }
+
+    // --- STEP 3: Format conversion if needed ---
+    let formatConverted = false;
+    if (needsConversion) {
+      try {
+        const converted = await ImageManipulator.manipulateAsync(
+          uri,
+          [],
+          { compress: 1, format: ImageManipulator.SaveFormat.JPEG }
+        );
+        workingUri = converted.uri;
+        formatConverted = true;
+      } catch {
+        Alert.alert('Cannot Use This Photo', t('photoScreen.validationFormat'));
+        return null;
+      }
+    }
+
+    // --- STEP 4: Get image dimensions ---
+    let width = 0;
+    let height = 0;
+    try {
+      const imageInfo = await ImageManipulator.manipulateAsync(workingUri, []);
+      width = imageInfo.width;
+      height = imageInfo.height;
+    } catch {
+      // Cannot get dimensions — continue with 0,0
+    }
+
+    if (width > 0 && height > 0 && (width < 100 || height < 100)) {
+      Alert.alert('Cannot Use This Photo', t('photoScreen.validationTooSmall'));
+      return null;
+    }
+
+    // --- STEP 5: Blank image check ---
+    // A genuinely blank capture is typically under 5 KB
+    if (originalSize > 0 && originalSize < 5 * 1024) {
+      Alert.alert('Cannot Use This Photo', t('photoScreen.validationBlank'));
+      return null;
+    }
+
+    // --- STEP 6: Duplicate detection ---
+    const isDuplicate = photos.some((p) => p.originalUri === uri || p.uri === uri);
+    if (isDuplicate) {
+      Alert.alert('Duplicate Photo', t('photoScreen.validationDuplicate'));
+      return null;
+    }
+
+    // --- STEP 7: Size-based compression ---
+    let finalUri = workingUri;
+    let compressionApplied = false;
+    let finalSize = originalSize;
+
+    const MB = 1024 * 1024;
+
+    if (originalSize > 8 * MB) {
+      // Above 8 MB: compress to ~1.5 MB target
+      try {
+        const compressed = await ImageManipulator.manipulateAsync(
+          workingUri,
+          [],
+          { compress: 0.5, format: ImageManipulator.SaveFormat.JPEG }
+        );
+        finalUri = compressed.uri;
+        compressionApplied = true;
+        const info = await FileSystem.getInfoAsync(finalUri);
+        finalSize = (info as any).size ?? originalSize;
+      } catch {
+        finalUri = workingUri;
+      }
+    } else if (originalSize >= 1.5 * MB) {
+      // 1.5 MB to 8 MB: compress to ~1 MB target
+      try {
+        const compressed = await ImageManipulator.manipulateAsync(
+          workingUri,
+          [],
+          { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG }
+        );
+        finalUri = compressed.uri;
+        compressionApplied = true;
+        const info = await FileSystem.getInfoAsync(finalUri);
+        finalSize = (info as any).size ?? originalSize;
+      } catch {
+        finalUri = workingUri;
+      }
+    }
+    // Under 1.5 MB: no compression — use as-is
+
+    // --- STEP 8: EXIF extraction ---
+    // expo-image-manipulator does not expose EXIF directly.
+    // GPS and device fields require expo-media-library — deferred to a future prompt.
+    const exif: ProcessedPhoto['exif'] = {
+      dateTaken: new Date().toISOString(),
+      dateDigitised: new Date().toISOString(),
+      gpsLat: null,
+      gpsLng: null,
+      make: null,
+      model: null,
+      width: width || null,
+      height: height || null,
+    };
+
+    return {
+      uri: finalUri,
+      originalUri: uri,
+      mimeType: 'image/jpeg',
+      originalSize,
+      finalSize,
+      compressionApplied,
+      formatConverted,
+      exif,
+    };
+  };
+
   const handleTakePhoto = async () => {
     try {
       const permission = await ImagePicker.requestCameraPermissionsAsync();
@@ -442,10 +610,13 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
         );
         return;
       }
-      const result = await ImagePicker.launchCameraAsync({ mediaTypes: ["images"], quality: 0.8 });
-      if (!result.canceled && result.assets[0]) {
+      const result = await ImagePicker.launchCameraAsync({ mediaTypes: ["images"], allowsEditing: false, quality: 1 });
+      if (!result.canceled && result.assets?.[0]) {
         const asset = result.assets[0];
-        setPhotos((prev) => [...prev, { uri: asset.uri, filename: `photo_${Date.now()}.jpg`, type: "image/jpeg" }]);
+        const processed = await processPhoto(asset.uri, asset.mimeType ?? '');
+        if (processed) {
+          setPhotos((prev) => [...prev, processed]);
+        }
       }
     } catch (e) {
       Alert.alert("Camera Error", String(e));
@@ -466,10 +637,13 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
         );
         return;
       }
-      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.8 });
-      if (!result.canceled && result.assets[0]) {
+      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], allowsEditing: false, quality: 1 });
+      if (!result.canceled && result.assets?.[0]) {
         const asset = result.assets[0];
-        setPhotos((prev) => [...prev, { uri: asset.uri, filename: `photo_${Date.now()}.jpg`, type: "image/jpeg" }]);
+        const processed = await processPhoto(asset.uri, asset.mimeType ?? '');
+        if (processed) {
+          setPhotos((prev) => [...prev, processed]);
+        }
       }
     } catch (e) {
       Alert.alert("Gallery Error", String(e));
@@ -618,6 +792,18 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
       reporter_id: reporterId || undefined,
       language_code: languageCode,
       question_package_version: questionPackage?.version ?? null,
+      photos: photos.map((photo, index) => ({
+        uri: photo.uri,
+        index,
+        original_size: photo.originalSize,
+        final_size: photo.finalSize,
+        compression_applied: photo.compressionApplied,
+        format_converted: photo.formatConverted,
+        mime_type: photo.mimeType,
+        exif_date_taken: photo.exif.dateTaken,
+        exif_width: photo.exif.width,
+        exif_height: photo.exif.height,
+      })),
       was_queued: false,
     };
 
@@ -629,7 +815,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
         const formData = new FormData();
         formData.append("report_id", reportId);
         formData.append("display_order", String(i));
-        formData.append("file", { uri: photos[i].uri, name: photos[i].filename, type: photos[i].type } as any);
+        formData.append("file", { uri: photos[i].uri, name: `photo_${i}.jpg`, type: photos[i].mimeType } as any);
         await api.post("/api/photos", formData, { headers: { "Content-Type": "multipart/form-data" } });
       }
 
@@ -641,8 +827,8 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
       await registerPushToken();
       const queuedPhotos: QueuedPhoto[] = photos.map((p, i) => ({
         uri: p.uri,
-        filename: p.filename,
-        content_type: p.type,
+        filename: `photo_${i}.jpg`,
+        content_type: p.mimeType,
         display_order: i,
       }));
       // ReportSubmitRequest type predates multi-type infra fields — cast to bypass
