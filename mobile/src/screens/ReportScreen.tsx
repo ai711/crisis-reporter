@@ -18,6 +18,7 @@ import {
   GeoJSONSource,
   Layer,
   UserLocation,
+  Marker,
   type CameraRef,
   type ViewStateChangeEvent,
   type PressEventWithFeatures,
@@ -260,6 +261,8 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
   const [locationMethod, setLocationMethod] = useState<
     'map_selection' | 'pin_drop' | 'manual' | null
   >(null);
+  const [pinDropActive, setPinDropActive] = useState(false);
+  const [pinCoords, setPinCoords] = useState<{ lat: number; lng: number } | null>(null);
 
   // Submit
   const [flowStartedAt, setFlowStartedAt] = useState<string | null>(null);
@@ -282,6 +285,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
   // Map refs
   const cameraRef = useRef<CameraRef | null>(null);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const buildingTappedRef = useRef(false);
 
   useEffect(() => {
     setFlowStartedAt(new Date().toISOString());
@@ -374,6 +378,38 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
 
     detectScenario();
   }, [step]);
+
+  // Connectivity transition listener — scoped to location step only
+  useEffect(() => {
+    if (step !== 'location') return;
+
+    const unsubscribe = NetInfo.addEventListener((state) => {
+      const nowOnline = !!(state.isConnected && state.isInternetReachable);
+
+      if (!nowOnline && (locationScenario === 'online_gps' || locationScenario === 'online_no_gps')) {
+        setLocationScenario('loading');
+        setTimeout(() => {
+          if (locationGpsCoords) {
+            setLocationScenario('offline_gps');
+          } else {
+            setLocationScenario('offline_no_gps');
+          }
+          setIsOnlineAtLocation(false);
+        }, 300);
+      }
+
+      if (nowOnline && (locationScenario === 'offline_gps' || locationScenario === 'offline_no_gps')) {
+        setIsOnlineAtLocation(true);
+        if (locationGpsCoords) {
+          setLocationScenario('online_gps');
+        } else {
+          setLocationScenario('online_no_gps');
+        }
+      }
+    });
+
+    return () => unsubscribe();
+  }, [step, locationScenario, locationGpsCoords]);
 
   // ── Question package helpers ──────────────────────────────────────────────────
 
@@ -508,6 +544,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
   };
 
   const handleBuildingPress = (event: NativeSyntheticEvent<PressEventWithFeatures>) => {
+    buildingTappedRef.current = true;
     const { features } = event.nativeEvent;
     if (!features?.length) return;
 
@@ -525,6 +562,25 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
       feature: f,
     });
     setShowBuildingConfirm(true);
+  };
+
+  const handleMapPress = (event: any) => {
+    if (buildingTappedRef.current) {
+      buildingTappedRef.current = false;
+      return;
+    }
+
+    const coords = event.geometry?.coordinates ??
+      event.nativeEvent?.geometry?.coordinates;
+    if (!coords || coords.length < 2) return;
+
+    const [lng, lat] = coords;
+    setPinCoords({ lat, lng });
+    setPinDropActive(true);
+    setLocationMethod('pin_drop');
+
+    setSelectedBuilding(null);
+    setEditableBuildingName('');
   };
 
   // ── Location actions ──────────────────────────────────────────────────────────
@@ -561,7 +617,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
 
   const isLocationValid = (): boolean => {
     if (locationScenario === 'online_gps' || locationScenario === 'online_no_gps') {
-      return !!(selectedBuilding || gpsCoords || locationGpsCoords);
+      return !!(selectedBuilding || pinCoords || gpsCoords || locationGpsCoords);
     }
     if (locationScenario === 'offline_gps' || locationScenario === 'offline_no_gps') {
       return !!(
@@ -990,6 +1046,14 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
     setIsOnlineAtLocation(true);
     setLocationNote('');
     setLocationMethod(null);
+    setPinDropActive(false);
+    setPinCoords(null);
+    setPendingBuilding(null);
+    setShowBuildingConfirm(false);
+    setEditableBuildingName('');
+    setSearchQuery('');
+    setSearchResults([]);
+    setShowSearchResults(false);
     setSubmitted(false);
     setWasQueued(false);
     setSubmittedReportId(null);
@@ -1030,10 +1094,14 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
       submitted_at: new Date().toISOString(),
       building_id: selectedBuilding ? String(selectedBuilding.id) : null,
       location: {
-        gps_latitude: gpsCoords?.lat ?? null,
-        gps_longitude: gpsCoords?.lng ?? null,
+        gps_latitude: selectedBuilding
+          ? (gpsCoords?.lat ?? null)
+          : (pinCoords?.lat ?? gpsCoords?.lat ?? locationGpsCoords?.lat ?? null),
+        gps_longitude: selectedBuilding
+          ? (gpsCoords?.lng ?? null)
+          : (pinCoords?.lng ?? gpsCoords?.lng ?? locationGpsCoords?.lng ?? null),
         gps_accuracy_meters: locationGpsCoords?.accuracy ?? null,
-        gps_available: !!gpsCoords || !!locationGpsCoords,
+        gps_available: !!gpsCoords || !!locationGpsCoords || !!pinCoords,
         location_address: buildLocationAddress(),
         location_landmark: locationLandmark || null,
         location_building_name: locationBuildingName || null,
@@ -1041,6 +1109,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
       location_note: locationNote || undefined,
       location_method: locationMethod ?? (
         selectedBuilding ? 'map_selection' :
+        pinCoords ? 'pin_drop' :
         (locationAddress || locationLandmark || locationBuildingName) ? 'manual' :
         undefined
       ),
@@ -1224,6 +1293,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                   style={{ flex: 1 }}
                   onRegionDidChange={handleRegionChange}
                   onDidFinishLoadingMap={handleMapLoaded}
+                  onPress={handleMapPress}
                 >
                   <Camera
                     ref={cameraRef}
@@ -1263,6 +1333,19 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                         paint={{ "line-color": "#0468B1", "line-width": 2 }}
                       />
                     </GeoJSONSource>
+                  )}
+
+                  {/* Pin drop marker — tap anywhere on the map to reposition */}
+                  {pinDropActive && pinCoords && (
+                    <Marker
+                      id="pin-drop"
+                      lngLat={[pinCoords.lng, pinCoords.lat]}
+                      anchor="bottom"
+                    >
+                      <View style={styles.pinMarker}>
+                        <Text style={styles.pinMarkerIcon}>📍</Text>
+                      </View>
+                    </Marker>
                   )}
                 </MLMap>
 
@@ -1343,18 +1426,34 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                 </TouchableOpacity>
               </View>
 
-              {/* Editable building name + location note — shown after building confirmed */}
-              {selectedBuilding && (
+              {/* Editable building name + location note — shown after building confirmed or pin dropped */}
+              {(selectedBuilding || pinDropActive) && (
                 <View style={styles.mapBottomPanel}>
                   <ScrollView keyboardShouldPersistTaps="handled" style={{ maxHeight: 200 }}>
-                    <Text style={styles.panelFieldLabel}>{t('locationScreen.editBuildingName')}</Text>
-                    <TextInput
-                      style={styles.panelInput}
-                      value={editableBuildingName}
-                      onChangeText={setEditableBuildingName}
-                      placeholder={t('locationScreen.buildingNameLabel')}
-                      placeholderTextColor="#999999"
-                    />
+                    {pinDropActive && !selectedBuilding && (
+                      <View style={styles.pinInfoRow}>
+                        <Text style={styles.pinInfoLabel}>Pin location</Text>
+                        <Text style={styles.pinInfoCoords}>
+                          {pinCoords?.lat.toFixed(5)}, {pinCoords?.lng.toFixed(5)}
+                        </Text>
+                        <Text style={styles.pinInfoHint}>
+                          Tap anywhere on the map to move the pin
+                        </Text>
+                      </View>
+                    )}
+
+                    {selectedBuilding && (
+                      <>
+                        <Text style={styles.panelFieldLabel}>{t('locationScreen.editBuildingName')}</Text>
+                        <TextInput
+                          style={styles.panelInput}
+                          value={editableBuildingName}
+                          onChangeText={setEditableBuildingName}
+                          placeholder={t('locationScreen.buildingNameLabel')}
+                          placeholderTextColor="#999999"
+                        />
+                      </>
+                    )}
 
                     <Text style={styles.panelFieldLabel}>{t('locationScreen.locationNote')}</Text>
                     <TextInput
@@ -1674,7 +1773,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
 
               <TouchableOpacity
                 style={styles.confirmConfirmBtn}
-                onPress={() => {
+                onPress={async () => {
                   if (!pendingBuilding) return;
                   setSelectedBuilding({
                     id: pendingBuilding.id,
@@ -1691,6 +1790,44 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                     zoom: 17,
                     duration: 400,
                   });
+
+                  try {
+                    const params = new URLSearchParams();
+                    if (pendingBuilding.id) params.append('building_id', String(pendingBuilding.id));
+                    if (pendingBuilding.centroid[1] !== undefined) params.append('lat', String(pendingBuilding.centroid[1]));
+                    if (pendingBuilding.centroid[0] !== undefined) params.append('lng', String(pendingBuilding.centroid[0]));
+
+                    const dupRes = await api.get(`/api/reports/duplicate-check?${params.toString()}`);
+                    if (dupRes.data?.is_duplicate) {
+                      Alert.alert(
+                        t('locationScreen.duplicateWarningTitle'),
+                        t('locationScreen.duplicateWarningBody'),
+                        [
+                          {
+                            text: t('locationScreen.duplicateWarningGoBack'),
+                            style: 'cancel',
+                            onPress: () => {
+                              setSelectedBuilding(null);
+                              setEditableBuildingName('');
+                              setPendingBuilding(null);
+                              setShowBuildingConfirm(false);
+                            },
+                          },
+                          {
+                            text: t('locationScreen.duplicateWarningContinue'),
+                            onPress: () => {
+                              setShowBuildingConfirm(false);
+                              setPendingBuilding(null);
+                            },
+                          },
+                        ]
+                      );
+                      return;
+                    }
+                  } catch {
+                    // Duplicate check failed (offline or error) — proceed without warning
+                  }
+
                   setShowBuildingConfirm(false);
                   setPendingBuilding(null);
                 }}
@@ -2673,6 +2810,38 @@ const styles = StyleSheet.create({
   mapRecentreIcon: {
     fontSize: 22,
     color: '#0468B1',
+  },
+
+  // Pin drop annotation
+  pinMarker: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pinMarkerIcon: {
+    fontSize: 32,
+    lineHeight: 36,
+  },
+
+  // Pin info in bottom panel
+  pinInfoRow: {
+    paddingVertical: 8,
+    marginBottom: 4,
+  },
+  pinInfoLabel: {
+    fontSize: 13,
+    color: '#888888',
+    marginBottom: 2,
+  },
+  pinInfoCoords: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#0468B1',
+    marginBottom: 4,
+  },
+  pinInfoHint: {
+    fontSize: 12,
+    color: '#999999',
+    fontStyle: 'italic',
   },
 
   // Map bottom panel — editable building name + location note
