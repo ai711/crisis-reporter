@@ -17,6 +17,7 @@ import {
   Camera,
   GeoJSONSource,
   Layer,
+  UserLocation,
   type CameraRef,
   type ViewStateChangeEvent,
   type PressEventWithFeatures,
@@ -32,7 +33,7 @@ import StepIndicator from "../components/StepIndicator";
 import type { DamageLevel, QueuedPhoto, ProcessedPhoto } from "../types";
 
 const MAPTILER_KEY = process.env.EXPO_PUBLIC_MAPTILER_KEY ?? "";
-const MAP_STYLE_URL = `https://api.maptiler.com/maps/streets/style.json?key=${MAPTILER_KEY}`;
+const MAP_STYLE_URL = `https://api.maptiler.com/maps/dataviz-light/style.json?key=${MAPTILER_KEY}`;
 
 // ── Overpass types ─────────────────────────────────────────────────────────────
 
@@ -223,6 +224,27 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
   const [manualExpanded, setManualExpanded] = useState(false);
   const [gpsCapturing, setGpsCapturing] = useState(false);
   const [mapZoom, setMapZoom] = useState(2);
+
+  // Search bar state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<
+    Array<{ id: string; place_name: string; center: [number, number] }>
+  >([]);
+  const [showSearchResults, setShowSearchResults] = useState(false);
+  const [searchLoading, setSearchLoading] = useState(false);
+
+  // Building confirmation popup state
+  const [pendingBuilding, setPendingBuilding] = useState<{
+    id: number;
+    name: string;
+    building: string;
+    centroid: [number, number];
+    feature: GeoJSON.Feature;
+  } | null>(null);
+  const [showBuildingConfirm, setShowBuildingConfirm] = useState(false);
+
+  // Editable building name (pre-filled from OSM on confirm)
+  const [editableBuildingName, setEditableBuildingName] = useState('');
 
   // Location screen scenario state
   const [locationScenario, setLocationScenario] = useState<
@@ -445,6 +467,46 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
     }, 1000);
   };
 
+  const handleSearch = async (query: string) => {
+    setSearchQuery(query);
+    if (query.trim().length < 3) {
+      setSearchResults([]);
+      setShowSearchResults(false);
+      return;
+    }
+    setSearchLoading(true);
+    try {
+      const encoded = encodeURIComponent(query);
+      const response = await fetch(
+        `https://api.maptiler.com/geocoding/${encoded}.json?key=${MAPTILER_KEY}&limit=5`
+      );
+      const data = await response.json();
+      const results = (data.features ?? []).map((f: any) => ({
+        id: f.id,
+        place_name: f.place_name ?? f.text ?? '',
+        center: f.center as [number, number],
+      }));
+      setSearchResults(results);
+      setShowSearchResults(results.length > 0);
+    } catch {
+      setSearchResults([]);
+      setShowSearchResults(false);
+    } finally {
+      setSearchLoading(false);
+    }
+  };
+
+  const handleSearchResultSelect = (result: { center: [number, number]; place_name: string }) => {
+    setSearchQuery(result.place_name);
+    setShowSearchResults(false);
+    setSearchResults([]);
+    cameraRef.current?.easeTo({
+      center: result.center,
+      zoom: 16,
+      duration: 600,
+    });
+  };
+
   const handleBuildingPress = (event: NativeSyntheticEvent<PressEventWithFeatures>) => {
     const { features } = event.nativeEvent;
     if (!features?.length) return;
@@ -455,14 +517,14 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
     const ring = geom.coordinates[0];
     const [centLng, centLat] = computeCentroid(ring);
 
-    setSelectedBuilding({
+    setPendingBuilding({
       id: props.osm_id,
       name: props.name ?? "",
       building: props.building ?? "yes",
       centroid: [centLng, centLat],
+      feature: f,
     });
-    setGpsCoords({ lat: centLat, lng: centLng });
-    setSelectedBuildingFC({ type: "FeatureCollection", features: [f] });
+    setShowBuildingConfirm(true);
   };
 
   // ── Location actions ──────────────────────────────────────────────────────────
@@ -984,6 +1046,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
       ),
       internet_available_at_location: isOnlineAtLocation,
       offline_map_pack_used: false,
+      building_name: editableBuildingName || selectedBuilding?.name || undefined,
       building_name_osm: selectedBuilding?.name ?? undefined,
       building_type: selectedBuilding?.building ?? undefined,
       gps_accuracy: locationGpsCoords?.accuracy ?? undefined,
@@ -1155,7 +1218,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
               )}
 
               {/* Map fills most of the screen */}
-              <View style={{ flex: 1 }}>
+              <View style={styles.mapWrapper}>
                 <MLMap
                   mapStyle={MAP_STYLE_URL}
                   style={{ flex: 1 }}
@@ -1166,6 +1229,9 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                     ref={cameraRef}
                     initialViewState={{ center: [0, 20], zoom: 2 }}
                   />
+                  {locationScenario === 'online_gps' && (
+                    <UserLocation animated heading />
+                  )}
 
                   {/* Default building footprints */}
                   {buildingsFC && (
@@ -1200,6 +1266,50 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                   )}
                 </MLMap>
 
+                {/* Search bar overlay */}
+                <View style={styles.searchContainer} pointerEvents="box-none">
+                  <View style={styles.searchInputRow}>
+                    <TextInput
+                      style={styles.searchInput}
+                      placeholder={t('locationScreen.searchPlaceholder')}
+                      placeholderTextColor="#999999"
+                      value={searchQuery}
+                      onChangeText={handleSearch}
+                      returnKeyType="search"
+                      clearButtonMode="while-editing"
+                    />
+                    {searchLoading && (
+                      <ActivityIndicator
+                        color="#0468B1"
+                        style={styles.searchSpinner}
+                        size="small"
+                      />
+                    )}
+                  </View>
+
+                  {showSearchResults && (
+                    <View style={styles.searchResultsList}>
+                      {searchResults.length === 0 ? (
+                        <Text style={styles.searchNoResults}>
+                          {t('locationScreen.searchResultsEmpty')}
+                        </Text>
+                      ) : (
+                        searchResults.map((result) => (
+                          <TouchableOpacity
+                            key={result.id}
+                            style={styles.searchResultItem}
+                            onPress={() => handleSearchResultSelect(result)}
+                          >
+                            <Text style={styles.searchResultText} numberOfLines={2}>
+                              {result.place_name}
+                            </Text>
+                          </TouchableOpacity>
+                        ))
+                      )}
+                    </View>
+                  )}
+                </View>
+
                 {/* Zoom hint overlay */}
                 {mapZoom < 14 && (
                   <View style={styles.zoomHint} pointerEvents="none">
@@ -1215,7 +1325,50 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                     </Text>
                   </View>
                 )}
+
+                {/* GPS recentre overlay button */}
+                <TouchableOpacity
+                  style={styles.mapRecentreBtn}
+                  onPress={() => {
+                    if (locationGpsCoords) {
+                      cameraRef.current?.easeTo({
+                        center: [locationGpsCoords.lng, locationGpsCoords.lat],
+                        zoom: 16,
+                        duration: 500,
+                      });
+                    }
+                  }}
+                >
+                  <Text style={styles.mapRecentreIcon}>◎</Text>
+                </TouchableOpacity>
               </View>
+
+              {/* Editable building name + location note — shown after building confirmed */}
+              {selectedBuilding && (
+                <View style={styles.mapBottomPanel}>
+                  <ScrollView keyboardShouldPersistTaps="handled" style={{ maxHeight: 200 }}>
+                    <Text style={styles.panelFieldLabel}>{t('locationScreen.editBuildingName')}</Text>
+                    <TextInput
+                      style={styles.panelInput}
+                      value={editableBuildingName}
+                      onChangeText={setEditableBuildingName}
+                      placeholder={t('locationScreen.buildingNameLabel')}
+                      placeholderTextColor="#999999"
+                    />
+
+                    <Text style={styles.panelFieldLabel}>{t('locationScreen.locationNote')}</Text>
+                    <TextInput
+                      style={[styles.panelInput, { height: 72 }]}
+                      value={locationNote}
+                      onChangeText={setLocationNote}
+                      placeholder={t('locationScreen.locationNoteHint')}
+                      placeholderTextColor="#999999"
+                      multiline
+                      numberOfLines={3}
+                    />
+                  </ScrollView>
+                </View>
+              )}
 
               {/* Bottom panel */}
               <ScrollView
@@ -1461,6 +1614,90 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
             >
               <Text style={styles.optionLabelCancel}>Cancel</Text>
             </TouchableOpacity>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Building confirmation popup */}
+      <Modal
+        visible={showBuildingConfirm}
+        transparent
+        animationType="slide"
+        onRequestClose={() => {
+          setShowBuildingConfirm(false);
+          setPendingBuilding(null);
+        }}
+      >
+        <TouchableOpacity
+          style={styles.confirmOverlay}
+          activeOpacity={1}
+          onPress={() => {
+            setShowBuildingConfirm(false);
+            setPendingBuilding(null);
+          }}
+        >
+          <TouchableOpacity activeOpacity={1} style={[styles.confirmSheet, { paddingBottom: insets.bottom + 16 }]}>
+            <View style={styles.confirmHandle} />
+            <Text style={styles.confirmTitle}>{t('locationScreen.confirmBuilding')}</Text>
+
+            {pendingBuilding?.name ? (
+              <View style={styles.confirmRow}>
+                <Text style={styles.confirmLabel}>{t('locationScreen.buildingNameLabel')}</Text>
+                <Text style={styles.confirmValue}>{pendingBuilding.name}</Text>
+              </View>
+            ) : null}
+
+            {pendingBuilding?.building && pendingBuilding.building !== 'yes' ? (
+              <View style={styles.confirmRow}>
+                <Text style={styles.confirmLabel}>{t('locationScreen.buildingTypeLabel')}</Text>
+                <Text style={styles.confirmValue}>{pendingBuilding.building}</Text>
+              </View>
+            ) : null}
+
+            <View style={styles.confirmRow}>
+              <Text style={styles.confirmLabel}>{t('locationScreen.buildingCoordsLabel')}</Text>
+              <Text style={styles.confirmValue}>
+                {pendingBuilding?.centroid[1].toFixed(5)}, {pendingBuilding?.centroid[0].toFixed(5)}
+              </Text>
+            </View>
+
+            <View style={styles.confirmButtons}>
+              <TouchableOpacity
+                style={styles.confirmCancelBtn}
+                onPress={() => {
+                  setShowBuildingConfirm(false);
+                  setPendingBuilding(null);
+                }}
+              >
+                <Text style={styles.confirmCancelText}>{t('locationScreen.cancelButton')}</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.confirmConfirmBtn}
+                onPress={() => {
+                  if (!pendingBuilding) return;
+                  setSelectedBuilding({
+                    id: pendingBuilding.id,
+                    name: pendingBuilding.name,
+                    building: pendingBuilding.building,
+                    centroid: pendingBuilding.centroid,
+                  });
+                  setEditableBuildingName(pendingBuilding.name ?? '');
+                  setGpsCoords({ lat: pendingBuilding.centroid[1], lng: pendingBuilding.centroid[0] });
+                  setSelectedBuildingFC({ type: "FeatureCollection", features: [pendingBuilding.feature] });
+                  setLocationMethod('map_selection');
+                  cameraRef.current?.easeTo({
+                    center: pendingBuilding.centroid,
+                    zoom: 17,
+                    duration: 400,
+                  });
+                  setShowBuildingConfirm(false);
+                  setPendingBuilding(null);
+                }}
+              >
+                <Text style={styles.confirmConfirmText}>{t('locationScreen.confirmBuildingButton')}</Text>
+              </TouchableOpacity>
+            </View>
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
@@ -2347,6 +2584,200 @@ const styles = StyleSheet.create({
   addPhotoIcon: { fontSize: 32 },
   addPhotoText: { fontSize: 11, color: "#666" },
   fieldLabel: { fontSize: 14, fontWeight: "500", color: "#666" },
+
+  // Map wrapper — needs position: relative for absolute search overlay
+  mapWrapper: {
+    flex: 1,
+    position: 'relative',
+  },
+
+  // Search bar overlay
+  searchContainer: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
+    right: 12,
+    zIndex: 10,
+  },
+  searchInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 15,
+    color: '#333333',
+    paddingVertical: 0,
+  },
+  searchSpinner: {
+    marginLeft: 8,
+  },
+  searchResultsList: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    marginTop: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    elevation: 4,
+    overflow: 'hidden',
+  },
+  searchResultItem: {
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+    minHeight: 48,
+    justifyContent: 'center',
+  },
+  searchResultText: {
+    fontSize: 14,
+    color: '#333333',
+    lineHeight: 20,
+  },
+  searchNoResults: {
+    fontSize: 14,
+    color: '#888888',
+    padding: 16,
+    textAlign: 'center',
+  },
+
+  // GPS recentre overlay button
+  mapRecentreBtn: {
+    position: 'absolute',
+    bottom: 16,
+    right: 16,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
+    zIndex: 5,
+  },
+  mapRecentreIcon: {
+    fontSize: 22,
+    color: '#0468B1',
+  },
+
+  // Map bottom panel — editable building name + location note
+  mapBottomPanel: {
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: '#E0E0E0',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  panelFieldLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#555555',
+    marginBottom: 4,
+    marginTop: 8,
+  },
+  panelInput: {
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: '#333333',
+    backgroundColor: '#FAFAFA',
+    minHeight: 44,
+  },
+
+  // Building confirmation bottom sheet
+  confirmOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  confirmSheet: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+  },
+  confirmHandle: {
+    width: 36, height: 4,
+    backgroundColor: '#E0E0E0',
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 16,
+  },
+  confirmTitle: {
+    fontSize: 17,
+    fontWeight: 'bold',
+    color: '#333333',
+    marginBottom: 16,
+  },
+  confirmRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  confirmLabel: {
+    fontSize: 13,
+    color: '#888888',
+    flex: 1,
+  },
+  confirmValue: {
+    fontSize: 14,
+    color: '#333333',
+    flex: 2,
+    textAlign: 'right',
+  },
+  confirmButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 20,
+  },
+  confirmCancelBtn: {
+    flex: 1,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 1.5,
+    borderColor: '#0468B1',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  confirmCancelText: {
+    color: '#0468B1',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  confirmConfirmBtn: {
+    flex: 1,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#0468B1',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  confirmConfirmText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '600',
+  },
 
   // Photo guidelines
   guidelinesContainer: {
