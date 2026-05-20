@@ -228,6 +228,9 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [wasQueued, setWasQueued] = useState(false);
+  const [showPhotoOptions, setShowPhotoOptions] = useState(false);
+  const [activeThumbnailIndex, setActiveThumbnailIndex] = useState<number | null>(null);
+  const [viewerPhoto, setViewerPhoto] = useState<string | null>(null);
   const [submittedReportId, setSubmittedReportId] = useState<string | null>(null);
   const [showDupeWarning, setShowDupeWarning] = useState(false);
   const [crisisId, setCrisisId] = useState<string | null>(null);
@@ -648,6 +651,105 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
     } catch (e) {
       Alert.alert("Gallery Error", String(e));
     }
+  };
+
+  const handlePhotoTap = (index: number) => {
+    setActiveThumbnailIndex(index);
+    setShowPhotoOptions(true);
+  };
+
+  const handleRemovePhoto = (index: number) => {
+    Alert.alert(
+      t('photoScreen.removeTitle'),
+      undefined,
+      [
+        {
+          text: t('photoScreen.removeCancel'),
+          style: 'cancel',
+        },
+        {
+          text: t('photoScreen.removeConfirm'),
+          style: 'destructive',
+          onPress: () => {
+            setPhotos((prev) => prev.filter((_, i) => i !== index));
+          },
+        },
+      ]
+    );
+  };
+
+  const handleReplacePhoto = async (index: number) => {
+    Alert.alert(
+      'Replace Photo',
+      'Choose a source',
+      [
+        {
+          text: 'Take a Photo',
+          onPress: async () => {
+            const { status } = await ImagePicker.requestCameraPermissionsAsync();
+            if (status !== 'granted') {
+              Alert.alert(
+                'Camera Access Needed',
+                'Camera access is not available. You can enable it in your phone settings.',
+                [
+                  { text: 'Open Settings', onPress: () => Linking.openSettings() },
+                  { text: 'OK', style: 'cancel' },
+                ]
+              );
+              return;
+            }
+            const result = await ImagePicker.launchCameraAsync({
+              mediaTypes: ["images"],
+              allowsEditing: false,
+              quality: 1,
+            });
+            if (!result.canceled && result.assets?.[0]) {
+              const processed = await processPhoto(result.assets[0].uri, result.assets[0].mimeType ?? '');
+              if (processed) {
+                setPhotos((prev) => {
+                  const updated = [...prev];
+                  updated[index] = processed;
+                  return updated;
+                });
+              }
+            }
+          },
+        },
+        {
+          text: 'Upload from Gallery',
+          onPress: async () => {
+            const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (status !== 'granted') {
+              Alert.alert(
+                'Gallery Access Needed',
+                'Gallery access is not available. You can enable it in your phone settings.',
+                [
+                  { text: 'Open Settings', onPress: () => Linking.openSettings() },
+                  { text: 'OK', style: 'cancel' },
+                ]
+              );
+              return;
+            }
+            const result = await ImagePicker.launchImageLibraryAsync({
+              mediaTypes: ["images"],
+              allowsEditing: false,
+              quality: 1,
+            });
+            if (!result.canceled && result.assets?.[0]) {
+              const processed = await processPhoto(result.assets[0].uri, result.assets[0].mimeType ?? '');
+              if (processed) {
+                setPhotos((prev) => {
+                  const updated = [...prev];
+                  updated[index] = processed;
+                  return updated;
+                });
+              }
+            }
+          },
+        },
+        { text: 'Cancel', style: 'cancel' },
+      ]
+    );
   };
 
   // ── Damage handlers ───────────────────────────────────────────────────────────
@@ -1113,6 +1215,95 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
         </View>
       </Modal>
 
+      {/* Photo options modal */}
+      <Modal
+        visible={showPhotoOptions}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowPhotoOptions(false)}
+      >
+        <TouchableOpacity
+          style={styles.optionsOverlay}
+          activeOpacity={1}
+          onPress={() => setShowPhotoOptions(false)}
+        >
+          <TouchableOpacity activeOpacity={1} style={[styles.optionsSheet, { paddingBottom: insets.bottom + 8 }]}>
+            <View style={styles.optionsHandle} />
+
+            <TouchableOpacity
+              style={styles.optionRow}
+              onPress={() => {
+                setShowPhotoOptions(false);
+                if (activeThumbnailIndex !== null && photos[activeThumbnailIndex]) {
+                  setViewerPhoto(photos[activeThumbnailIndex].uri);
+                }
+              }}
+            >
+              <Text style={styles.optionIcon}>🔍</Text>
+              <Text style={styles.optionLabel}>View</Text>
+            </TouchableOpacity>
+
+            <View style={styles.optionDivider} />
+
+            <TouchableOpacity
+              style={styles.optionRow}
+              onPress={() => {
+                setShowPhotoOptions(false);
+                handleReplacePhoto(activeThumbnailIndex!);
+              }}
+            >
+              <Text style={styles.optionIcon}>🔄</Text>
+              <Text style={styles.optionLabel}>Replace</Text>
+            </TouchableOpacity>
+
+            <View style={styles.optionDivider} />
+
+            <TouchableOpacity
+              style={styles.optionRow}
+              onPress={() => {
+                setShowPhotoOptions(false);
+                handleRemovePhoto(activeThumbnailIndex!);
+              }}
+            >
+              <Text style={styles.optionIcon}>🗑️</Text>
+              <Text style={[styles.optionLabel, styles.optionLabelDanger]}>Remove</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.optionRow, styles.optionCancel]}
+              onPress={() => setShowPhotoOptions(false)}
+            >
+              <Text style={styles.optionLabelCancel}>Cancel</Text>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Full-screen photo viewer */}
+      <Modal
+        visible={!!viewerPhoto}
+        transparent={false}
+        animationType="fade"
+        onRequestClose={() => setViewerPhoto(null)}
+        statusBarTranslucent
+      >
+        <View style={styles.viewerContainer}>
+          <TouchableOpacity
+            style={styles.viewerClose}
+            onPress={() => setViewerPhoto(null)}
+          >
+            <Text style={styles.viewerCloseText}>✕ Close</Text>
+          </TouchableOpacity>
+          {viewerPhoto && (
+            <Image
+              source={{ uri: viewerPhoto }}
+              style={styles.viewerImage}
+              resizeMode="contain"
+            />
+          )}
+        </View>
+      </Modal>
+
       {/* All other steps inside ScrollView */}
       {step !== "location" && (
         <ScrollView style={styles.content} contentContainerStyle={styles.contentPadding}>
@@ -1123,22 +1314,41 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
               <Text style={styles.stepTitle}>{t("report.photos")} *</Text>
               <Text style={styles.hintText}>Add up to 3 photos. At least 1 required.</Text>
 
-              <View style={styles.photoGrid}>
-                {photos.map((photo, index) => (
-                  <View key={index} style={styles.photoThumb}>
-                    <Image source={{ uri: photo.uri }} style={styles.thumbImage} />
+              {/* Photo slots — always show all 3 */}
+              <View style={styles.photoSlotsRow}>
+                {[0, 1, 2].map((slotIndex) => {
+                  const photo = photos[slotIndex];
+                  return (
                     <TouchableOpacity
-                      style={styles.removePhotoBtn}
-                      onPress={() => setPhotos((prev) => prev.filter((_, i) => i !== index))}
+                      key={slotIndex}
+                      style={[styles.photoSlot, photo ? styles.photoSlotFilled : styles.photoSlotEmpty]}
+                      onPress={() => {
+                        if (photo) {
+                          handlePhotoTap(slotIndex);
+                        } else if (photos.length === slotIndex) {
+                          setShowPhotoOptions(true);
+                        }
+                      }}
+                      activeOpacity={photo ? 0.85 : 0.6}
+                      disabled={!photo && photos.length !== slotIndex}
                     >
-                      <Text style={styles.removePhotoBtnText}>✕</Text>
+                      {photo ? (
+                        <Image
+                          source={{ uri: photo.uri }}
+                          style={styles.photoThumb}
+                        />
+                      ) : (
+                        <View style={styles.photoSlotInner}>
+                          <Text style={styles.photoSlotPlus}>+</Text>
+                        </View>
+                      )}
                     </TouchableOpacity>
-                  </View>
-                ))}
+                  );
+                })}
               </View>
 
-              {photos.length < 3 && (
-                <View style={styles.photoButtons}>
+              {photos.length < 3 ? (
+                <View style={styles.photoButtonsRow}>
                   <TouchableOpacity style={styles.photoOptionBtn} onPress={handleTakePhoto}>
                     <Text style={styles.photoOptionIcon}>📷</Text>
                     <Text style={styles.photoOptionText}>{t("report.takePhoto")}</Text>
@@ -1148,6 +1358,8 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                     <Text style={styles.photoOptionText}>{t("report.uploadPhoto")}</Text>
                   </TouchableOpacity>
                 </View>
+              ) : (
+                <Text style={styles.maxPhotosNote}>{t('photoScreen.maxPhotos')}</Text>
               )}
 
               {/* Photo guidelines */}
@@ -1566,7 +1778,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
   },
   optionBtnSelected: { borderColor: "#0468B1", backgroundColor: "#E8F4FD" },
-  optionIcon: { fontSize: 28 },
   optionText: { fontSize: 16, fontWeight: "600", color: "#1A2B4A" },
   checkRow: {
     flexDirection: "row",
@@ -1609,9 +1820,121 @@ const styles = StyleSheet.create({
   },
   gpsButtonText: { color: "#fff", fontWeight: "600", fontSize: 15 },
 
-  // Photos
+  // Photos — slot grid
+  photoSlotsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginHorizontal: 24,
+    marginTop: 16,
+    gap: 12,
+  },
+  photoSlot: {
+    flex: 1,
+    aspectRatio: 1,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  photoSlotEmpty: {
+    borderWidth: 2,
+    borderColor: '#D0D0D0',
+    borderStyle: 'dashed',
+    backgroundColor: '#FAFAFA',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  photoSlotFilled: {
+    borderWidth: 0,
+  },
+  photoSlotInner: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    flex: 1,
+  },
+  photoSlotPlus: {
+    fontSize: 28,
+    color: '#BBBBBB',
+    lineHeight: 32,
+  },
+  photoThumb: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 12,
+  },
+  maxPhotosNote: {
+    textAlign: 'center',
+    fontSize: 13,
+    color: '#888888',
+    marginTop: 12,
+    marginHorizontal: 24,
+  },
+  photoButtonsRow: {
+    marginTop: 12,
+    marginHorizontal: 24,
+    gap: 10,
+  },
+
+  // Photo action sheet
+  optionsOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  optionsSheet: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingTop: 8,
+    paddingHorizontal: 16,
+  },
+  optionsHandle: {
+    width: 36, height: 4,
+    backgroundColor: '#E0E0E0',
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 8,
+  },
+  optionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
+    minHeight: 52,
+  },
+  optionIcon: { fontSize: 20, width: 36 },
+  optionLabel: { fontSize: 16, color: '#333333' },
+  optionLabelDanger: { color: '#D32F2F' },
+  optionDivider: { height: 1, backgroundColor: '#F0F0F0' },
+  optionCancel: { justifyContent: 'center', marginTop: 4 },
+  optionLabelCancel: {
+    fontSize: 16, color: '#888888',
+    textAlign: 'center', width: '100%',
+  },
+
+  // Full-screen viewer
+  viewerContainer: {
+    flex: 1,
+    backgroundColor: '#000000',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  viewerClose: {
+    position: 'absolute',
+    top: 48,
+    right: 20,
+    zIndex: 10,
+    padding: 8,
+  },
+  viewerCloseText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  viewerImage: {
+    width: '100%',
+    height: '100%',
+  },
+
+  // Legacy photo grid (kept to avoid removal errors)
   photoGrid: { flexDirection: "row", gap: 10, flexWrap: "wrap" },
-  photoThumb: { width: 100, height: 100, borderRadius: 8, overflow: "hidden", position: "relative" },
   thumbImage: { width: "100%", height: "100%" },
   removePhotoBtn: {
     position: "absolute",

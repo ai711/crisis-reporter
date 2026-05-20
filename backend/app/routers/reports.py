@@ -67,6 +67,7 @@ class ReportSubmitRequest(BaseModel):
     language_code: str = "en"
 
     # BE-02 — Chapter 4 submission timing and photo metadata
+    flow_started_at: Optional[datetime] = None
     submission_started_at: Optional[str] = None
     submission_submitted_at: Optional[str] = None
     photo_metadata: Optional[str] = None
@@ -341,6 +342,7 @@ async def submit_report(
         # BE-05 — structured answers
         question_answers=request.question_answers,
         # BE-02 — submission timing + photo metadata
+        flow_started_at=request.flow_started_at,
         submission_started_at=submission_started_at,
         submission_submitted_at=submission_submitted_at,
         photo_metadata=request.photo_metadata,

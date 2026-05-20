@@ -131,6 +131,9 @@ class Report(Base):
     )
 
     # BE-02 — Chapter 4 submission timing and photo metadata
+    flow_started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, default=None
+    )
     submission_started_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
