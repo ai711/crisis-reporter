@@ -1,6 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as FileSystem from "expo-file-system";
 import type { QueuedReport, QueuedPhoto, ReportSubmitRequest } from "../types";
+import { tokenStorage } from "../services/api";
 
 const QUEUE_KEY = "cr_report_queue";
 
@@ -103,7 +104,7 @@ export async function syncQueue(apiBaseUrl: string): Promise<void> {
       await updateItemStatus(item.local_id, "syncing");
 
       try {
-        const accessToken = await AsyncStorage.getItem("cr_access_token");
+        const accessToken = await tokenStorage.getAccessToken();
         const headers: Record<string, string> = {
           "Content-Type": "application/json",
         };

@@ -60,6 +60,7 @@ export default function MapScreen() {
   const [isOnline, setIsOnline] = useState(true);
   const [selectedReport, setSelectedReport] = useState<ReportPin | null>(null);
   const cameraRef = useRef<CameraRef | null>(null);
+  const initialFetchDone = useRef(false);
 
   const fetchReports = async () => {
     setLoading(true);
@@ -106,6 +107,7 @@ export default function MapScreen() {
       setIsOnline(!!state.isConnected);
       if (state.isConnected) {
         fetchReports();
+        initialFetchDone.current = true;
       } else {
         setLoading(false);
       }
@@ -114,8 +116,10 @@ export default function MapScreen() {
     const unsubscribe = NetInfo.addEventListener((state) => {
       const online = !!state.isConnected && !!state.isInternetReachable;
       setIsOnline(online);
-      if (online && reports.length === 0) {
+      // Guard against stale closure: only fetch once on first connectivity event.
+      if (online && !initialFetchDone.current) {
         fetchReports();
+        initialFetchDone.current = true;
       }
     });
 

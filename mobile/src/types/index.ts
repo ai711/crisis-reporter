@@ -38,9 +38,10 @@ export interface LocationData {
 }
 
 export interface ReportSubmitRequest {
-  crisis_id: string;
+  crisis_id?: string;
   damage_level: DamageLevel;
-  infrastructure_type: string;
+  infrastructure_types: string[];
+  infrastructure_other?: string;
   platform: Platform;
   submitted_at: string;
   location: LocationData;

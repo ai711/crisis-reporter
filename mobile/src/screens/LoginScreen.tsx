@@ -5,8 +5,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
-import api from "../services/api";
-import * as SecureStore from "expo-secure-store";
+import { loginReporter } from "../services/auth";
 import { useAuthStore } from "../stores/authStore";
 
 export default function LoginScreen() {
@@ -16,18 +15,17 @@ export default function LoginScreen() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const setReporterId = useAuthStore((s) => s.setReporterId);
+  const setReporter = useAuthStore((s) => s.setReporter);
 
   const handleLogin = async () => {
     if (!email || !password) return;
     setLoading(true);
     setError(null);
     try {
-      const response = await api.post("/api/reporters/login", { email, password });
-      const { reporter_id, access_token } = response.data;
-      await SecureStore.setItemAsync("cr_reporter_id", reporter_id);
-      await SecureStore.setItemAsync("cr_access_token", access_token);
-      setReporterId(reporter_id);
+      // loginReporter calls the correct endpoint, stores access + refresh tokens
+      // via tokenStorage.setTokens(), and returns the full AuthTokens payload.
+      const tokens = await loginReporter(email, password);
+      setReporter(tokens.reporter_id, tokens.is_verified);
       navigation.goBack();
     } catch (err: any) {
       const status = err?.response?.status;

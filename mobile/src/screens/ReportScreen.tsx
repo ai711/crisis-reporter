@@ -1276,7 +1276,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
     // TODO: MCC reading requires expo-cellular — install with: expo install expo-cellular
     // mcc, mnc, carrier_name are intentionally omitted until expo-cellular is added
     const reportPayload = {
-      crisis_id: crisisId!,
+      crisis_id: crisisId ?? undefined,
       flow_started_at: flowStartedAt ?? new Date().toISOString(),
       damage_level: damageLevel as DamageLevel,
       infrastructure_types: infrastructureTypes,
