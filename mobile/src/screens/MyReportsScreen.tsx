@@ -405,12 +405,7 @@ export default function MyReportsScreen() {
               <TouchableOpacity
                 key={report.id}
                 style={styles.reportCard}
-                onPress={() => {
-                  Alert.alert(
-                    'Report Detail',
-                    `Location: ${getSubmittedLocationLabel(report)}\nDamage: ${report.damage_level ?? '—'}\nSubmitted: ${formatTime(report.submitted_at)}`
-                  );
-                }}
+                onPress={() => navigation.navigate('ReportDetailScreen', { reportId: report.id })}
                 activeOpacity={0.75}
               >
                 <View style={styles.reportCardRow}>
