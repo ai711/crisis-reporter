@@ -27,7 +27,7 @@ import { useAuthStore } from "../stores/authStore";
 import api from "../services/api";
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as FileSystem from 'expo-file-system';
-import { addToQueue } from "../utils/offlineQueue";
+import { addToQueue, syncQueue } from "../utils/offlineQueue";
 import NetInfo from "@react-native-community/netinfo";
 import StepIndicator from "../components/StepIndicator";
 import type { DamageLevel, QueuedPhoto, ProcessedPhoto } from "../types";
@@ -35,6 +35,7 @@ import type { DamageLevel, QueuedPhoto, ProcessedPhoto } from "../types";
 const MAPTILER_KEY = process.env.EXPO_PUBLIC_MAPTILER_KEY ?? "";
 const MAP_STYLE_URL = `https://api.maptiler.com/maps/dataviz-light/style.json?key=${MAPTILER_KEY}`;
 const ANSWERS_KEY = 'cr_draft_answers';
+const API_URL = "https://crisis-reporter-production.up.railway.app";
 
 // ── Overpass types ─────────────────────────────────────────────────────────────
 
@@ -1468,33 +1469,143 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
 
   // ── Early returns ─────────────────────────────────────────────────────────────
 
-  if (submitted) {
+  // Tier 1 — Successful submission confirmation
+  if (submitted && !wasQueued) {
     return (
-      <View style={styles.successContainer}>
-        <View style={styles.confirmCheckCircle}>
-          <Text style={styles.confirmCheckIcon}>✓</Text>
+      <View style={[styles.confirmContainer, { paddingTop: insets.top, paddingBottom: insets.bottom + 24 }]}>
+        <View style={styles.confirmIconCircle}>
+          <Text style={styles.confirmIcon}>✓</Text>
         </View>
-        <Text style={styles.successTitle}>
-          {wasQueued ? "Report Saved" : "Report Submitted"}
+
+        <Text style={styles.confirmScreenTitle}>{t('review.confirmationTitle')}</Text>
+
+        <Text style={styles.confirmMessage}>
+          {t('review.confirmationMessage')}
         </Text>
-        <Text style={styles.successText}>
-          {wasQueued
-            ? "Your report has been saved and will be sent automatically when you reconnect to the internet."
-            : "Thank you for helping UNDP map crisis damage. Your report has been received and is now part of the crisis map."}
+
+        <View style={styles.confirmScreenButtons}>
+          <TouchableOpacity
+            style={styles.confirmPrimaryBtn}
+            onPress={() => {
+              resetForm();
+              setStep('photos');
+            }}
+          >
+            <Text style={styles.confirmPrimaryBtnText}>
+              {t('review.confirmationSubmitAnother')}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.confirmSecondaryBtn}
+            onPress={() => {
+              resetForm();
+              navigation.navigate("Home");
+            }}
+          >
+            <Text style={styles.confirmSecondaryBtnText}>
+              {t('review.confirmationGoHome')}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
+  // Tier 2 — Offline queue confirmation
+  if (submitted && wasQueued) {
+    return (
+      <View style={[styles.confirmContainer, { paddingTop: insets.top, paddingBottom: insets.bottom + 24 }]}>
+        <View style={[styles.confirmIconCircle, styles.confirmIconCircleQueue]}>
+          <Text style={styles.confirmIcon}>📶</Text>
+        </View>
+
+        <Text style={styles.confirmScreenTitle}>{t('review.queueTitle')}</Text>
+
+        <Text style={styles.confirmMessage}>
+          {t('review.queueMessage')}
         </Text>
-        <View style={styles.confirmRefBadge}>
-          <Text style={styles.confirmRefText}>
-            {wasQueued
-              ? "Your report is queued"
-              : `Report ref: ${(submittedReportId ?? "").slice(0, 8).toUpperCase()}`}
+
+        {Platform.OS === 'android' && (
+          <Text style={styles.queuePlatformNote}>
+            {t('review.queueAndroidNote')}
           </Text>
+        )}
+
+        <View style={styles.queueSummaryCard}>
+          <View style={styles.queueSummaryRow}>
+            <Text style={styles.queueSummaryLabel}>{t('review.queueSummaryLocation')}</Text>
+            <Text style={styles.queueSummaryValue} numberOfLines={1}>
+              {editableBuildingName ||
+                selectedBuilding?.name ||
+                locationAddress ||
+                locationLandmark ||
+                locationBuildingName ||
+                '—'}
+            </Text>
+          </View>
+          <View style={styles.queueSummaryRow}>
+            <Text style={styles.queueSummaryLabel}>{t('review.queueSummaryDamage')}</Text>
+            <Text style={styles.queueSummaryValue}>{damageLevel || '—'}</Text>
+          </View>
+          <View style={styles.queueSummaryRow}>
+            <Text style={styles.queueSummaryLabel}>{t('review.queueSummaryQueued')}</Text>
+            <Text style={styles.queueSummaryValue}>
+              {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </Text>
+          </View>
         </View>
-        <TouchableOpacity style={styles.homeButton} onPress={resetForm}>
-          <Text style={styles.primaryButtonText}>Submit Another Report</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => navigation.navigate("Home")}>
-          <Text style={styles.goHomeText}>Go to Home</Text>
-        </TouchableOpacity>
+
+        <View style={styles.confirmScreenButtons}>
+          <TouchableOpacity
+            style={styles.confirmRetryBtn}
+            onPress={async () => {
+              const netState = await NetInfo.fetch();
+              if (netState.isConnected && netState.isInternetReachable) {
+                try {
+                  await syncQueue(API_URL);
+                  setWasQueued(false);
+                } catch {
+                  Alert.alert(
+                    'Still offline',
+                    'Internet is not available yet. Your report is saved and will send automatically.'
+                  );
+                }
+              } else {
+                Alert.alert(
+                  'Still offline',
+                  'Internet is not available yet. Your report is saved and will send automatically.'
+                );
+              }
+            }}
+          >
+            <Text style={styles.confirmRetryBtnText}>{t('review.queueRetry')}</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.confirmPrimaryBtn}
+            onPress={() => {
+              resetForm();
+              setStep('photos');
+            }}
+          >
+            <Text style={styles.confirmPrimaryBtnText}>
+              {t('review.queueSubmitAnother')}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.confirmSecondaryBtn}
+            onPress={() => {
+              resetForm();
+              navigation.navigate("Home");
+            }}
+          >
+            <Text style={styles.confirmSecondaryBtnText}>
+              {t('review.queueGoHome')}
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   }
@@ -3391,6 +3502,123 @@ const styles = StyleSheet.create({
   },
   confirmRefText: { fontSize: 14, color: "#666", letterSpacing: 0.5 },
   goHomeText: { fontSize: 15, color: "#666", textDecorationLine: "underline" },
+
+  // Confirmation screens (Tier 1 & Tier 2)
+  confirmContainer: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+  },
+  confirmIconCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#E8F5E9',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  confirmIconCircleQueue: {
+    backgroundColor: '#FFF3E0',
+  },
+  confirmIcon: {
+    fontSize: 36,
+  },
+  confirmScreenTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#333333',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  confirmMessage: {
+    fontSize: 15,
+    color: '#555555',
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 24,
+  },
+  queuePlatformNote: {
+    fontSize: 13,
+    color: '#0468B1',
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: 16,
+    paddingHorizontal: 8,
+  },
+  queueSummaryCard: {
+    width: '100%',
+    backgroundColor: '#F8F9FA',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: '#EEEEEE',
+  },
+  queueSummaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEEEEE',
+  },
+  queueSummaryLabel: {
+    fontSize: 13,
+    color: '#888888',
+    flex: 1,
+  },
+  queueSummaryValue: {
+    fontSize: 14,
+    color: '#333333',
+    flex: 2,
+    textAlign: 'right',
+  },
+  confirmScreenButtons: {
+    width: '100%',
+    gap: 12,
+  },
+  confirmRetryBtn: {
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#0468B1',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  confirmRetryBtnText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  confirmPrimaryBtn: {
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#0468B1',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  confirmPrimaryBtnText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  confirmSecondaryBtn: {
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#0468B1',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  confirmSecondaryBtnText: {
+    color: '#0468B1',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.55)",

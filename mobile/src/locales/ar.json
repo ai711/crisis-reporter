@@ -305,6 +305,19 @@
     "q8Label": "Pressing needs",
     "locationChangedNote": "لقد تغير موقعك. يرجى تأكيد اسم البنية التحتية أو تحديثه.",
     "submitTimeout": "يستغرق هذا وقتاً أطول من المتوقع. يرجى المحاولة مرة أخرى.",
-    "submitRetry": "إعادة المحاولة"
+    "submitRetry": "إعادة المحاولة",
+    "confirmationTitle": "Report submitted",
+    "confirmationMessage": "Your report has been submitted. Thank you for helping crisis response teams get to the right places faster.",
+    "confirmationSubmitAnother": "Submit another report",
+    "confirmationGoHome": "Go to Home",
+    "queueTitle": "Report saved",
+    "queueMessage": "No internet connection. Your report has been saved and will be sent automatically when internet returns.",
+    "queueAndroidNote": "You do not need to keep this app open — your report will send automatically in the background.",
+    "queueSummaryLocation": "Location",
+    "queueSummaryDamage": "Damage level",
+    "queueSummaryQueued": "Saved at",
+    "queueRetry": "Retry now",
+    "queueSubmitAnother": "Submit another report",
+    "queueGoHome": "Go to Home"
   }
 }

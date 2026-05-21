@@ -307,6 +307,19 @@
     "q8Label": "Pressing needs",
     "locationChangedNote": "Your location has changed. Please confirm or update the infrastructure name.",
     "submitTimeout": "This is taking longer than expected. Please try again.",
-    "submitRetry": "Retry"
+    "submitRetry": "Retry",
+    "confirmationTitle": "Report submitted",
+    "confirmationMessage": "Your report has been submitted. Thank you for helping crisis response teams get to the right places faster.",
+    "confirmationSubmitAnother": "Submit another report",
+    "confirmationGoHome": "Go to Home",
+    "queueTitle": "Report saved",
+    "queueMessage": "No internet connection. Your report has been saved and will be sent automatically when internet returns.",
+    "queueAndroidNote": "You do not need to keep this app open — your report will send automatically in the background.",
+    "queueSummaryLocation": "Location",
+    "queueSummaryDamage": "Damage level",
+    "queueSummaryQueued": "Saved at",
+    "queueRetry": "Retry now",
+    "queueSubmitAnother": "Submit another report",
+    "queueGoHome": "Go to Home"
   }
 }

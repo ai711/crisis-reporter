@@ -6,7 +6,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
 import { useAuthStore } from "../stores/authStore";
-import { getQueueCount, syncQueue } from "../utils/offlineQueue";
+import { getQueueCount, syncQueue, onQueueChange } from "../utils/offlineQueue";
 import { registerAnonymously } from "../services/auth";
 import api from "../services/api";
 import NetInfo from "@react-native-community/netinfo";
@@ -56,11 +56,15 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
     });
   }, []);
 
-  // Queue count + NetInfo sync listener
+  // Queue count + NetInfo sync listener + reactive queue change subscription
   useEffect(() => {
     getQueueCount().then(setQueueCount);
 
-    const unsubscribe = NetInfo.addEventListener((state) => {
+    const unsubscribeQueue = onQueueChange((count) => {
+      setQueueCount(count);
+    });
+
+    const unsubscribeNet = NetInfo.addEventListener((state) => {
       const online = state.isConnected ?? false;
       setIsOnline(online);
       if (online) {
@@ -68,7 +72,10 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
       }
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribeQueue();
+      unsubscribeNet();
+    };
   }, []);
 
   // Background question package version check — once per app session

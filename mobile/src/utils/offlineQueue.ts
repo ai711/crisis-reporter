@@ -4,6 +4,24 @@ import type { QueuedReport, QueuedPhoto, ReportSubmitRequest } from "../types";
 
 const QUEUE_KEY = "cr_report_queue";
 
+// ── Queue change listeners ────────────────────────────────────────────────────
+
+type QueueChangeListener = (count: number) => void;
+const queueChangeListeners: QueueChangeListener[] = [];
+
+export const onQueueChange = (listener: QueueChangeListener): (() => void) => {
+  queueChangeListeners.push(listener);
+  return () => {
+    const index = queueChangeListeners.indexOf(listener);
+    if (index > -1) queueChangeListeners.splice(index, 1);
+  };
+};
+
+const notifyQueueChange = async () => {
+  const count = await getQueueCount();
+  queueChangeListeners.forEach((listener) => listener(count));
+};
+
 // ── Queue operations ──────────────────────────────────────────────────────────
 
 export async function getQueue(): Promise<QueuedReport[]> {
@@ -34,6 +52,7 @@ export async function addToQueue(
 
   queue.push(queuedReport);
   await saveQueue(queue);
+  await notifyQueueChange();
   return local_id;
 }
 
@@ -130,6 +149,7 @@ export async function syncQueue(apiBaseUrl: string): Promise<void> {
         }
 
         await removeFromQueue(item.local_id);
+        await notifyQueueChange();
       } catch {
         await updateItemStatus(
           item.local_id,
