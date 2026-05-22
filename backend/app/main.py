@@ -373,15 +373,21 @@ ON CONFLICT DO NOTHING""",
         created_at TIMESTAMPTZ DEFAULT NOW()
     )""",
     "CREATE UNIQUE INDEX IF NOT EXISTS ix_languages_code_unique ON languages(code)",
-    # Seed 6 UN languages (idempotent)
-    """INSERT INTO languages (code, name, status, is_protected)
+    # Seed 6 UN languages (idempotent).
+    # id AND created_at must be supplied explicitly: create_all builds the table from the
+    # Language model, which uses Python-side defaults (default=uuid.uuid4,
+    # default=datetime.utcnow).  SQLAlchemy does NOT emit DEFAULT clauses for those in the
+    # DDL, so both columns are NOT NULL with no server-side fallback.  Omitting either
+    # column causes a NOT NULL violation which poisons the transaction and rolls back every
+    # statement that follows.
+    """INSERT INTO languages (id, code, name, status, is_protected, created_at)
        VALUES
-         ('ar', 'Arabic',  'active', TRUE),
-         ('zh', 'Chinese', 'active', TRUE),
-         ('en', 'English', 'active', TRUE),
-         ('fr', 'French',  'active', TRUE),
-         ('ru', 'Russian', 'active', TRUE),
-         ('es', 'Spanish', 'active', TRUE)
+         (gen_random_uuid(), 'ar', 'Arabic',  'active', TRUE, NOW()),
+         (gen_random_uuid(), 'zh', 'Chinese', 'active', TRUE, NOW()),
+         (gen_random_uuid(), 'en', 'English', 'active', TRUE, NOW()),
+         (gen_random_uuid(), 'fr', 'French',  'active', TRUE, NOW()),
+         (gen_random_uuid(), 'ru', 'Russian', 'active', TRUE, NOW()),
+         (gen_random_uuid(), 'es', 'Spanish', 'active', TRUE, NOW())
        ON CONFLICT (code) DO NOTHING""",
     # Ensure protected flag is set for UN languages
     "UPDATE languages SET is_protected = TRUE WHERE code IN ('ar', 'zh', 'en', 'fr', 'ru', 'es')",
