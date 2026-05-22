@@ -1,288 +1,500 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   View, Text, TouchableOpacity, TextInput,
-  ScrollView, StyleSheet, ActivityIndicator, Alert
+  FlatList, ActivityIndicator, Alert, ScrollView,
+  StyleSheet,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
 import { useAuthStore } from "../stores/authStore";
-import { createAnonymousSession } from "../services/auth";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import api from "../services/api";
 
-const COUNTRIES = [
-  { code: "AF", name: "Afghanistan" },
-  { code: "BD", name: "Bangladesh" },
-  { code: "CM", name: "Cameroon" },
-  { code: "CD", name: "Congo (DRC)" },
-  { code: "ET", name: "Ethiopia" },
-  { code: "GT", name: "Guatemala" },
-  { code: "HT", name: "Haiti" },
-  { code: "IN", name: "India" },
-  { code: "IQ", name: "Iraq" },
-  { code: "KE", name: "Kenya" },
-  { code: "LB", name: "Lebanon" },
-  { code: "LY", name: "Libya" },
-  { code: "MM", name: "Myanmar" },
-  { code: "NP", name: "Nepal" },
-  { code: "NG", name: "Nigeria" },
-  { code: "PK", name: "Pakistan" },
-  { code: "PH", name: "Philippines" },
-  { code: "SO", name: "Somalia" },
-  { code: "SS", name: "South Sudan" },
-  { code: "SY", name: "Syria" },
-  { code: "TR", name: "Turkey" },
-  { code: "UA", name: "Ukraine" },
-  { code: "YE", name: "Yemen" },
+type Country = {
+  code: string;
+  name: string;
+  official_language: string | null;
+  is_active: boolean;
+};
+
+const BUNDLED_COUNTRIES_FALLBACK: Country[] = [
+  { code: "AF", name: "Afghanistan", official_language: null, is_active: true },
+  { code: "BD", name: "Bangladesh", official_language: null, is_active: true },
+  { code: "CM", name: "Cameroon", official_language: null, is_active: true },
+  { code: "CD", name: "Congo (DRC)", official_language: null, is_active: true },
+  { code: "ET", name: "Ethiopia", official_language: null, is_active: true },
+  { code: "GT", name: "Guatemala", official_language: null, is_active: true },
+  { code: "HT", name: "Haiti", official_language: null, is_active: true },
+  { code: "IN", name: "India", official_language: null, is_active: true },
+  { code: "IQ", name: "Iraq", official_language: null, is_active: true },
+  { code: "KE", name: "Kenya", official_language: null, is_active: true },
+  { code: "LB", name: "Lebanon", official_language: null, is_active: true },
+  { code: "LY", name: "Libya", official_language: null, is_active: true },
+  { code: "MM", name: "Myanmar", official_language: null, is_active: true },
+  { code: "NP", name: "Nepal", official_language: null, is_active: true },
+  { code: "NG", name: "Nigeria", official_language: null, is_active: true },
+  { code: "PK", name: "Pakistan", official_language: null, is_active: true },
+  { code: "PH", name: "Philippines", official_language: null, is_active: true },
+  { code: "SO", name: "Somalia", official_language: null, is_active: true },
+  { code: "SS", name: "South Sudan", official_language: null, is_active: true },
+  { code: "SY", name: "Syria", official_language: null, is_active: true },
+  { code: "TR", name: "Turkey", official_language: null, is_active: true },
+  { code: "UA", name: "Ukraine", official_language: null, is_active: true },
+  { code: "YE", name: "Yemen", official_language: null, is_active: true },
 ];
 
-const LANGUAGES = [
-  { code: "en", name: "English" },
-  { code: "ar", name: "العربية" },
-  { code: "zh", name: "中文" },
-  { code: "fr", name: "Français" },
-  { code: "ru", name: "Русский" },
-  { code: "es", name: "Español" },
+const UN_LANGUAGES = [
+  { code: "en", label: "English" },
+  { code: "fr", label: "Français" },
+  { code: "ar", label: "العربية" },
+  { code: "zh", label: "中文" },
+  { code: "ru", label: "Русский" },
+  { code: "es", label: "Español" },
 ];
+
+const UN_LANG_CODES = ["ar", "zh", "en", "fr", "ru", "es"];
 
 export default function OnboardingScreen() {
   const { t, i18n } = useTranslation();
-  const { setCountry, setLanguage, setOnboarded, setReporter } = useAuthStore();
-
-  const [step, setStep] = useState<"country" | "language">("country");
-  const [selectedCountry, setSelectedCountry] = useState("");
-  const [selectedLanguage, setSelectedLanguage] = useState("en");
-  const [search, setSearch] = useState("");
-  const [loading, setLoading] = useState(false);
   const insets = useSafeAreaInsets();
 
-  const filteredCountries = COUNTRIES.filter((c) =>
+  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [countries, setCountries] = useState<Country[]>([]);
+  const [countriesLoading, setCountriesLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [selectedCountry, setSelectedCountry] = useState<Country | null>(null);
+  const [selectedLang, setSelectedLang] = useState<string | null>(null);
+  const [officialLang, setOfficialLang] = useState<{ code: string; label: string } | null>(null);
+  const [officialLangLoading, setOfficialLangLoading] = useState(false);
+
+  useEffect(() => {
+    const loadCountries = async () => {
+      setCountriesLoading(true);
+      try {
+        const response = await api.get("/api/countries");
+        const active = response.data.filter((c: Country) => c.is_active);
+        setCountries(active);
+        await AsyncStorage.setItem("cr_countries_cache", JSON.stringify(active));
+      } catch {
+        const cached = await AsyncStorage.getItem("cr_countries_cache");
+        if (cached) {
+          setCountries(JSON.parse(cached));
+        } else {
+          setCountries(BUNDLED_COUNTRIES_FALLBACK);
+        }
+      } finally {
+        setCountriesLoading(false);
+      }
+    };
+    loadCountries();
+  }, []);
+
+  useEffect(() => {
+    if (step !== 2 || !selectedCountry?.official_language) return;
+    if (UN_LANG_CODES.includes(selectedCountry.official_language)) return;
+
+    setOfficialLangLoading(true);
+    api
+      .get(`/api/language-packages/active/${selectedCountry.official_language}`)
+      .then(() => {
+        setOfficialLang({
+          code: selectedCountry.official_language!,
+          label: selectedCountry.official_language!.toUpperCase(),
+        });
+      })
+      .catch(() => {
+        setOfficialLang(null);
+      })
+      .finally(() => setOfficialLangLoading(false));
+  }, [step, selectedCountry]);
+
+  const filteredCountries = countries.filter((c) =>
     c.name.toLowerCase().includes(search.toLowerCase())
   );
 
-  const handleCountryContinue = async () => {
-    if (!selectedCountry) return;
-    await AsyncStorage.setItem("cr_country_code", selectedCountry);
-    const country = COUNTRIES.find((c) => c.code === selectedCountry);
-    if (country) await AsyncStorage.setItem("cr_country_name", country.name);
-    setStep("language");
+  const handleCountryNext = async () => {
+    if (!selectedCountry || countriesLoading) return;
+    await AsyncStorage.setItem("cr_country_code", selectedCountry.code);
+    await AsyncStorage.setItem("cr_country_name", selectedCountry.name);
+    setStep(2);
   };
 
-    const handleFinish = async () => {
-    setLoading(true);
-    try {
-      console.log("Attempting to connect to:", process.env.EXPO_PUBLIC_API_URL);
-      const session = await createAnonymousSession(
-        selectedCountry,
-        selectedLanguage
-      );
-      setReporter(session.reporter_id, session.is_verified);
-      setCountry(selectedCountry);
-      setLanguage(selectedLanguage);
-      setOnboarded();
-    } catch (error) {
-      console.log("Connection error:", error);
-      Alert.alert(
-        "Connection Error",
-        `Could not connect to: ${process.env.EXPO_PUBLIC_API_URL || "no URL set"}. Error: ${error}`
-      );
-    } finally {
-      setLoading(false);
-    }
-    };
-
-  const handleLanguageSelect = async (code: string) => {
-    setSelectedLanguage(code);
-    i18n.changeLanguage(code);
-    await AsyncStorage.setItem("cr_language", code);
+  const handleLanguageNext = async () => {
+    if (!selectedLang) return;
+    i18n.changeLanguage(selectedLang);
+    await AsyncStorage.setItem("cr_language", selectedLang);
+    setStep(3);
   };
 
-  if (step === "country") {
-    return (
-      <View style={[styles.container, { paddingTop: insets.top }]}>
-        <View style={styles.header}>
-          <Text style={styles.logo}>🆘</Text>
-          <Text style={styles.appName}>Crisis Reporter</Text>
-          <Text style={styles.subtitle}>UNDP Crisis Damage Reporting</Text>
-        </View>
+  const handleAgree = async () => {
+    const ts = new Date().toISOString();
+    await AsyncStorage.setItem("cr_tandc_accepted_at", ts);
+    useAuthStore.getState().setTAndCAcceptedAt(ts);
+    useAuthStore.getState().setOnboarded();
+  };
 
-        <View style={styles.content}>
-          <Text style={styles.stepTitle}>{t("onboarding.selectCountry")}</Text>
+  const handleDecline = () => {
+    Alert.alert(
+      t("tandc.declineAlertTitle"),
+      t("tandc.declineAlertMessage"),
+      [{ text: t("tandc.declineAlertButton"), style: "default" }]
+    );
+  };
 
-          <TextInput
-            style={styles.searchInput}
-            placeholder={t("onboarding.countryPlaceholder")}
-            value={search}
-            onChangeText={setSearch}
-          />
-
-          <ScrollView style={styles.listContainer}>
-            {filteredCountries.map((country) => (
-              <TouchableOpacity
-                key={country.code}
-                style={[
-                  styles.listItem,
-                  selectedCountry === country.code && styles.listItemSelected,
-                ]}
-                onPress={() => setSelectedCountry(country.code)}
-              >
-                <Text style={styles.listItemText}>{country.name}</Text>
-                {selectedCountry === country.code && (
-                  <Text style={styles.checkmark}>✓</Text>
-                )}
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-
-          <TouchableOpacity
-            style={[
-              styles.primaryButton,
-              !selectedCountry && styles.buttonDisabled,
-            ]}
-            onPress={handleCountryContinue}
-            disabled={!selectedCountry}
-          >
-            <Text style={styles.primaryButtonText}>
-              {t("onboarding.continue")}
-            </Text>
+  const ScreenHeader = ({
+    showBack,
+    onBack,
+  }: {
+    showBack?: boolean;
+    onBack?: () => void;
+  }) => (
+    <>
+      <View style={styles.header}>
+        {showBack && (
+          <TouchableOpacity onPress={onBack} style={styles.backArrow}>
+            <Text style={styles.backArrowText}>{"←"}</Text>
           </TouchableOpacity>
-        </View>
+        )}
+        <Text style={styles.headerTitle}>Crisis Reporter</Text>
       </View>
+      <View style={styles.divider} />
+    </>
+  );
+
+  const NextButton = ({
+    onPress,
+    disabled,
+  }: {
+    onPress: () => void;
+    disabled: boolean;
+  }) => (
+    <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 16 }]}>
+      <TouchableOpacity
+        style={[styles.nextButton, disabled && styles.nextButtonDisabled]}
+        onPress={onPress}
+        disabled={disabled}
+      >
+        <Text style={styles.nextButtonText}>Next</Text>
+      </TouchableOpacity>
+    </View>
+  );
+
+  if (step === 1) {
+    return (
+      <SafeAreaView style={styles.container} edges={["top"]}>
+        <ScreenHeader />
+        <Text style={styles.stepTitle}>Select your country</Text>
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search countries..."
+          value={search}
+          onChangeText={setSearch}
+        />
+        {countriesLoading ? (
+          <ActivityIndicator style={styles.centeredLoader} color="#0468B1" />
+        ) : (
+          <FlatList
+            data={filteredCountries}
+            keyExtractor={(item) => item.code}
+            contentContainerStyle={styles.listContent}
+            renderItem={({ item }) => {
+              const selected = selectedCountry?.code === item.code;
+              return (
+                <TouchableOpacity
+                  style={[
+                    styles.countryItem,
+                    selected && styles.countryItemSelected,
+                  ]}
+                  onPress={() => setSelectedCountry(item)}
+                >
+                  <Text
+                    style={[
+                      styles.countryItemText,
+                      selected && styles.countryItemTextSelected,
+                    ]}
+                  >
+                    {item.name}
+                  </Text>
+                </TouchableOpacity>
+              );
+            }}
+          />
+        )}
+        <NextButton
+          onPress={handleCountryNext}
+          disabled={!selectedCountry || countriesLoading}
+        />
+      </SafeAreaView>
+    );
+  }
+
+  if (step === 2) {
+    return (
+      <SafeAreaView style={styles.container} edges={["top"]}>
+        <ScreenHeader showBack onBack={() => setStep(1)} />
+        <Text style={styles.stepTitle}>Select your language</Text>
+        {officialLangLoading && (
+          <ActivityIndicator
+            size="small"
+            color="#0468B1"
+            style={styles.inlineLoader}
+          />
+        )}
+        <ScrollView contentContainerStyle={styles.langContainer}>
+          {officialLang && (
+            <TouchableOpacity
+              style={[
+                styles.officialLangPill,
+                selectedLang === officialLang.code &&
+                  styles.officialLangPillSelected,
+              ]}
+              onPress={() => setSelectedLang(officialLang.code)}
+            >
+              <Text
+                style={[
+                  styles.officialLangText,
+                  selectedLang === officialLang.code && styles.langTextSelected,
+                ]}
+              >
+                {officialLang.code.toUpperCase()} — {officialLang.label}
+              </Text>
+              {selectedLang !== officialLang.code && (
+                <Text style={styles.downloadIndicator}>{"↓"}</Text>
+              )}
+            </TouchableOpacity>
+          )}
+          <View style={styles.langGrid}>
+            {UN_LANGUAGES.map((lang) => {
+              const selected = selectedLang === lang.code;
+              return (
+                <TouchableOpacity
+                  key={lang.code}
+                  style={[styles.langPill, selected && styles.langPillSelected]}
+                  onPress={() => setSelectedLang(lang.code)}
+                >
+                  <Text
+                    style={[
+                      styles.langPillText,
+                      selected && styles.langTextSelected,
+                    ]}
+                  >
+                    {lang.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+          <TouchableOpacity
+            style={styles.moreLangsRow}
+            onPress={() =>
+              Alert.alert(
+                "Coming Soon",
+                "Additional languages will be available in a future update."
+              )
+            }
+          >
+            <Text style={styles.moreLangsIcon}>+</Text>
+            <Text style={styles.moreLangsText}>More languages</Text>
+          </TouchableOpacity>
+        </ScrollView>
+        <NextButton onPress={handleLanguageNext} disabled={!selectedLang} />
+      </SafeAreaView>
     );
   }
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <View style={styles.header}>
-        <Text style={styles.logo}>🆘</Text>
-        <Text style={styles.appName}>Crisis Reporter</Text>
-        <Text style={styles.subtitle}>UNDP Crisis Damage Reporting</Text>
-      </View>
-
-      <View style={styles.content}>
-        <Text style={styles.stepTitle}>{t("onboarding.selectLanguage")}</Text>
-
-        <View style={styles.languageGrid}>
-          {LANGUAGES.map((lang) => (
-            <TouchableOpacity
-              key={lang.code}
-              style={[
-                styles.languageItem,
-                selectedLanguage === lang.code && styles.languageItemSelected,
-              ]}
-              onPress={() => handleLanguageSelect(lang.code)}
-            >
-              <Text style={[
-                styles.languageText,
-                selectedLanguage === lang.code && styles.languageTextSelected,
-              ]}>
-                {lang.name}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        <TouchableOpacity
-          style={[styles.primaryButton, loading && styles.buttonDisabled]}
-          onPress={handleFinish}
-          disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.primaryButtonText}>
-              {t("onboarding.continue")}
-            </Text>
-          )}
+    <SafeAreaView style={styles.container} edges={["top"]}>
+      <ScreenHeader showBack onBack={() => setStep(2)} />
+      <Text style={styles.tandcTitle}>{t("tandc.title")}</Text>
+      <Text style={styles.tandcSubtitle}>{t("tandc.subtitle")}</Text>
+      <ScrollView
+        style={styles.tandcScroll}
+        contentContainerStyle={styles.tandcScrollContent}
+      >
+        <Text style={styles.tandcBody}>{t("tandc.body")}</Text>
+      </ScrollView>
+      <View style={[styles.tandcButtons, { paddingBottom: insets.bottom + 16 }]}>
+        <TouchableOpacity style={styles.agreeButton} onPress={handleAgree}>
+          <Text style={styles.agreeButtonText}>{t("tandc.agreeButton")}</Text>
         </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => setStep("country")}
-        >
-          <Text style={styles.backButtonText}>← Back</Text>
+        <TouchableOpacity style={styles.declineButton} onPress={handleDecline}>
+          <Text style={styles.declineButtonText}>{t("tandc.declineButton")}</Text>
         </TouchableOpacity>
       </View>
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#f4f6f9" },
+  container: { flex: 1, backgroundColor: "#FFFFFF" },
+
   header: {
-    backgroundColor: "#1A2B4A",
-    padding: 40,
-    alignItems: "center",
-  },
-  logo: { fontSize: 48, marginBottom: 12 },
-  appName: {
-    color: "#fff",
-    fontSize: 28,
-    fontWeight: "700",
-    marginBottom: 8,
-  },
-  subtitle: { color: "#A0B4CC", fontSize: 14 },
-  content: { flex: 1, padding: 16, gap: 16 },
-  stepTitle: {
-    fontSize: 20,
-    fontWeight: "600",
-    color: "#1A2B4A",
-    marginBottom: 8,
-  },
-  searchInput: {
-    backgroundColor: "#fff",
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#e0e0e0",
-    padding: 12,
-    fontSize: 16,
-  },
-  listContainer: { flex: 1, maxHeight: 300 },
-  listItem: {
-    backgroundColor: "#fff",
-    borderRadius: 8,
-    borderWidth: 1.5,
-    borderColor: "#e0e0e0",
-    padding: 14,
-    marginBottom: 8,
     flexDirection: "row",
-    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 24,
+    paddingTop: 16,
+    paddingBottom: 16,
+  },
+  headerTitle: {
+    fontWeight: "bold",
+    fontSize: 22,
+    color: "#0468B1",
+  },
+  backArrow: { marginRight: 12 },
+  backArrowText: { fontSize: 20, color: "#0468B1" },
+  divider: { height: 1, backgroundColor: "#E0E0E0" },
+
+  stepTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#333",
+    marginHorizontal: 24,
+    marginTop: 20,
+    marginBottom: 12,
+  },
+
+  searchInput: {
+    borderWidth: 1,
+    borderColor: "#E0E0E0",
+    borderRadius: 24,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    marginHorizontal: 24,
+    marginBottom: 12,
+    fontSize: 15,
+  },
+
+  centeredLoader: { flex: 1 },
+  inlineLoader: { marginHorizontal: 24, marginBottom: 8 },
+
+  listContent: { paddingHorizontal: 24, paddingBottom: 8 },
+  countryItem: {
+    borderRadius: 24,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderWidth: 1,
+    marginBottom: 8,
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E0E0E0",
+  },
+  countryItemSelected: {
+    backgroundColor: "#0468B1",
+    borderColor: "#0468B1",
+  },
+  countryItemText: {
+    fontSize: 15,
+    fontWeight: "500",
+    color: "#333",
+  },
+  countryItemTextSelected: { color: "#FFFFFF" },
+
+  bottomBar: { paddingHorizontal: 24, paddingTop: 12 },
+  nextButton: {
+    width: "100%",
+    height: 52,
+    borderRadius: 28,
+    backgroundColor: "#0468B1",
+    justifyContent: "center",
     alignItems: "center",
   },
-  listItemSelected: {
+  nextButtonDisabled: { backgroundColor: "#B0C4D8" },
+  nextButtonText: { color: "#FFFFFF", fontSize: 16, fontWeight: "600" },
+
+  langContainer: { paddingHorizontal: 24, paddingBottom: 8 },
+  officialLangPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    height: 56,
+    borderRadius: 28,
+    paddingHorizontal: 16,
+    borderWidth: 1,
     borderColor: "#0468B1",
     backgroundColor: "#E8F4FD",
+    marginBottom: 12,
+    justifyContent: "space-between",
   },
-  listItemText: { fontSize: 16, color: "#1A2B4A" },
-  checkmark: { color: "#0468B1", fontWeight: "700", fontSize: 18 },
-  languageGrid: {
+  officialLangPillSelected: { backgroundColor: "#0468B1" },
+  officialLangText: { fontSize: 15, color: "#0468B1" },
+  downloadIndicator: { fontSize: 14, color: "#0468B1" },
+
+  langGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 10,
+    gap: 8,
   },
-  languageItem: {
+  langPill: {
     width: "47%",
-    padding: 16,
-    borderRadius: 8,
-    borderWidth: 1.5,
-    borderColor: "#e0e0e0",
-    backgroundColor: "#fff",
+    height: 56,
+    borderRadius: 28,
+    paddingHorizontal: 16,
+    justifyContent: "center",
     alignItems: "center",
-  },
-  languageItemSelected: {
+    borderWidth: 1,
     borderColor: "#0468B1",
-    backgroundColor: "#0468B1",
+    backgroundColor: "#FFFFFF",
   },
-  languageText: { fontSize: 15, fontWeight: "500", color: "#1A2B4A" },
-  languageTextSelected: { color: "#fff" },
-  primaryButton: {
-    backgroundColor: "#0468B1",
-    borderRadius: 8,
-    padding: 16,
+  langPillSelected: { backgroundColor: "#0468B1" },
+  langPillText: { color: "#0468B1", fontSize: 15, fontWeight: "500" },
+  langTextSelected: { color: "#FFFFFF" },
+
+  moreLangsRow: {
+    flexDirection: "row",
     alignItems: "center",
     marginTop: 8,
+    paddingVertical: 12,
   },
-  buttonDisabled: { opacity: 0.5 },
-  primaryButtonText: { color: "#fff", fontSize: 16, fontWeight: "600" },
-  backButton: { alignItems: "center", padding: 12 },
-  backButtonText: { color: "#666", fontSize: 15 },
+  moreLangsIcon: { fontSize: 18, color: "#0468B1" },
+  moreLangsText: { fontSize: 15, color: "#0468B1", marginLeft: 8 },
+
+  tandcTitle: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: "#333",
+    marginHorizontal: 24,
+    marginTop: 20,
+  },
+  tandcSubtitle: {
+    fontSize: 14,
+    color: "#666",
+    marginHorizontal: 24,
+    marginTop: 4,
+    marginBottom: 16,
+  },
+  tandcScroll: { flex: 1 },
+  tandcScrollContent: { paddingHorizontal: 24, paddingBottom: 16 },
+  tandcBody: { fontSize: 14, color: "#555", lineHeight: 22 },
+
+  tandcButtons: { paddingHorizontal: 24, paddingTop: 12 },
+  agreeButton: {
+    width: "100%",
+    height: 52,
+    borderRadius: 28,
+    backgroundColor: "#0468B1",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  agreeButtonText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "600",
+    textAlign: "center",
+  },
+  declineButton: {
+    width: "100%",
+    height: 52,
+    borderRadius: 28,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1.5,
+    borderColor: "#0468B1",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  declineButtonText: {
+    color: "#0468B1",
+    fontSize: 16,
+    fontWeight: "600",
+    textAlign: "center",
+  },
 });
