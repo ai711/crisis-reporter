@@ -175,19 +175,6 @@ class LoginRequest(BaseModel):
     password: str
 
 
-class TokenResponse(BaseModel):
-    access_token: str
-    refresh_token: str
-    token_type: str
-    expires_in: int
-    inactivity_timeout_minutes: int
-    user: DashboardUserResponse | None = None
-
-
-class RefreshRequest(BaseModel):
-    refresh_token: str
-
-
 class DashboardUserResponse(BaseModel):
     id: str
     email: str
@@ -203,6 +190,19 @@ class DashboardUserResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    refresh_token: str
+    token_type: str
+    expires_in: int
+    inactivity_timeout_minutes: int
+    user: DashboardUserResponse | None = None
+
+
+class RefreshRequest(BaseModel):
+    refresh_token: str
 
 
 async def _user_response(user: DashboardUser, db: AsyncSession) -> DashboardUserResponse:
