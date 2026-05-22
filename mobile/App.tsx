@@ -41,7 +41,7 @@ function Navigation() {
 
   useEffect(() => {
     const unsubscribe = NetInfo.addEventListener((state) => {
-      if (state.isConnected && state.isInternetReachable) {
+      if (state.isConnected === true && state.isInternetReachable !== false) {
         syncRegistrationQueue();
       }
     });

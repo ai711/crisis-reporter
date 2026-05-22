@@ -398,7 +398,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
       let online = false;
       try {
         const netState = await NetInfo.fetch();
-        online = !!(netState.isConnected && netState.isInternetReachable);
+        online = netState.isConnected === true && netState.isInternetReachable !== false;
       } catch {
         online = false;
       }
@@ -448,7 +448,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
     if (step !== 'location') return;
 
     const unsubscribe = NetInfo.addEventListener((state) => {
-      const nowOnline = !!(state.isConnected && state.isInternetReachable);
+      const nowOnline = state.isConnected === true && state.isInternetReachable !== false;
 
       if (!nowOnline && (locationScenario === 'online_gps' || locationScenario === 'online_no_gps')) {
         setLocationScenario('loading');
@@ -1409,7 +1409,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
     let isCurrentlyOnline = false;
     try {
       const netState = await NetInfo.fetch();
-      isCurrentlyOnline = !!(netState.isConnected && netState.isInternetReachable);
+      isCurrentlyOnline = netState.isConnected === true && netState.isInternetReachable !== false;
     } catch {
       isCurrentlyOnline = false;
     }
@@ -1561,7 +1561,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
             style={styles.confirmRetryBtn}
             onPress={async () => {
               const netState = await NetInfo.fetch();
-              if (netState.isConnected && netState.isInternetReachable) {
+              if (netState.isConnected === true && netState.isInternetReachable !== false) {
                 try {
                   await syncQueue(API_URL);
                   setWasQueued(false);
@@ -2061,7 +2061,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                   let online = false;
                   try {
                     const netState = await NetInfo.fetch();
-                    online = !!(netState.isConnected && netState.isInternetReachable);
+                    online = netState.isConnected === true && netState.isInternetReachable !== false;
                   } catch { online = false; }
                   await doSubmit(t2, online);
                 }}

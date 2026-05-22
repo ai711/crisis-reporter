@@ -1214,8 +1214,20 @@ export default function ReportPage() {
       setPreparingPhotos(false);
     }
 
-    // E32 — Live connectivity check immediately before transmission (web is Tier 1 only)
-    if (!navigator.onLine) {
+    // E32 — Active probe before transmission: navigator.onLine is unreliable (true behind captive portals).
+    const isCurrentlyOnline = await (async () => {
+      try {
+        const r = await fetch(`${API_URL}/api/health`, {
+          method: "HEAD",
+          cache: "no-store",
+          signal: AbortSignal.timeout(5000),
+        });
+        return r.ok;
+      } catch {
+        return false;
+      }
+    })();
+    if (!isCurrentlyOnline) {
       setSubmitError("no_internet");
       setSubmitting(false);
       return;

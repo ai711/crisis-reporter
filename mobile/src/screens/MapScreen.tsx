@@ -114,7 +114,7 @@ export default function MapScreen() {
     });
 
     const unsubscribe = NetInfo.addEventListener((state) => {
-      const online = !!state.isConnected && !!state.isInternetReachable;
+      const online = state.isConnected === true && state.isInternetReachable !== false;
       setIsOnline(online);
       // Guard against stale closure: only fetch once on first connectivity event.
       if (online && !initialFetchDone.current) {
