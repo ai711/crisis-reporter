@@ -255,6 +255,58 @@ async def delete_language(
 
 # ── /api/language-packages ────────────────────────────────────────────────────
 
+_AVAILABLE_UN_LANG_CODES = ["en", "fr", "ar", "zh", "ru", "es"]
+_AVAILABLE_UN_LANG_NAMES = {
+    "en": "English",
+    "fr": "French",
+    "ar": "Arabic",
+    "zh": "Chinese",
+    "ru": "Russian",
+    "es": "Spanish",
+}
+
+
+@packages_router.get("/available")
+async def get_available_languages(
+    db: AsyncSession = Depends(get_db),
+) -> list[dict]:
+    """Public endpoint — returns all reporter-visible languages.
+
+    Always includes the 6 UN languages (hardcoded). Also includes any
+    non-UN language that has a published package.
+    """
+    lang_result = await db.execute(select(Language))
+    lang_map = {l.code: l.name for l in lang_result.scalars().all()}
+
+    pkg_result = await db.execute(
+        select(LanguagePackage.language_code).where(LanguagePackage.status == "published")
+    )
+    published_codes = {row[0] for row in pkg_result.all()}
+
+    result: list[dict] = []
+    for code in _AVAILABLE_UN_LANG_CODES:
+        result.append({
+            "code": code,
+            "name": lang_map.get(code, _AVAILABLE_UN_LANG_NAMES[code]),
+            "status": "protected",
+            "is_un_language": True,
+        })
+
+    non_un: list[dict] = []
+    for code in published_codes:
+        if code not in _AVAILABLE_UN_LANG_CODES:
+            non_un.append({
+                "code": code,
+                "name": lang_map.get(code, code),
+                "status": "active",
+                "is_un_language": False,
+            })
+    non_un.sort(key=lambda x: x["name"])
+    result.extend(non_un)
+
+    return result
+
+
 @packages_router.get("/active/{language_code}", response_model=dict[str, str])
 async def get_active_package(
     language_code: str,

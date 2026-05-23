@@ -1086,13 +1086,14 @@ function LanguagesTab() {
               <tr style={s.thead}>
                 <th style={s.th}>Language</th>
                 <th style={s.th}>Status</th>
+                <th style={s.th}>Reporter Visible</th>
                 <th style={{ ...s.th, textAlign: "right" as const }}>Coverage</th>
                 <th style={{ ...s.th, textAlign: "right" as const }}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {langsLoading ? (
-                <tr><td colSpan={4} style={{ ...s.td, textAlign: "center", color: "#718096" }}>Loading…</td></tr>
+                <tr><td colSpan={5} style={{ ...s.td, textAlign: "center", color: "#718096" }}>Loading…</td></tr>
               ) : languages.map((lang) => {
                 const pct = coverageByLang[lang.code] ?? 0;
                 const langQEntry = queueStatus?.by_language.find((l) => l.lang_code === lang.code);
@@ -1111,6 +1112,19 @@ function LanguagesTab() {
                     </td>
                     <td style={s.td}>
                       <LangStatusPill lang={lang} />
+                    </td>
+                    <td style={s.td}>
+                      {lang.is_protected || lang.status === "active" ? (
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 600, color: "#22c55e" }}>
+                          <span>✓</span>
+                          <span>Visible</span>
+                        </span>
+                      ) : (
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 600, color: "#a0aec0" }}>
+                          <span>—</span>
+                          <span>Hidden</span>
+                        </span>
+                      )}
                     </td>
                     <td style={{ ...s.td, textAlign: "right" as const }}>
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8 }}>
