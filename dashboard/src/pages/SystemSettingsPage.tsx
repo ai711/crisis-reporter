@@ -504,7 +504,7 @@ function AddLanguageModal({
   existingCodes,
 }: {
   onClose: () => void;
-  onSuccess: () => void;
+  onSuccess: (code: string) => void;
   existingCodes: string[];
 }) {
   const [search, setSearch] = useState("");
@@ -530,7 +530,7 @@ function AddLanguageModal({
         name: selected.name,
         code: selected.code,
       });
-      onSuccess();
+      onSuccess(selected.code);
     } catch {
       setSubmitError("Failed to add language. The code may already exist.");
     } finally {
@@ -891,6 +891,7 @@ function LanguagesTab() {
   const [isPublishingApi, setIsPublishingApi] = useState(false);
   const [publishMsg, setPublishMsg] = useState<{ text: string; type: "success" | "error" } | null>(null);
   const [approvingAllDraft, setApprovingAllDraft] = useState(false);
+  const [optimisticDraftClear, setOptimisticDraftClear] = useState(false);
   const [translateStartTime, setTranslateStartTime] = useState<number | null>(null);
   const [translationsLoadingImmediate, setTranslationsLoadingImmediate] = useState(false);
   const [approvingRowId, setApprovingRowId] = useState<string | null>(null);
@@ -960,16 +961,6 @@ function LanguagesTab() {
     return () => window.removeEventListener("beforeunload", handleUnload);
   }, [selectedLang]);
 
-  // FIX 8: clear immediate loading indicator when real loading completes
-  useEffect(() => {
-    if (!transLoading) setTranslationsLoadingImmediate(false);
-  }, [transLoading]);
-
-  // FIX 12: reset language table page when language list changes
-  useEffect(() => {
-    setLangPage(1);
-  }, [languages.length]);
-
   // FIX 13: reset translation table page when language or tab changes
   useEffect(() => {
     setTransPage(1);
@@ -984,6 +975,11 @@ function LanguagesTab() {
       return res.data;
     },
   });
+
+  // FIX 12: reset language table page when language list changes
+  useEffect(() => {
+    setLangPage(1);
+  }, [languages.length]);
 
   const { data: stringKeys = [], isLoading: keysLoading } = useQuery<StringKeyData[]>({
     queryKey: ["string-keys"],
@@ -1000,6 +996,11 @@ function LanguagesTab() {
       return res.data;
     },
   });
+
+  // FIX 8: clear immediate loading indicator when real loading completes
+  useEffect(() => {
+    if (!transLoading) setTranslationsLoadingImmediate(false);
+  }, [transLoading]);
 
   const { data: queueStatus } = useQuery<QueueStatusByLang>({
     queryKey: ["queue-status-by-lang"],
@@ -1102,8 +1103,9 @@ function LanguagesTab() {
     (t) => t.translated_by !== "" && t.translated_by !== "google" && t.translated_by !== "libretranslate" && t.translated_by !== "auto" && t.status !== "missing"
   ).length;
 
-  const filtered =
-    filterTab === "all" ? translations : translations.filter((t) => t.status === filterTab);
+  const filtered = (optimisticDraftClear && filterTab === "draft")
+    ? []
+    : filterTab === "all" ? translations : translations.filter((t) => t.status === filterTab);
 
   // FIX 12: language table pagination
   const LANG_PAGE_SIZE = 10;
@@ -1122,7 +1124,8 @@ function LanguagesTab() {
   // Publish eligibility
   const langQueueEntry = queueStatus?.by_language.find((l) => l.lang_code === selectedLang);
   const hasPending = (langQueueEntry?.draft_count ?? 0) + (langQueueEntry?.failed_count ?? 0) > 0;
-  const publishReady = (coverageByLang[selectedLang] ?? 0) === 100 && !hasPending;
+  const approvedForSelected = translations.filter(t => t.status === "approved").length;
+  const publishReady = approvedForSelected > 0 && !hasPending;
 
   // ── Handlers ─────────────────────────────────────────────────────────────
 
@@ -1149,6 +1152,7 @@ function LanguagesTab() {
       queryClient.invalidateQueries({ queryKey: ["translations", langCode] });
       queryClient.invalidateQueries({ queryKey: ["string-keys"] });
       queryClient.invalidateQueries({ queryKey: ["queue-status-by-lang"] });
+      setSelectedLang(langCode);
       // FIX 9: initialise progress with actual untranslated count
       const alreadyTranslated = (langCode === selectedLang ? translations : []).filter(
         (t) => t.status === "draft" || t.status === "approved" || t.status === "published"
@@ -1157,11 +1161,13 @@ function LanguagesTab() {
       setTranslateProgress({ completed: 0, total: Math.max(missingForLang, 1) });
       setTranslateMsg(`Auto-translation started for ${langName}. Check the Review Queue tab for progress.`);
       setTimeout(() => setTranslateMsg(""), 5000);
-      // FIX 3: scroll to progress banner after API call succeeds
-      setTimeout(() => {
-        const progressEl = document.getElementById('translate-progress-banner');
-        if (progressEl) progressEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }, 100);
+      // FIX 3: scroll to progress banner after two render cycles complete
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          const el = document.getElementById('translate-progress-banner');
+          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+      });
       // autoTranslatingLang intentionally NOT cleared here — progress banner
       // stays until user dismisses with ×
     } catch {
@@ -1184,11 +1190,18 @@ function LanguagesTab() {
     setIsPublishingApi(true);
     try {
       await api.post(`/api/language-packages/publish/${publishingLang}`);
-      queryClient.invalidateQueries({ queryKey: ["translations", publishingLang] });
-      queryClient.invalidateQueries({ queryKey: ["string-keys"] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["languages"] }),
+        queryClient.invalidateQueries({ queryKey: ["translations", publishingLang] }),
+        queryClient.invalidateQueries({ queryKey: ["queue-status"] }),
+        queryClient.invalidateQueries({ queryKey: ["string-keys"] }),
+      ]);
       queryClient.invalidateQueries({ queryKey: ["language-packages"] });
       queryClient.invalidateQueries({ queryKey: ["queue-status-by-lang"] });
       queryClient.invalidateQueries({ queryKey: ["translation-audit"] });
+      setHighlightedLang(publishingLang);
+      setTimeout(() => setHighlightedLang(null), 3000);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
       setShowPublishConfirm(false);
       setPublishMsg({ text: "Published successfully. Reporters will receive updates on next app open.", type: "success" });
       setTimeout(() => setPublishMsg(null), 5000);
@@ -1274,11 +1287,13 @@ function LanguagesTab() {
     if (draftCount === 0) { showBanner("No draft translations to approve."); return; }
     if (!canEdit) { showBanner("Acquire edit lock first.", false); return; }
     setApprovingAllDraft(true);
+    setOptimisticDraftClear(true);
     try {
       const res = await api.post<{ approved_count: number }>("/api/translations/approve-all", {
         language_code: selectedLang,
       });
-      queryClient.invalidateQueries({ queryKey: ["translations", selectedLang] });
+      await queryClient.invalidateQueries({ queryKey: ["translations", selectedLang] });
+      await queryClient.invalidateQueries({ queryKey: ["queue-status"] });
       queryClient.invalidateQueries({ queryKey: ["string-keys"] });
       queryClient.invalidateQueries({ queryKey: ["queue-status-by-lang"] });
       queryClient.invalidateQueries({ queryKey: ["translation-audit"] });
@@ -1290,6 +1305,7 @@ function LanguagesTab() {
       showBanner("Failed to approve all translations.", false);
     } finally {
       setApprovingAllDraft(false);
+      setOptimisticDraftClear(false);
     }
   }
 
@@ -1299,7 +1315,7 @@ function LanguagesTab() {
       await api.patch(`/api/languages/${deprecateModal.code}/status`, { status: "deprecated" });
       queryClient.invalidateQueries({ queryKey: ["languages"] });
       queryClient.invalidateQueries({ queryKey: ["translation-audit"] });
-      showBanner(`${deprecateModal.name} marked as deprecated.`);
+      showBanner(`${deprecateModal.name} marked as deactivated.`);
       setDeprecateModal(null);
       setDeprecateComment("");
     } catch {
@@ -1502,10 +1518,22 @@ function LanguagesTab() {
             <thead>
               <tr style={s.thead}>
                 <th style={s.th}>Language</th>
-                <th style={s.th}>Status</th>
-                <th style={s.th}>Reporter Visible</th>
-                <th style={{ ...s.th, textAlign: "right" as const }}>Translation Status</th>
-                <th style={{ ...s.th, textAlign: "right" as const }}>Actions</th>
+                <th style={s.th}>
+                  Status
+                  <span title="Protected: built-in UN languages that cannot be changed. Active: available to reporters. Pending: added but not yet published. Deprecated/Deactivated: being phased out." style={{ fontSize: 12, color: "#9ca3af", cursor: "help", marginLeft: 4, verticalAlign: "middle" }}>ⓘ</span>
+                </th>
+                <th style={s.th}>
+                  Reporter Visible
+                  <span title="Whether this language appears in the reporter app. Only Active and Protected languages are visible to reporters." style={{ fontSize: 12, color: "#9ca3af", cursor: "help", marginLeft: 4, verticalAlign: "middle" }}>ⓘ</span>
+                </th>
+                <th style={{ ...s.th, textAlign: "right" as const }}>
+                  Translation Status
+                  <span title="Shows how many strings are translated for this language. Missing: not yet translated. Draft: translated but not reviewed. Approved: reviewed and ready to publish. Published: live and visible to reporters." style={{ fontSize: 12, color: "#9ca3af", cursor: "help", marginLeft: 4, verticalAlign: "middle" }}>ⓘ</span>
+                </th>
+                <th style={{ ...s.th, textAlign: "right" as const }}>
+                  Actions
+                  <span title="Available actions depend on the language status and your role. Only Superadmins can publish." style={{ fontSize: 12, color: "#9ca3af", cursor: "help", marginLeft: 4, verticalAlign: "middle" }}>ⓘ</span>
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -1515,7 +1543,8 @@ function LanguagesTab() {
                 const pct = coverageByLang[lang.code] ?? 0;
                 const langQEntry = queueStatus?.by_language.find((l) => l.lang_code === lang.code);
                 const pending = (langQEntry?.draft_count ?? 0) + (langQEntry?.failed_count ?? 0);
-                const canPublish = pct === 100 && pending === 0 && isSuperadmin;
+                const approvedCount = activeKeys.filter(k => k.translations?.[lang.code] === "approved").length;
+                const canPublish = approvedCount > 0 && pending === 0 && isSuperadmin;
                 const isPastRemoval = lang.removal_scheduled_at
                   ? new Date(lang.removal_scheduled_at) <= new Date()
                   : false;
@@ -1577,9 +1606,15 @@ function LanguagesTab() {
                                 </span>
                               )}
                               {st.published > 0 && (
-                                <span style={{ display: "inline-flex", padding: "2px 8px", borderRadius: 9999, fontSize: 11, fontWeight: 600, marginRight: 4, background: "#dcfce7", color: "#166534" }}>
-                                  {st.published} Published
-                                </span>
+                                st.published === totalActive && st.approved === 0 ? (
+                                  <span style={{ display: "inline-flex", padding: "2px 8px", borderRadius: 9999, fontSize: 11, fontWeight: 600, marginRight: 4, background: "#dcfce7", color: "#166534" }}>
+                                    ✓ All Live
+                                  </span>
+                                ) : (
+                                  <span style={{ display: "inline-flex", padding: "2px 8px", borderRadius: 9999, fontSize: 11, fontWeight: 600, marginRight: 4, background: "#dcfce7", color: "#166534" }}>
+                                    {st.published} Published
+                                  </span>
+                                )
                               )}
                             </>
                           );
@@ -1601,7 +1636,7 @@ function LanguagesTab() {
                           const st = statusByLang[lang.code];
                           const hasMissing = (st?.missing ?? 0) > 0 || (st?.draft ?? 0) > 0;
                           if (!hasMissing) {
-                            return <span style={{ color: "#9ca3af", fontSize: 12 }}>Up to date</span>;
+                            return null;
                           }
                           return (
                             <button
@@ -1626,7 +1661,7 @@ function LanguagesTab() {
                             style={{ ...sL.actionBtn, background: "#fff5f5", color: "#c53030", border: "1px solid #fc8181" }}
                             onClick={() => setDeprecateModal({ code: lang.code, name: lang.name })}
                           >
-                            Deprecate
+                            Deactivate
                           </button>
                         )}
                         {isAdmin && !lang.is_protected && lang.status === "deprecated" && (
@@ -2092,27 +2127,27 @@ function LanguagesTab() {
         </div>
       )}
 
-      {/* ── Deprecate Modal ──────────────────────────────────────────────── */}
+      {/* ── Deactivate Modal ──────────────────────────────────────────────── */}
       {deprecateModal && (
         <div style={s.overlay} onClick={() => setDeprecateModal(null)}>
           <div style={{ ...s.modal, maxWidth: 440 }} onClick={(e) => e.stopPropagation()}>
             <div style={s.modalHeader}>
-              <h2 style={s.modalTitle}>Deprecate Language</h2>
+              <h2 style={s.modalTitle}>Deactivate Language</h2>
               <button style={s.closeBtn} onClick={() => setDeprecateModal(null)}>✕</button>
             </div>
             <div style={{ padding: "20px 24px" }}>
               <div style={s.warningBanner}>
                 <span style={{ fontSize: 20 }}>⚠️</span>
                 <div>
-                  <div style={{ fontWeight: 700, fontSize: 14, color: "#92400e", marginBottom: 4 }}>Deprecating {deprecateModal.name}</div>
-                  <div style={{ fontSize: 13, color: "#92400e", lineHeight: 1.5 }}>This language will be scheduled for removal in 90 days. You can restore it before the deadline.</div>
+                  <div style={{ fontWeight: 700, fontSize: 14, color: "#92400e", marginBottom: 4 }}>Deactivating {deprecateModal.name}</div>
+                  <div style={{ fontSize: 13, color: "#92400e", lineHeight: 1.5 }}>You are about to deactivate {deprecateModal.name}. Reporters currently using this language will be notified to switch on their next app open. Translation updates will be paused for this language.</div>
                 </div>
               </div>
               <Field label="Comment (required, min 10 characters)" required error={deprecateComment.trim().length > 0 && deprecateComment.trim().length < 10 ? "Minimum 10 characters" : undefined}>
                 <textarea
                   value={deprecateComment}
                   onChange={(e) => setDeprecateComment(e.target.value)}
-                  placeholder="Reason for deprecation…"
+                  placeholder="Reason for deactivation…"
                   rows={2}
                   style={{ ...s.input, width: "100%", resize: "vertical" as const, boxSizing: "border-box" as const, marginTop: 12 }}
                 />
@@ -2125,7 +2160,7 @@ function LanguagesTab() {
                 disabled={deprecateComment.trim().length < 10}
                 onClick={handleDeprecate}
               >
-                Deprecate Language
+                Deactivate Language
               </button>
             </div>
           </div>
@@ -2136,9 +2171,10 @@ function LanguagesTab() {
       {showAddLanguageModal && (
         <AddLanguageModal
           onClose={() => setShowAddLanguageModal(false)}
-          onSuccess={() => {
+          onSuccess={(newLangCode) => {
             setShowAddLanguageModal(false);
             queryClient.invalidateQueries({ queryKey: ["languages"] });
+            setSelectedLang(newLangCode);
           }}
           existingCodes={languages.map((l) => l.code)}
         />

@@ -37,6 +37,7 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
   const [countries, setCountries] = useState<Country[]>([]);
   const [countrySearch, setCountrySearch] = useState("");
   const [currentCountry, setCurrentCountry] = useState("");
+  const [availableLangs, setAvailableLangs] = useState<{ code: string; name: string }[]>([]);
 
   useEffect(() => {
     AsyncStorage.getItem("cr_country_name").then((v) => {
@@ -52,6 +53,19 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
           .catch(() => {});
       }
     });
+  }, []);
+
+  useEffect(() => {
+    api.get('/api/language-packages/available')
+      .then(r => setAvailableLangs(r.data))
+      .catch(() => setAvailableLangs([
+        { code: "en", name: "English" },
+        { code: "fr", name: "Français" },
+        { code: "ar", name: "العربية" },
+        { code: "zh", name: "中文" },
+        { code: "ru", name: "Русский" },
+        { code: "es", name: "Español" },
+      ]));
   }, []);
 
   const filteredCountries = countries.filter((c) =>
@@ -88,7 +102,14 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
         return;
       }
       try {
-        await api.get(`/api/language-packages/active/${langCode}`);
+        const pkgResponse = await api.get(`/api/language-packages/active/${langCode}`);
+        const translationMap: Record<string, string> = pkgResponse.data;
+        if (translationMap && Object.keys(translationMap).length > 0) {
+          await AsyncStorage.setItem(
+            `cr_lang_package_${langCode}`,
+            JSON.stringify(translationMap)
+          );
+        }
       } catch {
         Alert.alert(
           "Download failed",
@@ -96,6 +117,8 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
         );
         return;
       }
+      const { loadDynamicLanguagePackage } = await import("../i18n");
+      await loadDynamicLanguagePackage(langCode);
     }
 
     setLanguage(langCode);
@@ -147,23 +170,26 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
         {/* Language */}
         <Text style={styles.sectionTitle}>{t("settings.language")}</Text>
         <View style={styles.languageGrid}>
-          {LANGUAGES.map((lang) => (
-            <TouchableOpacity
-              key={lang.code}
-              style={[
-                styles.langBtn,
-                languageCode === lang.code && styles.langBtnSelected,
-              ]}
-              onPress={() => handleLanguageChange(lang.code)}
-            >
-              <Text style={[
-                styles.langBtnText,
-                languageCode === lang.code && styles.langBtnTextSelected,
-              ]}>
-                {lang.name}
-              </Text>
-            </TouchableOpacity>
-          ))}
+          {(() => {
+            const currentLang = languageCode || i18n.language || "en";
+            return availableLangs.map((lang) => (
+              <TouchableOpacity
+                key={lang.code}
+                style={[
+                  styles.langBtn,
+                  currentLang === lang.code && styles.langBtnSelected,
+                ]}
+                onPress={() => handleLanguageChange(lang.code)}
+              >
+                <Text style={[
+                  styles.langBtnText,
+                  currentLang === lang.code && styles.langBtnTextSelected,
+                ]}>
+                  {lang.name}
+                </Text>
+              </TouchableOpacity>
+            ));
+          })()}
         </View>
 
         {/* Logout */}

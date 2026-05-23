@@ -136,13 +136,53 @@ export default function OnboardingScreen() {
     }
   }
 
-  // Version check on app open — fire and forget, non-blocking
+  async function checkIfSelectedLanguageDeactivated(storedLangCode: string) {
+    try {
+      const UN_CODES = ["en", "fr", "ar", "zh", "ru", "es"];
+      if (UN_CODES.includes(storedLangCode)) return;
+
+      const response = await api.get('/api/language-packages/available');
+      const available: {code: string, name: string, is_un_language: boolean}[] = response.data;
+
+      const isStillActive = available.some(l => l.code === storedLangCode);
+
+      if (!isStillActive) {
+        await AsyncStorage.setItem('cr_lang_deactivated', storedLangCode);
+      } else {
+        await AsyncStorage.removeItem('cr_lang_deactivated');
+      }
+    } catch (e) {
+      console.warn('Language deactivation check failed', e);
+    }
+  }
+
+  // Version + deactivation check on app open — fire and forget, non-blocking
   useEffect(() => {
-    AsyncStorage.getItem("cr_language").then((storedLang) => {
+    const startup = async () => {
+      const storedLang = await AsyncStorage.getItem("cr_language");
       if (storedLang && storedLang !== "en") {
         checkLanguagePackageVersion(storedLang); // fire-and-forget, no await
+        checkIfSelectedLanguageDeactivated(storedLang); // fire-and-forget, no await
       }
-    });
+
+      // Alert returning users if their previously-selected language was deactivated
+      const deactivatedLang = await AsyncStorage.getItem('cr_lang_deactivated');
+      const tandcAcceptedAt = await AsyncStorage.getItem('cr_tandc_accepted_at');
+      if (deactivatedLang && tandcAcceptedAt) {
+        Alert.alert(
+          "Language No Longer Available",
+          "The language you selected is no longer supported. Please select a new language to continue.",
+          [{
+            text: "Select Language",
+            onPress: () => {
+              AsyncStorage.removeItem('cr_lang_deactivated');
+              setStep(2);
+            },
+          }]
+        );
+      }
+    };
+    startup();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const filteredCountries = countries.filter((c) =>
@@ -181,7 +221,14 @@ export default function OnboardingScreen() {
       }
     }
 
+    // Load the package into i18n immediately so T&C renders in selected language
+    if (!UN_LANG_CODES.includes(selectedLang)) {
+      const { loadDynamicLanguagePackage } = await import("../i18n");
+      await loadDynamicLanguagePackage(selectedLang);
+    }
+
     i18n.changeLanguage(selectedLang);
+    useAuthStore.getState().setLanguage(selectedLang);
     await AsyncStorage.setItem("cr_language", selectedLang);
     setStep(3);
   };
@@ -244,18 +291,19 @@ export default function OnboardingScreen() {
   type GridItem = { code: string; label: string; isSeeAll?: boolean };
   const officialCode = selectedCountry?.official_language ?? null;
   let orderedLangs = [...availableLangs];
-  if (officialCode && !UN_LANG_CODES.includes(officialCode)) {
+  if (officialCode) {
     const officialIdx = orderedLangs.findIndex((l) => l.code === officialCode);
     if (officialIdx > 0) {
       const [officialEntry] = orderedLangs.splice(officialIdx, 1);
       orderedLangs.unshift(officialEntry);
     }
     // officialIdx === -1 means not in availableLangs — exclude silently
+    // officialIdx === 0 means already first — no action needed
   }
-  const GRID_LIMIT = 8;
-  const gridItems: GridItem[] = orderedLangs.length > GRID_LIMIT
+  const GRID_LIMIT = 7;
+  const gridItems: GridItem[] = orderedLangs.length >= GRID_LIMIT
     ? [
-        ...orderedLangs.slice(0, 7).map((l) => ({ code: l.code, label: l.name })),
+        ...orderedLangs.slice(0, 6).map((l) => ({ code: l.code, label: l.name })),
         { code: "__seeall__", label: `See all ${orderedLangs.length} languages`, isSeeAll: true },
       ]
     : orderedLangs.map((l) => ({ code: l.code, label: l.name }));
@@ -263,7 +311,7 @@ export default function OnboardingScreen() {
   for (let i = 0; i < gridItems.length; i += 2) {
     langRows.push(gridItems.slice(i, i + 2));
   }
-  const modalLangs = orderedLangs.length > GRID_LIMIT ? orderedLangs.slice(7) : [];
+  const modalLangs = orderedLangs.length >= GRID_LIMIT ? orderedLangs : [];
 
   // ── Shared hero section ────────────────────────────────────────────────────
   const renderHero = (logoSize: number = 80) => (

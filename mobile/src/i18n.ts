@@ -9,10 +9,30 @@ import fr from "./locales/fr.json";
 import ru from "./locales/ru.json";
 import es from "./locales/es.json";
 
-const initI18n = async () => {
+const UN_CODES = ["en", "fr", "ar", "zh", "ru", "es"];
+
+export async function loadDynamicLanguagePackage(langCode: string): Promise<boolean> {
+  try {
+    if (UN_CODES.includes(langCode)) return false;
+
+    const stored = await AsyncStorage.getItem(`cr_lang_package_${langCode}`);
+    if (!stored) return false;
+
+    const translationMap: Record<string, string> = JSON.parse(stored);
+    if (!translationMap || Object.keys(translationMap).length === 0) return false;
+
+    i18n.addResourceBundle(langCode, "translation", translationMap, true, true);
+    return true;
+  } catch (e) {
+    console.warn("Failed to load dynamic language package:", e);
+    return false;
+  }
+}
+
+export const initI18n = async () => {
   const savedLanguage = await AsyncStorage.getItem("cr_language");
 
-  i18n.use(initReactI18next).init({
+  await i18n.use(initReactI18next).init({
     resources: {
       en: { translation: en },
       ar: { translation: ar },
@@ -25,6 +45,10 @@ const initI18n = async () => {
     fallbackLng: "en",
     interpolation: { escapeValue: false },
   });
+
+  if (savedLanguage && !UN_CODES.includes(savedLanguage)) {
+    await loadDynamicLanguagePackage(savedLanguage);
+  }
 };
 
 initI18n();

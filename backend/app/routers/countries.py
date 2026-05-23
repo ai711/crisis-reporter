@@ -12,6 +12,103 @@ from app.services.dependencies import require_admin
 router = APIRouter(prefix="/api/countries", tags=["Countries"])
 
 
+# ── Official language name → ISO 639-1 code normalisation map ─────────────────
+
+OFFICIAL_LANG_NAME_TO_CODE: dict[str, str] = {
+    # A
+    "afar": "aa", "abkhazian": "ab", "avestan": "ae", "afrikaans": "af",
+    "akan": "ak", "amharic": "am", "aragonese": "an", "arabic": "ar",
+    "assamese": "as", "avaric": "av", "aymara": "ay", "azerbaijani": "az",
+    # B
+    "bashkir": "ba", "belarusian": "be", "bulgarian": "bg", "bislama": "bi",
+    "bambara": "bm", "bengali": "bn", "tibetan": "bo", "breton": "br",
+    "bosnian": "bs",
+    # C
+    "catalan": "ca", "chechen": "ce", "chamorro": "ch", "corsican": "co",
+    "cree": "cr", "czech": "cs", "church slavic": "cu", "chuvash": "cv",
+    "welsh": "cy",
+    # D
+    "danish": "da", "german": "de", "divehi": "dv", "dzongkha": "dz",
+    # E
+    "ewe": "ee", "greek": "el", "english": "en", "esperanto": "eo",
+    "spanish": "es", "estonian": "et", "basque": "eu",
+    # F
+    "persian": "fa", "farsi": "fa", "dari": "fa", "fula": "ff",
+    "finnish": "fi", "fijian": "fj", "faroese": "fo", "french": "fr",
+    "western frisian": "fy",
+    # G
+    "irish": "ga", "scottish gaelic": "gd", "galician": "gl", "guarani": "gn",
+    "gujarati": "gu", "manx": "gv",
+    # H
+    "hausa": "ha", "hebrew": "he", "hindi": "hi", "hiri motu": "ho",
+    "croatian": "hr", "haitian creole": "ht", "hungarian": "hu",
+    "armenian": "hy",
+    # I
+    "herero": "hz", "interlingua": "ia", "indonesian": "id", "igbo": "ig",
+    "sichuan yi": "ii", "inupiaq": "ik", "ido": "io", "icelandic": "is",
+    "italian": "it", "inuktitut": "iu",
+    # J
+    "japanese": "ja", "javanese": "jv",
+    # K
+    "georgian": "ka", "kongo": "kg", "kikuyu": "ki", "kwanyama": "kj",
+    "kazakh": "kk", "kalaallisut": "kl", "khmer": "km", "kannada": "kn",
+    "korean": "ko", "kanuri": "kr", "kashmiri": "ks", "kurdish": "ku",
+    "komi": "kv", "cornish": "kw", "kyrgyz": "ky",
+    # L
+    "latin": "la", "luxembourgish": "lb", "ganda": "lg", "limburgish": "li",
+    "lingala": "ln", "lao": "lo", "lithuanian": "lt", "luba-katanga": "lu",
+    "latvian": "lv",
+    # M
+    "malagasy": "mg", "marshallese": "mh", "maori": "mi", "macedonian": "mk",
+    "malayalam": "ml", "mongolian": "mn", "marathi": "mr", "malay": "ms",
+    "maltese": "mt", "burmese": "my", "myanmar": "my",
+    # N
+    "nauru": "na", "norwegian bokmal": "nb", "north ndebele": "nd",
+    "nepali": "ne", "ndonga": "ng", "dutch": "nl", "norwegian nynorsk": "nn",
+    "norwegian": "no", "south ndebele": "nr", "navajo": "nv", "chichewa": "ny",
+    # O
+    "occitan": "oc", "ojibwe": "oj", "oromo": "om", "oriya": "or",
+    "odia": "or", "ossetian": "os",
+    # P
+    "punjabi": "pa", "pali": "pi", "polish": "pl", "pashto": "ps",
+    "portuguese": "pt",
+    # Q
+    "quechua": "qu",
+    # R
+    "romansh": "rm", "kirundi": "rn", "romanian": "ro", "russian": "ru",
+    "kinyarwanda": "rw",
+    # S
+    "sanskrit": "sa", "sardinian": "sc", "sindhi": "sd", "northern sami": "se",
+    "sango": "sg", "sinhala": "si", "slovak": "sk", "slovenian": "sl",
+    "samoan": "sm", "shona": "sn", "somali": "so", "albanian": "sq",
+    "serbian": "sr", "swati": "ss", "sotho": "st", "sundanese": "su",
+    "swedish": "sv", "swahili": "sw",
+    # T
+    "tamil": "ta", "telugu": "te", "tajik": "tg", "thai": "th",
+    "tigrinya": "ti", "turkmen": "tk", "tagalog": "tl", "tswana": "tn",
+    "tonga": "to", "turkish": "tr", "tsonga": "ts", "tatar": "tt",
+    "twi": "tw", "tahitian": "ty",
+    # U
+    "uyghur": "ug", "ukrainian": "uk", "urdu": "ur", "uzbek": "uz",
+    # V
+    "venda": "ve", "vietnamese": "vi", "volapuk": "vo",
+    # W
+    "walloon": "wa", "wolof": "wo",
+    # X
+    "xhosa": "xh",
+    # Y
+    "yiddish": "yi", "yoruba": "yo",
+    # Z
+    "zhuang": "za", "chinese": "zh", "mandarin": "zh",
+    "simplified chinese": "zh", "traditional chinese": "zh",
+    "zulu": "zu",
+    # Additional
+    "filipino": "tl", "dhivehi": "dv", "sesotho": "st", "montenegrin": "sr",
+    "seychellois creole": "fr", "nauruan": "na", "palauan": "pau",
+    "tongan": "to", "tuvaluan": "tvl", "tetum": "tet",
+}
+
+
 # ── Schemas ───────────────────────────────────────────────────────────────────
 
 class CountryCreate(BaseModel):
@@ -271,7 +368,22 @@ async def list_countries(db: AsyncSession = Depends(get_db)):
     result = await db.execute(
         select(Country).order_by(Country.is_active.desc(), Country.name)
     )
-    return result.scalars().all()
+    countries = result.scalars().all()
+    response = []
+    for country in countries:
+        official_lang = country.official_language
+        if official_lang:
+            normalized = OFFICIAL_LANG_NAME_TO_CODE.get(official_lang.lower().strip())
+            if normalized:
+                official_lang = normalized
+        response.append(CountryResponse(
+            code=country.code,
+            name=country.name,
+            official_language=official_lang,
+            is_active=country.is_active,
+            dialling_code=country.dialling_code,
+        ))
+    return response
 
 
 @router.post("", response_model=CountryResponse, status_code=status.HTTP_201_CREATED)
