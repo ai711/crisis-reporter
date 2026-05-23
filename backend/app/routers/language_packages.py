@@ -8,6 +8,7 @@ Four router prefixes:
     /api/translations         — per-language translation workflow (edit locks, audit)
 """
 
+import asyncio
 import logging
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -22,6 +23,7 @@ from sqlalchemy.orm import selectinload
 
 from app.config import settings
 from app.database import AsyncSessionLocal, get_db
+from app.utils.translation import translate_text
 from app.models.language_package import Language, LanguagePackage, StringKey, Translation
 from app.models.translation_audit_log import TranslationAuditLog
 from app.services.dependencies import (
@@ -44,6 +46,11 @@ VALID_CATEGORIES = {
     "button", "question", "answer", "error",
     "content", "safety", "onboarding", "tc",
 }
+
+TRANSLATION_BATCH_SIZE = 5  # change here only to tune concurrency
+
+# Tracks in-progress auto-translation per language code; cleared on completion.
+_translation_progress: dict[str, dict] = {}
 
 # ── Four routers ───────────────────────────────────────────────────────────────
 
@@ -808,6 +815,7 @@ async def get_queue_status(
         "has_pending": total_pending > 0,
         "total_pending": total_pending,
         "by_language": by_language,
+        "batch_progress": next(iter(_translation_progress.values()), None),
     }
 
 
@@ -1053,44 +1061,69 @@ async def _run_auto_translation(language_code: str, db: AsyncSession) -> None:
         if not keys_to_translate:
             return
 
-        translate_url = settings.LIBRETRANSLATE_URL.rstrip("/") + "/translate"
+        total_keys = len(keys_to_translate)
         translated = 0
         failed = 0
         errors: list[str] = []
 
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            for sk in keys_to_translate:
-                try:
-                    resp = await client.post(
-                        translate_url,
-                        json={
-                            "q": sk.english_text,
-                            "source": "en",
-                            "target": language_code,
-                            "format": "text",
-                        },
-                    )
-                    resp.raise_for_status()
-                    data = resp.json()
-                    translated_text = data.get("translatedText", "")
-                    if not translated_text:
-                        raise ValueError("Empty translatedText in LibreTranslate response")
+        batches = [
+            keys_to_translate[i:i + TRANSLATION_BATCH_SIZE]
+            for i in range(0, total_keys, TRANSLATION_BATCH_SIZE)
+        ]
 
+        async def _translate_single(key_id, key_name, english_text, target_lang, _db) -> dict:
+            try:
+                try:
+                    t_text, svc = await translate_text(english_text, target_lang)
+                except httpx.HTTPStatusError as rate_exc:
+                    if rate_exc.response.status_code == 429:
+                        log.warning("Rate limited (429) translating %s, retrying after 3s", key_name)
+                        await asyncio.sleep(3.0)
+                        t_text, svc = await translate_text(english_text, target_lang)
+                    else:
+                        raise
+                if svc == "libretranslate":
+                    await asyncio.sleep(0.5)
+                return {"key_id": key_id, "key_name": key_name, "translated_text": t_text, "service_used": svc, "error": None}
+            except Exception as exc:
+                return {"key_id": key_id, "key_name": key_name, "translated_text": None, "service_used": None, "error": str(exc)}
+
+        for batch_idx, batch in enumerate(batches):
+            _translation_progress[language_code] = {
+                "completed": batch_idx * TRANSLATION_BATCH_SIZE,
+                "total": total_keys,
+                "current_batch": batch_idx + 1,
+            }
+
+            results = await asyncio.gather(*[
+                _translate_single(sk.id, sk.key, sk.english_text, language_code, db)
+                for sk in batch
+            ])
+
+            for result in results:
+                if result["error"]:
+                    failed += 1
+                    errors.append(f"{result['key_name']}: {result['error']}")
+                    log.warning("auto_translate failed for key %s: %s", result["key_name"], result["error"])
+                else:
                     db.add(
                         Translation(
-                            string_key_id=sk.id,
+                            string_key_id=result["key_id"],
                             language_code=language_code,
-                            translated_text=translated_text,
+                            translated_text=result["translated_text"],
                             status="draft",
-                            translated_by="auto",
+                            translated_by=result["service_used"],
                         )
                     )
                     translated += 1
+                    log.info("Translated key %s via %s", result["key_name"], result["service_used"])
 
-                except Exception as exc:
-                    failed += 1
-                    errors.append(f"{sk.key}: {exc}")
-                    log.warning("auto_translate failed for key %s: %s", sk.key, exc)
+            await db.commit()
+
+            if batch_idx < len(batches) - 1:
+                await asyncio.sleep(1.0)
+
+        _translation_progress.pop(language_code, None)
 
         if translated > 0:
             await write_translation_audit(
@@ -1103,6 +1136,7 @@ async def _run_auto_translation(language_code: str, db: AsyncSession) -> None:
             )
             await db.commit()
     except Exception as exc:
+        _translation_progress.pop(language_code, None)
         log.error("_run_auto_translation background task failed for %s: %s", language_code, exc)
 
 

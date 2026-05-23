@@ -69,6 +69,7 @@ interface QueueStatusByLang {
   has_pending: boolean;
   total_pending: number;
   by_language: { lang_code: string; lang_name: string; draft_count: number; failed_count: number }[];
+  batch_progress: { completed: number; total: number; current_batch: number } | null;
 }
 
 interface LanguageLifecycle {
@@ -181,6 +182,25 @@ function categoryBadgeStyle(): React.CSSProperties {
     color: "#4a5568",
     border: "1px solid #e2e8f0",
   };
+}
+
+function TranslationSourcePill({ translatedBy }: { translatedBy: string }) {
+  if (!translatedBy) return <span style={{ color: "#a0aec0" }}>—</span>;
+  const base: React.CSSProperties = {
+    display: "inline-flex",
+    padding: "2px 8px",
+    borderRadius: 9999,
+    fontSize: 11,
+    fontWeight: 600,
+    whiteSpace: "nowrap" as const,
+  };
+  if (translatedBy === "google")
+    return <span style={{ ...base, background: "#dcfce7", color: "#166534" }}>Google</span>;
+  if (translatedBy === "libretranslate")
+    return <span style={{ ...base, background: "#f3f4f6", color: "#374151" }}>LibreTranslate</span>;
+  if (translatedBy === "auto")
+    return <span style={{ ...base, background: "#f3f4f6", color: "#6b7280" }}>Auto</span>;
+  return <span style={{ ...base, background: "#dbeafe", color: "#1e40af" }}>Manual</span>;
 }
 
 // ── Toggle Switch ──────────────────────────────────────────────────────────────
@@ -831,6 +851,12 @@ function LanguagesTab() {
     published: translations.filter((t) => t.status === "published").length,
   };
 
+  const googleCount = translations.filter((t) => t.translated_by === "google").length;
+  const libreCount = translations.filter((t) => t.translated_by === "libretranslate").length;
+  const manualCount = translations.filter(
+    (t) => t.translated_by !== "" && t.translated_by !== "google" && t.translated_by !== "libretranslate" && t.translated_by !== "auto" && t.status !== "missing"
+  ).length;
+
   const filtered =
     filterTab === "all" ? translations : translations.filter((t) => t.status === filterTab);
 
@@ -1330,10 +1356,19 @@ function LanguagesTab() {
           )}
         </div>
 
+        {/* Service breakdown summary — C */}
+        {!transLoading && (googleCount > 0 || libreCount > 0 || manualCount > 0) && (
+          <div style={{ fontSize: 12, color: "#6b7280", padding: "6px 16px 4px", display: "flex", gap: 10, flexWrap: "wrap" as const }}>
+            {googleCount > 0 && <span>{googleCount} via Google</span>}
+            {libreCount > 0 && <span>{libreCount} via LibreTranslate</span>}
+            {manualCount > 0 && <span>{manualCount} manual</span>}
+          </div>
+        )}
+
         <div style={s.tableWrap}>
           <table style={{ ...s.table, tableLayout: "fixed" as const }}>
             <colgroup>
-              <col style={{ width: "16%" }} /><col style={{ width: "8%" }} /><col style={{ width: "22%" }} /><col style={{ width: "26%" }} /><col style={{ width: "11%" }} /><col style={{ width: "17%" }} />
+              <col style={{ width: "14%" }} /><col style={{ width: "7%" }} /><col style={{ width: "20%" }} /><col style={{ width: "22%" }} /><col style={{ width: "9%" }} /><col style={{ width: "10%" }} /><col style={{ width: "18%" }} />
             </colgroup>
             <thead>
               <tr style={s.thead}>
@@ -1341,15 +1376,16 @@ function LanguagesTab() {
                 <th style={s.th}>Category</th>
                 <th style={s.th}>English</th>
                 <th style={s.th}>Translation</th>
+                <th style={s.th}>Translated By</th>
                 <th style={s.th}>Status</th>
                 <th style={{ ...s.th, textAlign: "center" as const }}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {transLoading ? (
-                <tr><td colSpan={6} style={{ ...s.td, textAlign: "center", color: "#718096" }}>Loading translations…</td></tr>
+                <tr><td colSpan={7} style={{ ...s.td, textAlign: "center", color: "#718096" }}>Loading translations…</td></tr>
               ) : filtered.length === 0 ? (
-                <tr><td colSpan={6} style={{ ...s.td, textAlign: "center", color: "#718096", fontStyle: "italic" }}>No {filterTab === "all" ? "" : filterTab + " "}translations.</td></tr>
+                <tr><td colSpan={7} style={{ ...s.td, textAlign: "center", color: "#718096", fontStyle: "italic" }}>No {filterTab === "all" ? "" : filterTab + " "}translations.</td></tr>
               ) : filtered.map((t) => {
                 const isSaving = savingKeys.has(t.string_key);
                 const currentText = editedTexts[t.string_key] ?? t.translated_text;
@@ -1382,6 +1418,14 @@ function LanguagesTab() {
                       {t.rejection_reason && (
                         <div style={{ fontSize: 11, color: "#c53030", marginTop: 2 }}>Rejected: {t.rejection_reason}</div>
                       )}
+                      {(t.translated_by === "google" || t.translated_by === "libretranslate" || t.translated_by === "auto") && t.status === "draft" && (
+                        <div style={{ fontSize: 10, color: "#9ca3af", marginTop: 2, fontStyle: "italic" }}>
+                          Auto-translated · {new Date(t.updated_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
+                        </div>
+                      )}
+                    </td>
+                    <td style={s.td}>
+                      <TranslationSourcePill translatedBy={t.translated_by} />
                     </td>
                     <td style={s.td}>
                       <span style={statusBadgeStyle(t.status)}>{t.status}</span>

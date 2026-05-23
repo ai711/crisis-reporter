@@ -51,8 +51,10 @@ class Settings(BaseSettings):
     # Expo Push
     EXPO_PUSH_TOKEN: str = ""
 
-    # LibreTranslate
+    # Translation
     LIBRETRANSLATE_URL: str = "https://libretranslate.com"
+    GOOGLE_TRANSLATE_API_KEY: str = ""
+    TRANSLATION_PRIMARY: str = "google"  # "google" or "libretranslate"
 
     # Bootstrap admin — created once on first startup if no admin exists
     FIRST_ADMIN_EMAIL: str = ""
