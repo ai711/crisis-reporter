@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "8cdcae5d-9452-4d00-8bfe-e2f4a73e1ab1"
+      }
+    },
+    "android": {
+      "package": "com.i711.crisisreporter"
+    }
+  }
+}

@@ -58,3 +58,6 @@ yarn-debug.log*
 
 # Railway
 .railway/
+
+# Claude Code
+.claude/
