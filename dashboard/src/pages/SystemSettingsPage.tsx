@@ -395,50 +395,147 @@ function AddCountryModal({
   );
 }
 
-// ── Add Language Modal ─────────────────────────────────────────────────────────
+// ── ISO 639-1 Language List (FIX 5) ───────────────────────────────────────────
+
+const ISO_LANGUAGES = [
+  { code: "af", name: "Afrikaans" },
+  { code: "sq", name: "Albanian" },
+  { code: "am", name: "Amharic" },
+  { code: "ar", name: "Arabic" },
+  { code: "hy", name: "Armenian" },
+  { code: "az", name: "Azerbaijani" },
+  { code: "eu", name: "Basque" },
+  { code: "be", name: "Belarusian" },
+  { code: "bn", name: "Bengali" },
+  { code: "bs", name: "Bosnian" },
+  { code: "bg", name: "Bulgarian" },
+  { code: "ca", name: "Catalan" },
+  { code: "ceb", name: "Cebuano" },
+  { code: "zh", name: "Chinese" },
+  { code: "hr", name: "Croatian" },
+  { code: "cs", name: "Czech" },
+  { code: "da", name: "Danish" },
+  { code: "nl", name: "Dutch" },
+  { code: "en", name: "English" },
+  { code: "eo", name: "Esperanto" },
+  { code: "et", name: "Estonian" },
+  { code: "fi", name: "Finnish" },
+  { code: "fr", name: "French" },
+  { code: "gl", name: "Galician" },
+  { code: "ka", name: "Georgian" },
+  { code: "de", name: "German" },
+  { code: "el", name: "Greek" },
+  { code: "gu", name: "Gujarati" },
+  { code: "ht", name: "Haitian Creole" },
+  { code: "ha", name: "Hausa" },
+  { code: "he", name: "Hebrew" },
+  { code: "hi", name: "Hindi" },
+  { code: "hu", name: "Hungarian" },
+  { code: "is", name: "Icelandic" },
+  { code: "ig", name: "Igbo" },
+  { code: "id", name: "Indonesian" },
+  { code: "ga", name: "Irish" },
+  { code: "it", name: "Italian" },
+  { code: "ja", name: "Japanese" },
+  { code: "jv", name: "Javanese" },
+  { code: "kn", name: "Kannada" },
+  { code: "kk", name: "Kazakh" },
+  { code: "km", name: "Khmer" },
+  { code: "ko", name: "Korean" },
+  { code: "ku", name: "Kurdish" },
+  { code: "ky", name: "Kyrgyz" },
+  { code: "lo", name: "Lao" },
+  { code: "lv", name: "Latvian" },
+  { code: "lt", name: "Lithuanian" },
+  { code: "lb", name: "Luxembourgish" },
+  { code: "mk", name: "Macedonian" },
+  { code: "mg", name: "Malagasy" },
+  { code: "ms", name: "Malay" },
+  { code: "ml", name: "Malayalam" },
+  { code: "mt", name: "Maltese" },
+  { code: "mi", name: "Maori" },
+  { code: "mr", name: "Marathi" },
+  { code: "mn", name: "Mongolian" },
+  { code: "my", name: "Myanmar (Burmese)" },
+  { code: "ne", name: "Nepali" },
+  { code: "no", name: "Norwegian" },
+  { code: "or", name: "Odia" },
+  { code: "ps", name: "Pashto" },
+  { code: "fa", name: "Persian" },
+  { code: "pl", name: "Polish" },
+  { code: "pt", name: "Portuguese" },
+  { code: "pa", name: "Punjabi" },
+  { code: "ro", name: "Romanian" },
+  { code: "ru", name: "Russian" },
+  { code: "sm", name: "Samoan" },
+  { code: "sr", name: "Serbian" },
+  { code: "si", name: "Sinhala" },
+  { code: "sk", name: "Slovak" },
+  { code: "sl", name: "Slovenian" },
+  { code: "so", name: "Somali" },
+  { code: "es", name: "Spanish" },
+  { code: "su", name: "Sundanese" },
+  { code: "sw", name: "Swahili" },
+  { code: "sv", name: "Swedish" },
+  { code: "tg", name: "Tajik" },
+  { code: "ta", name: "Tamil" },
+  { code: "tt", name: "Tatar" },
+  { code: "te", name: "Telugu" },
+  { code: "th", name: "Thai" },
+  { code: "tr", name: "Turkish" },
+  { code: "tk", name: "Turkmen" },
+  { code: "uk", name: "Ukrainian" },
+  { code: "ur", name: "Urdu" },
+  { code: "ug", name: "Uyghur" },
+  { code: "uz", name: "Uzbek" },
+  { code: "vi", name: "Vietnamese" },
+  { code: "cy", name: "Welsh" },
+  { code: "xh", name: "Xhosa" },
+  { code: "yi", name: "Yiddish" },
+  { code: "yo", name: "Yoruba" },
+  { code: "zu", name: "Zulu" },
+];
+
+// ── Add Language Modal (FIX 5) ─────────────────────────────────────────────────
 
 function AddLanguageModal({
   onClose,
   onSuccess,
+  existingCodes,
 }: {
   onClose: () => void;
   onSuccess: () => void;
+  existingCodes: string[];
 }) {
-  const [name, setName] = useState("");
-  const [code, setCode] = useState("");
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [search, setSearch] = useState("");
+  const [selected, setSelected] = useState<{ code: string; name: string } | null>(null);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
   const [submitError, setSubmitError] = useState("");
-  const [submitting, setSubmitting] = useState(false);
+  const [addingLanguage, setAddingLanguage] = useState(false);
 
-  function validate() {
-    const e: Record<string, string> = {};
-    if (!name.trim()) e.name = "Language name is required";
-    if (!code.trim()) e.code = "Language code is required";
-    else if (!/^[a-z]{2,5}$/.test(code.trim())) e.code = "Use 2–5 lowercase letters (e.g. sw, ht)";
-    setErrors(e);
-    return Object.keys(e).length === 0;
-  }
+  const available = ISO_LANGUAGES.filter(
+    (l) =>
+      !existingCodes.includes(l.code) &&
+      (l.name.toLowerCase().includes(search.toLowerCase()) ||
+        l.code.toLowerCase().includes(search.toLowerCase()))
+  );
 
   async function handleSubmit(ev: React.FormEvent) {
     ev.preventDefault();
-    if (!validate()) return;
+    if (!selected) { setSubmitError("Please select a language from the list."); return; }
     setSubmitError("");
-    setSubmitting(true);
+    setAddingLanguage(true);
     try {
       await api.post("/api/languages", {
-        name: name.trim(),
-        code: code.trim().toLowerCase(),
+        name: selected.name,
+        code: selected.code,
       });
       onSuccess();
     } catch {
       setSubmitError("Failed to add language. The code may already exist.");
     } finally {
-      setSubmitting(false);
+      setAddingLanguage(false);
     }
-  }
-
-  function clearErr(key: string) {
-    setErrors((p) => { const n = { ...p }; delete n[key]; return n; });
   }
 
   return (
@@ -449,35 +546,111 @@ function AddLanguageModal({
           <button style={s.closeBtn} onClick={onClose}>✕</button>
         </div>
         <form onSubmit={handleSubmit} style={s.form}>
-          <Field label="Language Name" required error={errors.name}>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => { setName(e.target.value); clearErr("name"); }}
-              placeholder="e.g. Swahili"
-              style={{ ...s.input, borderColor: errors.name ? "#e53e3e" : "#e2e8f0" }}
-            />
-          </Field>
-          <Field label="Language Code" required error={errors.code}>
-            <input
-              type="text"
-              value={code}
-              onChange={(e) => { setCode(e.target.value); clearErr("code"); }}
-              placeholder="e.g. sw"
-              style={{ ...s.input, borderColor: errors.code ? "#e53e3e" : "#e2e8f0" }}
-            />
+          <Field label="Language" required>
+            {selected ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 4px" }}>
+                <span style={{ display: "inline-block", padding: "3px 10px", borderRadius: 5, background: "#f0f4f8", color: "#4a5568", fontSize: 12, fontWeight: 700, letterSpacing: 0.5, fontFamily: "monospace" }}>
+                  {selected.code}
+                </span>
+                <span style={{ fontSize: 14, fontWeight: 600, color: "#1A2B4A", flex: 1 }}>{selected.name}</span>
+                <button
+                  type="button"
+                  onClick={() => { setSelected(null); setSearch(""); }}
+                  style={{ background: "none", border: "none", color: "#a0aec0", cursor: "pointer", fontSize: 18, lineHeight: 1, padding: "0 4px" }}
+                  title="Clear selection"
+                >
+                  ✕
+                </button>
+              </div>
+            ) : (
+              <div style={{ position: "relative" }}>
+                <input
+                  type="text"
+                  value={search}
+                  onChange={(e) => { setSearch(e.target.value); setDropdownOpen(true); }}
+                  onFocus={() => setDropdownOpen(true)}
+                  onBlur={() => setTimeout(() => setDropdownOpen(false), 150)}
+                  placeholder="Search by name or code…"
+                  style={{ padding: "10px 12px", borderRadius: 7, border: "1.5px solid #e2e8f0", fontSize: 14, color: "#1A2B4A", outline: "none", background: "#fff", width: "100%", boxSizing: "border-box" as const }}
+                  autoComplete="off"
+                />
+                {dropdownOpen && (
+                  <div style={{
+                    position: "absolute",
+                    top: "calc(100% + 4px)",
+                    left: 0,
+                    right: 0,
+                    background: "#fff",
+                    border: "1.5px solid #e2e8f0",
+                    borderRadius: 7,
+                    boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
+                    maxHeight: 220,
+                    overflowY: "auto",
+                    zIndex: 100,
+                  }}>
+                    {available.length === 0 ? (
+                      <div style={{ padding: "12px 14px", color: "#a0aec0", fontSize: 13, fontStyle: "italic" }}>
+                        {search ? "No matching languages." : "All available languages are already added."}
+                      </div>
+                    ) : (
+                      available.map((lang) => (
+                        <button
+                          key={lang.code}
+                          type="button"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            setSelected(lang);
+                            setSearch("");
+                            setDropdownOpen(false);
+                          }}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 10,
+                            width: "100%",
+                            padding: "9px 14px",
+                            background: "none",
+                            border: "none",
+                            borderBottom: "1px solid #f0f4f8",
+                            cursor: "pointer",
+                            textAlign: "left" as const,
+                            fontSize: 13,
+                            color: "#1A2B4A",
+                          }}
+                        >
+                          <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: 4, background: "#f0f4f8", color: "#4a5568", fontSize: 11, fontWeight: 700, fontFamily: "monospace", minWidth: 32, textAlign: "center" as const }}>
+                            {lang.code}
+                          </span>
+                          <span>{lang.name}</span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </Field>
           {submitError && <div style={s.submitError}>{submitError}</div>}
           <div style={s.modalFooter}>
-            <button type="button" style={s.cancelBtn} onClick={onClose}>Cancel</button>
+            <button type="button" style={{ ...s.cancelBtn, opacity: addingLanguage ? 0.6 : 1 }} onClick={onClose} disabled={addingLanguage}>Cancel</button>
             <button
               type="submit"
-              style={{ ...s.submitBtn, opacity: submitting ? 0.7 : 1 }}
-              disabled={submitting}
+              style={{ ...s.submitBtn, opacity: addingLanguage || !selected ? 0.7 : 1 }}
+              disabled={addingLanguage || !selected}
             >
-              {submitting ? "Adding…" : "Add Language"}
+              {addingLanguage ? (
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                  <div style={{ width: 10, height: 10, border: "2px solid #fff", borderTopColor: "transparent", borderRadius: "50%", animation: "cr-spin 0.8s linear infinite" }} />
+                  Adding...
+                </span>
+              ) : "Add Language"}
             </button>
           </div>
+          {addingLanguage && (
+            <p style={{ fontSize: 12, color: "#718096", textAlign: "center", margin: "8px 0 0", padding: "0 24px 16px" }}>
+              Adding language and setting up translation keys...
+            </p>
+          )}
         </form>
       </div>
     </div>
@@ -717,6 +890,15 @@ function LanguagesTab() {
   const [showPublishConfirm, setShowPublishConfirm] = useState(false);
   const [isPublishingApi, setIsPublishingApi] = useState(false);
   const [publishMsg, setPublishMsg] = useState<{ text: string; type: "success" | "error" } | null>(null);
+  const [approvingAllDraft, setApprovingAllDraft] = useState(false);
+  const [translateStartTime, setTranslateStartTime] = useState<number | null>(null);
+  const [translationsLoadingImmediate, setTranslationsLoadingImmediate] = useState(false);
+  const [approvingRowId, setApprovingRowId] = useState<string | null>(null);
+  const [activatingLang, setActivatingLang] = useState<string | null>(null);
+  const [langPage, setLangPage] = useState(1);
+  const [transPage, setTransPage] = useState(1);
+  const [regeneratingRowId, setRegeneratingRowId] = useState<string | null>(null);
+  const [regeneratingAllDraft, setRegeneratingAllDraft] = useState(false);
 
   function showBanner(msg: string, ok = true) {
     setBanner({ msg, ok });
@@ -778,16 +960,20 @@ function LanguagesTab() {
     return () => window.removeEventListener("beforeunload", handleUnload);
   }, [selectedLang]);
 
-  // Update translateProgress whenever queueStatus refreshes during active translation
+  // FIX 8: clear immediate loading indicator when real loading completes
   useEffect(() => {
-    if (!autoTranslatingLang || !queueStatus) return;
-    const entry = queueStatus.by_language.find((l) => l.lang_code === autoTranslatingLang);
-    const remaining = (entry?.draft_count ?? 0) + (entry?.failed_count ?? 0);
-    // totalActive is computed in derived-data below; captured safely in closure
-    setTranslateProgress((prev) =>
-      prev !== null ? { completed: Math.max(0, prev.total - remaining), total: prev.total } : null
-    );
-  }, [queueStatus]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!transLoading) setTranslationsLoadingImmediate(false);
+  }, [transLoading]);
+
+  // FIX 12: reset language table page when language list changes
+  useEffect(() => {
+    setLangPage(1);
+  }, [languages.length]);
+
+  // FIX 13: reset translation table page when language or tab changes
+  useEffect(() => {
+    setTransPage(1);
+  }, [selectedLang, filterTab]);
 
   // ── Queries ──────────────────────────────────────────────────────────────
 
@@ -823,6 +1009,35 @@ function LanguagesTab() {
     },
     refetchInterval: autoTranslatingLang ? 10000 : 30000,
   });
+
+  // Update translateProgress whenever queueStatus refreshes during active translation
+  useEffect(() => {
+    if (!autoTranslatingLang || !queueStatus) return;
+    const entry = queueStatus.by_language.find((l) => l.lang_code === autoTranslatingLang);
+    const draftCount = (entry?.draft_count ?? 0);
+    const failedCount = (entry?.failed_count ?? 0);
+    const completed = draftCount + failedCount;
+    setTranslateProgress((prev) =>
+      prev !== null ? { completed, total: prev.total } : null
+    );
+    const total = translateProgress?.total ?? 0;
+    // FIX 7: stall check — trigger completion if stuck at total-1 for > 60s
+    const elapsed = Date.now() - (translateStartTime ?? Date.now());
+    const isStalled = elapsed > 60000 && total > 0 && completed === total - 1;
+    if ((completed >= total && total > 0) || isStalled) {
+      const langName = languages.find((l) => l.code === autoTranslatingLang)?.name ?? autoTranslatingLang.toUpperCase();
+      const msg = isStalled
+        ? `Auto-translation complete with ${total - completed} string(s) that could not be translated. Review the queue.`
+        : `Auto-translation complete for ${langName}. Review the queue before publishing.`;
+      setTimeout(() => {
+        setAutoTranslatingLang(null);
+        setTranslateProgress(null);
+        setTranslateMsg(msg);
+        setTranslateStartTime(null);
+        setTimeout(() => setTranslateMsg(''), 8000);
+      }, 1500);
+    }
+  }, [queueStatus]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const { data: auditData } = useQuery({
     queryKey: ["translation-audit", auditPage],
@@ -861,14 +1076,15 @@ function LanguagesTab() {
   // Per-language translation status counts for the Translation Status pills (FIX 2)
   const statusByLang = Object.fromEntries(
     languages.map((lang) => {
-      let missing = 0, draft = 0, published = 0;
+      let missing = 0, draft = 0, approved = 0, published = 0;
       for (const key of activeKeys) {
         const st = key.translations[lang.code];
         if (!st || st === "missing" || st === "retired") missing++;
         else if (st === "draft" || st === "failed") draft++;
-        else if (st === "approved" || st === "published") published++;
+        else if (st === "approved") approved++;
+        else if (st === "published") published++;
       }
-      return [lang.code, { missing, draft, published }];
+      return [lang.code, { missing, draft, approved, published }];
     })
   );
 
@@ -888,6 +1104,16 @@ function LanguagesTab() {
 
   const filtered =
     filterTab === "all" ? translations : translations.filter((t) => t.status === filterTab);
+
+  // FIX 12: language table pagination
+  const LANG_PAGE_SIZE = 10;
+  const totalLangPages = Math.ceil((languages.length || 1) / LANG_PAGE_SIZE);
+  const pagedLanguages = languages.slice((langPage - 1) * LANG_PAGE_SIZE, langPage * LANG_PAGE_SIZE);
+
+  // FIX 13: edit translations pagination
+  const TRANS_PAGE_SIZE = 50;
+  const totalTransPages = Math.ceil((filtered.length || 1) / TRANS_PAGE_SIZE);
+  const pagedTrans = filtered.slice((transPage - 1) * TRANS_PAGE_SIZE, transPage * TRANS_PAGE_SIZE);
 
   const selectedLangData = languages.find((l) => l.code === selectedLang);
   const lockHeld = lockInfo?.locked === true;
@@ -914,6 +1140,7 @@ function LanguagesTab() {
     );
     if (!confirmed) return;
     setAutoTranslatingLang(langCode);
+    setTranslateStartTime(Date.now());
     try {
       await api.post<{ status: string; language_code: string }>(
         "/api/translations/auto-translate",
@@ -922,16 +1149,26 @@ function LanguagesTab() {
       queryClient.invalidateQueries({ queryKey: ["translations", langCode] });
       queryClient.invalidateQueries({ queryKey: ["string-keys"] });
       queryClient.invalidateQueries({ queryKey: ["queue-status-by-lang"] });
-      // Initialise progress banner — total is updated each queue-status poll
-      setTranslateProgress({ completed: 0, total: totalActive });
+      // FIX 9: initialise progress with actual untranslated count
+      const alreadyTranslated = (langCode === selectedLang ? translations : []).filter(
+        (t) => t.status === "draft" || t.status === "approved" || t.status === "published"
+      ).length;
+      const missingForLang = totalActive > 0 ? totalActive - alreadyTranslated : 1;
+      setTranslateProgress({ completed: 0, total: Math.max(missingForLang, 1) });
       setTranslateMsg(`Auto-translation started for ${langName}. Check the Review Queue tab for progress.`);
       setTimeout(() => setTranslateMsg(""), 5000);
+      // FIX 3: scroll to progress banner after API call succeeds
+      setTimeout(() => {
+        const progressEl = document.getElementById('translate-progress-banner');
+        if (progressEl) progressEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 100);
       // autoTranslatingLang intentionally NOT cleared here — progress banner
       // stays until user dismisses with ×
     } catch {
       showBanner("Auto-translate failed — check LibreTranslate configuration.", false);
       setAutoTranslatingLang(null);
       setTranslateProgress(null);
+      setTranslateStartTime(null);
     }
   }
 
@@ -999,6 +1236,7 @@ function LanguagesTab() {
 
   async function handleApprove(translationId: string) {
     if (!canEdit) { showBanner("Acquire edit lock first.", false); return; }
+    setApprovingRowId(translationId);
     try {
       await api.patch(`/api/translations/${translationId}/approve`);
       queryClient.invalidateQueries({ queryKey: ["translations", selectedLang] });
@@ -1007,6 +1245,8 @@ function LanguagesTab() {
       queryClient.invalidateQueries({ queryKey: ["translation-audit"] });
     } catch {
       showBanner("Failed to approve translation.", false);
+    } finally {
+      setApprovingRowId(null);
     }
   }
 
@@ -1030,20 +1270,27 @@ function LanguagesTab() {
   }
 
   async function handleApproveAll() {
-    const draftIds = translations.filter((t) => t.status === "draft" && t.id).map((t) => t.id);
-    if (draftIds.length === 0) { showBanner("No draft translations to approve."); return; }
+    const draftCount = translations.filter((t) => t.status === "draft" && t.id).length;
+    if (draftCount === 0) { showBanner("No draft translations to approve."); return; }
     if (!canEdit) { showBanner("Acquire edit lock first.", false); return; }
-    let ok = 0;
-    for (const id of draftIds) {
-      try { await api.patch(`/api/translations/${id}/approve`); ok++; } catch { /* continue */ }
+    setApprovingAllDraft(true);
+    try {
+      const res = await api.post<{ approved_count: number }>("/api/translations/approve-all", {
+        language_code: selectedLang,
+      });
+      queryClient.invalidateQueries({ queryKey: ["translations", selectedLang] });
+      queryClient.invalidateQueries({ queryKey: ["string-keys"] });
+      queryClient.invalidateQueries({ queryKey: ["queue-status-by-lang"] });
+      queryClient.invalidateQueries({ queryKey: ["translation-audit"] });
+      showBanner(`Approved ${res.data.approved_count} translations.`);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      setHighlightedLang(selectedLang);
+      setTimeout(() => setHighlightedLang(null), 3000);
+    } catch {
+      showBanner("Failed to approve all translations.", false);
+    } finally {
+      setApprovingAllDraft(false);
     }
-    queryClient.invalidateQueries({ queryKey: ["translations", selectedLang] });
-    queryClient.invalidateQueries({ queryKey: ["string-keys"] });
-    queryClient.invalidateQueries({ queryKey: ["queue-status-by-lang"] });
-    showBanner(`Approved ${ok} / ${draftIds.length} translations.`);
-    window.scrollTo({ top: 0, behavior: "smooth" });
-    setHighlightedLang(selectedLang);
-    setTimeout(() => setHighlightedLang(null), 3000);
   }
 
   async function handleDeprecate() {
@@ -1099,6 +1346,18 @@ function LanguagesTab() {
     }
   }
 
+  async function handleActivateLang(code: string) {
+    setActivatingLang(code);
+    try {
+      await api.patch(`/api/languages/${code}/status`, { status: "active" });
+      queryClient.invalidateQueries({ queryKey: ["languages"] });
+    } catch {
+      showBanner("Failed to activate.", false);
+    } finally {
+      setActivatingLang(null);
+    }
+  }
+
   // ── Render ───────────────────────────────────────────────────────────────
 
   return (
@@ -1150,8 +1409,8 @@ function LanguagesTab() {
       </div>
 
       {autoTranslatingLang ? (
-        /* ── Auto-translate live progress banner (FIX 3) ─────────────────── */
-        <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 6, padding: "12px 16px" }}>
+        /* ── Auto-translate live progress banner ─────────────────────────── */
+        <div id="translate-progress-banner" style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 6, padding: "12px 16px" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <div style={{ width: 14, height: 14, border: "2px solid #0468b1", borderTopColor: "transparent", borderRadius: "50%", animation: "cr-spin 0.8s linear infinite", flexShrink: 0 }} />
@@ -1252,7 +1511,7 @@ function LanguagesTab() {
             <tbody>
               {langsLoading ? (
                 <tr><td colSpan={5} style={{ ...s.td, textAlign: "center", color: "#718096" }}>Loading…</td></tr>
-              ) : languages.map((lang) => {
+              ) : pagedLanguages.map((lang) => {
                 const pct = coverageByLang[lang.code] ?? 0;
                 const langQEntry = queueStatus?.by_language.find((l) => l.lang_code === lang.code);
                 const pending = (langQEntry?.draft_count ?? 0) + (langQEntry?.failed_count ?? 0);
@@ -1287,12 +1546,22 @@ function LanguagesTab() {
                     <td style={{ ...s.td, textAlign: "right" as const }}>
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 2, flexWrap: "wrap" as const }}>
                         {(() => {
+                          // FIX 5: English is the source language — show Default pill only
+                          if (lang.code === "en") {
+                            return (
+                              <span style={{ display: "inline-flex", padding: "2px 8px", borderRadius: 9999, fontSize: 11, fontWeight: 600, background: "#dbeafe", color: "#1e40af" }}>
+                                Default · Source Language
+                              </span>
+                            );
+                          }
                           const st = statusByLang[lang.code];
                           if (!st) return <span style={{ fontSize: 12, color: "#a0aec0" }}>—</span>;
-                          const allPublished = st.missing === 0 && st.draft === 0 && st.published > 0;
+                          const hasAny = st.missing > 0 || st.draft > 0 || st.approved > 0 || st.published > 0;
+                          if (!hasAny) return <span style={{ fontSize: 12, color: "#a0aec0" }}>—</span>;
                           return (
                             <>
-                              {!allPublished && st.missing > 0 && (
+                              {/* FIX 6: order — Missing → Draft → Approved → Published */}
+                              {st.missing > 0 && (
                                 <span style={{ display: "inline-flex", padding: "2px 8px", borderRadius: 9999, fontSize: 11, fontWeight: 600, marginRight: 4, background: "#fee2e2", color: "#991b1b" }}>
                                   {st.missing} Missing
                                 </span>
@@ -1302,13 +1571,15 @@ function LanguagesTab() {
                                   {st.draft} Draft
                                 </span>
                               )}
+                              {st.approved > 0 && (
+                                <span style={{ display: "inline-flex", padding: "2px 8px", borderRadius: 9999, fontSize: 11, fontWeight: 600, marginRight: 4, background: "#e0e7ff", color: "#3730a3" }}>
+                                  {st.approved} Approved
+                                </span>
+                              )}
                               {st.published > 0 && (
                                 <span style={{ display: "inline-flex", padding: "2px 8px", borderRadius: 9999, fontSize: 11, fontWeight: 600, marginRight: 4, background: "#dcfce7", color: "#166534" }}>
                                   {st.published} Published
                                 </span>
-                              )}
-                              {st.missing === 0 && st.draft === 0 && st.published === 0 && (
-                                <span style={{ fontSize: 12, color: "#a0aec0" }}>—</span>
                               )}
                             </>
                           );
@@ -1317,13 +1588,22 @@ function LanguagesTab() {
                     </td>
                     <td style={{ ...s.td, textAlign: "right" as const }}>
                       <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", flexWrap: "wrap" as const }}>
-                        {lang.code !== "en" && (
-                          autoTranslatingLang === lang.code ? (
-                            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                              <div style={{ width: 14, height: 14, border: "2px solid #fcd34d", borderTopColor: "transparent", borderRadius: "50%", animation: "cr-spin 0.8s linear infinite" }} />
-                              <span style={{ fontSize: 12, color: "#6b7280" }}>Translating...</span>
-                            </div>
-                          ) : (
+                        {lang.code !== "en" && (() => {
+                          if (autoTranslatingLang === lang.code) {
+                            return (
+                              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                <div style={{ width: 14, height: 14, border: "2px solid #fcd34d", borderTopColor: "transparent", borderRadius: "50%", animation: "cr-spin 0.8s linear infinite" }} />
+                                <span style={{ fontSize: 12, color: "#6b7280" }}>Translating...</span>
+                              </div>
+                            );
+                          }
+                          // FIX 4: only show Auto-translate when language has missing/draft translations
+                          const st = statusByLang[lang.code];
+                          const hasMissing = (st?.missing ?? 0) > 0 || (st?.draft ?? 0) > 0;
+                          if (!hasMissing) {
+                            return <span style={{ color: "#9ca3af", fontSize: 12 }}>Up to date</span>;
+                          }
+                          return (
                             <button
                               style={{ ...sL.actionBtn, background: "#fffbeb", color: "#d97706", border: "1px solid #fcd34d" }}
                               onClick={() => handleAutoTranslate(lang.code)}
@@ -1331,8 +1611,8 @@ function LanguagesTab() {
                             >
                               Auto-translate
                             </button>
-                          )
-                        )}
+                          );
+                        })()}
                         {canPublish && (
                           <button
                             style={{ ...sL.actionBtn, background: "#d4edda", color: "#155724", border: "1px solid #c3e6cb" }}
@@ -1368,17 +1648,19 @@ function LanguagesTab() {
                           </>
                         )}
                         {isAdmin && !lang.is_protected && lang.status === "pending" && (
-                          <button
-                            style={{ ...sL.actionBtn, background: "#d4edda", color: "#155724", border: "1px solid #c3e6cb" }}
-                            onClick={async () => {
-                              try {
-                                await api.patch(`/api/languages/${lang.code}/status`, { status: "active" });
-                                queryClient.invalidateQueries({ queryKey: ["languages"] });
-                              } catch { showBanner("Failed to activate.", false); }
-                            }}
-                          >
-                            Activate
-                          </button>
+                          activatingLang === lang.code ? (
+                            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                              <div style={{ width: 12, height: 12, border: "2px solid #155724", borderTopColor: "transparent", borderRadius: "50%", animation: "cr-spin 0.8s linear infinite" }} />
+                              <span style={{ fontSize: 12, color: "#6b7280" }}>Activating...</span>
+                            </div>
+                          ) : (
+                            <button
+                              style={{ ...sL.actionBtn, background: "#d4edda", color: "#155724", border: "1px solid #c3e6cb" }}
+                              onClick={() => handleActivateLang(lang.code)}
+                            >
+                              Activate
+                            </button>
+                          )
                         )}
                       </div>
                     </td>
@@ -1388,11 +1670,31 @@ function LanguagesTab() {
             </tbody>
           </table>
         </div>
+        {/* FIX 12: Language table pagination */}
+        {totalLangPages > 1 && (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8, padding: "12px 16px", borderTop: "1px solid #f0f4f8" }}>
+            <button
+              onClick={() => setLangPage((p) => Math.max(1, p - 1))}
+              disabled={langPage === 1}
+              style={{ outline: "1px solid #e2e8f0", border: "none", borderRadius: 4, padding: "4px 12px", fontSize: 13, cursor: langPage === 1 ? "default" : "pointer", opacity: langPage === 1 ? 0.5 : 1, background: "#fff" }}
+            >
+              Previous
+            </button>
+            <span style={{ fontSize: 13, color: "#4a5568" }}>Page {langPage} of {totalLangPages}</span>
+            <button
+              onClick={() => setLangPage((p) => Math.min(totalLangPages, p + 1))}
+              disabled={langPage === totalLangPages}
+              style={{ outline: "1px solid #e2e8f0", border: "none", borderRadius: 4, padding: "4px 12px", fontSize: 13, cursor: langPage === totalLangPages ? "default" : "pointer", opacity: langPage === totalLangPages ? 0.5 : 1, background: "#fff" }}
+            >
+              Next
+            </button>
+          </div>
+        )}
       </div>
 
       {/* ── Translation Editor ───────────────────────────────────────────── */}
       <div style={{ ...sL.sectionCard, position: "relative" }}>
-        {(lockLoading || transLoading) && (
+        {(lockLoading || transLoading || translationsLoadingImmediate) && (
           <div style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", background: "rgba(255,255,255,0.8)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10, borderRadius: 12 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
               <div style={{ width: 20, height: 20, border: "3px solid #0468b1", borderTopColor: "transparent", borderRadius: "50%", animation: "cr-spin 0.8s linear infinite" }} />
@@ -1404,7 +1706,10 @@ function LanguagesTab() {
           <span style={sL.sectionTitle}>Edit Translations</span>
           <select
             value={selectedLang}
-            onChange={(e) => handleLangChange(e.target.value)}
+            onChange={(e) => {
+              setTranslationsLoadingImmediate(true);
+              handleLangChange(e.target.value);
+            }}
             style={{ ...s.select, minWidth: 200 }}
           >
             {languages.map((l) => (
@@ -1451,9 +1756,48 @@ function LanguagesTab() {
           ))}
           <div style={{ flex: 1 }} />
           {canEdit && counts.draft > 0 && (
-            <button style={{ ...sL.actionBtn, margin: "6px 8px", background: "#d4edda", color: "#155724", border: "1px solid #c3e6cb" }} onClick={handleApproveAll}>
-              Approve all Draft ({counts.draft})
-            </button>
+            <>
+              <button
+                style={{ ...sL.actionBtn, margin: "6px 8px", background: "#d4edda", color: "#155724", border: "1px solid #c3e6cb", opacity: approvingAllDraft ? 0.7 : 1 }}
+                onClick={handleApproveAll}
+                disabled={approvingAllDraft}
+              >
+                {approvingAllDraft ? (
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                    <div style={{ width: 10, height: 10, border: "2px solid #155724", borderTopColor: "transparent", borderRadius: "50%", animation: "cr-spin 0.8s linear infinite" }} />
+                    Approving...
+                  </span>
+                ) : `Approve all Draft (${counts.draft})`}
+              </button>
+              {/* FIX 14B: Regenerate All Draft button on Draft tab */}
+              {filterTab === "draft" && (
+                <button
+                  style={{ ...sL.actionBtn, margin: "6px 8px", background: "#f0f4f8", color: "#4a5568", border: "1px solid #e2e8f0", opacity: regeneratingAllDraft ? 0.7 : 1 }}
+                  onClick={async () => {
+                    if (!window.confirm(`Regenerate all ${counts.draft} draft translations for ${selectedLangData?.name ?? selectedLang}? This will overwrite all current drafts with fresh translations.`)) return;
+                    setRegeneratingAllDraft(true);
+                    try {
+                      await api.post('/api/translations/regenerate-all-draft', { language_code: selectedLang });
+                      queryClient.invalidateQueries({ queryKey: ['translations', selectedLang] });
+                      queryClient.invalidateQueries({ queryKey: ['string-keys'] });
+                      showBanner('All draft translations are being regenerated.');
+                    } catch {
+                      showBanner('Failed to regenerate draft translations.', false);
+                    } finally {
+                      setRegeneratingAllDraft(false);
+                    }
+                  }}
+                  disabled={regeneratingAllDraft}
+                >
+                  {regeneratingAllDraft ? (
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                      <div style={{ width: 10, height: 10, border: "2px solid #4a5568", borderTopColor: "transparent", borderRadius: "50%", animation: "cr-spin 0.8s linear infinite" }} />
+                      Regenerating...
+                    </span>
+                  ) : "Regenerate All Draft"}
+                </button>
+              )}
+            </>
           )}
           {isSuperadmin && (
             <button
@@ -1497,7 +1841,7 @@ function LanguagesTab() {
                 <tr><td colSpan={7} style={{ ...s.td, textAlign: "center", color: "#718096" }}>Loading translations…</td></tr>
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={7} style={{ ...s.td, textAlign: "center", color: "#718096", fontStyle: "italic" }}>No {filterTab === "all" ? "" : filterTab + " "}translations.</td></tr>
-              ) : filtered.map((t) => {
+              ) : pagedTrans.map((t) => {
                 const isSaving = savingKeys.has(t.string_key);
                 const currentText = editedTexts[t.string_key] ?? t.translated_text;
                 const editable = canEdit && t.status !== "published";
@@ -1544,14 +1888,48 @@ function LanguagesTab() {
                     <td style={{ ...s.td, textAlign: "center" as const }}>
                       <div style={{ display: "flex", gap: 4, justifyContent: "center", flexWrap: "wrap" as const }}>
                         {canApprove && (
-                          <button style={{ padding: "4px 10px", background: "#d4edda", color: "#155724", border: "1px solid #c3e6cb", borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: "pointer" }} onClick={() => handleApprove(t.id)}>
-                            Approve
-                          </button>
+                          approvingRowId === t.id ? (
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 10px", fontSize: 11, color: "#718096" }}>
+                              <div style={{ width: 10, height: 10, border: "2px solid #718096", borderTopColor: "transparent", borderRadius: "50%", animation: "cr-spin 0.8s linear infinite" }} />
+                              Approving...
+                            </span>
+                          ) : (
+                            <button style={{ padding: "4px 10px", background: "#d4edda", color: "#155724", border: "1px solid #c3e6cb", borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: "pointer" }} onClick={() => handleApprove(t.id)}>
+                              Approve
+                            </button>
+                          )
                         )}
                         {canReject && (
                           <button style={{ padding: "4px 10px", background: "#fff5f5", color: "#c53030", border: "1px solid #fc8181", borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: "pointer" }} onClick={() => { setRejectModal({ id: t.id, key: t.string_key }); setRejectReason(""); }}>
                             Reject
                           </button>
+                        )}
+                        {/* FIX 14A: Row-wise regenerate button for draft translations */}
+                        {t.status === "draft" && !!t.id && (
+                          regeneratingRowId === t.id ? (
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 6px", fontSize: 11, color: "#718096" }}>
+                              <div style={{ width: 10, height: 10, border: "2px solid #718096", borderTopColor: "transparent", borderRadius: "50%", animation: "cr-spin 0.8s linear infinite" }} />
+                            </span>
+                          ) : (
+                            <button
+                              title="Regenerate translation"
+                              style={{ padding: "4px 8px", background: "#f0f4f8", color: "#4a5568", border: "1px solid #e2e8f0", borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+                              onClick={async () => {
+                                if (!window.confirm(`Regenerate translation for "${t.string_key}"? This will overwrite the current draft.`)) return;
+                                setRegeneratingRowId(t.id);
+                                try {
+                                  await api.post('/api/translations/regenerate-single', { translation_id: t.id, language_code: selectedLang });
+                                  queryClient.invalidateQueries({ queryKey: ['translations', selectedLang] });
+                                } catch {
+                                  showBanner('Failed to regenerate translation.', false);
+                                } finally {
+                                  setRegeneratingRowId(null);
+                                }
+                              }}
+                            >
+                              ↻
+                            </button>
+                          )
                         )}
                       </div>
                     </td>
@@ -1561,6 +1939,26 @@ function LanguagesTab() {
             </tbody>
           </table>
         </div>
+        {/* FIX 13: Edit Translations pagination */}
+        {totalTransPages > 1 && (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8, padding: "12px 16px", borderTop: "1px solid #f0f4f8" }}>
+            <button
+              onClick={() => setTransPage((p) => Math.max(1, p - 1))}
+              disabled={transPage === 1}
+              style={{ outline: "1px solid #e2e8f0", border: "none", borderRadius: 4, padding: "4px 12px", fontSize: 13, cursor: transPage === 1 ? "default" : "pointer", opacity: transPage === 1 ? 0.5 : 1, background: "#fff" }}
+            >
+              Previous
+            </button>
+            <span style={{ fontSize: 13, color: "#4a5568" }}>Page {transPage} of {totalTransPages}</span>
+            <button
+              onClick={() => setTransPage((p) => Math.min(totalTransPages, p + 1))}
+              disabled={transPage === totalTransPages}
+              style={{ outline: "1px solid #e2e8f0", border: "none", borderRadius: 4, padding: "4px 12px", fontSize: 13, cursor: transPage === totalTransPages ? "default" : "pointer", opacity: transPage === totalTransPages ? 0.5 : 1, background: "#fff" }}
+            >
+              Next
+            </button>
+          </div>
+        )}
       </div>
 
       {/* ── Publish History ──────────────────────────────────────────────── */}
@@ -1742,6 +2140,7 @@ function LanguagesTab() {
             setShowAddLanguageModal(false);
             queryClient.invalidateQueries({ queryKey: ["languages"] });
           }}
+          existingCodes={languages.map((l) => l.code)}
         />
       )}
 

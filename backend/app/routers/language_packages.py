@@ -1495,6 +1495,117 @@ async def create_translation(
     )
 
 
+# ── Regenerate endpoints ──────────────────────────────────────────────────────
+
+class RegenerateSingleRequest(BaseModel):
+    translation_id: str
+    language_code: str
+
+
+class RegenerateAllDraftRequest(BaseModel):
+    language_code: str
+
+
+@translations_router.post("/regenerate-single", response_model=TranslationOut)
+async def regenerate_single_translation(
+    body: RegenerateSingleRequest,
+    db: AsyncSession = Depends(get_db),
+    _=Depends(get_current_dashboard_user),
+) -> TranslationOut:
+    """Retranslate a single draft translation using the translation service."""
+    result = await db.execute(
+        select(Translation).where(Translation.id == body.translation_id)
+    )
+    translation = result.scalar_one_or_none()
+    if not translation:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Translation not found")
+
+    sk_result = await db.execute(
+        select(StringKey).where(StringKey.id == translation.string_key_id)
+    )
+    sk = sk_result.scalar_one_or_none()
+    if not sk:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="String key not found")
+
+    try:
+        t_text, service_used = await translate_text(sk.english_text, body.language_code)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Translation service error: {exc}",
+        )
+
+    translation.translated_text = t_text
+    translation.status = "draft"
+    translation.translated_by = service_used
+
+    await db.commit()
+    await db.refresh(translation)
+
+    return TranslationOut(
+        id=str(translation.id),
+        string_key=sk.key,
+        english_text=sk.english_text,
+        translated_text=translation.translated_text,
+        status=translation.status,
+        translated_by=translation.translated_by,
+        reviewed_by=translation.reviewed_by,
+        rejected_at=translation.rejected_at,
+        rejection_reason=translation.rejection_reason,
+        created_at=translation.created_at,
+        updated_at=translation.updated_at,
+    )
+
+
+@translations_router.post("/regenerate-all-draft")
+async def regenerate_all_draft_translations(
+    body: RegenerateAllDraftRequest,
+    db: AsyncSession = Depends(get_db),
+    _=Depends(get_current_dashboard_user),
+) -> dict:
+    """Retranslate all draft translations for a language in batches."""
+    result = await db.execute(
+        select(Translation).where(
+            Translation.language_code == body.language_code,
+            Translation.status == "draft",
+        )
+    )
+    drafts = result.scalars().all()
+
+    if not drafts:
+        return {"regenerated_count": 0, "language_code": body.language_code}
+
+    sk_ids = [d.string_key_id for d in drafts]
+    sk_result = await db.execute(select(StringKey).where(StringKey.id.in_(sk_ids)))
+    sk_map = {sk.id: sk for sk in sk_result.scalars().all()}
+
+    regenerated = 0
+    batches = [
+        drafts[i:i + TRANSLATION_BATCH_SIZE]
+        for i in range(0, len(drafts), TRANSLATION_BATCH_SIZE)
+    ]
+
+    async def _regen_single(t: Translation) -> bool:
+        sk = sk_map.get(t.string_key_id)
+        if not sk:
+            return False
+        try:
+            t_text, service_used = await translate_text(sk.english_text, body.language_code)
+            t.translated_text = t_text
+            t.translated_by = service_used
+            return True
+        except Exception as exc:
+            log.warning("regenerate_all_draft failed for key %s: %s", sk.key, exc)
+            return False
+
+    for batch in batches:
+        results = await asyncio.gather(*[_regen_single(t) for t in batch])
+        regenerated += sum(1 for r in results if r)
+        await db.commit()
+
+    return {"regenerated_count": regenerated, "language_code": body.language_code}
+
+
 # ── Seed data ─────────────────────────────────────────────────────────────────
 
 _SEED_KEYS: list[tuple[str, str, str]] = [
