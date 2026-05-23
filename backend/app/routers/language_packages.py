@@ -17,7 +17,7 @@ from typing import Optional
 import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from pydantic import BaseModel, field_validator
-from sqlalchemy import select, func
+from sqlalchemy import select, func, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -546,6 +546,80 @@ async def list_language_packages(
     ]
 
 
+# ── Utility: ensure Translation rows are in sync with StringKeys + Languages ──
+
+async def ensure_string_keys_synced(db: AsyncSession) -> dict:
+    """Ensures all active StringKey records have a Translation row for every
+    active or protected Language.
+
+    - Creates missing Translation rows with status='missing', translated_text=''.
+    - Marks Translation rows whose StringKey is now inactive as status='retired'
+      (does not delete them).
+
+    Returns {"created": N, "retired": N}.
+    """
+    # All active string keys
+    active_keys_result = await db.execute(
+        select(StringKey).where(StringKey.is_active == True)
+    )
+    active_keys = active_keys_result.scalars().all()
+
+    # All active or protected languages
+    active_langs_result = await db.execute(
+        select(Language).where(
+            or_(Language.status == "active", Language.is_protected == True)
+        )
+    )
+    active_langs = active_langs_result.scalars().all()
+
+    if not active_keys or not active_langs:
+        return {"created": 0, "retired": 0}
+
+    active_key_ids = [k.id for k in active_keys]
+    active_lang_codes = [l.code for l in active_langs]
+
+    # Existing (string_key_id, language_code) pairs
+    existing_result = await db.execute(
+        select(Translation.string_key_id, Translation.language_code).where(
+            Translation.string_key_id.in_(active_key_ids),
+            Translation.language_code.in_(active_lang_codes),
+        )
+    )
+    existing_pairs = {(row[0], row[1]) for row in existing_result.all()}
+
+    # Create missing Translation rows
+    created = 0
+    for key in active_keys:
+        for lang in active_langs:
+            if (key.id, lang.code) not in existing_pairs:
+                db.add(Translation(
+                    string_key_id=key.id,
+                    language_code=lang.code,
+                    translated_text="",
+                    status="missing",
+                    translated_by="",
+                ))
+                created += 1
+
+    # Retire translations whose StringKey is now inactive
+    retired_result = await db.execute(
+        select(Translation)
+        .join(StringKey, StringKey.id == Translation.string_key_id)
+        .where(
+            StringKey.is_active == False,
+            Translation.status != "retired",
+        )
+    )
+    retired_rows = retired_result.scalars().all()
+    for t in retired_rows:
+        t.status = "retired"
+    retired = len(retired_rows)
+
+    await db.commit()
+    log.info("ensure_string_keys_synced: created=%d retired=%d", created, retired)
+    return {"created": created, "retired": retired}
+
+
 # ── /api/string-keys ─────────────────────────────────────────────────────────
 
 class StringKeyCreate(BaseModel):
@@ -608,6 +682,10 @@ async def create_string_key(
     db.add(sk)
     await db.commit()
     await db.refresh(sk)
+
+    # Auto-sync: create Translation rows for this new key in all active languages
+    # TODO: call ensure_string_keys_synced after any StringKey retire operation
+    await ensure_string_keys_synced(db)
 
     return StringKeyOut(
         id=str(sk.id),
@@ -999,6 +1077,23 @@ async def approve_all_translations(
         "language_code": body.language_code,
         "message": f"{len(drafts)} strings approved",
     }
+
+
+@translations_router.post("/sync-string-keys")
+async def sync_string_keys(
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_dashboard_user),
+) -> dict:
+    """Admin utility: ensure every active StringKey has a Translation row for
+    every active/protected language. Idempotent — safe to run multiple times."""
+    result = await ensure_string_keys_synced(db)
+    log.info(
+        "sync_string_keys called by %s: created=%d retired=%d",
+        current_user.full_name,
+        result["created"],
+        result["retired"],
+    )
+    return result
 
 
 @translations_router.get("/{language_code}", response_model=list[TranslationOut])

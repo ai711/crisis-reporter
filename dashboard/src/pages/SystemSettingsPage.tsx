@@ -709,7 +709,11 @@ function LanguagesTab() {
   const [auditOpen, setAuditOpen] = useState(false);
   const [auditPage, setAuditPage] = useState(1);
   const [translateMsg, setTranslateMsg] = useState<string>("");
-  const [approvingAll, setApprovingAll] = useState(false);
+  const [translateProgress, setTranslateProgress] = useState<{ completed: number; total: number } | null>(null);
+  const [showAddLanguageModal, setShowAddLanguageModal] = useState(false);
+  const [highlightedLang, setHighlightedLang] = useState<string | null>(null);
+  const [syncingStringKeys, setSyncingStringKeys] = useState(false);
+  const [syncMsg, setSyncMsg] = useState<string>("");
   const [showPublishConfirm, setShowPublishConfirm] = useState(false);
   const [isPublishingApi, setIsPublishingApi] = useState(false);
   const [publishMsg, setPublishMsg] = useState<{ text: string; type: "success" | "error" } | null>(null);
@@ -774,6 +778,17 @@ function LanguagesTab() {
     return () => window.removeEventListener("beforeunload", handleUnload);
   }, [selectedLang]);
 
+  // Update translateProgress whenever queueStatus refreshes during active translation
+  useEffect(() => {
+    if (!autoTranslatingLang || !queueStatus) return;
+    const entry = queueStatus.by_language.find((l) => l.lang_code === autoTranslatingLang);
+    const remaining = (entry?.draft_count ?? 0) + (entry?.failed_count ?? 0);
+    // totalActive is computed in derived-data below; captured safely in closure
+    setTranslateProgress((prev) =>
+      prev !== null ? { completed: Math.max(0, prev.total - remaining), total: prev.total } : null
+    );
+  }, [queueStatus]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Queries ──────────────────────────────────────────────────────────────
 
   const { data: languages = [], isLoading: langsLoading } = useQuery<LanguageLifecycle[]>({
@@ -806,7 +821,7 @@ function LanguagesTab() {
       const res = await api.get<QueueStatusByLang>("/api/translations/queue-status");
       return res.data;
     },
-    refetchInterval: 30000,
+    refetchInterval: autoTranslatingLang ? 10000 : 30000,
   });
 
   const { data: auditData } = useQuery({
@@ -840,6 +855,20 @@ function LanguagesTab() {
         if (st === "approved" || st === "published") approved++;
       }
       return [lang.code, totalActive > 0 ? Math.round((approved / totalActive) * 100) : 0];
+    })
+  );
+
+  // Per-language translation status counts for the Translation Status pills (FIX 2)
+  const statusByLang = Object.fromEntries(
+    languages.map((lang) => {
+      let missing = 0, draft = 0, published = 0;
+      for (const key of activeKeys) {
+        const st = key.translations[lang.code];
+        if (!st || st === "missing" || st === "retired") missing++;
+        else if (st === "draft" || st === "failed") draft++;
+        else if (st === "approved" || st === "published") published++;
+      }
+      return [lang.code, { missing, draft, published }];
     })
   );
 
@@ -886,23 +915,23 @@ function LanguagesTab() {
     if (!confirmed) return;
     setAutoTranslatingLang(langCode);
     try {
-      const res = await api.post<{ translated: number; skipped: number; failed: number }>(
+      await api.post<{ status: string; language_code: string }>(
         "/api/translations/auto-translate",
         { language_code: langCode }
       );
       queryClient.invalidateQueries({ queryKey: ["translations", langCode] });
       queryClient.invalidateQueries({ queryKey: ["string-keys"] });
       queryClient.invalidateQueries({ queryKey: ["queue-status-by-lang"] });
-      const { translated, failed } = res.data;
-      showBanner(
-        `Auto-translated ${translated} strings for ${langCode.toUpperCase()}${failed > 0 ? `, ${failed} failed` : ""}.`
-      );
+      // Initialise progress banner — total is updated each queue-status poll
+      setTranslateProgress({ completed: 0, total: totalActive });
       setTranslateMsg(`Auto-translation started for ${langName}. Check the Review Queue tab for progress.`);
       setTimeout(() => setTranslateMsg(""), 5000);
+      // autoTranslatingLang intentionally NOT cleared here — progress banner
+      // stays until user dismisses with ×
     } catch {
       showBanner("Auto-translate failed — check LibreTranslate configuration.", false);
-    } finally {
       setAutoTranslatingLang(null);
+      setTranslateProgress(null);
     }
   }
 
@@ -1012,24 +1041,9 @@ function LanguagesTab() {
     queryClient.invalidateQueries({ queryKey: ["string-keys"] });
     queryClient.invalidateQueries({ queryKey: ["queue-status-by-lang"] });
     showBanner(`Approved ${ok} / ${draftIds.length} translations.`);
-  }
-
-  async function handleApproveAllPending() {
-    const selectedLangName = selectedLangData?.name ?? selectedLang;
-    if (!window.confirm(`Approve all pending translations for ${selectedLangName}? This cannot be undone.`)) return;
-    setApprovingAll(true);
-    try {
-      // TODO: backend endpoint POST /api/translations/approve-all needed
-      await api.post("/api/translations/approve-all", { language_code: selectedLang });
-      queryClient.invalidateQueries({ queryKey: ["translations", selectedLang] });
-      queryClient.invalidateQueries({ queryKey: ["string-keys"] });
-      queryClient.invalidateQueries({ queryKey: ["queue-status-by-lang"] });
-      showBanner("All pending translations approved.");
-    } catch {
-      window.alert("Approve all failed. Please try approving strings individually.");
-    } finally {
-      setApprovingAll(false);
-    }
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    setHighlightedLang(selectedLang);
+    setTimeout(() => setHighlightedLang(null), 3000);
   }
 
   async function handleDeprecate() {
@@ -1065,6 +1079,23 @@ function LanguagesTab() {
     } catch (err: unknown) {
       const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? "Remove failed.";
       showBanner(detail, false);
+    }
+  }
+
+  async function handleSyncStringKeys() {
+    setSyncingStringKeys(true);
+    setSyncMsg("");
+    try {
+      const res = await api.post<{ created: number; retired: number }>("/api/translations/sync-string-keys");
+      queryClient.invalidateQueries({ queryKey: ["string-keys"] });
+      queryClient.invalidateQueries({ queryKey: ["translations", selectedLang] });
+      setSyncMsg(`Sync complete: ${res.data.created} new strings added, ${res.data.retired} retired.`);
+      setTimeout(() => setSyncMsg(""), 6000);
+    } catch {
+      setSyncMsg("Sync failed. Check server logs.");
+      setTimeout(() => setSyncMsg(""), 4000);
+    } finally {
+      setSyncingStringKeys(false);
     }
   }
 
@@ -1118,11 +1149,42 @@ function LanguagesTab() {
         )}
       </div>
 
-      {translateMsg && (
+      {autoTranslatingLang ? (
+        /* ── Auto-translate live progress banner (FIX 3) ─────────────────── */
+        <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 6, padding: "12px 16px" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ width: 14, height: 14, border: "2px solid #0468b1", borderTopColor: "transparent", borderRadius: "50%", animation: "cr-spin 0.8s linear infinite", flexShrink: 0 }} />
+              <span style={{ fontWeight: 700, fontSize: 13, color: "#1e40af" }}>
+                Auto-translating {languages.find((l) => l.code === autoTranslatingLang)?.name ?? autoTranslatingLang.toUpperCase()}...
+              </span>
+            </div>
+            <button
+              style={{ background: "none", border: "none", color: "#6b7280", fontSize: 18, cursor: "pointer", lineHeight: 1, padding: "0 4px" }}
+              onClick={() => { setAutoTranslatingLang(null); setTranslateProgress(null); }}
+              title="Dismiss"
+            >
+              ×
+            </button>
+          </div>
+          {translateProgress && translateProgress.total > 0 ? (
+            <>
+              <div style={{ marginTop: 8, background: "#e5e7eb", borderRadius: 9999, height: 8, overflow: "hidden" }}>
+                <div style={{ height: "100%", background: "#0468b1", borderRadius: 9999, width: `${Math.round((translateProgress.completed / translateProgress.total) * 100)}%`, transition: "width 0.5s ease" }} />
+              </div>
+              <div style={{ marginTop: 4, fontSize: 12, color: "#6b7280" }}>
+                {translateProgress.completed} of {translateProgress.total} strings translated
+              </div>
+            </>
+          ) : (
+            <div style={{ marginTop: 6, fontSize: 12, color: "#6b7280" }}>Starting...</div>
+          )}
+        </div>
+      ) : translateMsg ? (
         <div style={{ background: "#fef3c7", color: "#92400e", padding: "8px 12px", borderRadius: 6, fontSize: 13 }}>
           {translateMsg}
         </div>
-      )}
+      ) : null}
       {publishMsg && (
         <div style={{ background: publishMsg.type === "success" ? "#dcfce7" : "#fee2e2", color: publishMsg.type === "success" ? "#166534" : "#991b1b", padding: "8px 12px", borderRadius: 6, fontSize: 13, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <span>{publishMsg.text}</span>
@@ -1141,12 +1203,41 @@ function LanguagesTab() {
       <div style={sL.sectionCard}>
         <div style={sL.sectionHeader}>
           <span style={sL.sectionTitle}>Languages</span>
-          <span style={sL.sectionMeta}>
-            {!langsLoading && !keysLoading && (
-              <>{languages.length} languages · {totalActive} strings</>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" as const }}>
+            <span style={sL.sectionMeta}>
+              {!langsLoading && !keysLoading && (
+                <>{languages.length} languages · {totalActive} strings</>
+              )}
+            </span>
+            {isAdmin && (
+              <button
+                style={{ padding: "8px 16px", background: BLUE, color: "#fff", border: "none", borderRadius: 6, fontSize: 14, fontWeight: 600, cursor: "pointer" }}
+                onClick={() => setShowAddLanguageModal(true)}
+              >
+                + Add Language
+              </button>
             )}
-          </span>
+            {isSuperadmin && (
+              <button
+                style={{ ...sL.actionBtn, background: "#f7fafc", color: "#4a5568", border: "1px solid #e2e8f0" }}
+                onClick={handleSyncStringKeys}
+                disabled={syncingStringKeys}
+              >
+                {syncingStringKeys ? (
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                    <div style={{ width: 10, height: 10, border: "2px solid #718096", borderTopColor: "transparent", borderRadius: "50%", animation: "cr-spin 0.8s linear infinite" }} />
+                    Syncing…
+                  </span>
+                ) : "Sync String Keys"}
+              </button>
+            )}
+          </div>
         </div>
+        {syncMsg && (
+          <div style={{ padding: "8px 24px", background: syncMsg.includes("failed") ? "#fff5f5" : "#d4edda", color: syncMsg.includes("failed") ? "#c53030" : "#155724", fontSize: 13, borderBottom: "1px solid #f0f4f8" }}>
+            {syncMsg}
+          </div>
+        )}
         <div style={s.tableWrap}>
           <table style={s.table}>
             <thead>
@@ -1154,7 +1245,7 @@ function LanguagesTab() {
                 <th style={s.th}>Language</th>
                 <th style={s.th}>Status</th>
                 <th style={s.th}>Reporter Visible</th>
-                <th style={{ ...s.th, textAlign: "right" as const }}>Coverage</th>
+                <th style={{ ...s.th, textAlign: "right" as const }}>Translation Status</th>
                 <th style={{ ...s.th, textAlign: "right" as const }}>Actions</th>
               </tr>
             </thead>
@@ -1170,7 +1261,7 @@ function LanguagesTab() {
                   ? new Date(lang.removal_scheduled_at) <= new Date()
                   : false;
                 return (
-                  <tr key={lang.code} style={s.tr}>
+                  <tr key={lang.code} style={{ ...s.tr, backgroundColor: highlightedLang === lang.code ? "#f0fdf4" : "transparent", transition: "background-color 0.5s ease" }}>
                     <td style={s.td}>
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                         <span style={s.codeBadge}>{lang.code}</span>
@@ -1194,28 +1285,53 @@ function LanguagesTab() {
                       )}
                     </td>
                     <td style={{ ...s.td, textAlign: "right" as const }}>
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8 }}>
-                        <div style={sL.progressBar}>
-                          <div style={{ ...sL.progressFill, width: `${pct}%`, background: pct === 100 ? "#22c55e" : pct >= 50 ? "#d97706" : "#e53e3e" }} />
-                        </div>
-                        <span style={{ fontSize: 12, fontWeight: 700, color: "#1A2B4A", minWidth: 36 }}>{pct}%</span>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 2, flexWrap: "wrap" as const }}>
+                        {(() => {
+                          const st = statusByLang[lang.code];
+                          if (!st) return <span style={{ fontSize: 12, color: "#a0aec0" }}>—</span>;
+                          const allPublished = st.missing === 0 && st.draft === 0 && st.published > 0;
+                          return (
+                            <>
+                              {!allPublished && st.missing > 0 && (
+                                <span style={{ display: "inline-flex", padding: "2px 8px", borderRadius: 9999, fontSize: 11, fontWeight: 600, marginRight: 4, background: "#fee2e2", color: "#991b1b" }}>
+                                  {st.missing} Missing
+                                </span>
+                              )}
+                              {st.draft > 0 && (
+                                <span style={{ display: "inline-flex", padding: "2px 8px", borderRadius: 9999, fontSize: 11, fontWeight: 600, marginRight: 4, background: "#fef3c7", color: "#92400e" }}>
+                                  {st.draft} Draft
+                                </span>
+                              )}
+                              {st.published > 0 && (
+                                <span style={{ display: "inline-flex", padding: "2px 8px", borderRadius: 9999, fontSize: 11, fontWeight: 600, marginRight: 4, background: "#dcfce7", color: "#166534" }}>
+                                  {st.published} Published
+                                </span>
+                              )}
+                              {st.missing === 0 && st.draft === 0 && st.published === 0 && (
+                                <span style={{ fontSize: 12, color: "#a0aec0" }}>—</span>
+                              )}
+                            </>
+                          );
+                        })()}
                       </div>
                     </td>
                     <td style={{ ...s.td, textAlign: "right" as const }}>
                       <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", flexWrap: "wrap" as const }}>
-                        {autoTranslatingLang === lang.code ? (
-                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                            <div style={{ width: 14, height: 14, border: "2px solid #fcd34d", borderTopColor: "transparent", borderRadius: "50%", animation: "cr-spin 0.8s linear infinite" }} />
-                            <span style={{ fontSize: 12, color: "#6b7280" }}>Translating...</span>
-                          </div>
-                        ) : (
-                          <button
-                            style={{ ...sL.actionBtn, background: "#fffbeb", color: "#d97706", border: "1px solid #fcd34d" }}
-                            onClick={() => handleAutoTranslate(lang.code)}
-                            disabled={!!autoTranslatingLang}
-                          >
-                            Auto-translate
-                          </button>
+                        {lang.code !== "en" && (
+                          autoTranslatingLang === lang.code ? (
+                            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                              <div style={{ width: 14, height: 14, border: "2px solid #fcd34d", borderTopColor: "transparent", borderRadius: "50%", animation: "cr-spin 0.8s linear infinite" }} />
+                              <span style={{ fontSize: 12, color: "#6b7280" }}>Translating...</span>
+                            </div>
+                          ) : (
+                            <button
+                              style={{ ...sL.actionBtn, background: "#fffbeb", color: "#d97706", border: "1px solid #fcd34d" }}
+                              onClick={() => handleAutoTranslate(lang.code)}
+                              disabled={!!autoTranslatingLang}
+                            >
+                              Auto-translate
+                            </button>
+                          )
                         )}
                         {canPublish && (
                           <button
@@ -1274,21 +1390,16 @@ function LanguagesTab() {
         </div>
       </div>
 
-      {/* ── Approve All Pending ──────────────────────────────────────────── */}
-      {(counts.draft > 0 || counts.approved > 0) && (
-        <div style={{ display: "flex", justifyContent: "flex-end" }}>
-          <button
-            style={{ ...s.submitBtn, opacity: approvingAll ? 0.7 : 1 }}
-            onClick={handleApproveAllPending}
-            disabled={approvingAll}
-          >
-            {approvingAll ? "Approving..." : "Approve All Pending"}
-          </button>
-        </div>
-      )}
-
       {/* ── Translation Editor ───────────────────────────────────────────── */}
-      <div style={sL.sectionCard}>
+      <div style={{ ...sL.sectionCard, position: "relative" }}>
+        {(lockLoading || transLoading) && (
+          <div style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", background: "rgba(255,255,255,0.8)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10, borderRadius: 12 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <div style={{ width: 20, height: 20, border: "3px solid #0468b1", borderTopColor: "transparent", borderRadius: "50%", animation: "cr-spin 0.8s linear infinite" }} />
+              <span style={{ fontSize: 14, color: "#6b7280", fontWeight: 500 }}>Loading translations...</span>
+            </div>
+          </div>
+        )}
         <div style={sL.sectionHeader}>
           <span style={sL.sectionTitle}>Edit Translations</span>
           <select
@@ -1621,6 +1732,17 @@ function LanguagesTab() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ── Add Language Modal (FIX 7) ──────────────────────────────────── */}
+      {showAddLanguageModal && (
+        <AddLanguageModal
+          onClose={() => setShowAddLanguageModal(false)}
+          onSuccess={() => {
+            setShowAddLanguageModal(false);
+            queryClient.invalidateQueries({ queryKey: ["languages"] });
+          }}
+        />
       )}
 
       {/* ── Publish Confirmation Modal ───────────────────────────────────── */}

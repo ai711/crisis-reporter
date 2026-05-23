@@ -6,6 +6,19 @@ from app.config import settings
 
 log = logging.getLogger(__name__)
 
+# Supported language codes for LibreTranslate.
+# If a target language is not in this map the request is rejected early
+# rather than sending an invalid code to the API.
+LIBRETRANSLATE_LANG_MAP: dict[str, str] = {
+    "ar": "ar",  # Arabic
+    "zh": "zh",  # Chinese (Simplified)
+    "en": "en",  # English
+    "fr": "fr",  # French
+    "ru": "ru",  # Russian
+    "es": "es",  # Spanish
+    # Add further ISO 639-1 codes here as LibreTranslate support is confirmed
+}
+
 
 async def _translate_via_google(text: str, target_lang: str, source_lang: str = "en") -> str:
     async with httpx.AsyncClient(timeout=10.0) as client:
@@ -20,11 +33,28 @@ async def _translate_via_google(text: str, target_lang: str, source_lang: str = 
 
 
 async def _translate_via_libretranslate(text: str, target_lang: str, source_lang: str = "en") -> str:
-    translate_url = settings.LIBRETRANSLATE_URL.rstrip("/") + "/translate"
+    # Warn if the public rate-limited instance is in use
+    url_base = settings.LIBRETRANSLATE_URL.strip()
+    if not url_base or "libretranslate.com" in url_base:
+        log.warning(
+            "LIBRETRANSLATE_URL points to public instance (%s) — rate limits apply. "
+            "Consider self-hosting or using the Hugging Face Spaces instance.",
+            url_base or "(empty)",
+        )
+
+    # Reject unsupported language codes early to avoid sending a bad request
+    mapped_lang = LIBRETRANSLATE_LANG_MAP.get(target_lang)
+    if mapped_lang is None:
+        raise ValueError(
+            f"Language '{target_lang}' is not supported by the LibreTranslate fallback. "
+            f"Supported codes: {', '.join(sorted(LIBRETRANSLATE_LANG_MAP))}"
+        )
+
+    translate_url = url_base.rstrip("/") + "/translate"
     async with httpx.AsyncClient(timeout=30.0) as client:
         resp = await client.post(
             translate_url,
-            json={"q": text, "source": source_lang, "target": target_lang, "format": "text"},
+            json={"q": text, "source": source_lang, "target": mapped_lang, "format": "text"},
         )
         resp.raise_for_status()
         data = resp.json()
@@ -41,6 +71,7 @@ async def translate_text(text: str, target_lang: str, source_lang: str = "en") -
     "google", falling back to LibreTranslate on any error. Falls back to
     LibreTranslate directly when no Google key is set.
     """
+    log.info("translate_text called: primary=%s, has_google_key=%s", settings.TRANSLATION_PRIMARY, bool(settings.GOOGLE_TRANSLATE_API_KEY))
     if settings.GOOGLE_TRANSLATE_API_KEY and settings.TRANSLATION_PRIMARY == "google":
         try:
             result = await _translate_via_google(text, target_lang, source_lang)
