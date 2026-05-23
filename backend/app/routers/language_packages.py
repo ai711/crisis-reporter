@@ -14,7 +14,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from pydantic import BaseModel, field_validator
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -146,6 +146,67 @@ async def list_languages(
         )
         for l in langs
     ]
+
+
+class LanguageCreate(BaseModel):
+    name: str
+    code: str
+
+
+class LanguageCreateOut(BaseModel):
+    id: str
+    code: str
+    name: str
+    status: str
+    is_protected: bool
+    translation_package_available: bool
+
+    class Config:
+        from_attributes = True
+
+
+@languages_router.post("", response_model=LanguageCreateOut, status_code=status.HTTP_201_CREATED)
+async def create_language(
+    body: LanguageCreate,
+    db: AsyncSession = Depends(get_db),
+    _=Depends(get_current_dashboard_user),
+) -> LanguageCreateOut:
+    if len(body.code) != 2 or not body.code.isalpha():
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Language code must be a valid ISO 639-1 two-letter alphabetic code",
+        )
+
+    existing = await db.execute(select(Language).where(Language.code == body.code))
+    if existing.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Language code already exists",
+        )
+
+    pkg_result = await db.execute(
+        select(LanguagePackage).where(LanguagePackage.language_code == body.code).limit(1)
+    )
+    has_package = pkg_result.scalar_one_or_none() is not None
+
+    lang = Language(
+        code=body.code,
+        name=body.name,
+        status="pending",
+        is_protected=False,
+    )
+    db.add(lang)
+    await db.commit()
+    await db.refresh(lang)
+
+    return LanguageCreateOut(
+        id=str(lang.id),
+        code=lang.code,
+        name=lang.name,
+        status=lang.status,
+        is_protected=lang.is_protected,
+        translation_package_available=has_package,
+    )
 
 
 class LanguageStatusUpdate(BaseModel):
@@ -663,6 +724,10 @@ async def admin_release_lang_lock(
 
 # ── Translation CRUD ──────────────────────────────────────────────────────────
 
+class ApproveAllRequest(BaseModel):
+    language_code: str
+
+
 class AutoTranslateRequest(BaseModel):
     language_code: str
 
@@ -866,6 +931,68 @@ async def get_audit_log(
     }
 
 
+@translations_router.post("/approve-all")
+async def approve_all_translations(
+    body: ApproveAllRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_dashboard_user),
+) -> dict:
+    # Check edit lock — HTTP 423 per spec (distinct from the 409 used by _assert_lock)
+    redis = request.app.state.redis
+    lock = await get_translation_lock(redis, body.language_code)
+    if not lock or lock["editor_id"] != str(current_user.id):
+        raise HTTPException(
+            status_code=status.HTTP_423_LOCKED,
+            detail="Edit lock not held. Acquire the lock before approving.",
+        )
+    await refresh_translation_lock_ttl(redis, body.language_code)
+
+    # Query all draft translations for this language
+    result = await db.execute(
+        select(Translation).where(
+            Translation.language_code == body.language_code,
+            Translation.status == "draft",
+        )
+    )
+    drafts = result.scalars().all()
+
+    if not drafts:
+        return {"approved_count": 0, "message": "No pending translations to approve"}
+
+    # Approve all and commit — audit log written separately so a log failure
+    # does not roll back the approvals
+    for t in drafts:
+        t.status = "approved"
+        t.reviewed_by = str(current_user.id)
+
+    await db.commit()
+
+    # Write one audit entry covering the bulk operation
+    try:
+        await write_translation_audit(
+            db,
+            event_type="translations_bulk_approved",
+            lang_code=body.language_code,
+            details={"count": len(drafts), "reviewed_by": current_user.full_name},
+            performed_by=current_user.full_name,
+            dashboard_user_id=str(current_user.id),
+        )
+        await db.commit()
+    except Exception as exc:
+        log.error(
+            "approve_all audit log write failed for %s: %s",
+            body.language_code,
+            exc,
+        )
+
+    return {
+        "approved_count": len(drafts),
+        "language_code": body.language_code,
+        "message": f"{len(drafts)} strings approved",
+    }
+
+
 @translations_router.get("/{language_code}", response_model=list[TranslationOut])
 async def list_translations(
     language_code: str,
@@ -907,15 +1034,85 @@ async def list_translations(
     return out
 
 
-@translations_router.post(
-    "/auto-translate",
-    response_model=AutoTranslateResult,
-)
+async def _run_auto_translation(language_code: str, db: AsyncSession) -> None:
+    try:
+        existing_result = await db.execute(
+            select(Translation.string_key_id).where(
+                Translation.language_code == language_code
+            )
+        )
+        already_translated = {row[0] for row in existing_result.all()}
+
+        keys_result = await db.execute(
+            select(StringKey).where(
+                StringKey.is_active == True,
+                StringKey.id.not_in(already_translated) if already_translated else True,
+            )
+        )
+        keys_to_translate = keys_result.scalars().all()
+        if not keys_to_translate:
+            return
+
+        translate_url = settings.LIBRETRANSLATE_URL.rstrip("/") + "/translate"
+        translated = 0
+        failed = 0
+        errors: list[str] = []
+
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            for sk in keys_to_translate:
+                try:
+                    resp = await client.post(
+                        translate_url,
+                        json={
+                            "q": sk.english_text,
+                            "source": "en",
+                            "target": language_code,
+                            "format": "text",
+                        },
+                    )
+                    resp.raise_for_status()
+                    data = resp.json()
+                    translated_text = data.get("translatedText", "")
+                    if not translated_text:
+                        raise ValueError("Empty translatedText in LibreTranslate response")
+
+                    db.add(
+                        Translation(
+                            string_key_id=sk.id,
+                            language_code=language_code,
+                            translated_text=translated_text,
+                            status="draft",
+                            translated_by="auto",
+                        )
+                    )
+                    translated += 1
+
+                except Exception as exc:
+                    failed += 1
+                    errors.append(f"{sk.key}: {exc}")
+                    log.warning("auto_translate failed for key %s: %s", sk.key, exc)
+
+        if translated > 0:
+            await write_translation_audit(
+                db,
+                event_type="translation_auto_generated",
+                lang_code=language_code,
+                details={"translated": translated, "failed": failed},
+                performed_by="auto",
+                dashboard_user_id="",
+            )
+            await db.commit()
+    except Exception as exc:
+        log.error("_run_auto_translation background task failed for %s: %s", language_code, exc)
+
+
+@translations_router.post("/auto-translate")
 async def auto_translate(
     body: AutoTranslateRequest,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user=Depends(require_admin),
-) -> AutoTranslateResult:
+) -> dict:
     existing_result = await db.execute(
         select(Translation.string_key_id).where(
             Translation.language_code == body.language_code
@@ -940,64 +1137,8 @@ async def auto_translate(
             errors=[],
         )
 
-    translate_url = settings.LIBRETRANSLATE_URL.rstrip("/") + "/translate"
-    translated = 0
-    failed = 0
-    errors: list[str] = []
-
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        for sk in keys_to_translate:
-            try:
-                resp = await client.post(
-                    translate_url,
-                    json={
-                        "q": sk.english_text,
-                        "source": "en",
-                        "target": body.language_code,
-                        "format": "text",
-                    },
-                )
-                resp.raise_for_status()
-                data = resp.json()
-                translated_text = data.get("translatedText", "")
-                if not translated_text:
-                    raise ValueError("Empty translatedText in LibreTranslate response")
-
-                db.add(
-                    Translation(
-                        string_key_id=sk.id,
-                        language_code=body.language_code,
-                        translated_text=translated_text,
-                        status="draft",
-                        translated_by="auto",
-                    )
-                )
-                translated += 1
-
-            except Exception as exc:
-                failed += 1
-                msg = f"{sk.key}: {exc}"
-                errors.append(msg)
-                log.warning("auto_translate failed for key %s: %s", sk.key, exc)
-
-    if translated > 0:
-        await write_translation_audit(
-            db,
-            event_type="translation_auto_generated",
-            lang_code=body.language_code,
-            details={"translated": translated, "failed": failed},
-            performed_by=current_user.full_name,
-            dashboard_user_id=str(current_user.id),
-        )
-        await db.commit()
-
-    return AutoTranslateResult(
-        language_code=body.language_code,
-        translated=translated,
-        skipped=len(already_translated),
-        failed=failed,
-        errors=errors,
-    )
+    background_tasks.add_task(_run_auto_translation, body.language_code, db)
+    return {"status": "translation_started", "language_code": body.language_code}
 
 
 @translations_router.patch(

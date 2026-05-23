@@ -107,6 +107,44 @@ export default function OnboardingScreen() {
       });
   }, []);
 
+  async function checkLanguagePackageVersion(storedLangCode: string) {
+    try {
+      const storedVersion = await AsyncStorage.getItem("cr_lang_package_version");
+      if (!storedVersion || storedVersion !== storedLangCode) return;
+
+      // Check if a newer package exists
+      const response = await api.get("/api/language-packages/available");
+      const packages: { code: string; name: string }[] = response.data;
+      const hasPackage = packages.some((p) => p.code === storedLangCode);
+
+      if (hasPackage) {
+        // Silently re-fetch the package to get latest published strings
+        const pkgResponse = await api.get(
+          `/api/language-packages/active/${storedLangCode}`
+        );
+        const translationMap: Record<string, string> = pkgResponse.data;
+        if (translationMap && Object.keys(translationMap).length > 0) {
+          await AsyncStorage.setItem(
+            `cr_lang_package_${storedLangCode}`,
+            JSON.stringify(translationMap)
+          );
+        }
+      }
+    } catch (e) {
+      // Silent fail — version check is non-blocking
+      console.warn("Language version check failed", e);
+    }
+  }
+
+  // Version check on app open — fire and forget, non-blocking
+  useEffect(() => {
+    AsyncStorage.getItem("cr_language").then((storedLang) => {
+      if (storedLang && storedLang !== "en") {
+        checkLanguagePackageVersion(storedLang); // fire-and-forget, no await
+      }
+    });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const filteredCountries = countries.filter((c) =>
     c.name.toLowerCase().includes(search.toLowerCase())
   );
@@ -120,6 +158,29 @@ export default function OnboardingScreen() {
 
   const handleLanguageNext = async () => {
     if (!selectedLang) return;
+
+    const isNonBundled = !["en"].includes(selectedLang);
+    if (isNonBundled) {
+      try {
+        const pkgResponse = await api.get(
+          `/api/language-packages/active/${selectedLang}`
+        );
+        const translationMap: Record<string, string> = pkgResponse.data;
+        if (translationMap && Object.keys(translationMap).length > 0) {
+          await AsyncStorage.setItem(
+            `cr_lang_package_${selectedLang}`,
+            JSON.stringify(translationMap)
+          );
+          await AsyncStorage.setItem(
+            `cr_lang_package_version`,
+            selectedLang
+          );
+        }
+      } catch (e) {
+        console.warn("Language package fetch failed, using bundled fallback", e);
+      }
+    }
+
     i18n.changeLanguage(selectedLang);
     await AsyncStorage.setItem("cr_language", selectedLang);
     setStep(3);

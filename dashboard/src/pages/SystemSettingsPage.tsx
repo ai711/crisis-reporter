@@ -386,7 +386,6 @@ function AddLanguageModal({
 }) {
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
-  const [fileName, setFileName] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitError, setSubmitError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -447,25 +446,6 @@ function AddLanguageModal({
               placeholder="e.g. sw"
               style={{ ...s.input, borderColor: errors.code ? "#e53e3e" : "#e2e8f0" }}
             />
-          </Field>
-          <Field label="Translation File (JSON)">
-            <div style={s.fileInputWrap}>
-              <label style={s.fileLabel}>
-                <input
-                  type="file"
-                  accept=".json"
-                  style={{ display: "none" }}
-                  onChange={(e) => setFileName(e.target.files?.[0]?.name ?? "")}
-                />
-                <span style={s.fileBrowseBtn}>Browse</span>
-                <span style={{ fontSize: 13, color: "#718096" }}>
-                  {fileName || "No file selected"}
-                </span>
-              </label>
-            </div>
-            <p style={{ fontSize: 11, color: "#a0aec0", margin: "4px 0 0" }}>
-              Optional — upload a JSON translation file to enable this language in the app.
-            </p>
           </Field>
           {submitError && <div style={s.submitError}>{submitError}</div>}
           <div style={s.modalFooter}>
@@ -708,6 +688,11 @@ function LanguagesTab() {
   const [deprecateComment, setDeprecateComment] = useState("");
   const [auditOpen, setAuditOpen] = useState(false);
   const [auditPage, setAuditPage] = useState(1);
+  const [translateMsg, setTranslateMsg] = useState<string>("");
+  const [approvingAll, setApprovingAll] = useState(false);
+  const [showPublishConfirm, setShowPublishConfirm] = useState(false);
+  const [isPublishingApi, setIsPublishingApi] = useState(false);
+  const [publishMsg, setPublishMsg] = useState<{ text: string; type: "success" | "error" } | null>(null);
 
   function showBanner(msg: string, ok = true) {
     setBanner({ msg, ok });
@@ -868,6 +853,11 @@ function LanguagesTab() {
   }
 
   async function handleAutoTranslate(langCode: string) {
+    const langName = languages.find((l) => l.code === langCode)?.name ?? langCode.toUpperCase();
+    const confirmed = window.confirm(
+      `Start auto-translation for ${langName}? This will translate all untranslated strings using LibreTranslate. Existing translations will not be overwritten. This runs in the background and may take a few minutes.`
+    );
+    if (!confirmed) return;
     setAutoTranslatingLang(langCode);
     try {
       const res = await api.post<{ translated: number; skipped: number; failed: number }>(
@@ -881,6 +871,8 @@ function LanguagesTab() {
       showBanner(
         `Auto-translated ${translated} strings for ${langCode.toUpperCase()}${failed > 0 ? `, ${failed} failed` : ""}.`
       );
+      setTranslateMsg(`Auto-translation started for ${langName}. Check the Review Queue tab for progress.`);
+      setTimeout(() => setTranslateMsg(""), 5000);
     } catch {
       showBanner("Auto-translate failed — check LibreTranslate configuration.", false);
     } finally {
@@ -888,23 +880,34 @@ function LanguagesTab() {
     }
   }
 
-  async function handlePublish() {
-    if (!publishReady) return;
-    if (!window.confirm(`Publish all approved translations for ${selectedLang.toUpperCase()}? A new language package version will be created.`)) return;
-    setPublishingLang(selectedLang);
+  function handlePublish(langCode?: string) {
+    const code = langCode ?? selectedLang;
+    if (!langCode && !publishReady) return;
+    setPublishingLang(code);
+    setShowPublishConfirm(true);
+  }
+
+  async function executePublish() {
+    if (!publishingLang) return;
+    setIsPublishingApi(true);
     try {
-      await api.post(`/api/language-packages/publish/${selectedLang}`);
-      queryClient.invalidateQueries({ queryKey: ["translations", selectedLang] });
+      await api.post(`/api/language-packages/publish/${publishingLang}`);
+      queryClient.invalidateQueries({ queryKey: ["translations", publishingLang] });
       queryClient.invalidateQueries({ queryKey: ["string-keys"] });
       queryClient.invalidateQueries({ queryKey: ["language-packages"] });
       queryClient.invalidateQueries({ queryKey: ["queue-status-by-lang"] });
       queryClient.invalidateQueries({ queryKey: ["translation-audit"] });
-      showBanner(`Language package for ${selectedLang.toUpperCase()} published.`);
-    } catch (err: unknown) {
-      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? "Publish failed.";
-      showBanner(detail, false);
-    } finally {
+      setShowPublishConfirm(false);
+      setPublishMsg({ text: "Published successfully. Reporters will receive updates on next app open.", type: "success" });
+      setTimeout(() => setPublishMsg(null), 5000);
       setPublishingLang(null);
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? "Publish failed. Please try again.";
+      setShowPublishConfirm(false);
+      setPublishMsg({ text: detail, type: "error" });
+      // publishingLang kept for retry
+    } finally {
+      setIsPublishingApi(false);
     }
   }
 
@@ -985,6 +988,24 @@ function LanguagesTab() {
     showBanner(`Approved ${ok} / ${draftIds.length} translations.`);
   }
 
+  async function handleApproveAllPending() {
+    const selectedLangName = selectedLangData?.name ?? selectedLang;
+    if (!window.confirm(`Approve all pending translations for ${selectedLangName}? This cannot be undone.`)) return;
+    setApprovingAll(true);
+    try {
+      // TODO: backend endpoint POST /api/translations/approve-all needed
+      await api.post("/api/translations/approve-all", { language_code: selectedLang });
+      queryClient.invalidateQueries({ queryKey: ["translations", selectedLang] });
+      queryClient.invalidateQueries({ queryKey: ["string-keys"] });
+      queryClient.invalidateQueries({ queryKey: ["queue-status-by-lang"] });
+      showBanner("All pending translations approved.");
+    } catch {
+      window.alert("Approve all failed. Please try approving strings individually.");
+    } finally {
+      setApprovingAll(false);
+    }
+  }
+
   async function handleDeprecate() {
     if (!deprecateModal || deprecateComment.trim().length < 10) return;
     try {
@@ -1025,6 +1046,7 @@ function LanguagesTab() {
 
   return (
     <div style={s.tabContent}>
+      <style>{`@keyframes cr-spin { from { transform: rotate(0deg) } to { transform: rotate(360deg) } }`}</style>
       {banner && (
         <div style={{ ...s.successBanner, background: banner.ok ? "#d4edda" : "#fff5f5", color: banner.ok ? "#155724" : "#c53030", border: `1px solid ${banner.ok ? "#c3e6cb" : "#fc8181"}` }}>
           {banner.msg}
@@ -1069,6 +1091,25 @@ function LanguagesTab() {
           </div>
         )}
       </div>
+
+      {translateMsg && (
+        <div style={{ background: "#fef3c7", color: "#92400e", padding: "8px 12px", borderRadius: 6, fontSize: 13 }}>
+          {translateMsg}
+        </div>
+      )}
+      {publishMsg && (
+        <div style={{ background: publishMsg.type === "success" ? "#dcfce7" : "#fee2e2", color: publishMsg.type === "success" ? "#166534" : "#991b1b", padding: "8px 12px", borderRadius: 6, fontSize: 13, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <span>{publishMsg.text}</span>
+          {publishMsg.type === "error" && (
+            <button
+              style={{ ...sL.actionBtn, background: "#fff", color: "#991b1b", border: "1px solid #fca5a5", marginLeft: 12 }}
+              onClick={() => { if (publishingLang) setShowPublishConfirm(true); }}
+            >
+              Retry
+            </button>
+          )}
+        </div>
+      )}
 
       {/* ── Language List ────────────────────────────────────────────────── */}
       <div style={sL.sectionCard}>
@@ -1136,20 +1177,26 @@ function LanguagesTab() {
                     </td>
                     <td style={{ ...s.td, textAlign: "right" as const }}>
                       <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", flexWrap: "wrap" as const }}>
-                        <button
-                          style={{ ...sL.actionBtn, background: "#fffbeb", color: "#d97706", border: "1px solid #fcd34d", opacity: autoTranslatingLang === lang.code ? 0.6 : 1 }}
-                          onClick={() => handleAutoTranslate(lang.code)}
-                          disabled={!!autoTranslatingLang}
-                        >
-                          {autoTranslatingLang === lang.code ? "Translating…" : "Auto-translate"}
-                        </button>
+                        {autoTranslatingLang === lang.code ? (
+                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            <div style={{ width: 14, height: 14, border: "2px solid #fcd34d", borderTopColor: "transparent", borderRadius: "50%", animation: "cr-spin 0.8s linear infinite" }} />
+                            <span style={{ fontSize: 12, color: "#6b7280" }}>Translating...</span>
+                          </div>
+                        ) : (
+                          <button
+                            style={{ ...sL.actionBtn, background: "#fffbeb", color: "#d97706", border: "1px solid #fcd34d" }}
+                            onClick={() => handleAutoTranslate(lang.code)}
+                            disabled={!!autoTranslatingLang}
+                          >
+                            Auto-translate
+                          </button>
+                        )}
                         {canPublish && (
                           <button
-                            style={{ ...sL.actionBtn, background: "#d4edda", color: "#155724", border: "1px solid #c3e6cb", opacity: publishingLang === lang.code ? 0.6 : 1 }}
-                            onClick={() => { setSelectedLang(lang.code); handlePublish(); }}
-                            disabled={publishingLang === lang.code}
+                            style={{ ...sL.actionBtn, background: "#d4edda", color: "#155724", border: "1px solid #c3e6cb" }}
+                            onClick={() => handlePublish(lang.code)}
                           >
-                            {publishingLang === lang.code ? "Publishing…" : "Publish"}
+                            Publish
                           </button>
                         )}
                         {isAdmin && !lang.is_protected && lang.status === "active" && (
@@ -1200,6 +1247,19 @@ function LanguagesTab() {
           </table>
         </div>
       </div>
+
+      {/* ── Approve All Pending ──────────────────────────────────────────── */}
+      {(counts.draft > 0 || counts.approved > 0) && (
+        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+          <button
+            style={{ ...s.submitBtn, opacity: approvingAll ? 0.7 : 1 }}
+            onClick={handleApproveAllPending}
+            disabled={approvingAll}
+          >
+            {approvingAll ? "Approving..." : "Approve All Pending"}
+          </button>
+        </div>
+      )}
 
       {/* ── Translation Editor ───────────────────────────────────────────── */}
       <div style={sL.sectionCard}>
@@ -1262,10 +1322,10 @@ function LanguagesTab() {
             <button
               title={!publishReady ? (hasPending ? "Review queue has pending strings" : "Coverage is not 100%") : "Publish translations"}
               style={{ ...sL.actionBtn, margin: "6px 8px", background: publishReady ? "#d4edda" : "#f0f4f8", color: publishReady ? "#155724" : "#a0aec0", border: `1px solid ${publishReady ? "#c3e6cb" : "#e2e8f0"}`, cursor: publishReady ? "pointer" : "default" }}
-              onClick={handlePublish}
-              disabled={!publishReady || !!publishingLang}
+              onClick={() => handlePublish()}
+              disabled={!publishReady || showPublishConfirm}
             >
-              {publishingLang === selectedLang ? "Publishing…" : "Publish"}
+              {isPublishingApi && publishingLang === selectedLang ? "Publishing…" : "Publish"}
             </button>
           )}
         </div>
@@ -1513,6 +1573,40 @@ function LanguagesTab() {
                 onClick={handleDeprecate}
               >
                 Deprecate Language
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Publish Confirmation Modal ───────────────────────────────────── */}
+      {showPublishConfirm && publishingLang && (
+        <div style={s.overlay}>
+          <div style={{ ...s.modal, maxWidth: 480 }} onClick={(e) => e.stopPropagation()}>
+            <div style={s.modalHeader}>
+              <h2 style={{ ...s.modalTitle, fontSize: 18 }}>Publish Translation Package</h2>
+            </div>
+            <div style={{ padding: "24px" }}>
+              <p style={{ fontSize: 14, color: "#4a5568", margin: 0, lineHeight: 1.6 }}>
+                You are about to publish all approved translations for{" "}
+                <strong>{languages.find((l) => l.code === publishingLang)?.name ?? publishingLang}</strong>.
+                Reporters will receive these updates on their next app open. This cannot be undone.
+              </p>
+            </div>
+            <div style={{ ...s.modalFooter, padding: "0 24px 24px" }}>
+              <button
+                style={{ ...s.cancelBtn, opacity: isPublishingApi ? 0.6 : 1 }}
+                onClick={() => { setShowPublishConfirm(false); setPublishingLang(null); setPublishMsg(null); }}
+                disabled={isPublishingApi}
+              >
+                Cancel
+              </button>
+              <button
+                style={{ ...s.submitBtn, background: BLUE, opacity: isPublishingApi ? 0.7 : 1 }}
+                onClick={executePublish}
+                disabled={isPublishingApi}
+              >
+                {isPublishingApi ? "Publishing..." : "Publish Now"}
               </button>
             </div>
           </div>
