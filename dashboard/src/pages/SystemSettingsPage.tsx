@@ -3189,24 +3189,34 @@ function DisasterTypeRow({ typeKey, label, isAdmin }: { typeKey: string; label: 
                     <div style={{ fontSize: 14, fontWeight: 700, color: "#1A2B4A", marginBottom: 8 }}>
                       {slide.title || `Slide ${idx + 1}`}
                     </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                      <div>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: "#155724", textTransform: "uppercase", marginBottom: 4 }}>Dos</div>
-                        <ul style={{ margin: 0, padding: "0 0 0 16px" }}>
-                          {slide.dos.filter(Boolean).map((d, i) => (
-                            <li key={i} style={{ fontSize: 12, color: "#4a5568", marginBottom: 2 }}>{d}</li>
-                          ))}
-                        </ul>
-                      </div>
-                      <div>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: "#c53030", textTransform: "uppercase", marginBottom: 4 }}>Don'ts</div>
-                        <ul style={{ margin: 0, padding: "0 0 0 16px" }}>
-                          {slide.donts.filter(Boolean).map((d, i) => (
-                            <li key={i} style={{ fontSize: 12, color: "#4a5568", marginBottom: 2 }}>{d}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    </div>
+                    {(() => {
+                      const hasDos = slide.dos && slide.dos.filter((d) => d.trim()).length > 0;
+                      const hasDonts = slide.donts && slide.donts.filter((d) => d.trim()).length > 0;
+                      return (
+                        <div style={{ display: "grid", gridTemplateColumns: hasDos && hasDonts ? "1fr 1fr" : "1fr", gap: 12 }}>
+                          {hasDos && (
+                            <div>
+                              <div style={{ fontSize: 11, fontWeight: 700, color: "#155724", textTransform: "uppercase", marginBottom: 4 }}>Dos</div>
+                              <ul style={{ margin: 0, padding: "0 0 0 16px" }}>
+                                {slide.dos.filter(Boolean).map((d, i) => (
+                                  <li key={i} style={{ fontSize: 12, color: "#4a5568", marginBottom: 2 }}>{d}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                          {hasDonts && (
+                            <div>
+                              <div style={{ fontSize: 11, fontWeight: 700, color: "#c53030", textTransform: "uppercase", marginBottom: 4 }}>Don'ts</div>
+                              <ul style={{ margin: 0, padding: "0 0 0 16px" }}>
+                                {slide.donts.filter(Boolean).map((d, i) => (
+                                  <li key={i} style={{ fontSize: 12, color: "#4a5568", marginBottom: 2 }}>{d}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
                 ))
               )}
