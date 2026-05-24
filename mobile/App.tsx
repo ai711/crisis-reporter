@@ -19,6 +19,7 @@ import ReporterProfileScreen from "./src/screens/ReporterProfileScreen";
 import SafetyTipsScreen from "./src/screens/SafetyTipsScreen";
 import BadgesScreen from "./src/screens/BadgesScreen";
 import FAQScreen from "./src/screens/FAQScreen";
+import AboutScreen from "./src/screens/AboutScreen";
 import ReportDetailScreen from "./src/screens/ReportDetailScreen";
 
 const Stack = createNativeStackNavigator();
@@ -65,6 +66,7 @@ function Navigation() {
             <Stack.Screen name="SafetyTipsScreen" component={SafetyTipsScreen} options={{ headerShown: false }} />
             <Stack.Screen name="BadgesScreen" component={BadgesScreen} options={{ headerShown: false }} />
             <Stack.Screen name="FAQScreen" component={FAQScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="AboutScreen" component={AboutScreen} options={{ headerShown: false }} />
             <Stack.Screen name="ReportDetailScreen" component={ReportDetailScreen} options={{ headerShown: false }} />
           </>
         )}

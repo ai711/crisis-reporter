@@ -1,9 +1,13 @@
 import React, { useState } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet, Dimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
+import { MaterialIcons } from '@expo/vector-icons';
+
+const { width: screenWidth } = Dimensions.get('window');
+const scale = (size: number) => Math.round(screenWidth / 375 * size);
 
 const FAQ_ITEMS = [
   {
@@ -46,11 +50,10 @@ export default function FAQScreen() {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* Header */}
-      <View style={styles.header}>
+    <View style={styles.container}>
+      <View style={[styles.header, { paddingTop: insets.top, height: 56 + insets.top }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Text style={styles.backText}>← Back</Text>
+          <MaterialIcons name="arrow-back" size={scale(24)} color="#0468B1" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>FAQ</Text>
         <View style={styles.backBtn} />
@@ -66,10 +69,17 @@ export default function FAQScreen() {
           >
             <View style={styles.faqQuestion}>
               <Text style={styles.faqQuestionText}>{item.q}</Text>
-              <Text style={styles.faqChevron}>{openIndex === index ? '▲' : '▼'}</Text>
+              <MaterialIcons
+                name={openIndex === index ? 'expand-more' : 'chevron-right'}
+                size={scale(20)}
+                color="#717782"
+              />
             </View>
             {openIndex === index && (
-              <Text style={styles.faqAnswer}>{item.a}</Text>
+              <>
+                <View style={styles.separator} />
+                <Text style={styles.faqAnswer}>{item.a}</Text>
+              </>
             )}
           </TouchableOpacity>
         ))}
@@ -79,28 +89,44 @@ export default function FAQScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FFFFFF' },
+  container: { flex: 1, backgroundColor: '#F6F3F2' },
   header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 14,
-    borderBottomWidth: 1, borderBottomColor: '#E0E0E0',
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    backgroundColor: 'rgba(255,255,255,0.92)',
   },
-  backBtn: { width: 60 },
-  backText: { color: '#0468B1', fontSize: 15 },
-  headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#333333' },
-  scrollContent: { padding: 16 },
+  backBtn: { minWidth: 44, minHeight: 44, justifyContent: 'center', alignItems: 'center' },
+  headerTitle: { fontSize: scale(17), fontWeight: '600', color: '#1B1C1C' },
+  scrollContent: { paddingTop: 16, paddingBottom: 32 },
   faqItem: {
-    borderBottomWidth: 1, borderBottomColor: '#F0F0F0',
-    paddingVertical: 16, paddingHorizontal: 8,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    marginHorizontal: screenWidth * 0.05,
+    marginBottom: 8,
+    overflow: 'hidden',
   },
   faqQuestion: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   faqQuestionText: {
-    flex: 1, fontSize: 15, fontWeight: '600', color: '#333333', lineHeight: 22, marginRight: 12,
+    flex: 1,
+    fontSize: scale(15),
+    fontWeight: '600',
+    color: '#1B1C1C',
+    marginRight: 8,
   },
-  faqChevron: { fontSize: 12, color: '#0468B1', marginTop: 4 },
+  separator: { height: 1, backgroundColor: '#F6F3F2' },
   faqAnswer: {
-    fontSize: 14, color: '#555555', lineHeight: 21, marginTop: 10,
+    padding: 16,
+    paddingTop: 12,
+    fontSize: scale(14),
+    color: '#414751',
+    lineHeight: scale(14) * 1.6,
   },
 });
