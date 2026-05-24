@@ -1,44 +1,45 @@
 #!/usr/bin/env python3
 """
-Seed Safety Tips content (Parts A, B, C) into the Crisis Reporter database
-by calling the content API endpoints directly.
-
-Prerequisites:
-    - Backend must be running at http://localhost:8000
+Seed Safety Tips content (Parts A, B, C) directly into the database via SQLAlchemy.
+No HTTP calls, no backend process required — only a running PostgreSQL database.
 
 Usage:
     cd C:\\Users\\Shivam\\crisis-reporter\\backend
     python scripts/seed_safety_content.py
 """
 
+import asyncio
 import sys
-import time
+from datetime import datetime, timezone
+from pathlib import Path
 
-try:
-    import httpx
-except ImportError:
-    print("ERROR: httpx is not installed. Run: pip install httpx", file=sys.stderr)
-    sys.exit(1)
+# Allow imports from the backend app package
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
-# ── Configuration ──────────────────────────────────────────────────────────────
+from sqlalchemy import select
 
-BASE_URL = "http://localhost:8000"
-EMAIL = "admin@crisisreporter.org"
-PASSWORD = "Admin2026"
+from app.database import AsyncSessionLocal
+from app.models.app_setting import AppSetting
 
 
-# ── Auth ───────────────────────────────────────────────────────────────────────
+# ── DB helpers (mirrors content.py) ───────────────────────────────────────────
 
-def _login(client: httpx.Client, email: str, password: str) -> str:
-    resp = client.post(
-        f"{BASE_URL}/api/dashboard/auth/login",
-        json={"email": email, "password": password},
-        timeout=60,
-    )
-    if resp.status_code != 200:
-        print(f"ERROR: Login failed ({resp.status_code}): {resp.text}", file=sys.stderr)
-        sys.exit(1)
-    return resp.json()["access_token"]
+async def _upsert(db, key: str, value: dict) -> None:
+    result = await db.execute(select(AppSetting).where(AppSetting.key == key))
+    row = result.scalar_one_or_none()
+    if row is None:
+        db.add(AppSetting(key=key, value=value))
+    else:
+        row.value = value
+    await db.commit()
+
+
+def _now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _slides_value(slides: list[dict]) -> dict:
+    return {"slides": slides, "version": 1, "updated_at": _now()}
 
 
 # ── Part A — Safety Tips ───────────────────────────────────────────────────────
@@ -667,87 +668,59 @@ FIRST_AID_SLIDES: list[dict] = [
 ]
 
 
-# ── Seeding helpers ────────────────────────────────────────────────────────────
+# ── Seeding ────────────────────────────────────────────────────────────────────
 
-def _patch(
-    client: httpx.Client,
-    token: str,
-    url: str,
-    payload: dict,
-    label: str,
-) -> bool:
-    try:
-        resp = client.patch(
-            url,
-            json=payload,
-            headers={"Authorization": f"Bearer {token}"},
-            timeout=30,
-        )
-        if resp.status_code == 200:
-            return True
-        print(f"  FAILED ({resp.status_code}): {resp.text[:200]}")
-        return False
-    except httpx.RequestError as exc:
-        print(f"  ERROR: {exc}")
-        return False
-
-
-def seed_safety_tips(client: httpx.Client, token: str) -> None:
+async def seed_safety_tips(db) -> None:
     print("\n=== Part A: Safety Tips ===")
     for disaster_type, slides in SAFETY_TIPS.items():
         print(f"Seeding {disaster_type}...", end=" ", flush=True)
-        ok = _patch(
-            client,
-            token,
-            f"{BASE_URL}/api/content/safety-tips/{disaster_type}",
-            {"slides": slides},
-            disaster_type,
-        )
-        print("done" if ok else "SKIPPED (error logged above)")
-        if ok:
-            time.sleep(3)
+        try:
+            await _upsert(db, f"content_safety-tips_{disaster_type}", _slides_value(slides))
+            print("done")
+        except Exception as exc:
+            print(f"FAILED: {exc}")
 
 
-def seed_reporting_guidelines(client: httpx.Client, token: str) -> None:
+async def seed_reporting_guidelines(db) -> None:
     print("\n=== Part B: Reporting Guidelines ===")
     print("Seeding reporting-guidelines...", end=" ", flush=True)
-    ok = _patch(
-        client,
-        token,
-        f"{BASE_URL}/api/content/reporting-guidelines",
-        {"slides": REPORTING_GUIDELINES_SLIDES},
-        "reporting-guidelines",
-    )
-    print("done" if ok else "SKIPPED (error logged above)")
+    try:
+        await _upsert(db, "content_reporting-guidelines", _slides_value(REPORTING_GUIDELINES_SLIDES))
+        print("done")
+    except Exception as exc:
+        print(f"FAILED: {exc}")
 
 
-def seed_first_aid(client: httpx.Client, token: str) -> None:
+async def seed_first_aid(db) -> None:
     print("\n=== Part C: First Aid Tips ===")
     print("Seeding first-aid...", end=" ", flush=True)
-    ok = _patch(
-        client,
-        token,
-        f"{BASE_URL}/api/content/first-aid",
-        {"slides": FIRST_AID_SLIDES},
-        "first-aid",
-    )
-    print("done" if ok else "SKIPPED (error logged above)")
+    try:
+        await _upsert(db, "content_first-aid", _slides_value(FIRST_AID_SLIDES))
+        print("done")
+    except Exception as exc:
+        print(f"FAILED: {exc}")
+
+
+async def sync_string_keys(db) -> None:
+    print("\nSyncing translation string keys...", end=" ", flush=True)
+    try:
+        from app.routers.language_packages import ensure_string_keys_synced
+        await ensure_string_keys_synced(db)
+        print("done")
+    except Exception as exc:
+        print(f"FAILED: {exc}")
 
 
 # ── Entry point ────────────────────────────────────────────────────────────────
 
-def main() -> None:
-    print(f"Authenticating as {EMAIL}...", end=" ", flush=True)
-    with httpx.Client() as client:
-        token = _login(client, EMAIL, PASSWORD)
-        print("ok")
-
-        seed_safety_tips(client, token)
-        seed_reporting_guidelines(client, token)
-        seed_first_aid(client, token)
-
+async def main() -> None:
+    async with AsyncSessionLocal() as db:
+        await seed_safety_tips(db)
+        await seed_reporting_guidelines(db)
+        await seed_first_aid(db)
+        await sync_string_keys(db)
     print("\nSeeding complete.")
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
