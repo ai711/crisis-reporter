@@ -18,8 +18,15 @@ router = APIRouter(prefix="/api/content", tags=["Content"])
 SIMPLE_TYPES = {"tc", "onboarding", "reporting-guidelines", "first-aid", "error_messages", "system_messages"}
 
 DISASTER_TYPES = {
-    "earthquake", "flood", "hurricane", "landslide", "tsunami",
-    "fire", "drought", "conflict", "epidemic",
+    "earthquake",
+    "flood",
+    "tsunami",
+    "hurricane_cyclone",
+    "wildfire",
+    "explosion",
+    "chemical_incident",
+    "conflict",
+    "civil_unrest",
 }
 
 _REPORTING_GUIDELINES_DEFAULT = [
