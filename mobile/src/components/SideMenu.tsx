@@ -1,24 +1,33 @@
-import React from 'react';
+import React from "react";
 import {
   View, Text, TouchableOpacity, Modal,
   StyleSheet, Dimensions, TouchableWithoutFeedback,
-} from 'react-native';
-import { useNavigation } from '@react-navigation/native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+} from "react-native";
+import { useNavigation } from "@react-navigation/native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { MaterialIcons } from "@expo/vector-icons";
 
-const MENU_WIDTH = Dimensions.get('window').width * 0.75;
+const { width: screenWidth } = Dimensions.get("window");
+const scale = (size: number) => Math.round((screenWidth / 375) * size);
+
+const MENU_WIDTH = screenWidth * 0.78;
 
 type SideMenuProps = {
   visible: boolean;
   onClose: () => void;
 };
 
-const MENU_ITEMS = [
-  { key: 'SafetyTipsScreen', label: 'Safety Tips', icon: '🛡️' },
-  { key: 'ReporterProfileScreen', label: 'Reporter Profile', icon: '👤' },
-  { key: 'BadgesScreen', label: 'Badges & Certifications', icon: '🏅' },
-  { key: 'SettingsScreen', label: 'Settings', icon: '⚙️' },
-  { key: 'FAQScreen', label: 'FAQ', icon: '❓' },
+type MenuItem = {
+  key: string;
+  label: string;
+  icon: React.ComponentProps<typeof MaterialIcons>["name"];
+};
+
+const MENU_ITEMS: MenuItem[] = [
+  { key: "SafetyTipsScreen", label: "Safety Tips", icon: "security" },
+  { key: "ReporterProfileScreen", label: "Reporter Profile", icon: "person" },
+  { key: "BadgesScreen", label: "Badges & Certifications", icon: "star" },
+  { key: "SettingsScreen", label: "Settings", icon: "settings" },
 ];
 
 export default function SideMenu({ visible, onClose }: SideMenuProps) {
@@ -41,12 +50,21 @@ export default function SideMenu({ visible, onClose }: SideMenuProps) {
       <TouchableWithoutFeedback onPress={onClose}>
         <View style={styles.overlay}>
           <TouchableWithoutFeedback>
-            <View style={[styles.menu, { paddingTop: insets.top + 16, width: MENU_WIDTH }]}>
+            <View style={[styles.menu, { width: MENU_WIDTH }]}>
               {/* Menu header */}
-              <View style={styles.menuHeader}>
-                <Text style={styles.menuTitle}>Crisis Reporter</Text>
-                <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-                  <Text style={styles.closeIcon}>✕</Text>
+              <View style={[styles.menuHeader, { paddingTop: insets.top + 20 }]}>
+                <View style={styles.brandRow}>
+                  <View style={styles.brandIconContainer}>
+                    <MaterialIcons name="security" size={scale(20)} color="#0468B1" />
+                  </View>
+                  <Text style={styles.menuTitle}>Crisis Reporter</Text>
+                </View>
+                <TouchableOpacity
+                  onPress={onClose}
+                  style={styles.closeBtn}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <MaterialIcons name="close" size={scale(22)} color="#717782" />
                 </TouchableOpacity>
               </View>
 
@@ -54,19 +72,31 @@ export default function SideMenu({ visible, onClose }: SideMenuProps) {
               <View style={styles.divider} />
 
               {/* Menu items */}
-              {MENU_ITEMS.map((item) => (
-                <TouchableOpacity
-                  key={item.key}
-                  style={styles.menuItem}
-                  onPress={() => handleNavigate(item.key)}
-                >
-                  <Text style={styles.menuItemIcon}>{item.icon}</Text>
-                  <Text style={styles.menuItemLabel}>{item.label}</Text>
-                </TouchableOpacity>
-              ))}
+              <View style={styles.itemsContainer}>
+                {MENU_ITEMS.map((item) => (
+                  <TouchableOpacity
+                    key={item.key}
+                    style={styles.menuItem}
+                    onPress={() => handleNavigate(item.key)}
+                    activeOpacity={0.7}
+                  >
+                    <MaterialIcons name={item.icon} size={scale(22)} color="#414751" />
+                    <Text style={styles.menuItemLabel}>{item.label}</Text>
+                    <MaterialIcons
+                      name="chevron_right"
+                      size={scale(18)}
+                      color="#C1C7D2"
+                      style={styles.chevron}
+                    />
+                  </TouchableOpacity>
+                ))}
+              </View>
 
-              {/* Bottom padding */}
-              <View style={{ height: insets.bottom + 24 }} />
+              {/* Footer */}
+              <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
+                <View style={styles.footerDivider} />
+                <Text style={styles.footerText}>Crisis Reporter v1.0</Text>
+              </View>
             </View>
           </TouchableWithoutFeedback>
         </View>
@@ -78,59 +108,98 @@ export default function SideMenu({ visible, onClose }: SideMenuProps) {
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    flexDirection: 'row',
+    backgroundColor: "rgba(0,0,0,0.45)",
+    flexDirection: "row",
   },
   menu: {
-    backgroundColor: '#FFFFFF',
-    height: '100%',
-    shadowColor: '#000',
+    backgroundColor: "#FFFFFF",
+    height: "100%",
+    borderTopRightRadius: 16,
+    borderBottomRightRadius: 16,
+    shadowColor: "#000",
     shadowOffset: { width: 2, height: 0 },
     shadowOpacity: 0.15,
     shadowRadius: 8,
-    elevation: 8,
+    elevation: 20,
+    flexDirection: "column",
   },
+
+  // Header
   menuHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    marginBottom: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 24,
+    paddingBottom: 20,
+  },
+  brandRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  brandIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: "rgba(4,104,177,0.1)",
+    justifyContent: "center",
+    alignItems: "center",
   },
   menuTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#0468B1',
+    fontSize: scale(18),
+    fontWeight: "900",
+    color: "#0468B1",
   },
   closeBtn: {
-    padding: 8,
-    width: 36,
-    alignItems: 'center',
+    minWidth: 44,
+    minHeight: 44,
+    justifyContent: "center",
+    alignItems: "center",
   },
-  closeIcon: {
-    fontSize: 16,
-    color: '#666666',
-  },
+
+  // Divider
   divider: {
     height: 1,
-    backgroundColor: '#E0E0E0',
-    marginHorizontal: 20,
-    marginBottom: 8,
+    backgroundColor: "#F0EDED",
+  },
+
+  // Items
+  itemsContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    gap: 4,
+    flex: 1,
   },
   menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    minHeight: 52,
-  },
-  menuItemIcon: {
-    fontSize: 20,
-    width: 32,
+    height: 52,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 16,
+    minWidth: 44,
+    minHeight: 44,
   },
   menuItemLabel: {
-    fontSize: 16,
-    color: '#333333',
-    marginLeft: 12,
+    fontSize: scale(16),
+    fontWeight: "500",
+    color: "#1B1C1C",
+    flex: 1,
+  },
+  chevron: { marginLeft: "auto" },
+
+  // Footer
+  footer: {
+    paddingHorizontal: 24,
+  },
+  footerDivider: {
+    height: 1,
+    backgroundColor: "#F0EDED",
+    marginBottom: 16,
+  },
+  footerText: {
+    fontSize: scale(12),
+    color: "#9CA3AF",
+    fontWeight: "500",
   },
 });

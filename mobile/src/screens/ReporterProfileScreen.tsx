@@ -1,26 +1,44 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
-  StyleSheet, ActivityIndicator, Alert, Image,
+  StyleSheet, ActivityIndicator, Alert, Image, Dimensions,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import * as SecureStore from "expo-secure-store";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as ImagePicker from "expo-image-picker";
+import { MaterialIcons } from "@expo/vector-icons";
 import api from "../services/api";
+
+const { width: screenWidth } = Dimensions.get("window");
+const scale = (size: number) => Math.round((screenWidth / 375) * size);
 
 export default function ReporterProfileScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
 
   const [reporterId, setReporterId] = useState<string | null>(null);
-  const [name, setName] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
+  const [phoneCountryCode, setPhoneCountryCode] = useState("+1");
   const [phone, setPhone] = useState("");
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [focusedField, setFocusedField] = useState<string | null>(null);
+
+  const initialValues = useRef({ firstName: "", lastName: "", email: "", phone: "" });
+
+  const hasChanges =
+    firstName !== initialValues.current.firstName ||
+    lastName !== initialValues.current.lastName ||
+    email !== initialValues.current.email ||
+    phone !== initialValues.current.phone;
+
+  const completionCount = [firstName, lastName, email, phone].filter(Boolean).length;
+  const completion = Math.round((completionCount / 4) * 100);
 
   // ── Load reporter ID + pre-populate fields ──────────────────────────────
 
@@ -36,10 +54,20 @@ export default function ReporterProfileScreen() {
         const cached = await AsyncStorage.getItem("cr_profile_cache");
         if (cached) {
           const profile = JSON.parse(cached);
-          if (profile.name) setName(profile.name);
+          const parts = (profile.name ?? "").split(" ");
+          const fn = parts[0] ?? "";
+          const ln = parts.slice(1).join(" ");
+          setFirstName(fn);
+          setLastName(ln);
           if (profile.email) setEmail(profile.email);
           if (profile.phone) setPhone(profile.phone);
           if (profile.photo_url) setPhotoUrl(profile.photo_url);
+          initialValues.current = {
+            firstName: fn,
+            lastName: ln,
+            email: profile.email ?? "",
+            phone: profile.phone ?? "",
+          };
         }
       } catch {
         // Cache read failed — fall through to API
@@ -49,10 +77,25 @@ export default function ReporterProfileScreen() {
       try {
         const response = await api.get(`/api/reporters/${id}`);
         const data = response.data;
-        if (data.name) setName(data.name);
+        if (data.name) {
+          const parts = (data.name ?? "").split(" ");
+          const fn = parts[0] ?? "";
+          const ln = parts.slice(1).join(" ");
+          setFirstName(fn);
+          setLastName(ln);
+        }
         if (data.email) setEmail(data.email);
         if (data.phone) setPhone(data.phone);
         if (data.photo_url) setPhotoUrl(data.photo_url);
+
+        const fn2 = data.name ? data.name.split(" ")[0] ?? "" : "";
+        const ln2 = data.name ? data.name.split(" ").slice(1).join(" ") : "";
+        initialValues.current = {
+          firstName: fn2,
+          lastName: ln2,
+          email: data.email ?? "",
+          phone: data.phone ?? "",
+        };
 
         await AsyncStorage.setItem("cr_profile_cache", JSON.stringify({
           name: data.name ?? "",
@@ -141,18 +184,19 @@ export default function ReporterProfileScreen() {
 
   // ── Save ──────────────────────────────────────────────────────────────────
 
-  const hasAtLeastOne = name.trim() || email.trim() || phone.trim();
-
   const handleSave = async () => {
-    if (!hasAtLeastOne || !reporterId) return;
+    if (!hasChanges || !reporterId || loading) return;
     setLoading(true);
+
+    const fullName = [firstName.trim(), lastName.trim()].filter(Boolean).join(" ");
+    const fullPhone = phone.trim() ? `${phoneCountryCode}${phone.trim()}` : "";
 
     // Save locally first (offline-first)
     try {
       await AsyncStorage.setItem("cr_profile_cache", JSON.stringify({
-        name: name.trim(),
+        name: fullName,
         email: email.trim(),
-        phone: phone.trim(),
+        phone: fullPhone,
         photo_url: photoUrl ?? "",
       }));
     } catch {
@@ -162,10 +206,16 @@ export default function ReporterProfileScreen() {
     // Attempt API save
     try {
       await api.patch(`/api/reporters/${reporterId}`, {
-        name: name.trim() || undefined,
+        name: fullName || undefined,
         email: email.trim() || undefined,
-        phone: phone.trim() || undefined,
+        phone: fullPhone || undefined,
       });
+      initialValues.current = {
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        email: email.trim(),
+        phone: phone.trim(),
+      };
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch {
@@ -180,219 +230,387 @@ export default function ReporterProfileScreen() {
 
   // ── Render ────────────────────────────────────────────────────────────────
 
+  const inputStyle = (field: string, hasValue: boolean) => [
+    styles.input,
+    focusedField === field && styles.inputFocused,
+    hasValue && !focusedField && styles.inputFilled,
+    hasValue && focusedField === field && styles.inputFocused,
+  ];
+
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Text style={styles.backText}>← Back</Text>
+      <View style={[styles.header, { paddingTop: insets.top, height: 56 + insets.top }]}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.headerBtn}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <MaterialIcons name="arrow_back" size={scale(24)} color="#0468B1" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Reporter Profile</Text>
-        <View style={styles.backBtn} />
+        <View style={styles.headerBtn} />
       </View>
 
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={[styles.form, { paddingBottom: insets.bottom + 32 }]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 100 }]}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Profile photo circle */}
-        <TouchableOpacity style={styles.avatarContainer} onPress={handlePickPhoto}>
-          {photoUrl ? (
-            <Image source={{ uri: photoUrl }} style={styles.avatar} />
-          ) : (
-            <View style={styles.avatarPlaceholder}>
-              <Text style={styles.avatarPlaceholderText}>
-                {name ? name.charAt(0).toUpperCase() : "?"}
-              </Text>
+        {/* Profile photo section */}
+        <View style={styles.photoSection}>
+          <TouchableOpacity onPress={handlePickPhoto} style={styles.avatarWrapper}>
+            {photoUrl ? (
+              <Image source={{ uri: photoUrl }} style={styles.avatar} />
+            ) : (
+              <View style={styles.avatarEmpty}>
+                <MaterialIcons name="person" size={scale(48)} color="#9CA3AF" />
+              </View>
+            )}
+            <View style={styles.cameraBadge}>
+              <MaterialIcons name="photo_camera" size={scale(16)} color="#FFFFFF" />
             </View>
+          </TouchableOpacity>
+          <Text style={styles.photoLabel}>{photoUrl ? "Change Photo" : "Add Profile Photo"}</Text>
+          {reporterId && (
+            <Text style={styles.reporterIdText}>{reporterId}</Text>
           )}
-          <View style={styles.avatarEditBadge}>
-            <Text style={styles.avatarEditBadgeText}>📷</Text>
+        </View>
+
+        {/* Profile completion */}
+        <View style={styles.completionCard}>
+          <View style={styles.completionRow}>
+            <Text style={styles.completionLabel}>Profile Completion</Text>
+            <Text style={styles.completionPct}>{completion}%</Text>
           </View>
-        </TouchableOpacity>
-
-        {/* Reporter ID display */}
-        {reporterId && (
-          <View style={styles.reporterIdBox}>
-            <Text style={styles.reporterIdLabel}>Your Reporter ID</Text>
-            <Text style={styles.reporterIdValue}>{reporterId}</Text>
+          <View style={styles.progressTrack}>
+            <View style={[styles.progressFill, { width: `${completion}%` as any }]} />
           </View>
-        )}
+          <View style={styles.completionHintRow}>
+            <MaterialIcons name="info_outline" size={scale(14)} color="#717782" />
+            <Text style={styles.completionHint}>
+              Add your email or phone number to unlock badges
+            </Text>
+          </View>
+        </View>
 
-        {/* Text fields */}
-        <TextInput
-          style={styles.input}
-          placeholder="Your name (optional)"
-          placeholderTextColor="#999"
-          value={name}
-          onChangeText={setName}
-        />
-        <TextInput
-          style={styles.input}
-          placeholder="Email address (optional)"
-          placeholderTextColor="#999"
-          keyboardType="email-address"
-          autoCapitalize="none"
-          value={email}
-          onChangeText={setEmail}
-        />
-        <TextInput
-          style={styles.input}
-          placeholder="Phone number (optional)"
-          placeholderTextColor="#999"
-          keyboardType="phone-pad"
-          value={phone}
-          onChangeText={setPhone}
-        />
-
-        {!hasAtLeastOne && (
-          <Text style={styles.validationText}>
-            Please fill in at least one field to continue.
+        {/* Optional info notice */}
+        <View style={styles.infoNotice}>
+          <MaterialIcons name="info" size={scale(18)} color="#0468B1" />
+          <Text style={styles.infoNoticeText}>
+            Profile is optional. You can submit reports anonymously without filling in any details.
           </Text>
-        )}
+        </View>
 
-        {/* Success banner — shown above Save button for 3 seconds */}
+        {/* Form fields */}
+        <View style={styles.formCard}>
+          {/* First Name */}
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>FIRST NAME (OPTIONAL)</Text>
+            <TextInput
+              style={inputStyle("firstName", !!firstName)}
+              placeholder="First name"
+              placeholderTextColor="#9CA3AF"
+              value={firstName}
+              onChangeText={setFirstName}
+              onFocus={() => setFocusedField("firstName")}
+              onBlur={() => setFocusedField(null)}
+            />
+          </View>
+
+          {/* Last Name */}
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>LAST NAME (OPTIONAL)</Text>
+            <TextInput
+              style={inputStyle("lastName", !!lastName)}
+              placeholder="Last name"
+              placeholderTextColor="#9CA3AF"
+              value={lastName}
+              onChangeText={setLastName}
+              onFocus={() => setFocusedField("lastName")}
+              onBlur={() => setFocusedField(null)}
+            />
+          </View>
+
+          {/* Email */}
+          <View style={styles.fieldGroup}>
+            <View style={styles.fieldLabelRow}>
+              <Text style={[styles.fieldLabel, { marginBottom: 0 }]}>EMAIL ADDRESS (OPTIONAL)</Text>
+              <Text style={styles.fieldHint}>Links all your reports to this email</Text>
+            </View>
+            <View style={{ height: 6 }} />
+            <TextInput
+              style={inputStyle("email", !!email)}
+              placeholder="email@example.com"
+              placeholderTextColor="#9CA3AF"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              value={email}
+              onChangeText={setEmail}
+              onFocus={() => setFocusedField("email")}
+              onBlur={() => setFocusedField(null)}
+            />
+          </View>
+
+          {/* Mobile Number */}
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>MOBILE NUMBER (OPTIONAL)</Text>
+            <View style={styles.phoneRow}>
+              <TextInput
+                style={[inputStyle("phoneCode", true), styles.phoneCodeInput]}
+                value={phoneCountryCode}
+                onChangeText={setPhoneCountryCode}
+                keyboardType="phone-pad"
+                onFocus={() => setFocusedField("phoneCode")}
+                onBlur={() => setFocusedField(null)}
+              />
+              <TextInput
+                style={[inputStyle("phone", !!phone), styles.phoneNumberInput]}
+                placeholder="Phone number"
+                placeholderTextColor="#9CA3AF"
+                keyboardType="phone-pad"
+                value={phone}
+                onChangeText={setPhone}
+                onFocus={() => setFocusedField("phone")}
+                onBlur={() => setFocusedField(null)}
+              />
+            </View>
+          </View>
+        </View>
+
+        {/* Success banner */}
         {saveSuccess && (
           <View style={styles.successBanner}>
-            <Text style={styles.successBannerText}>✓ Profile saved</Text>
+            <MaterialIcons name="check_circle" size={scale(16)} color="#2E7D32" />
+            <Text style={styles.successBannerText}>Profile saved</Text>
           </View>
         )}
+      </ScrollView>
 
-        {/* Save button */}
+      {/* Fixed footer */}
+      <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
         <TouchableOpacity
-          style={[
-            styles.saveBtn,
-            (!hasAtLeastOne || loading) && styles.saveBtnDisabled,
-          ]}
+          style={[styles.saveBtn, (!hasChanges || loading) && styles.saveBtnDisabled]}
           onPress={handleSave}
-          disabled={!hasAtLeastOne || loading}
+          disabled={!hasChanges || loading}
         >
           {loading ? (
-            <ActivityIndicator color="#FFF" />
+            <ActivityIndicator color={hasChanges ? "#FFF" : "#9CA3AF"} />
           ) : (
-            <Text style={styles.saveBtnText}>Save Profile</Text>
+            <Text style={[styles.saveBtnText, (!hasChanges || loading) && styles.saveBtnTextDisabled]}>
+              Save Profile
+            </Text>
           )}
         </TouchableOpacity>
-      </ScrollView>
+        <Text style={styles.footerHint}>
+          Your profile is saved locally and synced when online
+        </Text>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#FFFFFF" },
+  container: { flex: 1, backgroundColor: "#F6F3F2" },
 
+  // Header
   header: {
+    backgroundColor: "rgba(255,255,255,0.92)",
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-end",
     justifyContent: "space-between",
     paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: "#E0E0E0",
+    paddingBottom: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "#E4E2E1",
   },
-  backBtn: { width: 60 },
-  backText: { color: "#0468B1", fontSize: 15 },
-  headerTitle: { fontSize: 18, fontWeight: "bold", color: "#333" },
+  headerBtn: { width: 44, minHeight: 44, justifyContent: "center" },
+  headerTitle: { fontSize: scale(17), fontWeight: "600", color: "#1B1C1C" },
 
   scroll: { flex: 1 },
-  form: { padding: 24, gap: 12 },
+  scrollContent: { paddingTop: 0 },
 
-  // Avatar
-  avatarContainer: {
-    alignSelf: "center",
-    marginBottom: 20,
-    marginTop: 8,
-    position: "relative",
-  },
-  avatar: {
+  // Photo section
+  photoSection: { alignItems: "center", marginTop: 24 },
+  avatarWrapper: { position: "relative" },
+  avatar: { width: 96, height: 96, borderRadius: 48 },
+  avatarEmpty: {
     width: 96,
     height: 96,
     borderRadius: 48,
-    backgroundColor: "#E0E0E0",
-  },
-  avatarPlaceholder: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    backgroundColor: "#0468B1",
+    backgroundColor: "#E4E2E1",
     justifyContent: "center",
     alignItems: "center",
   },
-  avatarPlaceholderText: {
-    color: "#FFFFFF",
-    fontSize: 36,
-    fontWeight: "bold",
-  },
-  avatarEditBadge: {
+  cameraBadge: {
     position: "absolute",
     bottom: 0,
     right: 0,
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: "#FFFFFF",
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#0468B1",
     justifyContent: "center",
     alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#E0E0E0",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.15,
-    shadowRadius: 2,
-    elevation: 2,
+    borderWidth: 2,
+    borderColor: "#FFFFFF",
   },
-  avatarEditBadgeText: { fontSize: 14 },
+  photoLabel: {
+    color: "#0468B1",
+    fontSize: scale(14),
+    fontWeight: "600",
+    marginTop: 10,
+  },
+  reporterIdText: {
+    fontSize: scale(12),
+    color: "#9CA3AF",
+    marginTop: 4,
+    letterSpacing: 0.5,
+  },
 
-  // Reporter ID box
-  reporterIdBox: {
-    backgroundColor: "#F0F7FF",
-    borderRadius: 8,
+  // Profile completion
+  completionCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    marginHorizontal: screenWidth * 0.05,
     padding: 16,
+    marginTop: 20,
+  },
+  completionRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 8,
   },
-  reporterIdLabel: { fontSize: 12, color: "#666", marginBottom: 4 },
-  reporterIdValue: { fontSize: 18, fontWeight: "bold", color: "#0468B1" },
+  completionLabel: { fontSize: scale(14), fontWeight: "500", color: "#1B1C1C" },
+  completionPct: { fontSize: scale(16), fontWeight: "700", color: "#0468B1" },
+  progressTrack: {
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#E4E2E1",
+    marginTop: 10,
+    overflow: "hidden",
+  },
+  progressFill: { height: 8, borderRadius: 4, backgroundColor: "#0468B1" },
+  completionHintRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 8,
+  },
+  completionHint: { fontSize: scale(13), color: "#717782", flex: 1 },
 
-  // Inputs
-  input: {
-    height: 52,
-    borderWidth: 1,
-    borderColor: "#E0E0E0",
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    fontSize: 15,
-    color: "#333",
+  // Info notice
+  infoNotice: {
+    backgroundColor: "rgba(210,228,255,0.4)",
+    borderRadius: 12,
+    padding: 14,
+    marginHorizontal: screenWidth * 0.05,
+    marginTop: 12,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
   },
-  validationText: { color: "#D32F2F", fontSize: 13 },
+  infoNoticeText: { fontSize: scale(13), color: "#00497F", flex: 1 },
+
+  // Form card
+  formCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    marginHorizontal: screenWidth * 0.05,
+    padding: 20,
+    marginTop: 16,
+    gap: 20,
+  },
+  fieldGroup: {},
+  fieldLabelRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  fieldLabel: {
+    fontSize: scale(11),
+    fontWeight: "700",
+    color: "#717782",
+    textTransform: "uppercase",
+    letterSpacing: 1.2,
+    marginBottom: 6,
+  },
+  fieldHint: {
+    fontSize: scale(10),
+    color: "#0468B1",
+    fontStyle: "italic",
+  },
+  input: {
+    backgroundColor: "#E4E2E1",
+    borderRadius: 4,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: scale(14),
+    color: "#1B1C1C",
+    borderBottomWidth: 2,
+    borderBottomColor: "transparent",
+  },
+  inputFocused: { borderBottomColor: "#0468B1" },
+  inputFilled: { borderBottomColor: "#0468B1" },
+  phoneRow: { flexDirection: "row", gap: 8 },
+  phoneCodeInput: { width: 72 },
+  phoneNumberInput: { flex: 1 },
 
   // Success banner
   successBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
     backgroundColor: "#E8F5E9",
     borderRadius: 8,
     paddingHorizontal: 16,
     paddingVertical: 10,
-    marginBottom: 10,
-    alignItems: "center",
+    marginHorizontal: screenWidth * 0.05,
+    marginTop: 12,
     borderLeftWidth: 3,
     borderLeftColor: "#4CAF50",
   },
   successBannerText: {
     color: "#2E7D32",
-    fontSize: 14,
+    fontSize: scale(14),
     fontWeight: "600",
   },
 
-  // Save button
+  // Footer
+  footer: {
+    backgroundColor: "rgba(255,255,255,0.92)",
+    paddingTop: 12,
+    paddingHorizontal: screenWidth * 0.05,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "#E4E2E1",
+  },
   saveBtn: {
     height: 52,
-    borderRadius: 28,
+    borderRadius: 26,
     backgroundColor: "#0468B1",
     justifyContent: "center",
     alignItems: "center",
+    elevation: 4,
+    shadowColor: "#0468B1",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+  },
+  saveBtnDisabled: {
+    backgroundColor: "#E4E2E1",
+    elevation: 0,
+    shadowOpacity: 0,
+  },
+  saveBtnText: {
+    color: "#FFFFFF",
+    fontSize: scale(16),
+    fontWeight: "600",
+  },
+  saveBtnTextDisabled: { color: "#9CA3AF" },
+  footerHint: {
+    fontSize: scale(12),
+    color: "#9CA3AF",
+    textAlign: "center",
     marginTop: 8,
   },
-  saveBtnDisabled: { backgroundColor: "#B0C4D8" },
-  saveBtnText: { color: "#FFFFFF", fontSize: 16, fontWeight: "600" },
 });
