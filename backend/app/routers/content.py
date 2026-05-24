@@ -150,6 +150,72 @@ async def get_safety_tips(
     return await _get(db, key, _safety_tips_default(disaster_type))
 
 
+async def _sync_safety_tips_to_translation(
+    disaster_type: str,
+    slides: list,
+    db: AsyncSession,
+) -> None:
+    """
+    For each slide in the safety tips content, ensure a StringKey row exists
+    for every translatable text string and trigger auto-translation for all
+    active languages. Called as a background task after content save.
+    """
+    try:
+        from app.routers.language_packages import ensure_string_keys_synced
+        from app.tasks import auto_translate_content
+        from app.models.language_package import StringKey
+        from sqlalchemy import select as sa_select
+
+        # Key format: SAFETY_TIP_A_{DISASTER_TYPE}_SLIDE_{N}_{FIELD}
+        # e.g. SAFETY_TIP_A_EARTHQUAKE_SLIDE_1_TITLE
+        #      SAFETY_TIP_A_EARTHQUAKE_SLIDE_1_DO_1
+        #      SAFETY_TIP_A_EARTHQUAKE_SLIDE_1_DONT_1
+        disaster_upper = disaster_type.upper().replace("-", "_")
+        keys_to_ensure = []
+
+        for slide_idx, slide in enumerate(slides, start=1):
+            slide_prefix = f"SAFETY_TIP_A_{disaster_upper}_SLIDE_{slide_idx}"
+
+            title_text = slide.title if hasattr(slide, "title") else slide.get("title", "")
+            if title_text:
+                keys_to_ensure.append((f"{slide_prefix}_TITLE", title_text, "safety"))
+
+            dos = slide.dos if hasattr(slide, "dos") else slide.get("dos", [])
+            for do_idx, do_text in enumerate(dos, start=1):
+                if do_text:
+                    keys_to_ensure.append((f"{slide_prefix}_DO_{do_idx}", do_text, "safety"))
+
+            donts = slide.donts if hasattr(slide, "donts") else slide.get("donts", [])
+            for dont_idx, dont_text in enumerate(donts, start=1):
+                if dont_text:
+                    keys_to_ensure.append((f"{slide_prefix}_DONT_{dont_idx}", dont_text, "safety"))
+
+        for key_name, english_text, category in keys_to_ensure:
+            result = await db.execute(
+                sa_select(StringKey).where(StringKey.key == key_name)
+            )
+            existing = result.scalar_one_or_none()
+            if existing is None:
+                db.add(StringKey(
+                    key=key_name,
+                    english_text=english_text,
+                    category=category,
+                    is_active=True,
+                ))
+            elif existing.english_text != english_text:
+                existing.english_text = english_text
+
+        await db.commit()
+        await ensure_string_keys_synced(db)
+        asyncio.create_task(auto_translate_content("safety-tips"))
+
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).error(
+            "Safety tips translation sync failed for %s: %s", disaster_type, exc
+        )
+
+
 @router.patch("/safety-tips/{disaster_type}")
 async def patch_safety_tips(
     disaster_type: str,
@@ -168,7 +234,69 @@ async def patch_safety_tips(
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
     await _upsert(db, key, updated)
+    asyncio.create_task(_sync_safety_tips_to_translation(disaster_type, payload.slides, db))
     return updated
+
+
+async def _sync_slideshow_to_translation(
+    part: str,
+    slides: list,
+    db: AsyncSession,
+) -> None:
+    """
+    For each slide in reporting-guidelines (Part B) or first-aid (Part C) content,
+    ensure a StringKey row exists for every translatable string and trigger
+    auto-translation. Called as a background task after content save.
+
+    Key format:
+      SAFETY_TIP_B_SLIDE_{N}_TITLE / SAFETY_TIP_B_SLIDE_{N}_BULLET_{M}  (reporting-guidelines)
+      SAFETY_TIP_C_SLIDE_{N}_TITLE / SAFETY_TIP_C_SLIDE_{N}_BULLET_{M}  (first-aid)
+    """
+    try:
+        from app.routers.language_packages import ensure_string_keys_synced
+        from app.tasks import auto_translate_content
+        from app.models.language_package import StringKey
+        from sqlalchemy import select as sa_select
+
+        content_type = "reporting-guidelines" if part == "B" else "first-aid"
+        keys_to_ensure = []
+
+        for slide_idx, slide in enumerate(slides, start=1):
+            slide_prefix = f"SAFETY_TIP_{part}_SLIDE_{slide_idx}"
+
+            title_text = slide.get("title", "") if isinstance(slide, dict) else getattr(slide, "title", "")
+            if title_text:
+                keys_to_ensure.append((f"{slide_prefix}_TITLE", title_text, "content"))
+
+            bullets = slide.get("bullets", []) if isinstance(slide, dict) else getattr(slide, "bullets", [])
+            for bullet_idx, bullet_text in enumerate(bullets, start=1):
+                if bullet_text:
+                    keys_to_ensure.append((f"{slide_prefix}_BULLET_{bullet_idx}", bullet_text, "content"))
+
+        for key_name, english_text, category in keys_to_ensure:
+            result = await db.execute(
+                sa_select(StringKey).where(StringKey.key == key_name)
+            )
+            existing = result.scalar_one_or_none()
+            if existing is None:
+                db.add(StringKey(
+                    key=key_name,
+                    english_text=english_text,
+                    category=category,
+                    is_active=True,
+                ))
+            elif existing.english_text != english_text:
+                existing.english_text = english_text
+
+        await db.commit()
+        await ensure_string_keys_synced(db)
+        asyncio.create_task(auto_translate_content(content_type))
+
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).error(
+            "Slideshow translation sync failed for part=%s: %s", part, exc
+        )
 
 
 # ── Generic content endpoints ─────────────────────────────────────────────────
@@ -222,8 +350,13 @@ async def patch_content(
             row.value = {"version": new_version}
         await db.commit()
 
-    # Enqueue background auto-translation
+    # Sync string keys and enqueue background auto-translation
+    from app.routers.language_packages import ensure_string_keys_synced
     from app.tasks import auto_translate_content
+    await ensure_string_keys_synced(db)
     asyncio.create_task(auto_translate_content(content_type=content_type))
+    if content_type in ("reporting-guidelines", "first-aid") and payload.slides is not None:
+        part = "B" if content_type == "reporting-guidelines" else "C"
+        asyncio.create_task(_sync_slideshow_to_translation(part, payload.slides, db))
 
     return updated
