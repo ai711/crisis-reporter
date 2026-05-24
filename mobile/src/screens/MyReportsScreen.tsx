@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  ActivityIndicator, Alert, RefreshControl,
+  ActivityIndicator, Alert, RefreshControl, Dimensions, Animated,
 } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import * as SecureStore from 'expo-secure-store';
@@ -15,6 +16,10 @@ import {
 } from '../utils/offlineQueue';
 import type { QueuedReport } from '../types';
 import NetInfo from '@react-native-community/netinfo';
+
+// ── Scale ──────────────────────────────────────────────────────────────────────
+const { width: screenWidth } = Dimensions.get('window');
+const scale = (size: number) => Math.round((screenWidth / 375) * size);
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -83,6 +88,24 @@ const formatTime = (isoString: string | null | undefined): string => {
 const isFailed = (report: QueuedReport): boolean =>
   report.status === 'failed' || (report.status === 'pending' && report.retry_count >= 5);
 
+const formatDamageLevel = (level: string | null | undefined): string => {
+  if (!level) return '—';
+  const map: Record<string, string> = {
+    completely_destroyed: 'Completely Destroyed',
+    partially_damaged: 'Partially Damaged',
+    minimal_no_damage: 'Minimal/No Damage',
+    minimal: 'Minimal/No Damage',
+  };
+  return map[level] ?? level;
+};
+
+const getDamagePill = (level: string | null | undefined) => {
+  if (!level) return { bg: 'rgba(113,119,130,0.1)', color: '#717782' };
+  if (level === 'completely_destroyed') return { bg: 'rgba(229,62,62,0.1)', color: '#E53E3E' };
+  if (level === 'partially_damaged') return { bg: 'rgba(242,153,74,0.1)', color: '#F2994A' };
+  return { bg: 'rgba(56,161,105,0.1)', color: '#38A169' };
+};
+
 // ── Component ──────────────────────────────────────────────────────────────────
 
 export default function MyReportsScreen() {
@@ -98,6 +121,23 @@ export default function MyReportsScreen() {
   const [error, setError] = useState<string | null>(null);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
+
+  const skeletonOpacity = useRef(new Animated.Value(0.4)).current;
+
+  useEffect(() => {
+    const anim = Animated.loop(
+      Animated.sequence([
+        Animated.timing(skeletonOpacity, { toValue: 0.8, duration: 800, useNativeDriver: true }),
+        Animated.timing(skeletonOpacity, { toValue: 0.4, duration: 800, useNativeDriver: true }),
+      ])
+    );
+    if (loading) {
+      anim.start();
+    } else {
+      anim.stop();
+    }
+    return () => anim.stop();
+  }, [loading, skeletonOpacity]);
 
   // ── Load reporter ID from SecureStore ─────────────────────────────────────
 
@@ -235,25 +275,19 @@ export default function MyReportsScreen() {
     );
   };
 
-  // ── Loading state ─────────────────────────────────────────────────────────
+  // ── Loading state — 3 skeleton cards ─────────────────────────────────────
 
   if (loading) {
     return (
-      <View style={[styles.container, { paddingTop: insets.top }]}>
-        <View style={styles.header}>
-          <TouchableOpacity
-            onPress={() => navigation.goBack()}
-            style={styles.backBtn}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Text style={styles.backBtnText}>←</Text>
-          </TouchableOpacity>
+      <View style={styles.container}>
+        <View style={[styles.header, { height: 56 + insets.top, paddingTop: insets.top }]}>
           <Text style={styles.headerTitle}>My Reports</Text>
-          <View style={styles.backBtn} />
         </View>
-        <View style={styles.centred}>
-          <ActivityIndicator color="#0468B1" size="large" />
-        </View>
+        <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
+          {[0, 1, 2].map((i) => (
+            <Animated.View key={i} style={[styles.skeletonCard, { opacity: skeletonOpacity }]} />
+          ))}
+        </ScrollView>
       </View>
     );
   }
@@ -261,18 +295,10 @@ export default function MyReportsScreen() {
   // ── Main render ───────────────────────────────────────────────────────────
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          style={styles.backBtn}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <Text style={styles.backBtnText}>←</Text>
-        </TouchableOpacity>
+      <View style={[styles.header, { height: 56 + insets.top, paddingTop: insets.top }]}>
         <Text style={styles.headerTitle}>My Reports</Text>
-        <View style={styles.backBtn} />
       </View>
 
       <ScrollView
@@ -287,52 +313,98 @@ export default function MyReportsScreen() {
         }
       >
 
-        {/* ── SECTION 1: QUEUED REPORTS (all reporter states) ── */}
+        {/* ── SECTION 1: ANONYMOUS LOGIN PROMPT ── */}
+        {isAnonymousId(reporterId) && (
+          <View style={styles.loginPromptCard}>
+            <MaterialIcons name="info" color="#0468B1" size={scale(24)} style={styles.loginPromptIcon} />
+            <Text style={styles.loginPromptTitle}>Log in to see your full history</Text>
+            <Text style={styles.loginPromptSubtitle}>
+              Log in or create a free account to view all your reports across devices.
+            </Text>
+            <View style={styles.loginPromptButtons}>
+              <TouchableOpacity
+                style={styles.loginBtn}
+                onPress={() => navigation.navigate('LoginScreen')}
+              >
+                <Text style={styles.loginBtnText}>Log In</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.createBtn}
+                onPress={() => navigation.navigate('ReporterProfileScreen')}
+              >
+                <Text style={styles.createBtnText}>Create Account</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        {/* ── SECTION 2: QUEUED / PENDING REPORTS (all reporter states) ── */}
         {queuedReports.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>PENDING REPORTS</Text>
+          <View>
+            <Text style={styles.sectionHeader}>PENDING</Text>
             {queuedReports.map((report) => {
               const failed = isFailed(report);
+              const damagePill = getDamagePill(report.report.damage_level);
+              const infraType = (report.report as any).infrastructure_type as string | null | undefined;
               return (
-                <View key={report.local_id} style={styles.queueCard}>
-                  <View style={styles.queueCardHeader}>
-                    <Text style={styles.queueLocation} numberOfLines={1}>
-                      {getQueuedLocationLabel(report)}
-                    </Text>
+                <View key={report.local_id} style={styles.reportCard}>
+                  {/* ROW 1: Status pill + date */}
+                  <View style={styles.cardRow1}>
                     <View style={[
-                      styles.statusBadge,
-                      failed ? styles.statusBadgeFailed : styles.statusBadgePending,
+                      styles.statusPill,
+                      { backgroundColor: failed ? 'rgba(229,62,62,0.12)' : 'rgba(245,166,35,0.12)' },
                     ]}>
-                      <Text style={styles.statusBadgeText}>
-                        {failed ? 'Failed' : 'Pending'}
+                      <Text style={[styles.statusPillText, { color: failed ? '#E53E3E' : '#F5A623' }]}>
+                        {failed ? 'Failed' : 'Pending Sync'}
                       </Text>
                     </View>
+                    <Text style={styles.cardDate}>{formatTime(report.created_at)}</Text>
                   </View>
 
-                  <Text style={styles.queueDetail}>
-                    Damage: {report.report.damage_level ?? '—'}
-                  </Text>
-                  <Text style={styles.queueDetail}>
-                    Saved: {formatTime(report.created_at)}
-                  </Text>
+                  {/* ROW 2: Location */}
+                  <View style={styles.cardRow2}>
+                    <MaterialIcons name="location_on" color="#0468B1" size={scale(16)} />
+                    <Text style={styles.locationText} numberOfLines={1}>
+                      {getQueuedLocationLabel(report)}
+                    </Text>
+                  </View>
 
+                  {/* ROW 3: Damage pill */}
+                  <View style={[styles.damagePill, { backgroundColor: damagePill.bg }]}>
+                    <Text style={[styles.damagePillText, { color: damagePill.color }]}>
+                      {formatDamageLevel(report.report.damage_level)}
+                    </Text>
+                  </View>
+
+                  {/* ROW 4: Infrastructure type */}
+                  {!!infraType && (
+                    <Text style={styles.infraText}>{infraType}</Text>
+                  )}
+
+                  {/* Failed attempts note */}
                   {failed && report.retry_count > 0 && (
-                    <Text style={styles.queueRetryCount}>
+                    <Text style={styles.retryCountText}>
                       Failed after {report.retry_count} attempt{report.retry_count !== 1 ? 's' : ''}
                     </Text>
                   )}
 
-                  <View style={styles.queueActions}>
+                  {/* Divider */}
+                  <View style={styles.cardDivider} />
+
+                  {/* Action row */}
+                  <View style={styles.cardActions}>
                     <TouchableOpacity
                       style={styles.retryBtn}
                       onPress={() => handleRetry(report)}
                     >
-                      <Text style={styles.retryBtnText}>Retry now</Text>
+                      <MaterialIcons name="refresh" color="#0468B1" size={scale(15)} />
+                      <Text style={styles.retryBtnText}>Retry</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={styles.deleteBtn}
                       onPress={() => handleDelete(report)}
                     >
+                      <MaterialIcons name="delete" color="#E53E3E" size={scale(15)} />
                       <Text style={styles.deleteBtnText}>Delete</Text>
                     </TouchableOpacity>
                   </View>
@@ -342,86 +414,78 @@ export default function MyReportsScreen() {
           </View>
         )}
 
-        {/* ── SECTION 2: ANONYMOUS LOGIN PROMPT ── */}
-        {isAnonymousId(reporterId) && (
-          <View style={styles.loginPrompt}>
-            <Text style={styles.loginPromptText}>
-              Log in or create a free account to view your full report history.
-            </Text>
-            <TouchableOpacity
-              style={styles.loginBtn}
-              onPress={() => navigation.navigate('LoginScreen')}
-            >
-              <Text style={styles.loginBtnText}>Log In</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.createBtn}
-              onPress={() => navigation.navigate('ReporterProfileScreen')}
-            >
-              <Text style={styles.createBtnText}>Create Account</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
         {/* Empty state for anonymous with no queue */}
         {isAnonymousId(reporterId) && queuedReports.length === 0 && (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyStateIcon}>📋</Text>
-            <Text style={styles.emptyStateText}>No reports in this session.</Text>
+            <MaterialIcons name="assignment" color="#C1C7D2" size={scale(56)} />
+            <Text style={styles.emptyTitle}>No reports yet</Text>
+            <Text style={styles.emptySubtitle}>Your submitted reports will appear here.</Text>
           </View>
         )}
 
         {/* ── SECTION 3: SUBMITTED REPORTS (logged-in reporters only) ── */}
         {!isAnonymousId(reporterId) && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>SUBMITTED REPORTS</Text>
+          <View>
+            <Text style={styles.sectionHeader}>SUBMITTED</Text>
 
             {error && (
               <View style={styles.errorBox}>
                 <Text style={styles.errorText}>{error}</Text>
                 <TouchableOpacity
-                  style={styles.retryBtn}
+                  style={styles.tryAgainBtn}
                   onPress={() => {
                     setError(null);
                     loadSubmitted();
                   }}
                 >
-                  <Text style={styles.retryBtnText}>Try Again</Text>
+                  <Text style={styles.tryAgainBtnText}>Try Again</Text>
                 </TouchableOpacity>
               </View>
             )}
 
             {!error && submittedReports.length === 0 && (
               <View style={styles.emptyState}>
-                <Text style={styles.emptyStateIcon}>📋</Text>
-                <Text style={styles.emptyStateText}>No reports submitted yet.</Text>
-                <Text style={styles.emptyStateHint}>
-                  Your submitted reports will appear here.
-                </Text>
+                <MaterialIcons name="assignment" color="#C1C7D2" size={scale(56)} />
+                <Text style={styles.emptyTitle}>No reports yet</Text>
+                <Text style={styles.emptySubtitle}>Your submitted reports will appear here.</Text>
               </View>
             )}
 
-            {submittedReports.map((report) => (
-              <TouchableOpacity
-                key={report.id}
-                style={styles.reportCard}
-                onPress={() => navigation.navigate('ReportDetailScreen', { reportId: report.id })}
-                activeOpacity={0.75}
-              >
-                <View style={styles.reportCardRow}>
-                  <Text style={styles.reportLocation} numberOfLines={1}>
-                    {getSubmittedLocationLabel(report)}
-                  </Text>
-                  <Text style={styles.reportChevron}>›</Text>
-                </View>
-                <Text style={styles.reportDetail}>
-                  Damage: {report.damage_level ?? '—'}
-                </Text>
-                <Text style={styles.reportDate}>
-                  {formatTime(report.submitted_at)}
-                </Text>
-              </TouchableOpacity>
-            ))}
+            {submittedReports.map((report) => {
+              const damagePill = getDamagePill(report.damage_level);
+              return (
+                <TouchableOpacity
+                  key={report.id}
+                  style={styles.reportCard}
+                  onPress={() => navigation.navigate('ReportDetailScreen', { reportId: report.id })}
+                  activeOpacity={0.75}
+                >
+                  {/* ROW 1: Status pill + date */}
+                  <View style={styles.cardRow1}>
+                    <View style={[styles.statusPill, { backgroundColor: 'rgba(56,161,105,0.12)' }]}>
+                      <Text style={[styles.statusPillText, { color: '#38A169' }]}>Submitted</Text>
+                    </View>
+                    <Text style={styles.cardDate}>{formatTime(report.submitted_at)}</Text>
+                  </View>
+
+                  {/* ROW 2: Location + tappability chevron */}
+                  <View style={styles.cardRow2}>
+                    <MaterialIcons name="location_on" color="#0468B1" size={scale(16)} />
+                    <Text style={styles.locationText} numberOfLines={1}>
+                      {getSubmittedLocationLabel(report)}
+                    </Text>
+                    <MaterialIcons name="chevron_right" color="#C1C7D2" size={scale(18)} />
+                  </View>
+
+                  {/* ROW 3: Damage pill */}
+                  <View style={[styles.damagePill, { backgroundColor: damagePill.bg }]}>
+                    <Text style={[styles.damagePillText, { color: damagePill.color }]}>
+                      {formatDamageLevel(report.damage_level)}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
 
             {nextCursor && (
               <TouchableOpacity
@@ -447,203 +511,254 @@ export default function MyReportsScreen() {
 // ── Styles ─────────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FFFFFF' },
+  container: { flex: 1, backgroundColor: '#F6F3F2' },
 
   header: {
-    paddingHorizontal: 8,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
-    backgroundColor: '#FFFFFF',
-    flexDirection: 'row',
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    justifyContent: 'flex-end',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    paddingBottom: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(193,199,210,0.3)',
   },
-  backBtn: { width: 44, height: 44, justifyContent: 'center', paddingLeft: 8 },
-  backBtnText: { fontSize: 22, color: '#0468B1' },
   headerTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#0468B1',
+    fontSize: scale(17),
+    fontWeight: '600',
+    color: '#1B1C1C',
   },
 
   scroll: { flex: 1 },
-  scrollContent: { paddingHorizontal: 20, paddingTop: 16 },
-  centred: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  scrollContent: {
+    paddingHorizontal: screenWidth * 0.04,
+    paddingTop: 16,
+  },
 
-  section: { marginBottom: 24 },
-  sectionTitle: {
-    fontSize: 11,
+  // ── Skeleton ────────────────────────────────────────────────────────────────
+  skeletonCard: {
+    height: 100,
+    borderRadius: 16,
+    backgroundColor: '#F0EDED',
+    marginBottom: 12,
+  },
+
+  // ── Section header ──────────────────────────────────────────────────────────
+  sectionHeader: {
+    fontSize: scale(11),
     fontWeight: '700',
-    color: '#888888',
-    letterSpacing: 0.8,
+    color: '#717782',
+    letterSpacing: 1.2,
     textTransform: 'uppercase',
-    marginBottom: 10,
+    marginBottom: 8,
+    marginTop: 20,
   },
 
-  // Queued report card
-  queueCard: {
-    backgroundColor: '#FFF8E1',
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: '#FFE082',
-  },
-  queueCardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  queueLocation: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#333333',
-    flex: 1,
-    marginRight: 8,
-  },
-  statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    borderRadius: 12,
-  },
-  statusBadgePending: { backgroundColor: '#FF9800' },
-  statusBadgeFailed: { backgroundColor: '#F44336' },
-  statusBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  queueDetail: {
-    fontSize: 13,
-    color: '#555555',
-    marginBottom: 2,
-  },
-  queueRetryCount: {
-    fontSize: 12,
-    color: '#D32F2F',
-    marginTop: 2,
-    fontStyle: 'italic',
-  },
-  queueActions: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 10,
-  },
-  retryBtn: {
-    flex: 1,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#0468B1',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  retryBtnText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  deleteBtn: {
-    flex: 1,
-    height: 44,
-    borderRadius: 22,
+  // ── Anonymous login prompt card ─────────────────────────────────────────────
+  loginPromptCard: {
     backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#F44336',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  deleteBtnText: {
-    color: '#F44336',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-
-  // Anonymous login prompt
-  loginPrompt: {
-    backgroundColor: '#F0F7FF',
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 20,
+    marginHorizontal: screenWidth * 0.06,
+    marginTop: 20,
+    marginBottom: 4,
     alignItems: 'center',
-    marginBottom: 24,
   },
-  loginPromptText: {
-    fontSize: 15,
-    color: '#333333',
+  loginPromptIcon: {
+    marginBottom: 12,
+  },
+  loginPromptTitle: {
+    fontSize: scale(16),
+    fontWeight: '700',
+    color: '#1B1C1C',
     textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 16,
+  },
+  loginPromptSubtitle: {
+    fontSize: scale(14),
+    color: '#717782',
+    textAlign: 'center',
+    marginTop: 6,
+    lineHeight: scale(20),
+  },
+  loginPromptButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 16,
+    alignSelf: 'stretch',
   },
   loginBtn: {
-    width: '100%',
-    height: 48,
-    borderRadius: 24,
+    flex: 1,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: '#0468B1',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 10,
+    minHeight: 44,
+    minWidth: 44,
   },
   loginBtnText: {
     color: '#FFFFFF',
-    fontSize: 15,
+    fontSize: scale(14),
     fontWeight: '600',
   },
   createBtn: {
-    width: '100%',
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#FFFFFF',
+    flex: 1,
+    height: 44,
+    borderRadius: 22,
     borderWidth: 1.5,
     borderColor: '#0468B1',
     justifyContent: 'center',
     alignItems: 'center',
+    minHeight: 44,
+    minWidth: 44,
   },
   createBtnText: {
     color: '#0468B1',
-    fontSize: 15,
+    fontSize: scale(14),
     fontWeight: '600',
   },
 
-  // Submitted report card
+  // ── Report card (shared between queued and submitted) ───────────────────────
   reportCard: {
-    backgroundColor: '#F8F9FA',
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: '#EEEEEE',
-    minHeight: 80,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    elevation: 1,
+    shadowColor: '#000000',
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
   },
-  reportCardRow: {
+
+  // Card ROW 1: status pill + date
+  cardRow1: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: 10,
   },
-  reportLocation: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#333333',
-    flex: 1,
+  statusPill: {
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
   },
-  reportChevron: {
-    fontSize: 20,
-    color: '#CCCCCC',
-    marginLeft: 8,
+  statusPillText: {
+    fontSize: scale(11),
+    fontWeight: '700',
   },
-  reportDetail: {
-    fontSize: 13,
-    color: '#555555',
-    marginBottom: 2,
-  },
-  reportDate: {
-    fontSize: 12,
-    color: '#888888',
-    marginTop: 2,
+  cardDate: {
+    fontSize: scale(11),
+    color: '#9CA3AF',
+    fontWeight: '400',
   },
 
-  // Load more
+  // Card ROW 2: icon + location + optional chevron
+  cardRow2: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  locationText: {
+    fontSize: scale(15),
+    fontWeight: '700',
+    color: '#1B1C1C',
+    flex: 1,
+    marginLeft: 6,
+  },
+
+  // Card ROW 3: damage classification pill
+  damagePill: {
+    alignSelf: 'flex-start',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    marginBottom: 4,
+  },
+  damagePillText: {
+    fontSize: scale(12),
+    fontWeight: '600',
+  },
+
+  // Card ROW 4: infrastructure type
+  infraText: {
+    fontSize: scale(13),
+    color: '#717782',
+    marginTop: 4,
+  },
+
+  // Failed attempts note
+  retryCountText: {
+    fontSize: scale(11),
+    color: '#E53E3E',
+    marginTop: 4,
+    fontStyle: 'italic',
+  },
+
+  // Divider (queued cards only, between content and actions)
+  cardDivider: {
+    height: 1,
+    backgroundColor: '#F6F3F2',
+    marginVertical: 12,
+  },
+
+  // Action row (queued cards only)
+  cardActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 10,
+  },
+  retryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(4,104,177,0.08)',
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    gap: 6,
+    minWidth: 44,
+    minHeight: 44,
+  },
+  retryBtnText: {
+    color: '#0468B1',
+    fontSize: scale(13),
+    fontWeight: '600',
+  },
+  deleteBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(229,62,62,0.08)',
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    gap: 6,
+    minWidth: 44,
+    minHeight: 44,
+  },
+  deleteBtnText: {
+    color: '#E53E3E',
+    fontSize: scale(13),
+    fontWeight: '600',
+  },
+
+  // ── Empty state ─────────────────────────────────────────────────────────────
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: 60,
+  },
+  emptyTitle: {
+    fontSize: scale(18),
+    fontWeight: '700',
+    color: '#1B1C1C',
+    marginTop: 16,
+  },
+  emptySubtitle: {
+    fontSize: scale(14),
+    color: '#717782',
+    textAlign: 'center',
+    marginTop: 8,
+    maxWidth: screenWidth * 0.6,
+  },
+
+  // ── Load more ───────────────────────────────────────────────────────────────
   loadMoreBtn: {
     height: 44,
     borderRadius: 22,
@@ -652,43 +767,41 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 8,
+    minHeight: 44,
   },
   loadMoreText: {
     color: '#0468B1',
-    fontSize: 14,
+    fontSize: scale(14),
     fontWeight: '600',
   },
 
-  // Error
+  // ── Error ────────────────────────────────────────────────────────────────────
   errorBox: {
     backgroundColor: '#FFF3F3',
-    borderRadius: 8,
-    padding: 12,
+    borderRadius: 12,
+    padding: 16,
     marginBottom: 12,
     alignItems: 'center',
   },
   errorText: {
-    fontSize: 14,
-    color: '#D32F2F',
-    marginBottom: 10,
+    fontSize: scale(14),
+    color: '#E53E3E',
+    marginBottom: 12,
     textAlign: 'center',
   },
-
-  // Empty state
-  emptyState: {
+  tryAgainBtn: {
+    height: 44,
+    paddingHorizontal: 24,
+    borderRadius: 22,
+    backgroundColor: '#0468B1',
+    justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 40,
+    minHeight: 44,
+    minWidth: 44,
   },
-  emptyStateIcon: { fontSize: 40, marginBottom: 12 },
-  emptyStateText: {
-    fontSize: 16,
+  tryAgainBtnText: {
+    color: '#FFFFFF',
+    fontSize: scale(13),
     fontWeight: '600',
-    color: '#555555',
-    marginBottom: 4,
-  },
-  emptyStateHint: {
-    fontSize: 13,
-    color: '#888888',
-    textAlign: 'center',
   },
 });
