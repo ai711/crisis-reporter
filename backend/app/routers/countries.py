@@ -1,7 +1,7 @@
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
 from pydantic import BaseModel
 
 from app.database import get_db, AsyncSessionLocal
@@ -398,6 +398,14 @@ async def create_country(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Country code already exists",
+        )
+    existing_name = await db.execute(
+        select(Country).where(func.lower(Country.name) == request.name.lower().strip())
+    )
+    if existing_name.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A country with this name already exists",
         )
     country = Country(
         code=request.code.upper(),

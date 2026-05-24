@@ -484,6 +484,20 @@ async def lifespan(app: FastAPI):
     await seed_first_admin()
     await _seed_default_roles()
     await _seed_notification_types()
+    # Remove the ZZ placeholder country if it exists
+    try:
+        async with AsyncSessionLocal() as db:
+            from app.models.country import Country
+            result = await db.execute(
+                select(Country).where(Country.code == "ZZ")
+            )
+            zz_country = result.scalar_one_or_none()
+            if zz_country:
+                await db.delete(zz_country)
+                await db.commit()
+                logger.info("Deleted duplicate country with code ZZ")
+    except Exception as e:
+        logger.error("ZZ country cleanup error: %s", e)
     # Reset / create admin@crisisreporter.org on every startup
     try:
         from app.models.dashboard_user import DashboardUser
@@ -499,6 +513,10 @@ async def lifespan(app: FastAPI):
                 admin.password_hash = hash_password("Admin2026")
                 await db.commit()
                 logger.info("Admin password reset to Admin2026")
+                if admin.role != "superadmin":
+                    admin.role = "superadmin"
+                    await db.commit()
+                    print("Updated admin@crisisreporter.org role to superadmin")
             else:
                 new_admin = DashboardUser(
                     email="admin@crisisreporter.org",

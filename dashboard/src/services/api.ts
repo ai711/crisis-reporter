@@ -1,5 +1,6 @@
 import axios from "axios";
 import type { AxiosInstance, InternalAxiosRequestConfig } from "axios";
+import { useAuthStore } from "../stores/authStore";
 
 const BASE_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
@@ -67,14 +68,16 @@ api.interceptors.response.use(
 
     if (originalRequest.url?.includes("/auth/refresh")) {
       tokenStorage.clearTokens();
-      window.location.href = "/login?reason=expired";
+      useAuthStore.getState().reset();
+      window.location.href = "/login?reason=session_expired";
       return Promise.reject(error);
     }
 
     const refreshToken = tokenStorage.getRefreshToken();
     if (!refreshToken) {
       tokenStorage.clearTokens();
-      window.location.href = "/login?reason=expired";
+      useAuthStore.getState().reset();
+      window.location.href = "/login?reason=session_expired";
       return Promise.reject(error);
     }
 
@@ -103,7 +106,8 @@ api.interceptors.response.use(
     } catch (refreshError) {
       processQueue(refreshError, null);
       tokenStorage.clearTokens();
-      window.location.href = "/login?reason=expired";
+      useAuthStore.getState().reset();
+      window.location.href = "/login?reason=session_expired";
       return Promise.reject(refreshError);
     } finally {
       isRefreshing = false;

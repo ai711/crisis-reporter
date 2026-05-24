@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView,
-  Modal, ActivityIndicator,
+  Modal, ActivityIndicator, Dimensions, Animated,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
@@ -13,6 +13,9 @@ import NetInfo from "@react-native-community/netinfo";
 import * as SecureStore from "expo-secure-store";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import SideMenu from "../components/SideMenu";
+
+const { width: screenWidth } = Dimensions.get("window");
+const scale = (size: number) => Math.round((screenWidth / 375) * size);
 
 const API_URL = "https://crisis-reporter-production.up.railway.app";
 
@@ -36,6 +39,8 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
   const [showCrisisModal, setShowCrisisModal] = useState(false);
   const [showWelcomeCard, setShowWelcomeCard] = useState(false);
   const [activeCrisis, setActiveCrisis] = useState<{ name: string; crisis_type: string } | null>(null);
+
+  const reportBtnScale = useRef(new Animated.Value(1)).current;
 
   // Login popup — show once until reporter_id exists
   useEffect(() => {
@@ -157,16 +162,34 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
     navigation.navigate("Report");
   };
 
+  const handleReportPressIn = () => {
+    Animated.spring(reportBtnScale, {
+      toValue: 0.97,
+      useNativeDriver: true,
+      speed: 50,
+      bounciness: 0,
+    }).start();
+  };
+
+  const handleReportPressOut = () => {
+    Animated.spring(reportBtnScale, {
+      toValue: 1,
+      useNativeDriver: true,
+      speed: 30,
+      bounciness: 6,
+    }).start();
+  };
+
   // ── Render ────────────────────────────────────────────────────────────────────
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={styles.container}>
 
-      {/* Header — white background, UNDP blue text */}
-      <View style={styles.header}>
+      {/* Header */}
+      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <TouchableOpacity
           onPress={() => setMenuOpen(true)}
-          style={styles.menuBtn}
+          style={styles.iconBtn}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
           <Text style={styles.menuIcon}>☰</Text>
@@ -174,25 +197,34 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
         <Text style={styles.appName}>{t("app.name")}</Text>
         <TouchableOpacity
           onPress={() => navigation.navigate("SettingsScreen")}
-          style={styles.menuBtn}
+          style={styles.iconBtn}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <Text style={styles.settingsIcon}>⚙️</Text>
+          <Text style={styles.settingsIcon}>⚙</Text>
         </TouchableOpacity>
       </View>
 
       {/* Active crisis banner */}
       {activeCrisis && (
         <View style={styles.crisisBanner}>
+          <Text style={styles.crisisBannerEmoji}>🚨</Text>
           <Text style={styles.crisisBannerText}>
-            🚨 Active crisis: {activeCrisis.name} ({activeCrisis.crisis_type})
+            Active crisis: {activeCrisis.name} ({activeCrisis.crisis_type})
           </Text>
         </View>
       )}
 
-      <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
 
-        {/* Welcome card — first visit only */}
+        {/* Headline group */}
+        <Text style={styles.headline}>Ready to report?</Text>
+        <Text style={styles.subtitle}>Help UNDP map damage in your area</Text>
+
+        {/* Existing functional: welcome card */}
         {showWelcomeCard && (
           <View style={styles.welcomeCard}>
             <Text style={styles.welcomeText}>{t("welcomeCard.body")}</Text>
@@ -202,26 +234,51 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
           </View>
         )}
 
+        {/* Existing functional: connectivity status card */}
         <View style={styles.statusCard}>
           <Text style={styles.statusTitle}>Powered by UNDP Crisis Response</Text>
           <View style={styles.statusRow}>
-            <View style={[
-              styles.statusDot,
-              { backgroundColor: isOnline ? "#4caf50" : "#ff9800" },
-            ]} />
-            <Text style={styles.statusText}>
-              {isOnline ? "Connected" : "Offline mode"}
-            </Text>
+            <View style={[styles.statusDot, { backgroundColor: isOnline ? "#38A169" : "#F5A623" }]} />
+            <Text style={styles.statusText}>{isOnline ? "Connected" : "Offline mode"}</Text>
           </View>
         </View>
 
-        {/* Primary action */}
-        <TouchableOpacity style={styles.reportButton} onPress={handleReportPress}>
-          <Text style={styles.reportButtonIcon}>📋</Text>
-          <Text style={styles.reportButtonText}>{t("home.reportButton")}</Text>
-        </TouchableOpacity>
+        {/* Gap between headline group and button area */}
+        <View style={{ height: 32 }} />
 
-        {/* "What can I report?" link */}
+        {/* Offline sync amber banner — shown when queue > 0 */}
+        {queueCount > 0 && (
+          <View style={styles.syncBanner}>
+            <Text style={styles.syncBannerIcon}>⚠</Text>
+            <Text style={styles.syncBannerText}>
+              {queueCount} {queueCount === 1 ? "report" : "reports"} waiting to sync — connect to internet to upload
+            </Text>
+          </View>
+        )}
+
+        {/* Primary report button */}
+        <Animated.View style={[styles.reportBtnWrapper, { transform: [{ scale: reportBtnScale }] }]}>
+          <TouchableOpacity
+            style={styles.reportButton}
+            onPress={handleReportPress}
+            onPressIn={handleReportPressIn}
+            onPressOut={handleReportPressOut}
+            activeOpacity={1}
+          >
+            <Text style={styles.reportButtonIcon}>📷</Text>
+            <Text style={styles.reportButtonText}>{t("home.reportButton")}</Text>
+          </TouchableOpacity>
+        </Animated.View>
+
+        {/* Sync status row — shown when queue is empty */}
+        {queueCount === 0 && (
+          <View style={styles.syncStatusRow}>
+            <View style={styles.syncGreenDot} />
+            <Text style={styles.syncStatusText}>NO REPORTS PENDING SYNC</Text>
+          </View>
+        )}
+
+        {/* Existing functional: "What can I report?" link */}
         <TouchableOpacity
           onPress={() => setShowCrisisModal(true)}
           style={styles.whatLink}
@@ -229,53 +286,47 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
           <Text style={styles.whatLinkText}>{t("whatCanIReport.link")}</Text>
         </TouchableOpacity>
 
-        {/* Pending sync counter — inline, below report button */}
-        {queueCount > 0 && (
-          <Text style={styles.pendingNote}>
-            {queueCount === 1
-              ? "1 report pending — waiting for internet connection."
-              : `${queueCount} reports pending — waiting for internet connection.`}
-          </Text>
-        )}
-
+        {/* Existing functional: secondary navigation buttons */}
         <View style={styles.secondaryActions}>
           <TouchableOpacity
             style={styles.secondaryButton}
             onPress={() => navigation.navigate("Map")}
           >
-            <Text style={styles.secondaryButtonText}>🗺️ View Map</Text>
+            <Text style={styles.secondaryButtonText}>🗺️  View Map</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.secondaryButton}
             onPress={() => navigation.navigate("MyReports")}
           >
             <Text style={styles.secondaryButtonText}>
-              📁 {t("home.myReports")}
+              📁  {t("home.myReports")}
             </Text>
           </TouchableOpacity>
         </View>
 
       </ScrollView>
 
-      {/* Footer navigation — Home tab is always active on this screen */}
+      {/* Bottom navigation — Home tab is always active on this screen */}
       <View style={[styles.bottomNav, { paddingBottom: insets.bottom }]}>
         <TouchableOpacity style={styles.navItem}>
-          <Text style={[styles.navIcon, styles.activeTabIcon]}>🏠</Text>
-          <Text style={[styles.navLabel, styles.activeTabLabel]}>Home</Text>
+          <View style={styles.activeNavPill}>
+            <Text style={styles.navIconActive}>🏠</Text>
+            <Text style={styles.navLabelActive}>HOME</Text>
+          </View>
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.navItem}
           onPress={() => navigation.navigate("Map")}
         >
-          <Text style={[styles.navIcon, styles.inactiveTabIcon]}>🗺️</Text>
-          <Text style={[styles.navLabel, styles.inactiveTabLabel]}>Map</Text>
+          <Text style={styles.navIconInactive}>🗺</Text>
+          <Text style={styles.navLabelInactive}>MAP</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.navItem}
           onPress={() => navigation.navigate("MyReports")}
         >
-          <Text style={[styles.navIcon, styles.inactiveTabIcon]}>📁</Text>
-          <Text style={[styles.navLabel, styles.inactiveTabLabel]}>My Reports</Text>
+          <Text style={styles.navIconInactive}>📋</Text>
+          <Text style={styles.navLabelInactive}>REPORTS</Text>
         </TouchableOpacity>
       </View>
 
@@ -353,52 +404,113 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#f4f6f9" },
 
-  // Header — white background, UNDP blue text
-  header: {
+  // ── Root ─────────────────────────────────────────────────────────────────────
+  container: {
+    flex: 1,
     backgroundColor: "#FFFFFF",
-    paddingHorizontal: 8,
-    paddingVertical: 12,
+  },
+
+  // ── Header ───────────────────────────────────────────────────────────────────
+  header: {
+    backgroundColor: "rgba(255,255,255,0.92)",
+    paddingHorizontal: screenWidth * 0.06,
+    paddingBottom: 12,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    borderBottomWidth: 1,
-    borderBottomColor: "#E8EDF2",
   },
-  menuBtn: { padding: 8, width: 44, justifyContent: "center" },
-  menuIcon: { fontSize: 20, color: "#0468B1" },
-  appName: { fontSize: 18, fontWeight: "700", color: "#0468B1" },
-  settingsIcon: { fontSize: 22 },
+  iconBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  menuIcon: {
+    fontSize: scale(22),
+    color: "#49454F",
+  },
+  settingsIcon: {
+    fontSize: scale(22),
+    color: "#49454F",
+  },
+  appName: {
+    flex: 1,
+    fontSize: scale(18),
+    fontWeight: "700",
+    color: "#0468B1",
+    textAlign: "center",
+  },
 
-  // Active crisis banner
+  // ── Active crisis banner ──────────────────────────────────────────────────────
   crisisBanner: {
     backgroundColor: "#FFF3E0",
-    paddingHorizontal: 16,
+    paddingHorizontal: screenWidth * 0.06,
     paddingVertical: 10,
-    borderBottomWidth: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: "#FFB74D",
   },
+  crisisBannerEmoji: {
+    fontSize: scale(14),
+  },
   crisisBannerText: {
-    fontSize: 13,
+    flex: 1,
+    fontSize: scale(13),
     color: "#E65100",
     fontWeight: "500",
+    lineHeight: scale(13) * 1.5,
   },
 
-  // Welcome card
+  // ── Scroll area ───────────────────────────────────────────────────────────────
+  scroll: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: screenWidth * 0.06,
+    paddingVertical: 24,
+  },
+
+  // ── Headline group ────────────────────────────────────────────────────────────
+  headline: {
+    fontSize: scale(32),
+    fontWeight: "900",
+    color: "#1B1C1C",
+    textAlign: "center",
+    letterSpacing: -0.5,
+    alignSelf: "center",
+  },
+  subtitle: {
+    fontSize: scale(16),
+    fontWeight: "400",
+    color: "#414751",
+    textAlign: "center",
+    marginTop: 8,
+    maxWidth: screenWidth * 0.7,
+    lineHeight: scale(16) * 1.5,
+    alignSelf: "center",
+  },
+
+  // ── Welcome card (existing functional) ───────────────────────────────────────
   welcomeCard: {
     backgroundColor: "#E8F4FD",
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 16,
-    marginHorizontal: 0,
-    marginBottom: 0,
+    marginTop: 20,
     borderLeftWidth: 4,
     borderLeftColor: "#0468B1",
+    width: "100%",
   },
   welcomeText: {
-    fontSize: 14,
-    color: "#333333",
-    lineHeight: 20,
+    fontSize: scale(14),
+    color: "#414751",
+    lineHeight: scale(14) * 1.5,
     marginBottom: 12,
   },
   welcomeBtn: {
@@ -410,88 +522,199 @@ const styles = StyleSheet.create({
   },
   welcomeBtnText: {
     color: "#FFFFFF",
-    fontSize: 14,
+    fontSize: scale(13),
     fontWeight: "600",
   },
 
-  // Status card
-  content: { flex: 1 },
-  contentContainer: { padding: 16, gap: 16 },
+  // ── Status card (existing functional) ────────────────────────────────────────
   statusCard: {
-    backgroundColor: "#fff",
-    borderRadius: 12,
+    backgroundColor: "#F6F3F2",
+    borderRadius: 16,
     padding: 16,
-    shadowColor: "#000",
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
+    marginTop: 16,
+    width: "100%",
   },
-  statusTitle: { fontSize: 14, color: "#666", fontWeight: "500" },
-  statusRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 8 },
-  statusDot: { width: 10, height: 10, borderRadius: 5 },
-  statusText: { fontSize: 13, color: "#666" },
+  statusTitle: {
+    fontSize: scale(12),
+    color: "#717782",
+    fontWeight: "500",
+    letterSpacing: 0.3,
+  },
+  statusRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 6,
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  statusText: {
+    fontSize: scale(13),
+    color: "#414751",
+    fontWeight: "500",
+  },
 
-  // Report button
+  // ── Amber sync banner (queue > 0) ─────────────────────────────────────────────
+  syncBanner: {
+    backgroundColor: "#F5A623",
+    borderRadius: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 12,
+    width: screenWidth * 0.88,
+  },
+  syncBannerIcon: {
+    fontSize: scale(20),
+    color: "#291800",
+  },
+  syncBannerText: {
+    flex: 1,
+    fontSize: scale(13),
+    fontWeight: "700",
+    color: "#291800",
+    lineHeight: scale(13) * 1.5,
+  },
+
+  // ── Report button ─────────────────────────────────────────────────────────────
+  reportBtnWrapper: {
+    width: screenWidth * 0.88,
+    alignSelf: "center",
+  },
   reportButton: {
     backgroundColor: "#0468B1",
-    borderRadius: 12,
-    padding: 20,
+    height: 56,
+    borderRadius: 28,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 12,
+    gap: 10,
     shadowColor: "#0468B1",
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
     elevation: 4,
   },
-  reportButtonIcon: { fontSize: 24 },
-  reportButtonText: { color: "#fff", fontSize: 18, fontWeight: "700" },
-
-  // "What can I report?" link
-  whatLink: { alignItems: "center", marginTop: -8 },
-  whatLinkText: { fontSize: 14, color: "#0468B1", textDecorationLine: "underline" },
-
-  // Pending sync counter
-  pendingNote: {
-    fontSize: 13,
-    color: "#E65100",
-    textAlign: "center",
-    marginTop: -4,
-    marginHorizontal: 24,
+  reportButtonIcon: {
+    fontSize: scale(20),
+  },
+  reportButtonText: {
+    color: "#FFFFFF",
+    fontSize: scale(16),
+    fontWeight: "700",
   },
 
-  // Secondary action buttons
-  secondaryActions: { flexDirection: "row", gap: 12 },
+  // ── Sync status row (queue === 0) ─────────────────────────────────────────────
+  syncStatusRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    marginTop: 12,
+  },
+  syncGreenDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#38A169",
+  },
+  syncStatusText: {
+    fontSize: scale(10),
+    fontWeight: "600",
+    color: "#717782",
+    letterSpacing: 1.5,
+  },
+
+  // ── "What can I report?" link ─────────────────────────────────────────────────
+  whatLink: {
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 44,
+    marginTop: 16,
+  },
+  whatLinkText: {
+    fontSize: scale(14),
+    color: "#0468B1",
+    textDecorationLine: "underline",
+  },
+
+  // ── Secondary action buttons (existing functional) ────────────────────────────
+  secondaryActions: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 8,
+    width: "100%",
+  },
   secondaryButton: {
     flex: 1,
-    backgroundColor: "#fff",
-    borderRadius: 12,
+    backgroundColor: "#F6F3F2",
+    borderRadius: 16,
     padding: 16,
     alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#e0e0e0",
+    justifyContent: "center",
+    minHeight: 52,
   },
-  secondaryButtonText: { fontSize: 14, fontWeight: "500", color: "#1A2B4A" },
+  secondaryButtonText: {
+    fontSize: scale(14),
+    fontWeight: "500",
+    color: "#414751",
+  },
 
-  // Footer navigation
+  // ── Bottom navigation ─────────────────────────────────────────────────────────
   bottomNav: {
-    backgroundColor: "#fff",
-    borderTopWidth: 1,
-    borderTopColor: "#e0e0e0",
+    backgroundColor: "rgba(255,255,255,0.92)",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     flexDirection: "row",
     justifyContent: "space-around",
-    paddingVertical: 8,
+    alignItems: "center",
+    paddingTop: 12,
+    shadowColor: "#000",
+    shadowOpacity: 0.06,
+    shadowRadius: 24,
+    elevation: 8,
   },
-  navItem: { alignItems: "center", padding: 8, minWidth: 64 },
-  navIcon: { fontSize: 20 },
-  navLabel: { fontSize: 11, marginTop: 4 },
-  activeTabLabel: { color: "#0468B1", fontWeight: "600" },
-  activeTabIcon: { color: "#0468B1" },
-  inactiveTabLabel: { color: "#999" },
-  inactiveTabIcon: { color: "#999" },
+  navItem: {
+    alignItems: "center",
+    justifyContent: "center",
+    minWidth: 64,
+    minHeight: 44,
+  },
+  activeNavPill: {
+    backgroundColor: "rgba(4,104,177,0.1)",
+    borderRadius: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 6,
+    alignItems: "center",
+    gap: 2,
+  },
+  navIconActive: {
+    fontSize: scale(24),
+    color: "#0468B1",
+  },
+  navLabelActive: {
+    fontSize: scale(10),
+    fontWeight: "600",
+    color: "#0468B1",
+    letterSpacing: 1.2,
+  },
+  navIconInactive: {
+    fontSize: scale(24),
+    color: "#6B7280",
+  },
+  navLabelInactive: {
+    fontSize: scale(10),
+    fontWeight: "500",
+    color: "#6B7280",
+    letterSpacing: 1.2,
+    marginTop: 2,
+  },
 
-  // Login popup
+  // ── Login popup ───────────────────────────────────────────────────────────────
   popupOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",
@@ -500,29 +723,32 @@ const styles = StyleSheet.create({
   },
   popupCard: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 16,
+    borderRadius: 24,
     padding: 24,
-    marginHorizontal: 24,
+    width: screenWidth - 48,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
-    shadowRadius: 12,
+    shadowRadius: 16,
     elevation: 8,
   },
   popupTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#333333",
+    fontSize: scale(18),
+    fontWeight: "700",
+    color: "#1B1C1C",
     textAlign: "center",
     marginBottom: 8,
   },
   popupBody: {
-    fontSize: 14,
-    color: "#666666",
+    fontSize: scale(14),
+    color: "#717782",
     textAlign: "center",
-    lineHeight: 20,
+    lineHeight: scale(14) * 1.5,
   },
-  popupButtons: { marginTop: 20, gap: 12 },
+  popupButtons: {
+    marginTop: 20,
+    gap: 12,
+  },
   popupBtnPrimary: {
     backgroundColor: "#0468B1",
     borderRadius: 28,
@@ -530,7 +756,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  popupBtnPrimaryText: { color: "#FFFFFF", fontSize: 16, fontWeight: "600" },
+  popupBtnPrimaryText: {
+    color: "#FFFFFF",
+    fontSize: scale(16),
+    fontWeight: "600",
+  },
   popupBtnSecondary: {
     backgroundColor: "#FFFFFF",
     borderRadius: 28,
@@ -540,11 +770,22 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: "#0468B1",
   },
-  popupBtnSecondaryText: { color: "#0468B1", fontSize: 16, fontWeight: "600" },
-  popupBtnSkip: { height: 44, justifyContent: "center", alignItems: "center" },
-  popupBtnSkipText: { color: "#888888", fontSize: 15 },
+  popupBtnSecondaryText: {
+    color: "#0468B1",
+    fontSize: scale(16),
+    fontWeight: "600",
+  },
+  popupBtnSkip: {
+    height: 44,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  popupBtnSkipText: {
+    color: "#717782",
+    fontSize: scale(14),
+  },
 
-  // "What can I report?" bottom sheet
+  // ── "What can I report?" bottom sheet ────────────────────────────────────────
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",
@@ -552,8 +793,8 @@ const styles = StyleSheet.create({
   },
   modalCard: {
     backgroundColor: "#FFFFFF",
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     padding: 24,
     maxHeight: "80%",
   },
@@ -563,18 +804,29 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 16,
   },
-  modalTitle: { fontSize: 18, fontWeight: "bold", color: "#333333" },
-  modalClose: { fontSize: 14, color: "#0468B1" },
+  modalTitle: {
+    fontSize: scale(18),
+    fontWeight: "700",
+    color: "#1B1C1C",
+  },
+  modalClose: {
+    fontSize: scale(14),
+    color: "#0468B1",
+  },
   crisisTypeRow: {
     paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#F0F0F0",
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "#F6F3F2",
   },
   crisisTypeName: {
-    fontSize: 15,
+    fontSize: scale(15),
     fontWeight: "600",
-    color: "#333333",
+    color: "#1B1C1C",
     marginBottom: 2,
   },
-  crisisTypeDesc: { fontSize: 13, color: "#666666", lineHeight: 18 },
+  crisisTypeDesc: {
+    fontSize: scale(13),
+    color: "#717782",
+    lineHeight: scale(13) * 1.5,
+  },
 });

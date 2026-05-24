@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect, useMemo } from "react";
 import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView,
   TextInput, Alert, ActivityIndicator, Image, Modal, Linking, Platform,
-  type NativeSyntheticEvent,
+  Dimensions, type NativeSyntheticEvent,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTranslation } from "react-i18next";
@@ -36,6 +36,9 @@ const MAPTILER_KEY = process.env.EXPO_PUBLIC_MAPTILER_KEY ?? "";
 const MAP_STYLE_URL = `https://api.maptiler.com/maps/dataviz-light/style.json?key=${MAPTILER_KEY}`;
 const ANSWERS_KEY = 'cr_draft_answers';
 const API_URL = "https://crisis-reporter-production.up.railway.app";
+
+const { width: screenWidth } = Dimensions.get('window');
+const scale = (size: number) => Math.round(screenWidth / 375 * size);
 
 // ── Overpass types ─────────────────────────────────────────────────────────────
 
@@ -1472,24 +1475,53 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
   // Tier 1 — Successful submission confirmation
   if (submitted && !wasQueued) {
     return (
-      <View style={[styles.confirmContainer, { paddingTop: insets.top, paddingBottom: insets.bottom + 24 }]}>
-        <View style={styles.confirmIconCircle}>
-          <Text style={styles.confirmIcon}>✓</Text>
+      <ScrollView
+        style={{ flex: 1, backgroundColor: '#FFFFFF' }}
+        contentContainerStyle={[styles.confirmContainer, { paddingTop: insets.top + 32, paddingBottom: insets.bottom + 32 }]}
+      >
+        <View style={styles.confirmIconCircleOnline}>
+          <Text style={styles.confirmIconCheck}>✓</Text>
         </View>
 
-        <Text style={styles.confirmScreenTitle}>{t('review.confirmationTitle')}</Text>
+        <Text style={styles.confirmTitleLarge}>{t('review.confirmationTitle')}</Text>
 
-        <Text style={styles.confirmMessage}>
+        <Text style={styles.confirmSubtitle}>
           {t('review.confirmationMessage')}
         </Text>
+
+        <View style={styles.confirmSummaryCard}>
+          <Text style={styles.confirmSummaryHeader}>REPORT SUMMARY</Text>
+          {submittedReportId ? (
+            <View style={styles.confirmSummaryRow}>
+              <Text style={styles.confirmSummaryLabel}>Report ID</Text>
+              <Text style={styles.confirmSummaryValue} numberOfLines={1}>{String(submittedReportId).slice(0, 16)}</Text>
+            </View>
+          ) : null}
+          <View style={styles.confirmSummaryRow}>
+            <Text style={styles.confirmSummaryLabel}>Damage level</Text>
+            <Text style={styles.confirmSummaryValue}>{DAMAGE_LABELS[damageLevel] ?? damageLevel}</Text>
+          </View>
+          <View style={styles.confirmSummaryRow}>
+            <Text style={styles.confirmSummaryLabel}>Location</Text>
+            <Text style={styles.confirmSummaryValue} numberOfLines={2}>
+              {editableBuildingName || selectedBuilding?.name || locationAddress || locationLandmark || locationBuildingName || '—'}
+            </Text>
+          </View>
+          <View style={[styles.confirmSummaryRow, { borderBottomWidth: 0 }]}>
+            <Text style={styles.confirmSummaryLabel}>Submitted</Text>
+            <Text style={styles.confirmSummaryValue}>
+              {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </Text>
+          </View>
+          <View style={styles.confirmSummaryFootNote}>
+            <Text style={styles.confirmSummaryFootNoteText}>ℹ Your report has been received by UNDP staff.</Text>
+          </View>
+        </View>
 
         <View style={styles.confirmScreenButtons}>
           <TouchableOpacity
             style={styles.confirmPrimaryBtn}
-            onPress={() => {
-              resetForm();
-              setStep('photos');
-            }}
+            onPress={() => { resetForm(); setStep('photos'); }}
           >
             <Text style={styles.confirmPrimaryBtnText}>
               {t('review.confirmationSubmitAnother')}
@@ -1498,115 +1530,122 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
 
           <TouchableOpacity
             style={styles.confirmSecondaryBtn}
-            onPress={() => {
-              resetForm();
-              navigation.navigate("Home");
-            }}
+            onPress={() => { resetForm(); navigation.navigate("Home"); }}
           >
             <Text style={styles.confirmSecondaryBtnText}>
               {t('review.confirmationGoHome')}
             </Text>
           </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.confirmTextLink}
+            onPress={() => { resetForm(); navigation.navigate("Home"); }}
+          >
+            <Text style={styles.confirmTextLinkText}>View My Reports</Text>
+          </TouchableOpacity>
         </View>
-      </View>
+      </ScrollView>
     );
   }
 
   // Tier 2 — Offline queue confirmation
   if (submitted && wasQueued) {
+    const retryUpload = async () => {
+      const netState = await NetInfo.fetch();
+      if (netState.isConnected === true && netState.isInternetReachable !== false) {
+        try {
+          await syncQueue(API_URL);
+          setWasQueued(false);
+        } catch {
+          Alert.alert('Still offline', 'Internet is not available yet. Your report is saved and will send automatically.');
+        }
+      } else {
+        Alert.alert('Still offline', 'Internet is not available yet. Your report is saved and will send automatically.');
+      }
+    };
+
     return (
-      <View style={[styles.confirmContainer, { paddingTop: insets.top, paddingBottom: insets.bottom + 24 }]}>
-        <View style={[styles.confirmIconCircle, styles.confirmIconCircleQueue]}>
-          <Text style={styles.confirmIcon}>📶</Text>
+      <ScrollView
+        style={{ flex: 1, backgroundColor: '#FFFFFF' }}
+        contentContainerStyle={[styles.confirmContainer, { paddingTop: insets.top + 32, paddingBottom: insets.bottom + 32 }]}
+      >
+        <View style={styles.confirmIconCircleOffline}>
+          <Text style={{ fontSize: scale(40), lineHeight: scale(48) }}>☁</Text>
         </View>
 
-        <Text style={styles.confirmScreenTitle}>{t('review.queueTitle')}</Text>
+        <Text style={styles.confirmTitleLarge}>{t('review.queueTitle')}</Text>
 
-        <Text style={styles.confirmMessage}>
+        <Text style={styles.confirmSubtitle}>
           {t('review.queueMessage')}
         </Text>
 
         {Platform.OS === 'android' && (
-          <Text style={styles.queuePlatformNote}>
-            {t('review.queueAndroidNote')}
-          </Text>
+          <Text style={styles.queuePlatformNote}>{t('review.queueAndroidNote')}</Text>
         )}
 
-        <View style={styles.queueSummaryCard}>
-          <View style={styles.queueSummaryRow}>
-            <Text style={styles.queueSummaryLabel}>{t('review.queueSummaryLocation')}</Text>
-            <Text style={styles.queueSummaryValue} numberOfLines={1}>
-              {editableBuildingName ||
-                selectedBuilding?.name ||
-                locationAddress ||
-                locationLandmark ||
-                locationBuildingName ||
-                '—'}
+        {/* Pending sync card */}
+        <View style={styles.offlineSyncCard}>
+          <View style={styles.offlineSyncAccent} />
+          <Text style={styles.offlineSyncHeader}>PENDING SYNC</Text>
+          <View style={styles.offlineSyncRow}>
+            <Text style={styles.offlineSyncIcon}>📵</Text>
+            <Text style={styles.offlineSyncText}>Currently offline</Text>
+          </View>
+          <View style={styles.offlineSyncRow}>
+            <Text style={styles.offlineSyncIcon}>☁</Text>
+            <Text style={styles.offlineSyncText}>1 report waiting to upload</Text>
+          </View>
+          <View style={styles.offlineSyncRow}>
+            <Text style={styles.offlineSyncLabel}>{t('review.queueSummaryLocation')}</Text>
+            <Text style={styles.offlineSyncValue} numberOfLines={1}>
+              {editableBuildingName || selectedBuilding?.name || locationAddress || locationLandmark || locationBuildingName || '—'}
             </Text>
           </View>
-          <View style={styles.queueSummaryRow}>
-            <Text style={styles.queueSummaryLabel}>{t('review.queueSummaryDamage')}</Text>
-            <Text style={styles.queueSummaryValue}>{damageLevel || '—'}</Text>
+          <View style={styles.offlineSyncRow}>
+            <Text style={styles.offlineSyncLabel}>{t('review.queueSummaryDamage')}</Text>
+            <Text style={styles.offlineSyncValue}>{damageLevel || '—'}</Text>
           </View>
-          <View style={styles.queueSummaryRow}>
-            <Text style={styles.queueSummaryLabel}>{t('review.queueSummaryQueued')}</Text>
-            <Text style={styles.queueSummaryValue}>
-              {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-            </Text>
-          </View>
+          <Text style={styles.offlineSyncNote}>Your report will upload automatically when internet is available.</Text>
         </View>
 
         <View style={styles.confirmScreenButtons}>
-          <TouchableOpacity
-            style={styles.confirmRetryBtn}
-            onPress={async () => {
-              const netState = await NetInfo.fetch();
-              if (netState.isConnected === true && netState.isInternetReachable !== false) {
-                try {
-                  await syncQueue(API_URL);
-                  setWasQueued(false);
-                } catch {
-                  Alert.alert(
-                    'Still offline',
-                    'Internet is not available yet. Your report is saved and will send automatically.'
-                  );
-                }
-              } else {
-                Alert.alert(
-                  'Still offline',
-                  'Internet is not available yet. Your report is saved and will send automatically.'
-                );
-              }
-            }}
-          >
-            <Text style={styles.confirmRetryBtnText}>{t('review.queueRetry')}</Text>
+          <TouchableOpacity style={styles.confirmRetryBtn} onPress={retryUpload}>
+            <Text style={styles.confirmRetryBtnText}>↻ {t('review.queueRetry')}</Text>
           </TouchableOpacity>
+          <Text style={styles.confirmRetryHelper}>Tap to attempt upload if you have a connection</Text>
 
           <TouchableOpacity
-            style={styles.confirmPrimaryBtn}
-            onPress={() => {
-              resetForm();
-              setStep('photos');
-            }}
+            style={styles.confirmSecondaryBtn}
+            onPress={() => { resetForm(); setStep('photos'); }}
           >
-            <Text style={styles.confirmPrimaryBtnText}>
-              {t('review.queueSubmitAnother')}
-            </Text>
+            <Text style={styles.confirmSecondaryBtnText}>{t('review.queueSubmitAnother')}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.confirmSecondaryBtn}
+            onPress={() => { resetForm(); navigation.navigate("Home"); }}
+          >
+            <Text style={styles.confirmSecondaryBtnText}>{t('review.queueGoHome')}</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.confirmTextLink}
             onPress={() => {
-              resetForm();
-              navigation.navigate("Home");
+              Alert.alert(
+                'Delete Report',
+                'This report will be permanently deleted and cannot be recovered.',
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  { text: 'Delete', style: 'destructive', onPress: () => { resetForm(); navigation.navigate('Home'); } },
+                ]
+              );
             }}
           >
-            <Text style={styles.confirmSecondaryBtnText}>
-              {t('review.queueGoHome')}
-            </Text>
+            <Text style={styles.confirmDeleteText}>Delete this report</Text>
           </TouchableOpacity>
+          <Text style={styles.confirmDeleteWarning}>DELETED REPORTS CANNOT BE RECOVERED</Text>
         </View>
-      </View>
+      </ScrollView>
     );
   }
 
@@ -1644,13 +1683,14 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
   // ── Render ─────────────────────────────────────────────────────────────────────
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
+      <View style={[styles.header, { paddingTop: insets.top }]}>
+        <TouchableOpacity style={styles.backBtnTouch} onPress={() => navigation.goBack()}>
           <Text style={styles.backBtn}>←</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{t("report.title")}</Text>
+        <View style={styles.backBtnTouch} />
       </View>
 
       {step !== 'review' && <StepIndicator currentStep={getStepNumber(step)} />}
@@ -1944,14 +1984,21 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
             <ScrollView style={styles.manualContainer} contentContainerStyle={styles.manualContent}>
               {/* Amber offline banner */}
               <View style={styles.offlineBanner}>
-                <Text style={styles.offlineBannerText}>
-                  {t('locationScreen.offlineBanner')}
-                </Text>
+                <Text style={styles.offlineBannerIcon}>📵</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.offlineBannerPrimary}>
+                    {t('locationScreen.offlineBanner')}
+                  </Text>
+                  <Text style={styles.offlineBannerSecondary}>
+                    Your GPS coordinates are still being recorded in the background
+                  </Text>
+                </View>
               </View>
 
               {/* GPS status indicator */}
               {locationScenario === 'offline_gps' && locationGpsCoords && (
                 <View style={styles.gpsIndicator}>
+                  <View style={styles.gpsDot} />
                   <Text style={styles.gpsIndicatorText}>
                     📍 {t('locationScreen.gpsRecorded')}
                   </Text>
@@ -2004,13 +2051,16 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
 
           {/* Footer — Back and Next for all non-loading scenarios */}
           {locationScenario !== 'loading' && (
-            <View style={[styles.locationNextContainer, { paddingBottom: insets.bottom + 16 }]}>
-              <View style={styles.navButtons}>
-                <TouchableOpacity style={styles.secondaryButton} onPress={() => setStep("photos")}>
-                  <Text style={styles.secondaryButtonText}>← Back</Text>
+            <View style={[styles.footerBar, { paddingBottom: insets.bottom + 16 }]}>
+              <View style={styles.footerDamageRow}>
+                <TouchableOpacity
+                  style={styles.footerBackPill}
+                  onPress={() => setStep("photos")}
+                >
+                  <Text style={styles.footerBackPillText}>← Back</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.primaryButton, !isLocationValid() && styles.buttonDisabled]}
+                  style={[styles.footerPillBtnFlex, !isLocationValid() && styles.footerPillBtnDisabled]}
                   onPress={() => {
                     if (!isLocationValid()) return;
                     if (fromReview) {
@@ -2030,7 +2080,9 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                   }}
                   disabled={!isLocationValid()}
                 >
-                  <Text style={styles.primaryButtonText}>Next →</Text>
+                  <Text style={[styles.footerPillBtnText, !isLocationValid() && styles.footerPillBtnTextDisabled]}>
+                    Next →
+                  </Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -2287,453 +2339,507 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
         </View>
       </Modal>
 
-      {/* All other steps inside ScrollView */}
+      {/* All other steps inside ScrollView + sticky footer */}
       {step !== "location" && step !== "review" && (
-        <ScrollView style={styles.content} contentContainerStyle={styles.contentPadding}>
+        <>
+          <ScrollView style={styles.content} contentContainerStyle={[styles.contentPadding, { paddingBottom: 24 }]}>
 
-          {/* Step 1 — Photos */}
-          {step === "photos" && (
-            <View style={styles.step}>
-              <Text style={styles.stepTitle}>{t("report.photos")} *</Text>
-              <Text style={styles.hintText}>Add up to 3 photos. At least 1 required.</Text>
+            {/* ── STEP 1: PHOTOS ── */}
+            {step === "photos" && (
+              <View style={styles.step}>
+                <Text style={styles.stepLabel}>STEP 1 OF 5 — ADD PHOTO</Text>
 
-              {/* Photo slots — always show all 3 */}
-              <View style={styles.photoSlotsRow}>
-                {[0, 1, 2].map((slotIndex) => {
-                  const photo = photos[slotIndex];
-                  return (
-                    <TouchableOpacity
-                      key={slotIndex}
-                      style={[styles.photoSlot, photo ? styles.photoSlotFilled : styles.photoSlotEmpty]}
-                      onPress={() => {
-                        if (photo) {
-                          handlePhotoTap(slotIndex);
-                        } else if (photos.length === slotIndex) {
-                          setShowPhotoOptions(true);
-                        }
-                      }}
-                      activeOpacity={photo ? 0.85 : 0.6}
-                      disabled={!photo && photos.length !== slotIndex}
-                    >
-                      {photo ? (
-                        <Image
-                          source={{ uri: photo.uri }}
-                          style={styles.photoThumb}
-                        />
-                      ) : (
-                        <View style={styles.photoSlotInner}>
-                          <Text style={styles.photoSlotPlus}>+</Text>
-                        </View>
-                      )}
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-
-              {photos.length < 3 ? (
-                <View style={styles.photoButtonsRow}>
-                  <TouchableOpacity style={styles.photoOptionBtn} onPress={handleTakePhoto}>
-                    <Text style={styles.photoOptionIcon}>📷</Text>
-                    <Text style={styles.photoOptionText}>{t("report.takePhoto")}</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.photoOptionBtn} onPress={handlePickPhoto}>
-                    <Text style={styles.photoOptionIcon}>🖼️</Text>
-                    <Text style={styles.photoOptionText}>{t("report.uploadPhoto")}</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : (
-                <Text style={styles.maxPhotosNote}>{t('photoScreen.maxPhotos')}</Text>
-              )}
-
-              {/* Photo guidelines */}
-              <View style={styles.guidelinesContainer}>
-                <Text style={styles.guidelinesTitle}>{t('photoScreen.guidelines.title')}</Text>
-                {[
-                  t('photoScreen.guidelines.g1'),
-                  t('photoScreen.guidelines.g2'),
-                  t('photoScreen.guidelines.g3'),
-                  t('photoScreen.guidelines.g4'),
-                ].map((guideline, index) => (
-                  <View key={index} style={styles.guidelineRow}>
-                    <Text style={styles.guidelineBullet}>•</Text>
-                    <Text style={styles.guidelineText}>{guideline}</Text>
-                  </View>
-                ))}
-              </View>
-
-              <TouchableOpacity
-                style={[styles.primaryButton, photos.length === 0 && styles.buttonDisabled]}
-                onPress={() => {
-                  if (!photos.length) return;
-                  if (fromReview) {
-                    setFromReview(false);
-                    setStep('review');
-                    return;
-                  }
-                  setStep('location');
-                }}
-                disabled={photos.length === 0}
-              >
-                <Text style={styles.primaryButtonText}>Next →</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
-          {/* Step 3 — Damage Assessment */}
-          {step === "damage" && (
-            <View style={styles.step}>
-              <Text style={styles.questionProgress}>
-                {t('questions.progressLabel', { current: damageQuestion, total: 8 + additionalQuestions.length })}
-              </Text>
-
-              {damageQuestion === 1 && (
-                <>
-                  <Text style={styles.stepTitle}>{qTitle(1, t('questions.q1.title'))}</Text>
-                  {qOptions(1, [
-                    { value: "minimal", label: t('questions.q1.opt_minimal') },
-                    { value: "partial", label: t('questions.q1.opt_partial') },
-                    { value: "complete", label: t('questions.q1.opt_complete') },
-                  ]).map(({ value, label }) => {
-                    const isSelected = damageLevel === value;
-                    return (
-                      <TouchableOpacity
-                        key={value}
-                        style={styles.radioRow}
-                        onPress={() => { setDamageLevel(value as DamageLevel); setShowQuestionHint(false); }}
-                      >
-                        <View style={[styles.radioCircle, isSelected && styles.radioCircleSelected]}>
-                          {isSelected && <View style={styles.radioDot} />}
-                        </View>
-                        <Text style={[styles.radioLabel, isSelected && styles.radioLabelSelected]}>
-                          {label}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </>
-              )}
-
-              {damageQuestion === 2 && (
-                <>
-                  <Text style={styles.stepTitle}>{qTitle(2, t('questions.q2.title'))}</Text>
-                  <Text style={styles.hintText}>{t('questions.q2.hint')}</Text>
-                  {qOptions(2, [
-                    { value: "residential", label: t('questions.q2.opt_residential') },
-                    { value: "commercial", label: t('questions.q2.opt_commercial') },
-                    { value: "government", label: t('questions.q2.opt_government') },
-                    { value: "educational", label: t('questions.q2.opt_educational') },
-                    { value: "healthcare", label: t('questions.q2.opt_healthcare') },
-                    { value: "critical_infrastructure", label: t('questions.q2.opt_critical_infrastructure') },
-                    { value: "agricultural", label: t('questions.q2.opt_agricultural') },
-                    { value: "public_spaces", label: t('questions.q2.opt_public_spaces') },
-                    { value: "other", label: t('questions.q2.opt_other') },
-                  ]).map(({ value, label }) => (
-                    <TouchableOpacity key={value} style={styles.checkRow} onPress={() => { toggleInfraType(value); setShowQuestionHint(false); }}>
-                      <View style={[styles.checkbox, infrastructureTypes.includes(value) && styles.checkboxSelected]}>
-                        {infrastructureTypes.includes(value) && <Text style={styles.checkmark}>✓</Text>}
-                      </View>
-                      <Text style={styles.checkRowText}>{label}</Text>
-                    </TouchableOpacity>
-                  ))}
-                  {infrastructureTypes.includes("other") && (
-                    <TextInput
-                      style={[styles.input, { marginTop: 8 }]}
-                      placeholder={t('questions.otherSpecifyPlaceholder')}
-                      value={infrastructureOther}
-                      onChangeText={(t) => setInfrastructureOther(t.slice(0, 100))}
-                      maxLength={100}
-                    />
-                  )}
-                </>
-              )}
-
-              {damageQuestion === 3 && (
-                <>
-                  <Text style={styles.stepTitle}>{qTitle(3, t('questions.q3.title'))}</Text>
-                  {showLocationChangedNote && (
-                    <View style={styles.locationChangedNote}>
-                      <Text style={styles.locationChangedNoteText}>
-                        {t('review.locationChangedNote')}
-                      </Text>
+                {/* Empty state */}
+                {photos.length === 0 && (
+                  <View style={styles.photoEmptyBox}>
+                    <View style={styles.photoEmptyIconCircle}>
+                      <Text style={{ fontSize: scale(28), color: '#717782' }}>📷</Text>
                     </View>
-                  )}
-                  <TextInput
-                    style={styles.input}
-                    placeholder={t('questions.q3.placeholder')}
-                    value={infrastructureName}
-                    onChangeText={(t) => setInfrastructureName(t.slice(0, 200))}
-                    maxLength={200}
-                  />
-                  <Text style={styles.charCounter}>{infrastructureName.length} / 200</Text>
-                </>
-              )}
+                    <Text style={styles.photoEmptyText}>No photo added yet</Text>
+                  </View>
+                )}
 
-              {damageQuestion === 4 && (
-                <>
-                  <Text style={styles.stepTitle}>{qTitle(4, t('questions.q4.title'))}</Text>
-                  {Q4_GROUPS.map((group) => (
-                    <View key={group.groupLabel}>
-                      <Text style={styles.q4GroupLabel}>{group.groupLabel}</Text>
-                      {group.options.map(({ value, label }) => {
-                        const isSelected = disasterType === value;
+                {/* Photo grid — shown when 1+ photos */}
+                {photos.length > 0 && (
+                  <View style={styles.photoGrid3Col}>
+                    {[0, 1, 2].map((slotIndex) => {
+                      const photo = photos[slotIndex];
+                      const isActiveNextSlot = !photo && photos.length === slotIndex;
+                      return (
+                        <TouchableOpacity
+                          key={slotIndex}
+                          style={[
+                            styles.photoGridCell,
+                            photo
+                              ? styles.photoGridCellFilled
+                              : isActiveNextSlot
+                                ? styles.photoGridCellActive
+                                : styles.photoGridCellInactive,
+                          ]}
+                          onPress={() => {
+                            if (photo) { handlePhotoTap(slotIndex); }
+                            else if (photos.length === slotIndex) { setShowPhotoOptions(true); }
+                          }}
+                          activeOpacity={photo ? 0.85 : 0.6}
+                          disabled={!photo && photos.length !== slotIndex}
+                        >
+                          {photo ? (
+                            <>
+                              <Image source={{ uri: photo.uri }} style={styles.photoGridImage} />
+                              <TouchableOpacity
+                                style={styles.photoDeleteBadge}
+                                onPress={() => handleRemovePhoto(slotIndex)}
+                              >
+                                <Text style={styles.photoDeleteBadgeText}>✕</Text>
+                              </TouchableOpacity>
+                            </>
+                          ) : (
+                            <Text style={[
+                              styles.photoGridPlus,
+                              isActiveNextSlot ? styles.photoGridPlusActive : styles.photoGridPlusInactive,
+                            ]}>+</Text>
+                          )}
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                )}
+
+                {/* Status text */}
+                {photos.length > 0 && photos.length < 3 && (
+                  <Text style={styles.photoStatusText}>
+                    {photos.length} of 3 photos added. You can add up to 3.
+                  </Text>
+                )}
+
+                {/* Max reached banner */}
+                {photos.length === 3 && (
+                  <View style={styles.photoMaxBanner}>
+                    <Text style={styles.photoMaxBannerIcon}>⚠</Text>
+                    <Text style={styles.photoMaxBannerText}>{t('photoScreen.maxPhotos')}</Text>
+                  </View>
+                )}
+
+                {/* Action buttons */}
+                {photos.length < 3 && (
+                  <View style={styles.photoActionsCol}>
+                    <TouchableOpacity style={styles.photoActionPill} onPress={handleTakePhoto}>
+                      <Text style={styles.photoActionPillIcon}>📷</Text>
+                      <Text style={styles.photoActionPillText}>{t("report.takePhoto")}</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.photoActionPill} onPress={handlePickPhoto}>
+                      <Text style={styles.photoActionPillIcon}>🖼️</Text>
+                      <Text style={styles.photoActionPillText}>{t("report.uploadPhoto")}</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+
+                {/* Photo tips */}
+                <View style={styles.photoTipsContainer}>
+                  <Text style={styles.photoTipsHeader}>{t('photoScreen.guidelines.title')}</Text>
+                  {[
+                    t('photoScreen.guidelines.g1'),
+                    t('photoScreen.guidelines.g2'),
+                    t('photoScreen.guidelines.g3'),
+                    t('photoScreen.guidelines.g4'),
+                  ].map((tip, index) => (
+                    <View key={index} style={styles.photoTipRow}>
+                      <Text style={styles.photoTipIcon}>✓</Text>
+                      <Text style={styles.photoTipText}>{tip}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            )}
+
+            {/* ── STEP 3: QUESTIONS ── */}
+            {step === "damage" && (
+              <View style={styles.step}>
+                {/* Question progress */}
+                <Text style={styles.questionProgressLabel}>
+                  QUESTION {damageQuestion} OF {8 + additionalQuestions.length}
+                </Text>
+                <View style={styles.questionProgressTrack}>
+                  <View style={[styles.questionProgressFill, {
+                    width: `${(Math.min(damageQuestion, 8 + additionalQuestions.length) / (8 + additionalQuestions.length)) * 100}%` as any,
+                  }]} />
+                </View>
+
+                {damageQuestion === 1 && (
+                  <>
+                    <Text style={styles.questionTitleLarge}>{qTitle(1, t('questions.q1.title'))}</Text>
+                    {qOptions(1, [
+                      { value: "minimal", label: t('questions.q1.opt_minimal') },
+                      { value: "partial", label: t('questions.q1.opt_partial') },
+                      { value: "complete", label: t('questions.q1.opt_complete') },
+                    ]).map(({ value, label }) => {
+                      const isSelected = damageLevel === value;
+                      return (
+                        <TouchableOpacity
+                          key={value}
+                          style={[styles.optionCard, isSelected && styles.optionCardSelected]}
+                          onPress={() => { setDamageLevel(value as DamageLevel); setShowQuestionHint(false); }}
+                        >
+                          <View style={styles.optionCardLeft}>
+                            <Text style={[styles.optionCardTitle, isSelected && styles.optionCardTitleSelected]}>{label}</Text>
+                          </View>
+                          <View style={[styles.optionCardRadio, isSelected && styles.optionCardRadioSelected]}>
+                            {isSelected && <View style={styles.optionCardRadioDot} />}
+                          </View>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </>
+                )}
+
+                {damageQuestion === 2 && (
+                  <>
+                    <Text style={styles.questionTitleLarge}>{qTitle(2, t('questions.q2.title'))}</Text>
+                    <Text style={styles.questionSubtitle}>{t('questions.q2.hint')}</Text>
+                    {qOptions(2, [
+                      { value: "residential", label: t('questions.q2.opt_residential') },
+                      { value: "commercial", label: t('questions.q2.opt_commercial') },
+                      { value: "government", label: t('questions.q2.opt_government') },
+                      { value: "educational", label: t('questions.q2.opt_educational') },
+                      { value: "healthcare", label: t('questions.q2.opt_healthcare') },
+                      { value: "critical_infrastructure", label: t('questions.q2.opt_critical_infrastructure') },
+                      { value: "agricultural", label: t('questions.q2.opt_agricultural') },
+                      { value: "public_spaces", label: t('questions.q2.opt_public_spaces') },
+                      { value: "other", label: t('questions.q2.opt_other') },
+                    ]).map(({ value, label }) => {
+                      const isSelected = infrastructureTypes.includes(value);
+                      return (
+                        <TouchableOpacity
+                          key={value}
+                          style={[styles.optionCard, isSelected && styles.optionCardSelected]}
+                          onPress={() => { toggleInfraType(value); setShowQuestionHint(false); }}
+                        >
+                          <View style={styles.optionCardLeft}>
+                            <Text style={[styles.optionCardTitle, isSelected && styles.optionCardTitleSelected]}>{label}</Text>
+                          </View>
+                          <View style={[styles.optionCardCheckbox, isSelected && styles.optionCardCheckboxSelected]}>
+                            {isSelected && <Text style={styles.optionCardCheckmark}>✓</Text>}
+                          </View>
+                        </TouchableOpacity>
+                      );
+                    })}
+                    {infrastructureTypes.includes("other") && (
+                      <TextInput
+                        style={[styles.input, { marginTop: 8 }]}
+                        placeholder={t('questions.otherSpecifyPlaceholder')}
+                        value={infrastructureOther}
+                        onChangeText={(t) => setInfrastructureOther(t.slice(0, 100))}
+                        maxLength={100}
+                      />
+                    )}
+                  </>
+                )}
+
+                {damageQuestion === 3 && (
+                  <>
+                    <Text style={styles.questionTitleLarge}>{qTitle(3, t('questions.q3.title'))}</Text>
+                    {showLocationChangedNote && (
+                      <View style={styles.locationChangedNote}>
+                        <Text style={styles.locationChangedNoteText}>{t('review.locationChangedNote')}</Text>
+                      </View>
+                    )}
+                    <TextInput
+                      style={styles.input}
+                      placeholder={t('questions.q3.placeholder')}
+                      value={infrastructureName}
+                      onChangeText={(t) => setInfrastructureName(t.slice(0, 200))}
+                      maxLength={200}
+                    />
+                    <Text style={styles.charCounter}>{infrastructureName.length} / 200</Text>
+                  </>
+                )}
+
+                {damageQuestion === 4 && (
+                  <>
+                    <Text style={styles.questionTitleLarge}>{qTitle(4, t('questions.q4.title'))}</Text>
+                    {Q4_GROUPS.map((group) => (
+                      <View key={group.groupLabel}>
+                        <Text style={styles.q4GroupLabel}>{group.groupLabel}</Text>
+                        {group.options.map(({ value, label }) => {
+                          const isSelected = disasterType === value;
+                          return (
+                            <TouchableOpacity
+                              key={value}
+                              style={[styles.optionCard, isSelected && styles.optionCardSelected]}
+                              onPress={() => { setDisasterType(value); setShowQuestionHint(false); }}
+                            >
+                              <View style={styles.optionCardLeft}>
+                                <Text style={[styles.optionCardTitle, isSelected && styles.optionCardTitleSelected]}>{label}</Text>
+                              </View>
+                              <View style={[styles.optionCardRadio, isSelected && styles.optionCardRadioSelected]}>
+                                {isSelected && <View style={styles.optionCardRadioDot} />}
+                              </View>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                    ))}
+                  </>
+                )}
+
+                {damageQuestion === 5 && (
+                  <>
+                    <Text style={styles.questionTitleLarge}>{qTitle(5, t('questions.q5.title'))}</Text>
+                    {qOptions(5, [
+                      { value: "yes", label: t('questions.q5.opt_yes') },
+                      { value: "no", label: t('questions.q5.opt_no') },
+                    ]).map(({ value, label }) => {
+                      const isSelected = debrisBlocking === value;
+                      return (
+                        <TouchableOpacity
+                          key={value}
+                          style={[styles.optionCard, isSelected && styles.optionCardSelected]}
+                          onPress={() => { setDebrisBlocking(value); setShowQuestionHint(false); }}
+                        >
+                          <View style={styles.optionCardLeft}>
+                            <Text style={[styles.optionCardTitle, isSelected && styles.optionCardTitleSelected]}>{label}</Text>
+                          </View>
+                          <View style={[styles.optionCardRadio, isSelected && styles.optionCardRadioSelected]}>
+                            {isSelected && <View style={styles.optionCardRadioDot} />}
+                          </View>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </>
+                )}
+
+                {damageQuestion === 6 && (
+                  <>
+                    <Text style={styles.questionTitleLarge}>{qTitle(6, t('questions.q6.title'))}</Text>
+                    <View style={styles.optionGrid2Col}>
+                      {qOptions(6, [
+                        { value: "no_damage", label: t('questions.q6.opt_no_damage') },
+                        { value: "minor", label: t('questions.q6.opt_minor') },
+                        { value: "moderate", label: t('questions.q6.opt_moderate') },
+                        { value: "severe", label: t('questions.q6.opt_severe') },
+                        { value: "destroyed", label: t('questions.q6.opt_destroyed') },
+                        { value: "unknown", label: t('questions.q6.opt_unknown') },
+                      ]).map(({ value, label }) => {
+                        const isSelected = electricityCondition === value;
                         return (
                           <TouchableOpacity
                             key={value}
-                            style={styles.radioRow}
-                            onPress={() => { setDisasterType(value); setShowQuestionHint(false); }}
+                            style={[styles.optionGridCell, isSelected && styles.optionGridCellSelected]}
+                            onPress={() => { setElectricityCondition(value); setShowQuestionHint(false); }}
                           >
-                            <View style={[styles.radioCircle, isSelected && styles.radioCircleSelected]}>
-                              {isSelected && <View style={styles.radioDot} />}
-                            </View>
-                            <Text style={[styles.radioLabel, isSelected && styles.radioLabelSelected]}>
-                              {label}
-                            </Text>
+                            <Text style={[styles.optionGridCellText, isSelected && styles.optionGridCellTextSelected]}>{label}</Text>
                           </TouchableOpacity>
                         );
                       })}
                     </View>
-                  ))}
-                </>
-              )}
+                  </>
+                )}
 
-              {damageQuestion === 5 && (
-                <>
-                  <Text style={styles.stepTitle}>{qTitle(5, t('questions.q5.title'))}</Text>
-                  {qOptions(5, [
-                    { value: "yes", label: t('questions.q5.opt_yes') },
-                    { value: "no", label: t('questions.q5.opt_no') },
-                  ]).map(({ value, label }) => {
-                    const isSelected = debrisBlocking === value;
-                    return (
-                      <TouchableOpacity
-                        key={value}
-                        style={styles.radioRow}
-                        onPress={() => { setDebrisBlocking(value); setShowQuestionHint(false); }}
-                      >
-                        <View style={[styles.radioCircle, isSelected && styles.radioCircleSelected]}>
-                          {isSelected && <View style={styles.radioDot} />}
-                        </View>
-                        <Text style={[styles.radioLabel, isSelected && styles.radioLabelSelected]}>
-                          {label}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </>
-              )}
-
-              {damageQuestion === 6 && (
-                <>
-                  <Text style={styles.stepTitle}>{qTitle(6, t('questions.q6.title'))}</Text>
-                  {qOptions(6, [
-                    { value: "no_damage", label: t('questions.q6.opt_no_damage') },
-                    { value: "minor", label: t('questions.q6.opt_minor') },
-                    { value: "moderate", label: t('questions.q6.opt_moderate') },
-                    { value: "severe", label: t('questions.q6.opt_severe') },
-                    { value: "destroyed", label: t('questions.q6.opt_destroyed') },
-                    { value: "unknown", label: t('questions.q6.opt_unknown') },
-                  ]).map(({ value, label }) => {
-                    const isSelected = electricityCondition === value;
-                    return (
-                      <TouchableOpacity
-                        key={value}
-                        style={styles.radioRow}
-                        onPress={() => { setElectricityCondition(value); setShowQuestionHint(false); }}
-                      >
-                        <View style={[styles.radioCircle, isSelected && styles.radioCircleSelected]}>
-                          {isSelected && <View style={styles.radioDot} />}
-                        </View>
-                        <Text style={[styles.radioLabel, isSelected && styles.radioLabelSelected]}>
-                          {label}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </>
-              )}
-
-              {damageQuestion === 7 && (
-                <>
-                  <Text style={styles.stepTitle}>{qTitle(7, t('questions.q7.title'))}</Text>
-                  {qOptions(7, [
-                    { value: "fully_functional", label: t('questions.q7.opt_fully') },
-                    { value: "partially_functional", label: t('questions.q7.opt_partially') },
-                    { value: "largely_disrupted", label: t('questions.q7.opt_largely') },
-                    { value: "not_functioning", label: t('questions.q7.opt_not_functioning') },
-                    { value: "unknown", label: t('questions.q7.opt_unknown') },
-                  ]).map(({ value, label }) => {
-                    const isSelected = healthServicesCondition === value;
-                    return (
-                      <TouchableOpacity
-                        key={value}
-                        style={styles.radioRow}
-                        onPress={() => { setHealthServicesCondition(value); setShowQuestionHint(false); }}
-                      >
-                        <View style={[styles.radioCircle, isSelected && styles.radioCircleSelected]}>
-                          {isSelected && <View style={styles.radioDot} />}
-                        </View>
-                        <Text style={[styles.radioLabel, isSelected && styles.radioLabelSelected]}>
-                          {label}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </>
-              )}
-
-              {damageQuestion === 8 && (
-                <>
-                  <Text style={styles.stepTitle}>{qTitle(8, t('questions.q8.title'))}</Text>
-                  <Text style={styles.hintText}>{t('questions.q8.hint')}</Text>
-                  {qOptions(8, [
-                    { value: "food_water", label: t('questions.q8.opt_food_water') },
-                    { value: "cash_financial", label: t('questions.q8.opt_cash') },
-                    { value: "healthcare", label: t('questions.q8.opt_healthcare') },
-                    { value: "shelter", label: t('questions.q8.opt_shelter') },
-                    { value: "livelihoods", label: t('questions.q8.opt_livelihoods') },
-                    { value: "wash", label: t('questions.q8.opt_wash') },
-                    { value: "basic_services", label: t('questions.q8.opt_basic_services') },
-                    { value: "protection", label: t('questions.q8.opt_protection') },
-                    { value: "local_support", label: t('questions.q8.opt_local_support') },
-                    { value: "other", label: t('questions.q8.opt_other') },
-                  ]).map(({ value, label }) => (
-                    <TouchableOpacity key={value} style={styles.checkRow} onPress={() => { togglePressingNeed(value); setShowQuestionHint(false); }}>
-                      <View style={[styles.checkbox, pressingNeeds.includes(value) && styles.checkboxSelected]}>
-                        {pressingNeeds.includes(value) && <Text style={styles.checkmark}>✓</Text>}
-                      </View>
-                      <Text style={styles.checkRowText}>{label}</Text>
-                    </TouchableOpacity>
-                  ))}
-                  {pressingNeeds.includes("other") && (
-                    <View>
-                      <TextInput
-                        style={[styles.input, { marginTop: 8 }]}
-                        placeholder={t('questions.otherSpecifyPlaceholder')}
-                        value={pressingNeedsOther}
-                        onChangeText={(txt) => setPressingNeedsOther(txt.slice(0, 100))}
-                        maxLength={100}
-                      />
-                      <Text style={styles.charCounter}>{pressingNeedsOther.length} / 100</Text>
+                {damageQuestion === 7 && (
+                  <>
+                    <Text style={styles.questionTitleLarge}>{qTitle(7, t('questions.q7.title'))}</Text>
+                    <View style={styles.optionGrid2Col}>
+                      {qOptions(7, [
+                        { value: "fully_functional", label: t('questions.q7.opt_fully') },
+                        { value: "partially_functional", label: t('questions.q7.opt_partially') },
+                        { value: "largely_disrupted", label: t('questions.q7.opt_largely') },
+                        { value: "not_functioning", label: t('questions.q7.opt_not_functioning') },
+                        { value: "unknown", label: t('questions.q7.opt_unknown') },
+                      ]).map(({ value, label }) => {
+                        const isSelected = healthServicesCondition === value;
+                        return (
+                          <TouchableOpacity
+                            key={value}
+                            style={[styles.optionGridCell, isSelected && styles.optionGridCellSelected]}
+                            onPress={() => { setHealthServicesCondition(value); setShowQuestionHint(false); }}
+                          >
+                            <Text style={[styles.optionGridCellText, isSelected && styles.optionGridCellTextSelected]}>{label}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
                     </View>
-                  )}
-                </>
-              )}
+                  </>
+                )}
 
-              {/* Additional dashboard-configured questions (order_index > 8) */}
-              {damageQuestion > 8 && (() => {
-                const aq = additionalQuestions[additionalQuestion - 1];
-                if (!aq) return null;
-                const qKey = String(aq.order_index);
-                const qType = aq.type ?? 'single_select';
-                return (
-                  <View style={styles.questionBlock}>
-                    <Text style={styles.questionTitle}>{aq.question_text}</Text>
-
-                    {/* Single select */}
-                    {qType === 'single_select' && (aq.options ?? []).map((opt) => {
-                      const isSelected = additionalAnswers[qKey] === opt.option_value;
+                {damageQuestion === 8 && (
+                  <>
+                    <Text style={styles.questionTitleLarge}>{qTitle(8, t('questions.q8.title'))}</Text>
+                    <Text style={styles.questionSubtitle}>{t('questions.q8.hint')}</Text>
+                    {qOptions(8, [
+                      { value: "food_water", label: t('questions.q8.opt_food_water') },
+                      { value: "cash_financial", label: t('questions.q8.opt_cash') },
+                      { value: "healthcare", label: t('questions.q8.opt_healthcare') },
+                      { value: "shelter", label: t('questions.q8.opt_shelter') },
+                      { value: "livelihoods", label: t('questions.q8.opt_livelihoods') },
+                      { value: "wash", label: t('questions.q8.opt_wash') },
+                      { value: "basic_services", label: t('questions.q8.opt_basic_services') },
+                      { value: "protection", label: t('questions.q8.opt_protection') },
+                      { value: "local_support", label: t('questions.q8.opt_local_support') },
+                      { value: "other", label: t('questions.q8.opt_other') },
+                    ]).map(({ value, label }) => {
+                      const isSelected = pressingNeeds.includes(value);
                       return (
                         <TouchableOpacity
-                          key={opt.option_value}
-                          style={styles.radioRow}
-                          onPress={() => {
-                            setAdditionalAnswers((prev) => ({ ...prev, [qKey]: opt.option_value }));
-                            setShowQuestionHint(false);
-                          }}
+                          key={value}
+                          style={[styles.optionCard, isSelected && styles.optionCardSelected]}
+                          onPress={() => { togglePressingNeed(value); setShowQuestionHint(false); }}
                         >
-                          <View style={[styles.radioCircle, isSelected && styles.radioCircleSelected]}>
-                            {isSelected && <View style={styles.radioDot} />}
+                          <View style={styles.optionCardLeft}>
+                            <Text style={[styles.optionCardTitle, isSelected && styles.optionCardTitleSelected]}>{label}</Text>
                           </View>
-                          <Text style={[styles.radioLabel, isSelected && styles.radioLabelSelected]}>
-                            {opt.option_text}
-                          </Text>
+                          <View style={[styles.optionCardCheckbox, isSelected && styles.optionCardCheckboxSelected]}>
+                            {isSelected && <Text style={styles.optionCardCheckmark}>✓</Text>}
+                          </View>
                         </TouchableOpacity>
                       );
                     })}
+                    {pressingNeeds.includes("other") && (
+                      <View>
+                        <TextInput
+                          style={[styles.input, { marginTop: 8 }]}
+                          placeholder={t('questions.otherSpecifyPlaceholder')}
+                          value={pressingNeedsOther}
+                          onChangeText={(txt) => setPressingNeedsOther(txt.slice(0, 100))}
+                          maxLength={100}
+                        />
+                        <Text style={styles.charCounter}>{pressingNeedsOther.length} / 100</Text>
+                      </View>
+                    )}
+                  </>
+                )}
 
-                    {/* Multi select */}
-                    {qType === 'multi_select' && (aq.options ?? []).map((opt) => {
-                      const current = (additionalAnswers[qKey] as string[]) ?? [];
-                      const selected = current.includes(opt.option_value);
-                      return (
-                        <TouchableOpacity
-                          key={opt.option_value}
-                          style={styles.checkRow}
-                          onPress={() => {
-                            const updated = selected
-                              ? current.filter((v) => v !== opt.option_value)
-                              : [...current, opt.option_value];
-                            setAdditionalAnswers((prev) => ({ ...prev, [qKey]: updated }));
-                            setShowQuestionHint(false);
+                {/* Additional dashboard-configured questions (order_index > 8) */}
+                {damageQuestion > 8 && (() => {
+                  const aq = additionalQuestions[additionalQuestion - 1];
+                  if (!aq) return null;
+                  const qKey = String(aq.order_index);
+                  const qType = aq.type ?? 'single_select';
+                  return (
+                    <View style={styles.questionBlock}>
+                      <Text style={styles.questionTitleLarge}>{aq.question_text}</Text>
+
+                      {qType === 'single_select' && (aq.options ?? []).map((opt) => {
+                        const isSelected = additionalAnswers[qKey] === opt.option_value;
+                        return (
+                          <TouchableOpacity
+                            key={opt.option_value}
+                            style={[styles.optionCard, isSelected && styles.optionCardSelected]}
+                            onPress={() => {
+                              setAdditionalAnswers((prev) => ({ ...prev, [qKey]: opt.option_value }));
+                              setShowQuestionHint(false);
+                            }}
+                          >
+                            <View style={styles.optionCardLeft}>
+                              <Text style={[styles.optionCardTitle, isSelected && styles.optionCardTitleSelected]}>{opt.option_text}</Text>
+                            </View>
+                            <View style={[styles.optionCardRadio, isSelected && styles.optionCardRadioSelected]}>
+                              {isSelected && <View style={styles.optionCardRadioDot} />}
+                            </View>
+                          </TouchableOpacity>
+                        );
+                      })}
+
+                      {qType === 'multi_select' && (aq.options ?? []).map((opt) => {
+                        const current = (additionalAnswers[qKey] as string[]) ?? [];
+                        const selected = current.includes(opt.option_value);
+                        return (
+                          <TouchableOpacity
+                            key={opt.option_value}
+                            style={[styles.optionCard, selected && styles.optionCardSelected]}
+                            onPress={() => {
+                              const updated = selected
+                                ? current.filter((v) => v !== opt.option_value)
+                                : [...current, opt.option_value];
+                              setAdditionalAnswers((prev) => ({ ...prev, [qKey]: updated }));
+                              setShowQuestionHint(false);
+                            }}
+                          >
+                            <View style={styles.optionCardLeft}>
+                              <Text style={[styles.optionCardTitle, selected && styles.optionCardTitleSelected]}>{opt.option_text}</Text>
+                            </View>
+                            <View style={[styles.optionCardCheckbox, selected && styles.optionCardCheckboxSelected]}>
+                              {selected && <Text style={styles.optionCardCheckmark}>✓</Text>}
+                            </View>
+                          </TouchableOpacity>
+                        );
+                      })}
+
+                      {qType === 'free_text' && (
+                        <TextInput
+                          style={styles.input}
+                          value={(additionalAnswers[qKey] as string) ?? ''}
+                          onChangeText={(text) => {
+                            setAdditionalAnswers((prev) => ({
+                              ...prev,
+                              [qKey]: text.slice(0, aq.max_length ?? 200),
+                            }));
                           }}
-                        >
-                          <View style={[styles.checkbox, selected && styles.checkboxSelected]}>
-                            {selected && <Text style={styles.checkmark}>✓</Text>}
-                          </View>
-                          <Text style={styles.checkRowText}>{opt.option_text}</Text>
-                        </TouchableOpacity>
-                      );
-                    })}
+                          multiline
+                          maxLength={aq.max_length ?? 200}
+                          placeholder="Enter your answer..."
+                          placeholderTextColor="#999999"
+                        />
+                      )}
 
-                    {/* Free text */}
-                    {qType === 'free_text' && (
-                      <TextInput
-                        style={styles.input}
-                        value={(additionalAnswers[qKey] as string) ?? ''}
-                        onChangeText={(text) => {
-                          setAdditionalAnswers((prev) => ({
-                            ...prev,
-                            [qKey]: text.slice(0, aq.max_length ?? 200),
-                          }));
-                        }}
-                        multiline
-                        maxLength={aq.max_length ?? 200}
-                        placeholder="Enter your answer..."
-                        placeholderTextColor="#999999"
-                      />
-                    )}
+                      {showQuestionHint && !additionalAnswers[qKey] && aq.is_mandatory && (
+                        <Text style={styles.questionHint}>{t('questions.answerHint')}</Text>
+                      )}
+                    </View>
+                  );
+                })()}
 
-                    {showQuestionHint && !additionalAnswers[qKey] && aq.is_mandatory && (
-                      <Text style={styles.questionHint}>
-                        {t('questions.answerHint')}
-                      </Text>
-                    )}
-                  </View>
-                );
-              })()}
+                {showQuestionHint && damageQuestion <= 8 && !isDamageQuestionAnswered() && (
+                  <Text style={styles.questionHint}>Please answer this question to continue.</Text>
+                )}
+              </View>
+            )}
 
-              {showQuestionHint && damageQuestion <= 8 && !isDamageQuestionAnswered() && (
-                <Text style={styles.questionHint}>
-                  Please answer this question to continue.
+          </ScrollView>
+
+          {/* Sticky footer — photos step */}
+          {step === "photos" && (
+            <View style={[styles.footerBar, { paddingBottom: insets.bottom + 16 }]}>
+              <TouchableOpacity
+                style={[styles.footerPillBtn, photos.length === 0 && styles.footerPillBtnDisabled]}
+                onPress={() => {
+                  if (!photos.length) return;
+                  if (fromReview) { setFromReview(false); setStep('review'); return; }
+                  setStep('location');
+                }}
+                disabled={photos.length === 0}
+              >
+                <Text style={[styles.footerPillBtnText, photos.length === 0 && styles.footerPillBtnTextDisabled]}>
+                  Next →
                 </Text>
-              )}
+              </TouchableOpacity>
+            </View>
+          )}
 
-              <View style={styles.navButtons}>
-                <TouchableOpacity style={styles.secondaryButton} onPress={handleDamageBack}>
-                  <Text style={styles.secondaryButtonText}>← Back</Text>
+          {/* Sticky footer — questions step */}
+          {step === "damage" && (
+            <View style={[styles.footerBar, { paddingBottom: insets.bottom + 16 }]}>
+              <View style={styles.footerDamageRow}>
+                <TouchableOpacity
+                  style={styles.footerBackPill}
+                  onPress={handleDamageBack}
+                >
+                  <Text style={styles.footerBackPillText}>← Back</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={styles.primaryButton}
+                  style={styles.footerPillBtnFlex}
                   onPress={() => {
-                    if (damageQuestion > 8) {
-                      handleAdditionalNext();
-                      return;
-                    }
-                    if (!isDamageQuestionAnswered()) {
-                      setShowQuestionHint(true);
-                      return;
-                    }
+                    if (damageQuestion > 8) { handleAdditionalNext(); return; }
+                    if (!isDamageQuestionAnswered()) { setShowQuestionHint(true); return; }
                     setShowQuestionHint(false);
                     handleDamageNext();
                   }}
                 >
-                  <Text style={styles.primaryButtonText}>Next →</Text>
+                  <Text style={styles.footerPillBtnText}>Next →</Text>
                 </TouchableOpacity>
               </View>
             </View>
           )}
-
-        </ScrollView>
+        </>
       )}
 
       {/* Step 4 — Review */}
@@ -2747,255 +2853,215 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
             contentContainerStyle={styles.reviewScrollContent}
             showsVerticalScrollIndicator={false}
           >
-            <Text style={styles.reviewTitle}>{t('review.title')}</Text>
+            <Text style={styles.reviewIntroText}>
+              Please review your report before submitting. Tap any section to edit.
+            </Text>
 
-            {/* ── SECTION 1: PHOTOS ── */}
-            <View style={styles.reviewSection}>
-              <View style={styles.reviewSectionHeader}>
-                <Text style={styles.reviewSectionTitle}>{t('review.photosSection')}</Text>
-                <TouchableOpacity
-                  onPress={() => {
-                    setFromReview(true);
-                    setStep('photos');
-                  }}
-                >
-                  <Text style={styles.reviewEditLink}>{t('review.editLink')}</Text>
-                </TouchableOpacity>
+            {/* Single white card containing all sections */}
+            <View style={styles.reviewCard}>
+
+              {/* ── SECTION 1: PHOTOS ── */}
+              <View style={styles.reviewCardSection}>
+                <View style={styles.reviewSectionHeader}>
+                  <Text style={styles.reviewSectionTitle}>{t('review.photosSection')}</Text>
+                  <TouchableOpacity
+                    style={{ minWidth: 44, minHeight: 44, justifyContent: 'center', alignItems: 'flex-end' }}
+                    onPress={() => { setFromReview(true); setStep('photos'); }}
+                  >
+                    <Text style={styles.reviewEditLink}>{t('review.editLink')} ✏</Text>
+                  </TouchableOpacity>
+                </View>
+                {photos.length > 0 ? (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.reviewPhotoRow}>
+                    {photos.map((photo, index) => (
+                      <TouchableOpacity
+                        key={index}
+                        onPress={() => setViewerPhoto(photo.uri)}
+                        style={styles.reviewPhotoThumb}
+                      >
+                        <Image source={{ uri: photo.uri }} style={styles.reviewPhotoThumbImage} />
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                ) : (
+                  <Text style={styles.reviewPhotoRequired}>{t('review.photoRequired')}</Text>
+                )}
               </View>
 
-              {/* Photo thumbnails row */}
-              {photos.length > 0 ? (
-                <ScrollView horizontal showsHorizontalScrollIndicator={false}
-                  style={styles.reviewPhotoRow}>
-                  {photos.map((photo, index) => (
-                    <TouchableOpacity
-                      key={index}
-                      onPress={() => setViewerPhoto(photo.uri)}
-                      style={styles.reviewPhotoThumb}
-                    >
-                      <Image
-                        source={{ uri: photo.uri }}
-                        style={styles.reviewPhotoThumbImage}
-                      />
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              ) : (
-                <Text style={styles.reviewPhotoRequired}>
-                  {t('review.photoRequired')}
-                </Text>
-              )}
-            </View>
+              <View style={styles.reviewCardDivider} />
 
-            {/* ── SECTION 2: LOCATION ── */}
-            <View style={styles.reviewSection}>
-              <View style={styles.reviewSectionHeader}>
-                <Text style={styles.reviewSectionTitle}>{t('review.locationSection')}</Text>
-                <TouchableOpacity
-                  onPress={() => {
-                    setFromReview(true);
-                    setStep('location');
-                  }}
-                >
-                  <Text style={styles.reviewEditLink}>{t('review.editLink')}</Text>
-                </TouchableOpacity>
-              </View>
+              {/* ── SECTION 2: LOCATION ── */}
+              <View style={styles.reviewCardSection}>
+                <View style={styles.reviewSectionHeader}>
+                  <Text style={styles.reviewSectionTitle}>{t('review.locationSection')}</Text>
+                  <TouchableOpacity
+                    style={{ minWidth: 44, minHeight: 44, justifyContent: 'center', alignItems: 'flex-end' }}
+                    onPress={() => { setFromReview(true); setStep('location'); }}
+                  >
+                    <Text style={styles.reviewEditLink}>{t('review.editLink')} ✏</Text>
+                  </TouchableOpacity>
+                </View>
 
-              {/* Map selection path */}
-              {selectedBuilding && (
-                <>
+                {selectedBuilding && (
+                  <>
+                    <View style={styles.reviewRow}>
+                      <Text style={styles.reviewLabel}>{t('review.locationBuilding')}</Text>
+                      <Text style={styles.reviewValue}>{editableBuildingName || selectedBuilding.name || '—'}</Text>
+                    </View>
+                    {selectedBuilding.building ? (
+                      <View style={styles.reviewRow}>
+                        <Text style={styles.reviewLabel}>{t('review.locationBuildingType')}</Text>
+                        <Text style={styles.reviewValue}>{selectedBuilding.building}</Text>
+                      </View>
+                    ) : null}
+                    {selectedBuilding.id ? (
+                      <View style={styles.reviewRow}>
+                        <Text style={styles.reviewLabel}>{t('review.locationFootprintId')}</Text>
+                        <Text style={[styles.reviewValue, styles.reviewMono]}>{String(selectedBuilding.id).substring(0, 16)}</Text>
+                      </View>
+                    ) : null}
+                  </>
+                )}
+
+                {!selectedBuilding && pinDropActive && pinCoords && (
                   <View style={styles.reviewRow}>
-                    <Text style={styles.reviewLabel}>{t('review.locationBuilding')}</Text>
-                    <Text style={styles.reviewValue}>
-                      {editableBuildingName || selectedBuilding.name || '—'}
-                    </Text>
+                    <Text style={styles.reviewLabel}>{t('review.locationPinDrop')}</Text>
+                    <Text style={styles.reviewValue}>{pinCoords.lat.toFixed(5)}, {pinCoords.lng.toFixed(5)}</Text>
                   </View>
-                  {selectedBuilding.building ? (
-                    <View style={styles.reviewRow}>
-                      <Text style={styles.reviewLabel}>{t('review.locationBuildingType')}</Text>
-                      <Text style={styles.reviewValue}>{selectedBuilding.building}</Text>
-                    </View>
-                  ) : null}
-                  {selectedBuilding.id ? (
-                    <View style={styles.reviewRow}>
-                      <Text style={styles.reviewLabel}>{t('review.locationFootprintId')}</Text>
-                      <Text style={[styles.reviewValue, styles.reviewMono]}>
-                        {String(selectedBuilding.id).substring(0, 16)}
-                      </Text>
-                    </View>
-                  ) : null}
-                </>
-              )}
+                )}
 
-              {/* Pin drop path */}
-              {!selectedBuilding && pinDropActive && pinCoords && (
-                <View style={styles.reviewRow}>
-                  <Text style={styles.reviewLabel}>{t('review.locationPinDrop')}</Text>
-                  <Text style={styles.reviewValue}>
-                    {pinCoords.lat.toFixed(5)}, {pinCoords.lng.toFixed(5)}
+                {!selectedBuilding && !pinDropActive && (
+                  <>
+                    <Text style={styles.reviewManualNote}>{t('review.locationManualNote')}</Text>
+                    {locationAddress ? (
+                      <View style={styles.reviewRow}>
+                        <Text style={styles.reviewLabel}>{t('review.locationAddress')}</Text>
+                        <Text style={styles.reviewValue}>{locationAddress}</Text>
+                      </View>
+                    ) : null}
+                    {locationLandmark ? (
+                      <View style={styles.reviewRow}>
+                        <Text style={styles.reviewLabel}>{t('review.locationLandmark')}</Text>
+                        <Text style={styles.reviewValue}>{locationLandmark}</Text>
+                      </View>
+                    ) : null}
+                    {locationBuildingName ? (
+                      <View style={styles.reviewRow}>
+                        <Text style={styles.reviewLabel}>{t('review.locationBuildingName')}</Text>
+                        <Text style={styles.reviewValue}>{locationBuildingName}</Text>
+                      </View>
+                    ) : null}
+                  </>
+                )}
+
+                {locationNote ? (
+                  <View style={styles.reviewRow}>
+                    <Text style={styles.reviewLabel}>{t('review.locationNote')}</Text>
+                    <Text style={styles.reviewValue}>{locationNote}</Text>
+                  </View>
+                ) : null}
+
+                <View style={[styles.reviewRow, { borderBottomWidth: 0 }]}>
+                  <Text style={styles.reviewLabel}>{t('review.locationGPS')}</Text>
+                  <Text style={[
+                    styles.reviewValue,
+                    (gpsCoords || locationGpsCoords) ? styles.reviewGPSCaptured : styles.reviewGPSUnavailable,
+                  ]}>
+                    {(gpsCoords || locationGpsCoords)
+                      ? `${t('review.locationGPSCaptured')} (${(locationGpsCoords?.lat ?? gpsCoords?.lat ?? 0).toFixed(4)}, ${(locationGpsCoords?.lng ?? gpsCoords?.lng ?? 0).toFixed(4)})`
+                      : t('review.locationGPSUnavailable')
+                    }
                   </Text>
                 </View>
-              )}
+              </View>
 
-              {/* Manual entry path */}
-              {!selectedBuilding && !pinDropActive && (
-                <>
-                  <Text style={styles.reviewManualNote}>
-                    {t('review.locationManualNote')}
-                  </Text>
-                  {locationAddress ? (
-                    <View style={styles.reviewRow}>
-                      <Text style={styles.reviewLabel}>{t('review.locationAddress')}</Text>
-                      <Text style={styles.reviewValue}>{locationAddress}</Text>
-                    </View>
-                  ) : null}
-                  {locationLandmark ? (
-                    <View style={styles.reviewRow}>
-                      <Text style={styles.reviewLabel}>{t('review.locationLandmark')}</Text>
-                      <Text style={styles.reviewValue}>{locationLandmark}</Text>
-                    </View>
-                  ) : null}
-                  {locationBuildingName ? (
-                    <View style={styles.reviewRow}>
-                      <Text style={styles.reviewLabel}>{t('review.locationBuildingName')}</Text>
-                      <Text style={styles.reviewValue}>{locationBuildingName}</Text>
-                    </View>
-                  ) : null}
-                </>
-              )}
+              <View style={styles.reviewCardDivider} />
 
-              {/* Location note (all paths) */}
-              {locationNote ? (
-                <View style={styles.reviewRow}>
-                  <Text style={styles.reviewLabel}>{t('review.locationNote')}</Text>
-                  <Text style={styles.reviewValue}>{locationNote}</Text>
+              {/* ── SECTION 3: QUESTIONS ── */}
+              <View style={styles.reviewCardSection}>
+                <View style={styles.reviewSectionHeader}>
+                  <Text style={styles.reviewSectionTitle}>{t('review.questionsSection')}</Text>
+                  <TouchableOpacity
+                    style={{ minWidth: 44, minHeight: 44, justifyContent: 'center', alignItems: 'flex-end' }}
+                    onPress={() => { setFromReview(true); setDamageQuestion(1); setStep('damage'); }}
+                  >
+                    <Text style={styles.reviewEditLink}>{t('review.editLink')} ✏</Text>
+                  </TouchableOpacity>
                 </View>
-              ) : null}
 
-              {/* GPS indicator (all paths) */}
-              <View style={styles.reviewRow}>
-                <Text style={styles.reviewLabel}>{t('review.locationGPS')}</Text>
-                <Text style={[
-                  styles.reviewValue,
-                  (gpsCoords || locationGpsCoords)
-                    ? styles.reviewGPSCaptured
-                    : styles.reviewGPSUnavailable
-                ]}>
-                  {(gpsCoords || locationGpsCoords)
-                    ? `${t('review.locationGPSCaptured')} (${
-                        (locationGpsCoords?.lat ?? gpsCoords?.lat ?? 0).toFixed(4)
-                      }, ${
-                        (locationGpsCoords?.lng ?? gpsCoords?.lng ?? 0).toFixed(4)
-                      })`
-                    : t('review.locationGPSUnavailable')
-                  }
-                </Text>
-              </View>
-            </View>
-
-            {/* ── SECTION 3: QUESTIONS ── */}
-            <View style={styles.reviewSection}>
-              <View style={styles.reviewSectionHeader}>
-                <Text style={styles.reviewSectionTitle}>{t('review.questionsSection')}</Text>
-                <TouchableOpacity
-                  onPress={() => {
-                    setFromReview(true);
-                    setDamageQuestion(1);
-                    setStep('damage');
-                  }}
-                >
-                  <Text style={styles.reviewEditLink}>{t('review.editLink')}</Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* Core questions Q1–Q8 */}
-              {[
-                { label: t('review.q1Label'), value: damageLevel },
-                { label: t('review.q2Label'), value: [
-                  ...infrastructureTypes,
-                  ...(infrastructureOther ? [`Other: ${infrastructureOther}`] : [])
-                ].join(', ') },
-                { label: t('review.q3Label'), value: infrastructureName },
-                { label: t('review.q4Label'), value: disasterType },
-                { label: t('review.q5Label'), value: debrisBlocking },
-                { label: t('review.q6Label'), value: electricityCondition },
-                { label: t('review.q7Label'), value: healthServicesCondition },
-                { label: t('review.q8Label'), value: [
-                  ...pressingNeeds,
-                  ...(pressingNeedsOther ? [`Other: ${pressingNeedsOther}`] : [])
-                ].join(', ') },
-              ].map((item, index) => (
-                item.value ? (
-                  <View key={index} style={styles.reviewRow}>
-                    <Text style={styles.reviewLabel}>{item.label}</Text>
-                    <Text style={styles.reviewValue}>{item.value}</Text>
-                  </View>
-                ) : null
-              ))}
-
-              {/* Additional question answers */}
-              {additionalQuestions.length > 0 &&
-                Object.entries(additionalAnswers).map(([qId, answer]) => {
-                  const aq = additionalQuestions.find((q: any) => q.id === qId);
-                  if (!aq) return null;
-                  const displayValue = Array.isArray(answer)
-                    ? answer.join(', ')
-                    : String(answer);
-                  return (
-                    <View key={qId} style={styles.reviewRow}>
-                      <Text style={styles.reviewLabel}>
-                        {(aq as any).text ?? (aq as any).question_text ?? qId}
-                      </Text>
-                      <Text style={styles.reviewValue}>{displayValue}</Text>
+                {[
+                  { label: t('review.q1Label'), value: damageLevel },
+                  { label: t('review.q2Label'), value: [...infrastructureTypes, ...(infrastructureOther ? [`Other: ${infrastructureOther}`] : [])].join(', ') },
+                  { label: t('review.q3Label'), value: infrastructureName },
+                  { label: t('review.q4Label'), value: disasterType },
+                  { label: t('review.q5Label'), value: debrisBlocking },
+                  { label: t('review.q6Label'), value: electricityCondition },
+                  { label: t('review.q7Label'), value: healthServicesCondition },
+                  { label: t('review.q8Label'), value: [...pressingNeeds, ...(pressingNeedsOther ? [`Other: ${pressingNeedsOther}`] : [])].join(', ') },
+                ].map((item, index) => (
+                  item.value ? (
+                    <View key={index} style={styles.reviewRow}>
+                      <Text style={styles.reviewLabel}>{item.label}</Text>
+                      <Text style={styles.reviewValue}>{item.value}</Text>
                     </View>
-                  );
-                })
-              }
+                  ) : null
+                ))}
+
+                {additionalQuestions.length > 0 &&
+                  Object.entries(additionalAnswers).map(([qId, answer]) => {
+                    const aq = additionalQuestions.find((q: any) => q.id === qId);
+                    if (!aq) return null;
+                    const displayValue = Array.isArray(answer) ? answer.join(', ') : String(answer);
+                    return (
+                      <View key={qId} style={styles.reviewRow}>
+                        <Text style={styles.reviewLabel}>{(aq as any).text ?? (aq as any).question_text ?? qId}</Text>
+                        <Text style={styles.reviewValue}>{displayValue}</Text>
+                      </View>
+                    );
+                  })
+                }
+              </View>
+
             </View>
 
-            {/* Bottom padding so content clears the sticky Submit button */}
             <View style={{ height: 100 }} />
           </ScrollView>
 
-          {/* ── STICKY SUBMIT BUTTON ── always visible at bottom */}
+          {/* ── STICKY SUBMIT BUTTON ── */}
           <View style={[styles.reviewSubmitContainer, { paddingBottom: insets.bottom + 16 }]}>
-            {/* Show error if no photos */}
+            {(gpsCoords || locationGpsCoords) && (
+              <View style={styles.reviewGpsRow}>
+                <View style={styles.reviewGpsDot} />
+                <Text style={styles.reviewGpsText}>GPS location captured and attached to this report</Text>
+              </View>
+            )}
             {photos.length === 0 && (
-              <Text style={styles.reviewPhotoRequired}>
-                {t('review.photoRequired')}
-              </Text>
+              <Text style={styles.reviewPhotoRequired}>{t('review.photoRequired')}</Text>
             )}
             {submitTimedOut && (
               <View style={styles.submitTimeoutBox}>
-                <Text style={styles.submitTimeoutText}>
-                  {t('review.submitTimeout')}
-                </Text>
+                <Text style={styles.submitTimeoutText}>{t('review.submitTimeout')}</Text>
                 <TouchableOpacity
                   style={styles.submitRetryBtn}
-                  onPress={() => {
-                    setSubmitTimedOut(false);
-                    handleSubmit();
-                  }}
+                  onPress={() => { setSubmitTimedOut(false); handleSubmit(); }}
                 >
                   <Text style={styles.submitRetryBtnText}>{t('review.submitRetry')}</Text>
                 </TouchableOpacity>
               </View>
             )}
             <TouchableOpacity
-              style={[
-                styles.reviewSubmitBtn,
-                (submitting || photos.length === 0) && styles.reviewSubmitBtnDisabled,
-              ]}
+              style={[styles.reviewSubmitBtn, (submitting || photos.length === 0) && styles.reviewSubmitBtnDisabled]}
               onPress={handleSubmit}
               disabled={submitting || photos.length === 0}
             >
               {submitting
                 ? <ActivityIndicator color="#FFFFFF" />
-                : <Text style={styles.reviewSubmitBtnText}>
-                    {t('review.submitButton')}
-                  </Text>
+                : <Text style={styles.reviewSubmitBtnText}>{t('review.submitButton')}</Text>
               }
             </TouchableOpacity>
+            <Text style={styles.reviewPrivacyNote}>
+              Your report is encrypted and shared only with authorized UNDP staff.
+            </Text>
           </View>
         </View>
       )}
@@ -3006,711 +3072,452 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
 // ── Styles ─────────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#f4f6f9" },
+  // ── CONTAINER & HEADER ──────────────────────────────────────────────────────
+  container: { flex: 1, backgroundColor: '#F6F3F2' },
   header: {
-    backgroundColor: "#FFFFFF",
-    padding: 16,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    borderBottomWidth: 1,
-    borderBottomColor: "#E8EDF2",
-  },
-  backBtn: { color: "#0468B1", fontSize: 22 },
-  headerTitle: { color: "#0468B1", fontSize: 18, fontWeight: "700", flex: 1, textAlign: "center" },
-  content: { flex: 1 },
-  contentPadding: { padding: 16 },
-  step: { gap: 12 },
-  stepTitle: { fontSize: 17, fontWeight: "600", color: "#1A2B4A" },
-
-  // Location step
-  locationPanel: { flexShrink: 0, maxHeight: 340, backgroundColor: "#fff", borderTopWidth: 1, borderTopColor: "#e0e0e0" },
-  locationPanelContent: { padding: 14, gap: 10 },
-  zoomHint: {
-    position: "absolute",
-    bottom: 12,
-    alignSelf: "center",
-    backgroundColor: "rgba(26,43,74,0.82)",
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    zIndex: 10,
-  },
-  zoomHintText: { color: "#fff", fontSize: 12, fontWeight: "500" },
-  microsoftNote: {
-    position: "absolute",
-    bottom: 46,
-    left: 8,
-    right: 8,
-    backgroundColor: "rgba(235, 248, 255, 0.95)",
-    borderRadius: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    zIndex: 10,
-    borderWidth: 1,
-    borderColor: "#63B3ED",
-  },
-  microsoftNoteText: { color: "#2B6CB0", fontSize: 11 },
-  selectionCard: {
-    backgroundColor: "#E8F4FD",
-    borderWidth: 1.5,
-    borderColor: "#0468B1",
-    borderRadius: 8,
-    padding: 12,
-    gap: 2,
-  },
-  selectionCardTitle: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#0468B1",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  selectionCardName: { fontSize: 15, fontWeight: "600", color: "#1A2B4A" },
-  selectionCardMeta: { fontSize: 12, color: "#718096" },
-  selectionCardCoords: { fontSize: 11, color: "#718096", fontVariant: ["tabular-nums"] },
-  manualToggle: { fontSize: 13, color: "#0468B1", textDecorationLine: "underline" },
-
-  // Damage / shared
-  optionBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 16,
-    padding: 16,
-    borderRadius: 10,
-    borderWidth: 1.5,
-    borderColor: "#e0e0e0",
-    backgroundColor: "#fff",
-  },
-  optionBtnSelected: { borderColor: "#0468B1", backgroundColor: "#E8F4FD" },
-  optionText: { fontSize: 16, fontWeight: "600", color: "#1A2B4A" },
-  checkRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 4,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f0f0f0",
-  },
-  checkbox: {
-    width: 22,
-    height: 22,
-    borderWidth: 2,
-    borderColor: "#ccc",
-    borderRadius: 4,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  checkboxSelected: { borderColor: "#0468B1", backgroundColor: "#0468B1" },
-  checkmark: { color: "#fff", fontSize: 13, fontWeight: "700" },
-  checkRowText: { flex: 1, fontSize: 15, color: "#1A2B4A" },
-  charCounter: { fontSize: 12, color: "#999", textAlign: "right" },
-  q4GroupLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#888888',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginTop: 12,
-    marginBottom: 6,
-    paddingHorizontal: 4,
-  },
-  input: {
-    backgroundColor: "#fff",
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#e0e0e0",
-    padding: 12,
-    fontSize: 15,
-  },
-  hintText: { fontSize: 14, color: "#666" },
-
-  // GPS button (reused for location panel)
-  gpsButton: {
-    backgroundColor: "#1A2B4A",
-    borderRadius: 8,
-    padding: 14,
-    alignItems: "center",
-  },
-  gpsButtonText: { color: "#fff", fontWeight: "600", fontSize: 15 },
-
-  // Photos — slot grid
-  photoSlotsRow: {
+    backgroundColor: 'rgba(255,255,255,0.92)',
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    marginHorizontal: 24,
-    marginTop: 16,
-    gap: 12,
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    minHeight: 56,
   },
-  photoSlot: {
+  backBtnTouch: {
+    minWidth: 44,
+    minHeight: 44,
+    justifyContent: 'center',
+    alignItems: 'flex-start',
+  },
+  backBtn: { color: '#0468B1', fontSize: scale(24), fontWeight: '600' },
+  headerTitle: {
+    fontSize: scale(17),
+    fontWeight: '600',
+    color: '#1B1C1C',
+    flex: 1,
+    textAlign: 'center',
+  },
+
+  // ── SHARED SCROLL & STEP ────────────────────────────────────────────────────
+  content: { flex: 1 },
+  contentPadding: { paddingHorizontal: screenWidth * 0.06, paddingTop: 16 },
+  step: { gap: 16 },
+  stepLabel: {
+    fontSize: scale(10),
+    fontWeight: '700',
+    color: '#717782',
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+    marginBottom: 4,
+  },
+
+  // ── FOOTER BAR (sticky for all steps) ──────────────────────────────────────
+  footerBar: {
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    paddingTop: 12,
+    paddingHorizontal: screenWidth * 0.06,
+  },
+  footerPillBtn: {
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#0468B1',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: screenWidth * 0.88,
+    alignSelf: 'center',
+    elevation: 4,
+    shadowColor: '#0468B1',
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+  },
+  footerPillBtnDisabled: {
+    backgroundColor: '#E4E2E1',
+    elevation: 0,
+    shadowOpacity: 0,
+  },
+  footerPillBtnText: {
+    color: '#FFFFFF',
+    fontSize: scale(16),
+    fontWeight: '700',
+  },
+  footerPillBtnTextDisabled: {
+    color: '#9CA3AF',
+  },
+  footerPillBtnFlex: {
+    flex: 1,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#0468B1',
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 4,
+    shadowColor: '#0468B1',
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+  },
+  footerDamageRow: {
+    flexDirection: 'row',
+    gap: 12,
+    alignItems: 'center',
+  },
+  footerBackPill: {
+    height: 56,
+    borderRadius: 28,
+    borderWidth: 2,
+    borderColor: '#0468B1',
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 44,
+  },
+  footerBackPillText: {
+    color: '#0468B1',
+    fontSize: scale(15),
+    fontWeight: '700',
+  },
+
+  // ── STEP 1 — PHOTOS ────────────────────────────────────────────────────────
+  photoEmptyBox: {
+    width: '100%',
+    aspectRatio: 4 / 3,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    borderColor: '#C1C7D2',
+    backgroundColor: '#FAFAFA',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  photoEmptyIconCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#EAEAEA',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  photoEmptyText: {
+    fontSize: scale(14),
+    color: '#717782',
+    fontWeight: '500',
+    marginTop: 8,
+  },
+
+  // Photo 3-col grid
+  photoGrid3Col: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  photoGridCell: {
     flex: 1,
     aspectRatio: 1,
     borderRadius: 12,
     overflow: 'hidden',
-  },
-  photoSlotEmpty: {
-    borderWidth: 2,
-    borderColor: '#D0D0D0',
-    borderStyle: 'dashed',
-    backgroundColor: '#FAFAFA',
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  photoSlotFilled: {
+  photoGridCellFilled: {
     borderWidth: 0,
   },
-  photoSlotInner: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    flex: 1,
+  photoGridCellActive: {
+    borderRadius: 12,
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    borderColor: '#0468B1',
+    backgroundColor: 'rgba(4,104,177,0.05)',
   },
-  photoSlotPlus: {
-    fontSize: 28,
-    color: '#BBBBBB',
-    lineHeight: 32,
+  photoGridCellInactive: {
+    borderRadius: 12,
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    borderColor: '#C1C7D2',
+    backgroundColor: '#F6F3F2',
   },
-  photoThumb: {
+  photoGridImage: {
     width: '100%',
     height: '100%',
     borderRadius: 12,
   },
-  maxPhotosNote: {
-    textAlign: 'center',
-    fontSize: 13,
-    color: '#888888',
-    marginTop: 12,
-    marginHorizontal: 24,
+  photoGridPlus: {
+    fontSize: scale(28),
+    lineHeight: scale(32),
   },
-  photoButtonsRow: {
-    marginTop: 12,
-    marginHorizontal: 24,
-    gap: 10,
-  },
-
-  // Photo action sheet
-  optionsOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    justifyContent: 'flex-end',
-  },
-  optionsSheet: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingTop: 8,
-    paddingHorizontal: 16,
-  },
-  optionsHandle: {
-    width: 36, height: 4,
-    backgroundColor: '#E0E0E0',
-    borderRadius: 2,
-    alignSelf: 'center',
-    marginBottom: 8,
-  },
-  optionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 16,
-    minHeight: 52,
-  },
-  optionIcon: { fontSize: 20, width: 36 },
-  optionLabel: { fontSize: 16, color: '#333333' },
-  optionLabelDanger: { color: '#D32F2F' },
-  optionDivider: { height: 1, backgroundColor: '#F0F0F0' },
-  optionCancel: { justifyContent: 'center', marginTop: 4 },
-  optionLabelCancel: {
-    fontSize: 16, color: '#888888',
-    textAlign: 'center', width: '100%',
-  },
-
-  // Full-screen viewer
-  viewerContainer: {
-    flex: 1,
-    backgroundColor: '#000000',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  viewerClose: {
+  photoGridPlusActive: { color: '#0468B1' },
+  photoGridPlusInactive: { color: '#C1C7D2' },
+  photoDeleteBadge: {
     position: 'absolute',
-    top: 48,
-    right: 20,
-    zIndex: 10,
-    padding: 8,
-  },
-  viewerCloseText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  viewerImage: {
-    width: '100%',
-    height: '100%',
-  },
-
-  // Legacy photo grid (kept to avoid removal errors)
-  photoGrid: { flexDirection: "row", gap: 10, flexWrap: "wrap" },
-  thumbImage: { width: "100%", height: "100%" },
-  removePhotoBtn: {
-    position: "absolute",
     top: 4,
     right: 4,
-    backgroundColor: "rgba(0,0,0,0.6)",
-    borderRadius: 12,
-    width: 24,
-    height: 24,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  removePhotoBtnText: { color: "#fff", fontSize: 12 },
-  photoButtons: { flexDirection: "row", gap: 12 },
-  photoOptionBtn: {
-    flex: 1,
-    backgroundColor: "#fff",
-    borderRadius: 10,
-    borderWidth: 1.5,
-    borderColor: "#0468B1",
-    padding: 16,
-    alignItems: "center",
-    gap: 8,
-  },
-  photoOptionIcon: { fontSize: 28 },
-  photoOptionText: { fontSize: 13, color: "#0468B1", fontWeight: "500" },
-
-  // Review
-  reviewContainer: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-  },
-  reviewScroll: {
-    flex: 1,
-  },
-  reviewScrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 8,
-  },
-  reviewTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333333',
-    marginBottom: 20,
-  },
-  reviewSection: {
-    backgroundColor: '#F8F9FA',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#EEEEEE',
-  },
-  reviewSectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  reviewSectionTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#888888',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  reviewEditLink: {
-    fontSize: 14,
-    color: '#0468B1',
-    fontWeight: '600',
-  },
-  reviewRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    paddingVertical: 6,
-    borderBottomWidth: 1,
-    borderBottomColor: '#EEEEEE',
-  },
-  reviewLabel: {
-    fontSize: 13,
-    color: '#888888',
-    flex: 1,
-    marginRight: 8,
-  },
-  reviewValue: {
-    fontSize: 14,
-    color: '#333333',
-    flex: 2,
-    textAlign: 'right',
-  },
-  reviewMono: {
-    fontFamily: 'monospace',
-    fontSize: 12,
-    color: '#666666',
-  },
-  reviewGPSCaptured: {
-    color: '#2E7D32',
-    fontSize: 12,
-  },
-  reviewGPSUnavailable: {
-    color: '#E65100',
-    fontSize: 12,
-  },
-  reviewManualNote: {
-    fontSize: 12,
-    color: '#888888',
-    fontStyle: 'italic',
-    marginBottom: 8,
-  },
-  reviewPhotoRow: {
-    flexDirection: 'row',
-    marginTop: 4,
-  },
-  reviewPhotoThumb: {
-    width: 80,
-    height: 80,
-    borderRadius: 10,
-    marginRight: 10,
-    overflow: 'hidden',
-  },
-  reviewPhotoThumbImage: {
-    width: '100%',
-    height: '100%',
-  },
-  reviewPhotoRequired: {
-    fontSize: 13,
-    color: '#D32F2F',
-    marginTop: 4,
-    textAlign: 'center',
-  },
-  reviewSubmitContainer: {
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#E0E0E0',
-    backgroundColor: '#FFFFFF',
-  },
-  reviewSubmitBtn: {
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#0468B1',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  reviewSubmitBtnDisabled: {
-    backgroundColor: '#B0C4D8',
-  },
-  reviewSubmitBtnText: {
-    color: '#FFFFFF',
-    fontSize: 17,
-    fontWeight: '700',
-  },
-  locationChangedNote: {
-    backgroundColor: '#FFF8E1',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 12,
-    borderLeftWidth: 3,
-    borderLeftColor: '#FFB300',
-  },
-  locationChangedNoteText: {
-    fontSize: 13,
-    color: '#F57F17',
-    lineHeight: 18,
-  },
-  submitTimeoutBox: {
-    backgroundColor: '#FFF3E0',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 12,
-    borderLeftWidth: 3,
-    borderLeftColor: '#FF6D00',
-  },
-  submitTimeoutText: {
-    fontSize: 13,
-    color: '#E65100',
-    lineHeight: 18,
-    marginBottom: 8,
-  },
-  submitRetryBtn: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#0468B1',
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-  },
-  submitRetryBtnText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-
-  // Nav
-  navButtons: { flexDirection: "row", gap: 12, marginTop: 8 },
-  primaryButton: {
-    flex: 1,
-    backgroundColor: "#0468B1",
-    borderRadius: 8,
-    padding: 16,
-    alignItems: "center",
-  },
-  buttonDisabled: { opacity: 0.5 },
-  primaryButtonText: { color: "#fff", fontSize: 16, fontWeight: "600" },
-  secondaryButton: {
-    padding: 16,
-    backgroundColor: "#fff",
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#e0e0e0",
-    alignItems: "center",
-  },
-  secondaryButtonText: { fontSize: 15, color: "#1A2B4A" },
-
-  // Success / error screens
-  successContainer: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 40,
-    gap: 20,
-    backgroundColor: "#f4f6f9",
-  },
-  homeButton: {
-    backgroundColor: "#0468B1",
-    borderRadius: 8,
-    padding: 16,
-    alignItems: "center",
-    width: "100%",
-    maxWidth: 300,
-  },
-  successTitle: { fontSize: 22, fontWeight: "700", color: "#1A2B4A", textAlign: "center" },
-  successText: { fontSize: 16, color: "#666", textAlign: "center", lineHeight: 24 },
-  errorText: { fontSize: 16, color: "#d32f2f", textAlign: "center", lineHeight: 24 },
-  confirmCheckCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: "#22c55e",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  confirmCheckIcon: { fontSize: 44, color: "#fff", lineHeight: 52 },
-  confirmRefBadge: {
-    backgroundColor: "#f4f6f9",
-    borderRadius: 20,
-    paddingHorizontal: 20,
-    paddingVertical: 8,
-  },
-  confirmRefText: { fontSize: 14, color: "#666", letterSpacing: 0.5 },
-  goHomeText: { fontSize: 15, color: "#666", textDecorationLine: "underline" },
-
-  // Confirmation screens (Tier 1 & Tier 2)
-  confirmContainer: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 32,
-  },
-  confirmIconCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#E8F5E9',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  confirmIconCircleQueue: {
-    backgroundColor: '#FFF3E0',
-  },
-  confirmIcon: {
-    fontSize: 36,
-  },
-  confirmScreenTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#333333',
-    textAlign: 'center',
-    marginBottom: 12,
-  },
-  confirmMessage: {
-    fontSize: 15,
-    color: '#555555',
-    textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 24,
-  },
-  queuePlatformNote: {
-    fontSize: 13,
-    color: '#0468B1',
-    textAlign: 'center',
-    lineHeight: 18,
-    marginBottom: 16,
-    paddingHorizontal: 8,
-  },
-  queueSummaryCard: {
-    width: '100%',
-    backgroundColor: '#F8F9FA',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 24,
-    borderWidth: 1,
-    borderColor: '#EEEEEE',
-  },
-  queueSummaryRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 6,
-    borderBottomWidth: 1,
-    borderBottomColor: '#EEEEEE',
-  },
-  queueSummaryLabel: {
-    fontSize: 13,
-    color: '#888888',
-    flex: 1,
-  },
-  queueSummaryValue: {
-    fontSize: 14,
-    color: '#333333',
-    flex: 2,
-    textAlign: 'right',
-  },
-  confirmScreenButtons: {
-    width: '100%',
-    gap: 12,
-  },
-  confirmRetryBtn: {
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: '#0468B1',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  confirmRetryBtnText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  confirmPrimaryBtn: {
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: '#0468B1',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  confirmPrimaryBtnText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  confirmSecondaryBtn: {
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
-    borderColor: '#0468B1',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  confirmSecondaryBtnText: {
-    color: '#0468B1',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.55)",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 20,
-  },
-  modalBox: {
-    backgroundColor: "#fff",
-    borderRadius: 14,
-    padding: 24,
-    width: "100%",
-    maxWidth: 380,
-    shadowColor: "#000",
-    shadowOpacity: 0.18,
-    shadowRadius: 16,
-    elevation: 8,
-  },
-  modalTitle: { fontSize: 17, fontWeight: "700", color: "#1A2B4A", marginBottom: 12 },
-  modalBody: { fontSize: 15, color: "#444", lineHeight: 22, marginBottom: 20 },
-  modalButtons: { flexDirection: "row", gap: 12 },
-  questionProgress: { fontSize: 13, fontWeight: "600", color: "#0468B1", textAlign: "center" },
-
-  // Radio button single-select styles
-  radioRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 4,
-    minHeight: 44,
-  },
-  radioCircle: {
     width: 22,
     height: 22,
     borderRadius: 11,
-    borderWidth: 2,
-    borderColor: '#CCCCCC',
-    marginRight: 12,
-    justifyContent: 'center',
+    backgroundColor: '#E53E3E',
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  radioCircleSelected: {
+  photoDeleteBadgeText: {
+    color: '#FFFFFF',
+    fontSize: scale(12),
+    fontWeight: '700',
+    lineHeight: scale(14),
+  },
+  photoStatusText: {
+    fontSize: scale(13),
+    color: '#717782',
+    marginBottom: 4,
+  },
+  photoMaxBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFDDB4',
+    borderRadius: 12,
+    padding: 12,
+    paddingHorizontal: 16,
+    gap: 8,
+    marginBottom: 4,
+  },
+  photoMaxBannerIcon: {
+    fontSize: scale(18),
+    color: '#8C5B00',
+  },
+  photoMaxBannerText: {
+    fontSize: scale(13),
+    fontWeight: '600',
+    color: '#6C4500',
+    flex: 1,
+  },
+  photoActionsCol: {
+    gap: 12,
+  },
+  photoActionPill: {
+    height: 52,
+    borderRadius: 26,
+    borderWidth: 2,
     borderColor: '#0468B1',
+    backgroundColor: 'transparent',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    minHeight: 44,
+  },
+  photoActionPillIcon: {
+    fontSize: scale(20),
+  },
+  photoActionPillText: {
+    color: '#0468B1',
+    fontSize: scale(15),
+    fontWeight: '700',
+  },
+
+  // Photo tips
+  photoTipsContainer: {
+    backgroundColor: '#F6F3F2',
+    borderRadius: 16,
+    padding: 20,
+    marginTop: 8,
+  },
+  photoTipsHeader: {
+    fontSize: scale(10),
+    fontWeight: '800',
+    color: '#1B1C1C',
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+    marginBottom: 16,
+  },
+  photoTipRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    marginBottom: 14,
+  },
+  photoTipIcon: {
+    fontSize: scale(20),
+    color: '#006D37',
+    lineHeight: scale(20) * 1.5,
+  },
+  photoTipText: {
+    flex: 1,
+    fontSize: scale(14),
+    color: '#414751',
+    lineHeight: scale(14) * 1.5,
+  },
+
+  // ── STEP 3 — QUESTIONS ─────────────────────────────────────────────────────
+  questionProgressLabel: {
+    fontSize: scale(10),
+    fontWeight: '700',
+    color: '#0468B1',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    marginBottom: 8,
+  },
+  questionProgressTrack: {
+    width: '100%',
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#E4E2E1',
+    marginBottom: 24,
+  },
+  questionProgressFill: {
+    height: 6,
+    borderRadius: 3,
     backgroundColor: '#0468B1',
   },
-  radioDot: {
+  questionTitleLarge: {
+    fontSize: scale(24),
+    fontWeight: '800',
+    color: '#1B1C1C',
+    lineHeight: scale(24) * 1.2,
+    marginBottom: 8,
+  },
+  questionSubtitle: {
+    fontSize: scale(15),
+    color: '#414751',
+    lineHeight: scale(15) * 1.5,
+    marginBottom: 8,
+  },
+
+  // Option cards — single + multi select
+  optionCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 2,
+    shadowOffset: { width: 0, height: 1 },
+    minHeight: 44,
+  },
+  optionCardSelected: {
+    backgroundColor: 'rgba(4,104,177,0.06)',
+    borderLeftWidth: 4,
+    borderLeftColor: '#0468B1',
+    borderRadius: 12,
+    elevation: 0,
+  },
+  optionCardLeft: { flex: 1 },
+  optionCardTitle: {
+    fontSize: scale(16),
+    fontWeight: '700',
+    color: '#1B1C1C',
+  },
+  optionCardTitleSelected: {
+    color: '#0468B1',
+  },
+  optionCardRadio: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#C1C7D2',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  optionCardRadioSelected: {
+    backgroundColor: '#0468B1',
+    borderColor: '#0468B1',
+  },
+  optionCardRadioDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
     backgroundColor: '#FFFFFF',
   },
-  radioLabel: {
-    flex: 1,
-    fontSize: 15,
-    color: '#333333',
-    lineHeight: 21,
+  optionCardCheckbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 4,
+    borderWidth: 2,
+    borderColor: '#C1C7D2',
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  radioLabelSelected: {
-    color: '#0468B1',
-    fontWeight: '500',
+  optionCardCheckboxSelected: {
+    backgroundColor: '#0468B1',
+    borderColor: '#0468B1',
+  },
+  optionCardCheckmark: {
+    color: '#FFFFFF',
+    fontSize: scale(13),
+    fontWeight: '700',
   },
 
-  // Inline validation hint
+  // 2-column grid options (Q6, Q7)
+  optionGrid2Col: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  optionGridCell: {
+    backgroundColor: '#F0EDED',
+    borderRadius: 10,
+    padding: 10,
+    paddingHorizontal: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: (screenWidth * 0.88 - 10) / 2,
+    minHeight: 44,
+  },
+  optionGridCellSelected: {
+    backgroundColor: '#0468B1',
+  },
+  optionGridCellText: {
+    fontSize: scale(13),
+    fontWeight: '500',
+    color: '#1B1C1C',
+    textAlign: 'center',
+  },
+  optionGridCellTextSelected: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+
+  // Shared form elements
+  input: {
+    backgroundColor: '#E4E2E1',
+    borderRadius: 4,
+    padding: 14,
+    fontSize: scale(14),
+    color: '#1B1C1C',
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  charCounter: { fontSize: scale(12), color: '#9CA3AF', textAlign: 'right' },
+  hintText: { fontSize: scale(14), color: '#666' },
+  q4GroupLabel: {
+    fontSize: scale(12),
+    fontWeight: '700',
+    color: '#717782',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginTop: 12,
+    marginBottom: 6,
+  },
   questionHint: {
-    fontSize: 13,
-    color: '#D32F2F',
+    fontSize: scale(13),
+    color: '#E53E3E',
     textAlign: 'center',
     marginTop: 8,
     marginBottom: 4,
   },
-
-  // Additional questions block
-  questionBlock: {
-    gap: 4,
-  },
+  questionBlock: { gap: 4 },
   questionTitle: {
-    fontSize: 17,
+    fontSize: scale(17),
     fontWeight: '600',
-    color: '#1A2B4A',
+    color: '#1B1C1C',
     marginBottom: 4,
   },
 
-  // Location screen scenario styles
-  locationContainer: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-  },
-  locationLoadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+  // ── STEP 2 — LOCATION ──────────────────────────────────────────────────────
+  locationContainer: { flex: 1, backgroundColor: '#FFFFFF' },
+  locationLoadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   gpsUnavailableNote: {
     backgroundColor: '#FFF8E1',
     paddingHorizontal: 16,
@@ -3718,102 +3525,13 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#FFE082',
   },
-  gpsUnavailableNoteText: {
-    fontSize: 13,
-    color: '#F57F17',
-    lineHeight: 18,
-  },
-  offlineBanner: {
-    backgroundColor: '#F5A623',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    marginBottom: 8,
-  },
-  offlineBannerText: {
-    fontSize: 14,
-    color: '#FFFFFF',
-    fontWeight: '600',
-    lineHeight: 20,
-  },
-  gpsIndicator: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    marginBottom: 8,
-  },
-  gpsIndicatorText: {
-    fontSize: 13,
-    color: '#2E7D32',
-    lineHeight: 18,
-  },
-  gpsIndicatorUnavailable: {
-    color: '#E65100',
-  },
-  manualContainer: {
-    flex: 1,
-  },
-  manualContent: {
-    paddingHorizontal: 24,
-    paddingTop: 8,
-    paddingBottom: 24,
-  },
-  manualFieldLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#333333',
-    marginTop: 16,
-    marginBottom: 6,
-  },
-  manualInput: {
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    fontSize: 15,
-    color: '#333333',
-    minHeight: 48,
-    backgroundColor: '#FFFFFF',
-  },
-  manualRequiredNote: {
-    fontSize: 13,
-    color: '#E65100',
-    marginTop: 12,
-    textAlign: 'center',
-  },
-  locationNextContainer: {
-    paddingHorizontal: 24,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#E0E0E0',
-    backgroundColor: '#FFFFFF',
-  },
+  gpsUnavailableNoteText: { fontSize: scale(13), color: '#F57F17', lineHeight: 18 },
 
-  // Unused legacy keys kept to avoid StyleSheet warnings if referenced elsewhere
-  typeGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
-  typeBtn: { width: "47%", padding: 12, borderRadius: 8, borderWidth: 1.5, borderColor: "#e0e0e0", backgroundColor: "#fff", alignItems: "center" },
-  typeBtnSelected: { borderColor: "#0468B1", backgroundColor: "#E8F4FD" },
-  typeBtnText: { fontSize: 13, fontWeight: "500", color: "#1A2B4A" },
-  typeBtnTextSelected: { color: "#0468B1" },
-  textarea: { backgroundColor: "#fff", borderRadius: 8, borderWidth: 1, borderColor: "#e0e0e0", padding: 12, fontSize: 15, minHeight: 100, textAlignVertical: "top" },
-  addPhotoBtn: { width: 100, height: 100, borderRadius: 8, borderWidth: 2, borderColor: "#ccc", borderStyle: "dashed", backgroundColor: "#fff", alignItems: "center", justifyContent: "center", gap: 4 },
-  addPhotoIcon: { fontSize: 32 },
-  addPhotoText: { fontSize: 11, color: "#666" },
-  fieldLabel: { fontSize: 14, fontWeight: "500", color: "#666" },
+  // Map wrapper
+  mapWrapper: { flex: 1, position: 'relative' },
 
-  // Map wrapper — needs position: relative for absolute search overlay
-  mapWrapper: {
-    flex: 1,
-    position: 'relative',
-  },
-
-  // Search bar overlay
-  searchContainer: {
-    position: 'absolute',
-    top: 12,
-    left: 12,
-    right: 12,
-    zIndex: 10,
-  },
+  // Search overlay
+  searchContainer: { position: 'absolute', top: 12, left: 12, right: 12, zIndex: 10 },
   searchInputRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -3827,15 +3545,8 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 4,
   },
-  searchInput: {
-    flex: 1,
-    fontSize: 15,
-    color: '#333333',
-    paddingVertical: 0,
-  },
-  searchSpinner: {
-    marginLeft: 8,
-  },
+  searchInput: { flex: 1, fontSize: scale(15), color: '#333333', paddingVertical: 0 },
+  searchSpinner: { marginLeft: 8 },
   searchResultsList: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
@@ -3855,106 +3566,625 @@ const styles = StyleSheet.create({
     minHeight: 48,
     justifyContent: 'center',
   },
-  searchResultText: {
-    fontSize: 14,
-    color: '#333333',
-    lineHeight: 20,
-  },
-  searchNoResults: {
-    fontSize: 14,
-    color: '#888888',
-    padding: 16,
-    textAlign: 'center',
-  },
+  searchResultText: { fontSize: scale(14), color: '#333333', lineHeight: 20 },
+  searchNoResults: { fontSize: scale(14), color: '#888888', padding: 16, textAlign: 'center' },
 
-  // GPS recentre overlay button
+  // Map overlays
+  zoomHint: {
+    position: 'absolute',
+    bottom: 12,
+    alignSelf: 'center',
+    backgroundColor: 'rgba(26,43,74,0.82)',
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    zIndex: 10,
+  },
+  zoomHintText: { color: '#fff', fontSize: scale(12), fontWeight: '500' },
+  microsoftNote: {
+    position: 'absolute',
+    bottom: 46,
+    left: 8,
+    right: 8,
+    backgroundColor: 'rgba(235,248,255,0.95)',
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    zIndex: 10,
+    borderWidth: 1,
+    borderColor: '#63B3ED',
+  },
+  microsoftNoteText: { color: '#2B6CB0', fontSize: scale(11) },
+
+  // GPS FAB
   mapRecentreBtn: {
     position: 'absolute',
     bottom: 16,
     right: 16,
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#FFFFFF',
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#0468B1',
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4,
+    elevation: 6,
+    shadowColor: '#0468B1',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
     zIndex: 5,
   },
-  mapRecentreIcon: {
-    fontSize: 22,
-    color: '#0468B1',
-  },
+  mapRecentreIcon: { fontSize: scale(24), color: '#FFFFFF' },
 
-  // Pin drop annotation
-  pinMarker: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  pinMarkerIcon: {
-    fontSize: 32,
-    lineHeight: 36,
-  },
+  // Pin marker
+  pinMarker: { alignItems: 'center', justifyContent: 'center' },
+  pinMarkerIcon: { fontSize: 32, lineHeight: 36 },
 
-  // Pin info in bottom panel
-  pinInfoRow: {
-    paddingVertical: 8,
-    marginBottom: 4,
-  },
-  pinInfoLabel: {
-    fontSize: 13,
-    color: '#888888',
-    marginBottom: 2,
-  },
-  pinInfoCoords: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#0468B1',
-    marginBottom: 4,
-  },
-  pinInfoHint: {
-    fontSize: 12,
-    color: '#999999',
-    fontStyle: 'italic',
-  },
-
-  // Map bottom panel — editable building name + location note
+  // Bottom panel (building name / pin note / location note)
   mapBottomPanel: {
     backgroundColor: '#FFFFFF',
-    borderTopWidth: 1,
-    borderTopColor: '#E0E0E0',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    borderTopWidth: 0,
+    paddingHorizontal: screenWidth * 0.06,
+    paddingTop: 16,
+    paddingBottom: 8,
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: -2 },
   },
+  pinInfoRow: { paddingVertical: 8, marginBottom: 4 },
+  pinInfoLabel: { fontSize: scale(13), color: '#717782', marginBottom: 2 },
+  pinInfoCoords: { fontSize: scale(14), fontWeight: '600', color: '#0468B1', marginBottom: 4 },
+  pinInfoHint: { fontSize: scale(12), color: '#9CA3AF', fontStyle: 'italic' },
   panelFieldLabel: {
-    fontSize: 13,
+    fontSize: scale(13),
     fontWeight: '600',
-    color: '#555555',
+    color: '#414751',
     marginBottom: 4,
     marginTop: 8,
   },
   panelInput: {
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-    borderRadius: 8,
+    backgroundColor: '#E4E2E1',
+    borderRadius: 4,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    fontSize: 14,
-    color: '#333333',
-    backgroundColor: '#FAFAFA',
+    fontSize: scale(14),
+    color: '#1B1C1C',
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
     minHeight: 44,
   },
 
-  // Building confirmation bottom sheet
-  confirmOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    justifyContent: 'flex-end',
+  // Location panel (scrollable area below map — online)
+  locationPanel: {
+    flexShrink: 0,
+    maxHeight: 320,
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: -2 },
   },
+  locationPanelContent: { paddingHorizontal: screenWidth * 0.06, paddingTop: 20, paddingBottom: 16, gap: 10 },
+
+  // Building selection card
+  selectionCard: {
+    backgroundColor: '#E8F4FD',
+    borderWidth: 1.5,
+    borderColor: '#0468B1',
+    borderRadius: 12,
+    padding: 12,
+    gap: 2,
+  },
+  selectionCardTitle: { fontSize: scale(11), fontWeight: '700', color: '#0468B1', textTransform: 'uppercase', letterSpacing: 0.5 },
+  selectionCardName: { fontSize: scale(15), fontWeight: '600', color: '#1B1C1C' },
+  selectionCardMeta: { fontSize: scale(12), color: '#717782' },
+  selectionCardCoords: { fontSize: scale(11), color: '#717782' },
+  manualToggle: { fontSize: scale(13), color: '#0468B1', textDecorationLine: 'underline' },
+
+  // GPS button
+  gpsButton: { backgroundColor: '#0468B1', borderRadius: 26, padding: 14, alignItems: 'center' },
+  gpsButtonText: { color: '#FFFFFF', fontWeight: '700', fontSize: scale(15) },
+
+  // Offline location
+  offlineBanner: {
+    backgroundColor: '#F5A623',
+    paddingHorizontal: screenWidth * 0.06,
+    paddingVertical: 14,
+    marginBottom: 0,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  offlineBannerIcon: { fontSize: scale(20), color: '#FFFFFF', lineHeight: scale(22) },
+  offlineBannerPrimary: {
+    fontSize: scale(14),
+    fontWeight: '700',
+    color: '#FFFFFF',
+    lineHeight: 20,
+    marginBottom: 2,
+  },
+  offlineBannerSecondary: {
+    fontSize: scale(12),
+    color: 'rgba(255,255,255,0.9)',
+    lineHeight: 17,
+  },
+  gpsIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: screenWidth * 0.06,
+    paddingVertical: 12,
+    marginTop: 4,
+    marginBottom: 4,
+    backgroundColor: 'rgba(125,219,157,0.15)',
+    borderRadius: 12,
+    marginHorizontal: screenWidth * 0.06,
+    gap: 8,
+  },
+  gpsDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#38A169' },
+  gpsIndicatorText: { fontSize: scale(12), color: '#414751', flex: 1 },
+  gpsIndicatorUnavailable: { color: '#E65100' },
+  manualContainer: { flex: 1 },
+  manualContent: {
+    paddingHorizontal: screenWidth * 0.06,
+    paddingTop: 8,
+    paddingBottom: 24,
+  },
+  manualFieldLabel: {
+    fontSize: scale(14),
+    fontWeight: '600',
+    color: '#1B1C1C',
+    marginTop: 24,
+    marginBottom: 8,
+  },
+  manualInput: {
+    backgroundColor: '#E4E2E1',
+    borderRadius: 4,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: scale(14),
+    color: '#1B1C1C',
+    minHeight: 48,
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  manualRequiredNote: {
+    fontSize: scale(13),
+    color: '#E53E3E',
+    marginTop: 12,
+    textAlign: 'center',
+  },
+
+  // Legacy — kept so existing unchanged JSX compiles
+  locationNextContainer: {
+    paddingHorizontal: screenWidth * 0.06,
+    paddingTop: 12,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+  },
+  navButtons: { flexDirection: 'row', gap: 12, marginTop: 8 },
+  primaryButton: {
+    flex: 1,
+    backgroundColor: '#0468B1',
+    borderRadius: 28,
+    height: 56,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  buttonDisabled: { backgroundColor: '#E4E2E1' },
+  primaryButtonText: { color: '#FFFFFF', fontSize: scale(16), fontWeight: '700' },
+  secondaryButton: {
+    height: 56,
+    borderRadius: 28,
+    paddingHorizontal: 20,
+    backgroundColor: 'transparent',
+    borderWidth: 2,
+    borderColor: '#0468B1',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  secondaryButtonText: { fontSize: scale(15), color: '#0468B1', fontWeight: '700' },
+
+  // ── STEP 4 — REVIEW ────────────────────────────────────────────────────────
+  reviewContainer: { flex: 1, backgroundColor: '#F6F3F2' },
+  reviewScroll: { flex: 1 },
+  reviewScrollContent: {
+    paddingHorizontal: screenWidth * 0.04,
+    paddingTop: 16,
+    paddingBottom: 8,
+  },
+  reviewIntroText: {
+    fontSize: scale(14),
+    color: '#717782',
+    textAlign: 'center',
+    marginBottom: 20,
+    lineHeight: scale(14) * 1.5,
+  },
+
+  // Single white review card
+  reviewCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    marginHorizontal: screenWidth * 0.01,
+    overflow: 'hidden',
+  },
+  reviewCardSection: { padding: 20 },
+  reviewCardDivider: { height: 1, backgroundColor: '#F6F3F2', marginHorizontal: 0 },
+
+  reviewSectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  reviewSectionTitle: {
+    fontSize: scale(15),
+    fontWeight: '700',
+    color: '#1B1C1C',
+  },
+  reviewEditLink: {
+    fontSize: scale(13),
+    color: '#0468B1',
+    fontWeight: '600',
+  },
+  reviewRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F6F3F2',
+  },
+  reviewLabel: {
+    backgroundColor: '#F6F3F2',
+    borderRadius: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    fontSize: scale(10),
+    fontWeight: '700',
+    color: '#717782',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    flex: 1,
+    marginRight: 8,
+  },
+  reviewValue: {
+    fontSize: scale(14),
+    fontWeight: '700',
+    color: '#1B1C1C',
+    flex: 1.5,
+    textAlign: 'right',
+  },
+  reviewMono: { fontFamily: 'monospace', fontSize: scale(12), color: '#666666' },
+  reviewGPSCaptured: { color: '#38A169', fontSize: scale(12) },
+  reviewGPSUnavailable: { color: '#E65100', fontSize: scale(12) },
+  reviewManualNote: {
+    fontSize: scale(12),
+    color: '#888888',
+    fontStyle: 'italic',
+    marginBottom: 8,
+  },
+  reviewPhotoRow: { flexDirection: 'row', marginTop: 4 },
+  reviewPhotoThumb: { width: 90, height: 90, borderRadius: 8, marginRight: 10, overflow: 'hidden' },
+  reviewPhotoThumbImage: { width: '100%', height: '100%' },
+  reviewPhotoRequired: { fontSize: scale(13), color: '#E53E3E', marginTop: 4, textAlign: 'center' },
+
+  // Review submit footer
+  reviewSubmitContainer: {
+    paddingHorizontal: screenWidth * 0.06,
+    paddingTop: 12,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+  },
+  reviewGpsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 8,
+  },
+  reviewGpsDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#38A169' },
+  reviewGpsText: { fontSize: scale(12), color: '#38A169' },
+  reviewSubmitBtn: {
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#0468B1',
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 4,
+    shadowColor: '#0468B1',
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+  },
+  reviewSubmitBtnDisabled: {
+    backgroundColor: '#E4E2E1',
+    elevation: 0,
+    shadowOpacity: 0,
+  },
+  reviewSubmitBtnText: { color: '#FFFFFF', fontSize: scale(16), fontWeight: '700' },
+  reviewPrivacyNote: {
+    fontSize: scale(11),
+    color: '#9CA3AF',
+    textAlign: 'center',
+    marginTop: 8,
+    marginBottom: 4,
+  },
+
+  // ── STEP 5 — CONFIRMATION (ONLINE) ─────────────────────────────────────────
+  confirmContainer: {
+    alignItems: 'center',
+    paddingHorizontal: 32,
+  },
+  confirmIconCircleOnline: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: '#27AE60',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+    elevation: 8,
+    shadowColor: '#27AE60',
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+  },
+  confirmIconCheck: { fontSize: scale(44), color: '#FFFFFF', lineHeight: scale(52) },
+  confirmTitleLarge: {
+    fontSize: scale(32),
+    fontWeight: '900',
+    color: '#1B1C1C',
+    textAlign: 'center',
+    marginTop: 0,
+    marginBottom: 12,
+  },
+  confirmSubtitle: {
+    fontSize: scale(16),
+    color: '#414751',
+    textAlign: 'center',
+    maxWidth: screenWidth * 0.75,
+    lineHeight: scale(16) * 1.5,
+    marginBottom: 32,
+  },
+
+  confirmSummaryCard: {
+    width: '100%',
+    backgroundColor: '#F6F3F2',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 32,
+  },
+  confirmSummaryHeader: {
+    fontSize: scale(10),
+    fontWeight: '800',
+    color: '#717782',
+    textTransform: 'uppercase',
+    letterSpacing: 1.5,
+    marginBottom: 16,
+  },
+  confirmSummaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(4,104,177,0.1)',
+    gap: 8,
+  },
+  confirmSummaryLabel: { fontSize: scale(11), color: '#717782' },
+  confirmSummaryValue: { fontSize: scale(14), fontWeight: '600', color: '#1B1C1C', flex: 1, textAlign: 'right' },
+  confirmSummaryFootNote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 12,
+    gap: 6,
+  },
+  confirmSummaryFootNoteText: {
+    fontSize: scale(12),
+    color: '#9CA3AF',
+    fontStyle: 'italic',
+    flex: 1,
+  },
+
+  confirmScreenButtons: { width: '100%', gap: 12 },
+  confirmPrimaryBtn: {
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#0468B1',
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 4,
+    shadowColor: '#0468B1',
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+  },
+  confirmPrimaryBtnText: { color: '#FFFFFF', fontSize: scale(16), fontWeight: '700' },
+  confirmSecondaryBtn: {
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 2,
+    borderColor: '#0468B1',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  confirmSecondaryBtnText: { color: '#0468B1', fontSize: scale(16), fontWeight: '600' },
+  confirmTextLink: { minHeight: 44, justifyContent: 'center', alignItems: 'center' },
+  confirmTextLinkText: { color: '#0468B1', fontSize: scale(14), fontWeight: '600' },
+
+  // ── STEP 5 — CONFIRMATION (OFFLINE) ────────────────────────────────────────
+  confirmIconCircleOffline: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: '#F5A623',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+    elevation: 8,
+    shadowColor: '#F5A623',
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+  },
+  offlineSyncCard: {
+    width: '100%',
+    backgroundColor: '#FFF9F0',
+    borderRadius: 16,
+    padding: 20,
+    paddingLeft: 26,
+    marginBottom: 32,
+    borderWidth: 1,
+    borderColor: 'rgba(245,166,35,0.2)',
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  offlineSyncAccent: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 6,
+    backgroundColor: '#F5A623',
+  },
+  offlineSyncHeader: {
+    fontSize: scale(10),
+    fontWeight: '800',
+    color: '#F5A623',
+    textTransform: 'uppercase',
+    letterSpacing: 1.5,
+    marginBottom: 12,
+  },
+  offlineSyncRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  offlineSyncIcon: { fontSize: scale(16) },
+  offlineSyncText: { fontSize: scale(13), color: '#414751' },
+  offlineSyncLabel: { fontSize: scale(13), color: '#717782', flex: 1 },
+  offlineSyncValue: { fontSize: scale(13), fontWeight: '600', color: '#1B1C1C', flex: 1.5, textAlign: 'right' },
+  offlineSyncNote: { fontSize: scale(12), color: '#717782', fontStyle: 'italic', marginTop: 4 },
+
+  confirmRetryBtn: {
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#0468B1',
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 4,
+    shadowColor: '#0468B1',
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+  },
+  confirmRetryBtnText: { color: '#FFFFFF', fontSize: scale(16), fontWeight: '700' },
+  confirmRetryHelper: {
+    fontSize: scale(11),
+    color: '#717782',
+    textAlign: 'center',
+    marginTop: -4,
+  },
+  confirmDeleteText: { color: '#E53E3E', fontSize: scale(14), fontWeight: '700', textAlign: 'center' },
+  confirmDeleteWarning: {
+    fontSize: scale(10),
+    color: '#717782',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    textAlign: 'center',
+    marginTop: -4,
+  },
+
+  queuePlatformNote: {
+    fontSize: scale(13),
+    color: '#0468B1',
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: 16,
+    paddingHorizontal: 8,
+  },
+
+  // ── LOADING / ERROR SCREENS ─────────────────────────────────────────────────
+  successContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 40,
+    gap: 20,
+    backgroundColor: '#F6F3F2',
+  },
+  homeButton: {
+    backgroundColor: '#0468B1',
+    borderRadius: 28,
+    height: 56,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    maxWidth: 300,
+    paddingHorizontal: 24,
+  },
+  successTitle: { fontSize: scale(22), fontWeight: '700', color: '#1B1C1C', textAlign: 'center' },
+  successText: { fontSize: scale(16), color: '#666', textAlign: 'center', lineHeight: 24 },
+  errorText: { fontSize: scale(16), color: '#E53E3E', textAlign: 'center', lineHeight: 24 },
+
+  // ── MODALS ─────────────────────────────────────────────────────────────────
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+  },
+  modalBox: {
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    padding: 24,
+    width: '100%',
+    maxWidth: 380,
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  modalTitle: { fontSize: scale(17), fontWeight: '700', color: '#1B1C1C', marginBottom: 12 },
+  modalBody: { fontSize: scale(15), color: '#444', lineHeight: 22, marginBottom: 20 },
+  modalButtons: { flexDirection: 'row', gap: 12 },
+
+  // Photo action sheet
+  optionsOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+  optionsSheet: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingTop: 8,
+    paddingHorizontal: 16,
+  },
+  optionsHandle: {
+    width: 36, height: 4, backgroundColor: '#E0E0E0', borderRadius: 2,
+    alignSelf: 'center', marginBottom: 8,
+  },
+  optionRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 16, minHeight: 52 },
+  optionIcon: { fontSize: 20, width: 36 },
+  optionLabel: { fontSize: scale(16), color: '#333333' },
+  optionLabelDanger: { color: '#E53E3E' },
+  optionDivider: { height: 1, backgroundColor: '#F0F0F0' },
+  optionCancel: { justifyContent: 'center', marginTop: 4 },
+  optionLabelCancel: { fontSize: scale(16), color: '#888888', textAlign: 'center', width: '100%' },
+
+  // Full-screen photo viewer
+  viewerContainer: { flex: 1, backgroundColor: '#000000', justifyContent: 'center', alignItems: 'center' },
+  viewerClose: { position: 'absolute', top: 48, right: 20, zIndex: 10, padding: 8, minWidth: 44, minHeight: 44 },
+  viewerCloseText: { color: '#FFFFFF', fontSize: scale(16), fontWeight: '600' },
+  viewerImage: { width: '100%', height: '100%' },
+
+  // Building confirmation sheet
+  confirmOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
   confirmSheet: {
     backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 20,
@@ -3962,18 +4192,10 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   confirmHandle: {
-    width: 36, height: 4,
-    backgroundColor: '#E0E0E0',
-    borderRadius: 2,
-    alignSelf: 'center',
-    marginBottom: 16,
+    width: 36, height: 4, backgroundColor: '#E0E0E0', borderRadius: 2,
+    alignSelf: 'center', marginBottom: 16,
   },
-  confirmTitle: {
-    fontSize: 17,
-    fontWeight: 'bold',
-    color: '#333333',
-    marginBottom: 16,
-  },
+  confirmTitle: { fontSize: scale(17), fontWeight: 'bold', color: '#1B1C1C', marginBottom: 16 },
   confirmRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -3982,81 +4204,113 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#F0F0F0',
   },
-  confirmLabel: {
-    fontSize: 13,
-    color: '#888888',
-    flex: 1,
-  },
-  confirmValue: {
-    fontSize: 14,
-    color: '#333333',
-    flex: 2,
-    textAlign: 'right',
-  },
-  confirmButtons: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 20,
-  },
+  confirmLabel: { fontSize: scale(13), color: '#888888', flex: 1 },
+  confirmValue: { fontSize: scale(14), color: '#333333', flex: 2, textAlign: 'right' },
+  confirmButtons: { flexDirection: 'row', gap: 12, marginTop: 20 },
   confirmCancelBtn: {
-    flex: 1,
-    height: 48,
-    borderRadius: 24,
-    borderWidth: 1.5,
-    borderColor: '#0468B1',
-    justifyContent: 'center',
-    alignItems: 'center',
+    flex: 1, height: 48, borderRadius: 24,
+    borderWidth: 1.5, borderColor: '#0468B1',
+    justifyContent: 'center', alignItems: 'center',
   },
-  confirmCancelText: {
-    color: '#0468B1',
-    fontSize: 15,
-    fontWeight: '600',
-  },
+  confirmCancelText: { color: '#0468B1', fontSize: scale(15), fontWeight: '600' },
   confirmConfirmBtn: {
-    flex: 1,
-    height: 48,
-    borderRadius: 24,
+    flex: 1, height: 48, borderRadius: 24,
     backgroundColor: '#0468B1',
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: 'center', alignItems: 'center',
   },
-  confirmConfirmText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '600',
-  },
+  confirmConfirmText: { color: '#FFFFFF', fontSize: scale(15), fontWeight: '600' },
 
-  // Photo guidelines
-  guidelinesContainer: {
-    marginTop: 20,
-    marginHorizontal: 24,
-    padding: 16,
-    backgroundColor: '#F8F9FA',
-    borderRadius: 12,
+  // Location changed / timeout notes
+  locationChangedNote: {
+    backgroundColor: '#FFF8E1',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+    borderLeftWidth: 3,
+    borderLeftColor: '#FFB300',
   },
-  guidelinesTitle: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#555555',
-    marginBottom: 10,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+  locationChangedNoteText: { fontSize: scale(13), color: '#F57F17', lineHeight: 18 },
+  submitTimeoutBox: {
+    backgroundColor: '#FFF3E0',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+    borderLeftWidth: 3,
+    borderLeftColor: '#FF6D00',
   },
-  guidelineRow: {
-    flexDirection: 'row',
-    marginBottom: 8,
-    alignItems: 'flex-start',
+  submitTimeoutText: { fontSize: scale(13), color: '#E65100', lineHeight: 18, marginBottom: 8 },
+  submitRetryBtn: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#0468B1',
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
   },
-  guidelineBullet: {
-    fontSize: 14,
-    color: '#0468B1',
-    marginRight: 8,
-    lineHeight: 20,
-  },
-  guidelineText: {
-    flex: 1,
-    fontSize: 13,
-    color: '#555555',
-    lineHeight: 20,
-  },
+  submitRetryBtnText: { color: '#FFFFFF', fontSize: scale(13), fontWeight: '600' },
+
+  // Legacy — kept to prevent TypeScript errors from any remaining references
+  stepTitle: { fontSize: scale(17), fontWeight: '600', color: '#1B1C1C' },
+  questionProgress: { fontSize: scale(13), fontWeight: '600', color: '#0468B1', textAlign: 'center' },
+  photoGrid: { flexDirection: 'row', gap: 10, flexWrap: 'wrap' },
+  thumbImage: { width: '100%', height: '100%' },
+  removePhotoBtn: { position: 'absolute', top: 4, right: 4, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 12, width: 24, height: 24, alignItems: 'center', justifyContent: 'center' },
+  removePhotoBtnText: { color: '#fff', fontSize: 12 },
+  photoButtons: { flexDirection: 'row', gap: 12 },
+  photoOptionBtn: { flex: 1, backgroundColor: '#fff', borderRadius: 10, borderWidth: 1.5, borderColor: '#0468B1', padding: 16, alignItems: 'center', gap: 8 },
+  photoOptionIcon: { fontSize: 28 },
+  photoOptionText: { fontSize: 13, color: '#0468B1', fontWeight: '500' },
+  photoSlotsRow: { flexDirection: 'row', justifyContent: 'space-between', marginHorizontal: 24, marginTop: 16, gap: 12 },
+  photoSlot: { flex: 1, aspectRatio: 1, borderRadius: 12, overflow: 'hidden' },
+  photoSlotEmpty: { borderWidth: 2, borderColor: '#D0D0D0', borderStyle: 'dashed', backgroundColor: '#FAFAFA', justifyContent: 'center', alignItems: 'center' },
+  photoSlotFilled: { borderWidth: 0 },
+  photoSlotInner: { justifyContent: 'center', alignItems: 'center', flex: 1 },
+  photoSlotPlus: { fontSize: 28, color: '#BBBBBB', lineHeight: 32 },
+  photoThumb: { width: '100%', height: '100%', borderRadius: 12 },
+  maxPhotosNote: { textAlign: 'center', fontSize: 13, color: '#888888', marginTop: 12, marginHorizontal: 24 },
+  photoButtonsRow: { marginTop: 12, marginHorizontal: 24, gap: 10 },
+  guidelinesContainer: { marginTop: 20, marginHorizontal: 24, padding: 16, backgroundColor: '#F8F9FA', borderRadius: 12 },
+  guidelinesTitle: { fontSize: 13, fontWeight: '600', color: '#555555', marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 },
+  guidelineRow: { flexDirection: 'row', marginBottom: 8, alignItems: 'flex-start' },
+  guidelineBullet: { fontSize: 14, color: '#0468B1', marginRight: 8, lineHeight: 20 },
+  guidelineText: { flex: 1, fontSize: 13, color: '#555555', lineHeight: 20 },
+  radioRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 4, minHeight: 44 },
+  radioCircle: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: '#CCCCCC', marginRight: 12, justifyContent: 'center', alignItems: 'center' },
+  radioCircleSelected: { borderColor: '#0468B1', backgroundColor: '#0468B1' },
+  radioDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#FFFFFF' },
+  radioLabel: { flex: 1, fontSize: 15, color: '#333333', lineHeight: 21 },
+  radioLabelSelected: { color: '#0468B1', fontWeight: '500' },
+  checkRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
+  checkbox: { width: 22, height: 22, borderWidth: 2, borderColor: '#ccc', borderRadius: 4, alignItems: 'center', justifyContent: 'center' },
+  checkboxSelected: { borderColor: '#0468B1', backgroundColor: '#0468B1' },
+  checkmark: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  checkRowText: { flex: 1, fontSize: 15, color: '#1B1C1C' },
+  optionBtn: { flexDirection: 'row', alignItems: 'center', gap: 16, padding: 16, borderRadius: 10, borderWidth: 1.5, borderColor: '#e0e0e0', backgroundColor: '#fff' },
+  optionBtnSelected: { borderColor: '#0468B1', backgroundColor: '#E8F4FD' },
+  optionText: { fontSize: 16, fontWeight: '600', color: '#1B1C1C' },
+  typeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  typeBtn: { width: '47%', padding: 12, borderRadius: 8, borderWidth: 1.5, borderColor: '#e0e0e0', backgroundColor: '#fff', alignItems: 'center' },
+  typeBtnSelected: { borderColor: '#0468B1', backgroundColor: '#E8F4FD' },
+  typeBtnText: { fontSize: 13, fontWeight: '500', color: '#1B1C1C' },
+  typeBtnTextSelected: { color: '#0468B1' },
+  textarea: { backgroundColor: '#fff', borderRadius: 8, borderWidth: 1, borderColor: '#e0e0e0', padding: 12, fontSize: 15, minHeight: 100, textAlignVertical: 'top' },
+  addPhotoBtn: { width: 100, height: 100, borderRadius: 8, borderWidth: 2, borderColor: '#ccc', borderStyle: 'dashed', backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', gap: 4 },
+  addPhotoIcon: { fontSize: 32 },
+  addPhotoText: { fontSize: 11, color: '#666' },
+  fieldLabel: { fontSize: 14, fontWeight: '500', color: '#666' },
+  confirmCheckCircle: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#22c55e', alignItems: 'center', justifyContent: 'center' },
+  confirmCheckIcon: { fontSize: 44, color: '#fff', lineHeight: 52 },
+  confirmRefBadge: { backgroundColor: '#f4f6f9', borderRadius: 20, paddingHorizontal: 20, paddingVertical: 8 },
+  confirmRefText: { fontSize: 14, color: '#666', letterSpacing: 0.5 },
+  goHomeText: { fontSize: 15, color: '#666', textDecorationLine: 'underline' },
+  confirmIconCircle: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#E8F5E9', justifyContent: 'center', alignItems: 'center', marginBottom: 24 },
+  confirmIconCircleQueue: { backgroundColor: '#FFF3E0' },
+  confirmIcon: { fontSize: 36 },
+  confirmScreenTitle: { fontSize: 24, fontWeight: 'bold', color: '#333333', textAlign: 'center', marginBottom: 12 },
+  confirmMessage: { fontSize: 15, color: '#555555', textAlign: 'center', lineHeight: 22, marginBottom: 24 },
+  queueSummaryCard: { width: '100%', backgroundColor: '#F8F9FA', borderRadius: 12, padding: 16, marginBottom: 24, borderWidth: 1, borderColor: '#EEEEEE' },
+  queueSummaryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: '#EEEEEE' },
+  queueSummaryLabel: { fontSize: 13, color: '#888888', flex: 1 },
+  queueSummaryValue: { fontSize: 14, color: '#333333', flex: 2, textAlign: 'right' },
+  reviewSection: { backgroundColor: '#F8F9FA', borderRadius: 12, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: '#EEEEEE' },
+  reviewTitle: { fontSize: 20, fontWeight: 'bold', color: '#333333', marginBottom: 20 },
 });

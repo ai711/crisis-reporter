@@ -344,7 +344,9 @@ async def get_available_languages(
     non-UN language that has a published package.
     """
     lang_result = await db.execute(select(Language))
-    lang_map = {l.code: l.name for l in lang_result.scalars().all()}
+    all_langs = lang_result.scalars().all()
+    lang_map = {l.code: l.name for l in all_langs}
+    lang_status_map = {l.code: l.status for l in all_langs}
 
     pkg_result = await db.execute(
         select(LanguagePackage.language_code).where(LanguagePackage.status == "published")
@@ -363,6 +365,9 @@ async def get_available_languages(
     non_un: list[dict] = []
     for code in published_codes:
         if code not in _AVAILABLE_UN_LANG_CODES:
+            # Exclude deprecated/inactive languages — they must not appear to reporters
+            if lang_status_map.get(code, "active") == "deprecated":
+                continue
             non_un.append({
                 "code": code,
                 "name": lang_map.get(code, code),

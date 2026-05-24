@@ -1,7 +1,16 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Dimensions } from 'react-native';
 
-const STEPS = ['Photo', 'Location', 'Questions', 'Review', 'Submit'];
+const { width: screenWidth } = Dimensions.get('window');
+const scale = (size: number) => Math.round((screenWidth / 375) * size);
+
+const STEPS = [
+  { label: 'PHOTO', icon: '📷' },
+  { label: 'LOCATION', icon: '📍' },
+  { label: 'QUESTIONS', icon: '📋' },
+  { label: 'REVIEW', icon: '👁' },
+  { label: 'SUBMIT', icon: '✓' },
+];
 
 type StepIndicatorProps = {
   currentStep: number; // 1-indexed: 1=Photo, 2=Location, 3=Questions, 4=Review, 5=Submit
@@ -10,51 +19,67 @@ type StepIndicatorProps = {
 export default function StepIndicator({ currentStep }: StepIndicatorProps) {
   return (
     <View style={styles.container}>
-      {/* Progress bar */}
-      <View style={styles.barTrack}>
-        <View
-          style={[
-            styles.barFill,
-            { width: `${((currentStep - 1) / (STEPS.length - 1)) * 100}%` as any },
-          ]}
-        />
-      </View>
-
-      {/* Step labels */}
-      <View style={styles.labelsRow}>
-        {STEPS.map((label, index) => {
+      <View style={styles.row}>
+        {STEPS.map((step, index) => {
           const stepNumber = index + 1;
           const isActive = stepNumber === currentStep;
           const isComplete = stepNumber < currentStep;
+          const isPending = stepNumber > currentStep;
+
           return (
-            <View key={label} style={styles.labelItem}>
-              {/* Step dot */}
-              <View
-                style={[
-                  styles.dot,
-                  isComplete && styles.dotComplete,
-                  isActive && styles.dotActive,
-                ]}
-              >
-                {isComplete && <Text style={styles.dotCheck}>✓</Text>}
-                {!isComplete && (
-                  <Text style={[styles.dotNumber, isActive && styles.dotNumberActive]}>
-                    {stepNumber}
-                  </Text>
-                )}
+            <React.Fragment key={step.label}>
+              {/* Connecting line before this step (skip for first) */}
+              {index > 0 && (
+                <View
+                  style={[
+                    styles.connector,
+                    isComplete || (isActive && index > 0)
+                      ? styles.connectorComplete
+                      : styles.connectorPending,
+                  ]}
+                />
+              )}
+
+              {/* Step circle + label */}
+              <View style={styles.stepCol}>
+                {/* Active ring wrapper */}
+                <View
+                  style={[
+                    styles.ringWrapper,
+                    isActive && styles.ringWrapperActive,
+                  ]}
+                >
+                  <View
+                    style={[
+                      styles.circle,
+                      isComplete && styles.circleComplete,
+                      isActive && styles.circleActive,
+                      isPending && styles.circlePending,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.circleIcon,
+                        isPending && styles.circleIconPending,
+                      ]}
+                    >
+                      {isComplete ? '✓' : step.icon}
+                    </Text>
+                  </View>
+                </View>
+
+                <Text
+                  style={[
+                    styles.label,
+                    (isActive || isComplete) && styles.labelActive,
+                    isPending && styles.labelPending,
+                  ]}
+                  numberOfLines={1}
+                >
+                  {step.label}
+                </Text>
               </View>
-              {/* Step label */}
-              <Text
-                style={[
-                  styles.label,
-                  isActive && styles.labelActive,
-                  isComplete && styles.labelComplete,
-                ]}
-                numberOfLines={1}
-              >
-                {label}
-              </Text>
-            </View>
+            </React.Fragment>
           );
         })}
       </View>
@@ -64,73 +89,83 @@ export default function StepIndicator({ currentStep }: StepIndicatorProps) {
 
 const styles = StyleSheet.create({
   container: {
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 4,
+    paddingHorizontal: screenWidth * 0.06,
+    paddingVertical: 16,
     backgroundColor: '#FFFFFF',
   },
-  barTrack: {
-    height: 3,
-    backgroundColor: '#E0E0E0',
-    borderRadius: 2,
-    marginBottom: 8,
-    marginHorizontal: 20,
-  },
-  barFill: {
-    height: 3,
-    backgroundColor: '#0468B1',
-    borderRadius: 2,
-  },
-  labelsRow: {
+  row: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  labelItem: {
     alignItems: 'center',
-    flex: 1,
   },
-  dot: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 2,
-    borderColor: '#CCCCCC',
+  connector: {
+    flex: 1,
+    height: 2,
+    marginHorizontal: 2,
+    alignSelf: 'flex-start',
+    marginTop: 20, // vertically center with circles (half of largest circle 40/2)
+  },
+  connectorComplete: {
+    backgroundColor: '#0468B1',
+  },
+  connectorPending: {
+    backgroundColor: '#E4E2E1',
+  },
+  stepCol: {
+    alignItems: 'center',
+    minWidth: scale(44),
+  },
+  ringWrapper: {
+    width: scale(46),
+    height: scale(46),
+    borderRadius: scale(23),
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 3,
+    backgroundColor: 'transparent',
   },
-  dotActive: {
-    borderColor: '#0468B1',
+  ringWrapperActive: {
+    borderWidth: 3,
+    borderColor: 'rgba(4,104,177,0.2)',
+  },
+  circle: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 999,
+  },
+  circleComplete: {
+    width: scale(36),
+    height: scale(36),
     backgroundColor: '#0468B1',
   },
-  dotComplete: {
-    borderColor: '#0468B1',
+  circleActive: {
+    width: scale(40),
+    height: scale(40),
     backgroundColor: '#0468B1',
   },
-  dotNumber: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: '#CCCCCC',
+  circlePending: {
+    width: scale(32),
+    height: scale(32),
+    backgroundColor: '#E4E2E1',
   },
-  dotNumberActive: {
+  circleIcon: {
+    fontSize: scale(14),
     color: '#FFFFFF',
   },
-  dotCheck: {
-    fontSize: 10,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
+  circleIconPending: {
+    color: '#717782',
   },
   label: {
-    fontSize: 10,
-    color: '#999999',
+    marginTop: 5,
+    fontSize: scale(10),
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
     textAlign: 'center',
   },
   labelActive: {
     color: '#0468B1',
-    fontWeight: '600',
   },
-  labelComplete: {
-    color: '#0468B1',
+  labelPending: {
+    color: '#9CA3AF',
+    fontWeight: '500',
   },
 });

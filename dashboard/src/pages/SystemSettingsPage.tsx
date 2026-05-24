@@ -277,9 +277,11 @@ function Field({
 function AddCountryModal({
   onClose,
   onSuccess,
+  countries,
 }: {
   onClose: () => void;
   onSuccess: () => void;
+  countries: Country[];
 }) {
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
@@ -293,6 +295,9 @@ function AddCountryModal({
   function validate() {
     const e: Record<string, string> = {};
     if (!name.trim()) e.name = "Country name is required";
+    else if (countries.some((c) => c.name.toLowerCase().trim() === name.toLowerCase().trim())) {
+      e.name = "A country with this name already exists.";
+    }
     if (!code.trim()) e.code = "Country code is required";
     else if (!/^[A-Za-z]{2}$/.test(code.trim())) e.code = "Must be exactly 2 letters";
     if (!lang.trim()) e.lang = "Official language is required";
@@ -314,8 +319,13 @@ function AddCountryModal({
         dialling_code: dialCode.trim() || null,
       });
       onSuccess();
-    } catch {
-      setSubmitError("Failed to add country. The code may already exist.");
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      if (detail === "A country with this name already exists") {
+        setErrors((p) => ({ ...p, name: "A country with this name already exists." }));
+      } else {
+        setSubmitError("Failed to add country. The code may already exist.");
+      }
     } finally {
       setSubmitting(false);
     }
@@ -710,6 +720,7 @@ function CountriesTab() {
   const [search, setSearch] = useState("");
   const [showAddModal, setShowAddModal] = useState(false);
   const [successBanner, setSuccessBanner] = useState("");
+  const [highlightedCountry, setHighlightedCountry] = useState<string | null>(null);
 
   const { data: countries = [], isLoading } = useQuery<Country[]>({
     queryKey: ["countries"],
@@ -723,8 +734,14 @@ function CountriesTab() {
     mutationFn: async ({ code, is_active }: { code: string; is_active: boolean }) => {
       await api.patch(`/api/countries/${code}`, { is_active });
     },
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["countries"] });
+      setHighlightedCountry(variables.code);
+      setTimeout(() => setHighlightedCountry(null), 2000);
+      setTimeout(() => {
+        const el = document.getElementById(`country-row-${variables.code}`);
+        if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 300);
     },
   });
 
@@ -773,7 +790,7 @@ function CountriesTab() {
             <thead>
               <tr style={s.thead}>
                 <th style={s.th}>Country Name</th>
-                <th style={s.th}>Country Code</th>
+                <th style={s.th}>CODE</th>
                 <th style={s.th}>Official Language</th>
                 <th style={s.th}>Dialling Code</th>
                 <th style={s.th}>Status</th>
@@ -781,12 +798,22 @@ function CountriesTab() {
             </thead>
             <tbody>
               {filtered.map((country) => (
-                <tr key={country.code} style={s.tr}>
+                <tr
+                  key={country.code}
+                  id={`country-row-${country.code}`}
+                  style={{
+                    ...s.tr,
+                    backgroundColor: highlightedCountry === country.code ? "#f0fdf4" : "transparent",
+                    transition: "background-color 0.5s ease",
+                  }}
+                >
                   <td style={s.td}>
                     <span style={{ fontWeight: 600, color: "#1A2B4A" }}>{country.name}</span>
                   </td>
                   <td style={s.td}>
-                    <span style={s.codeBadge}>{country.code}</span>
+                    <span style={{ fontFamily: "monospace", fontSize: 12, color: "#6b7280", background: "#f9fafb", padding: "2px 6px", borderRadius: 4 }}>
+                      {country.code}
+                    </span>
                   </td>
                   <td style={s.td}>
                     <span style={{ color: "#4a5568" }}>{country.official_language}</span>
@@ -821,6 +848,7 @@ function CountriesTab() {
         <AddCountryModal
           onClose={() => setShowAddModal(false)}
           onSuccess={handleSuccess}
+          countries={countries}
         />
       )}
     </div>

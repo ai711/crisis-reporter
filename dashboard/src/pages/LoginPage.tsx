@@ -121,7 +121,7 @@ export default function LoginPage() {
   // Session-expiry / reason banner — shown when redirected with ?reason=expired
   const reason = searchParams.get("reason");
   const [sessionMsg, setSessionMsg] = useState(
-    reason === "expired" ? "Your session has expired. Please log in again." : ""
+    reason === "session_expired" ? "Your session has expired. Please log in again." : ""
   );
 
   // Password-expired inline reset panel
@@ -450,13 +450,12 @@ const styles: Record<string, React.CSSProperties> = {
     margin: 0,
   },
   sessionMsg: {
-    background: "#fff8e1",
-    color: "#7a5c00",
-    padding: "12px 16px",
-    borderRadius: 8,
+    background: "#fef3c7",
+    color: "#92400e",
+    padding: "12px",
+    borderRadius: 6,
     fontSize: 14,
-    border: "1px solid #ffe082",
-    marginBottom: 20,
+    marginBottom: 16,
   },
   form: {
     display: "flex",
