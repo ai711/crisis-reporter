@@ -994,6 +994,24 @@ function LanguagesTab() {
     setTransPage(1);
   }, [selectedLang, filterTab]);
 
+  // Auto-sync string keys on tab mount — ensures new app content surfaces as
+  // Missing in the translation table without requiring a manual button click.
+  useEffect(() => {
+    api.post('/api/translations/sync-string-keys')
+      .then(res => {
+        const { created, retired } = res.data as { created: number; retired: number };
+        if (created > 0) {
+          setSyncMsg(`${created} new string${created > 1 ? 's' : ''} added to translation pipeline.`);
+          setTimeout(() => setSyncMsg(''), 6000);
+          queryClient.invalidateQueries({ queryKey: ['languages'] });
+          queryClient.invalidateQueries({ queryKey: ['string-keys'] });
+        }
+      })
+      .catch(() => {
+        // Silent fail — background maintenance, never block the UI
+      });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Queries ──────────────────────────────────────────────────────────────
 
   const { data: languages = [], isLoading: langsLoading } = useQuery<LanguageLifecycle[]>({
