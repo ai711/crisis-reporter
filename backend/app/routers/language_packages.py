@@ -1263,13 +1263,7 @@ async def auto_translate(
     keys_to_translate = keys_result.scalars().all()
 
     if not keys_to_translate:
-        return AutoTranslateResult(
-            language_code=body.language_code,
-            translated=0,
-            skipped=len(already_translated),
-            failed=0,
-            errors=[],
-        )
+        return {"status": "no_op", "language_code": body.language_code, "translated": 0, "skipped": len(already_translated), "failed": 0}
 
     background_tasks.add_task(_run_auto_translation, body.language_code, db)
     return {"status": "translation_started", "language_code": body.language_code}
