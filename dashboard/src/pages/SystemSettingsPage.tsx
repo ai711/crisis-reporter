@@ -1117,6 +1117,13 @@ function LanguagesTab() {
     })
   );
 
+  const totalMissingAllLangs = Object.entries(statusByLang)
+    .filter(([code]) => code !== "en")
+    .reduce((sum, [, st]) => sum + st.missing, 0);
+  const totalApprovedAllLangs = Object.values(statusByLang).reduce((sum, st) => sum + st.approved, 0);
+  const langsWithMissing = Object.entries(statusByLang)
+    .filter(([code, st]) => code !== "en" && st.missing > 0).length;
+
   const counts: Record<FilterStatus, number> = {
     all:       translations.length,
     missing:   translations.filter((t) => t.status === "missing").length,
@@ -1167,7 +1174,7 @@ function LanguagesTab() {
   async function handleAutoTranslate(langCode: string) {
     const langName = languages.find((l) => l.code === langCode)?.name ?? langCode.toUpperCase();
     const confirmed = window.confirm(
-      `Start auto-translation for ${langName}? This will translate all untranslated strings using LibreTranslate. Existing translations will not be overwritten. This runs in the background and may take a few minutes.`
+      `Start auto-translation for ${langName}? This will translate all untranslated strings using the auto-translation engine. Existing translations will not be overwritten. This runs in the background and may take a few minutes.`
     );
     if (!confirmed) return;
     setAutoTranslatingLang(langCode);
@@ -1181,12 +1188,9 @@ function LanguagesTab() {
       queryClient.invalidateQueries({ queryKey: ["string-keys"] });
       queryClient.invalidateQueries({ queryKey: ["queue-status-by-lang"] });
       setSelectedLang(langCode);
-      // FIX 9: initialise progress with actual untranslated count
-      const alreadyTranslated = (langCode === selectedLang ? translations : []).filter(
-        (t) => t.status === "draft" || t.status === "approved" || t.status === "published"
-      ).length;
-      const missingForLang = totalActive > 0 ? totalActive - alreadyTranslated : 1;
-      setTranslateProgress({ completed: 0, total: Math.max(missingForLang, 1) });
+      // FIX 9: initialise progress from the Missing pill count (status === "missing" rows only)
+      const missingCount = statusByLang[langCode]?.missing ?? 0;
+      setTranslateProgress({ completed: 0, total: Math.max(missingCount, 1) });
       setTranslateMsg(`Auto-translation started for ${langName}. Check the Review Queue tab for progress.`);
       setTimeout(() => setTranslateMsg(""), 5000);
       // FIX 3: scroll to progress banner after two render cycles complete
@@ -1199,7 +1203,7 @@ function LanguagesTab() {
       // autoTranslatingLang intentionally NOT cleared here — progress banner
       // stays until user dismisses with ×
     } catch {
-      showBanner("Auto-translate failed — check LibreTranslate configuration.", false);
+      showBanner("Auto-translate failed — check translation service configuration.", false);
       setAutoTranslatingLang(null);
       setTranslateProgress(null);
       setTranslateStartTime(null);
@@ -1419,9 +1423,13 @@ function LanguagesTab() {
           <span style={sL.sectionTitle}>Translation Review Queue</span>
           {queueStatus && (
             <span style={sL.sectionMeta}>
-              {queueStatus.total_pending === 0
-                ? <span style={{ color: "#22c55e", fontWeight: 700 }}>All translations are up to date</span>
-                : <span style={{ color: "#d97706", fontWeight: 700 }}>{queueStatus.total_pending} strings need review</span>
+              {queueStatus.total_pending > 0
+                ? <span style={{ color: "#d97706", fontWeight: 700 }}>{queueStatus.total_pending} strings need review</span>
+                : totalMissingAllLangs > 0
+                  ? <span style={{ color: "#92400e", fontWeight: 700 }}>{totalMissingAllLangs} strings missing</span>
+                  : totalApprovedAllLangs > 0
+                    ? <span style={{ color: "#1e40af", fontWeight: 700 }}>Ready to publish</span>
+                    : <span style={{ color: "#22c55e", fontWeight: 700 }}>All translations are up to date</span>
               }
             </span>
           )}
@@ -1446,8 +1454,20 @@ function LanguagesTab() {
             ))}
           </div>
         ) : (
-          <div style={{ padding: "16px 24px", color: "#718096", fontSize: 13, fontStyle: "italic" }}>
-            {queueStatus ? "No pending translations — all clear." : "Loading queue status…"}
+          <div style={{ padding: "16px 24px" }}>
+            {!queueStatus ? (
+              <div style={{ color: "#718096", fontSize: 13, fontStyle: "italic" }}>Loading queue status…</div>
+            ) : totalMissingAllLangs > 0 ? (
+              <div style={{ background: "#fef3c7", color: "#92400e", borderRadius: 6, padding: "10px 14px", fontSize: 13 }}>
+                {totalMissingAllLangs} string{totalMissingAllLangs !== 1 ? "s are" : " is"} missing translations across {langsWithMissing} language{langsWithMissing !== 1 ? "s" : ""}. Run Auto-translate to generate them.
+              </div>
+            ) : totalApprovedAllLangs > 0 ? (
+              <div style={{ background: "#eff6ff", color: "#1e40af", borderRadius: 6, padding: "10px 14px", fontSize: 13 }}>
+                All translations reviewed. Ready to publish.
+              </div>
+            ) : (
+              <div style={{ color: "#718096", fontSize: 13, fontStyle: "italic" }}>No pending translations — all clear.</div>
+            )}
           </div>
         )}
       </div>

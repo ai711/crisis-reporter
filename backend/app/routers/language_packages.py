@@ -1144,30 +1144,35 @@ async def list_translations(
 
 async def _run_auto_translation(language_code: str, db: AsyncSession) -> None:
     try:
-        existing_result = await db.execute(
-            select(Translation.string_key_id).where(
-                Translation.language_code == language_code
+        missing_trans_result = await db.execute(
+            select(Translation).where(
+                Translation.language_code == language_code,
+                Translation.status == "missing",
             )
         )
-        already_translated = {row[0] for row in existing_result.all()}
-
-        keys_result = await db.execute(
-            select(StringKey).where(
-                StringKey.is_active == True,
-                StringKey.id.not_in(already_translated) if already_translated else True,
-            )
-        )
-        keys_to_translate = keys_result.scalars().all()
-        if not keys_to_translate:
+        missing_translations = missing_trans_result.scalars().all()
+        if not missing_translations:
             return
 
-        total_keys = len(keys_to_translate)
+        sk_ids = [t.string_key_id for t in missing_translations]
+        sk_result = await db.execute(select(StringKey).where(StringKey.id.in_(sk_ids)))
+        sk_map = {sk.id: sk for sk in sk_result.scalars().all()}
+
+        trans_to_translate = [
+            (t, sk_map[t.string_key_id])
+            for t in missing_translations
+            if t.string_key_id in sk_map
+        ]
+        if not trans_to_translate:
+            return
+
+        total_keys = len(trans_to_translate)
         translated = 0
         failed = 0
         errors: list[str] = []
 
         batches = [
-            keys_to_translate[i:i + TRANSLATION_BATCH_SIZE]
+            trans_to_translate[i:i + TRANSLATION_BATCH_SIZE]
             for i in range(0, total_keys, TRANSLATION_BATCH_SIZE)
         ]
 
@@ -1195,9 +1200,11 @@ async def _run_auto_translation(language_code: str, db: AsyncSession) -> None:
                 "current_batch": batch_idx + 1,
             }
 
+            trans_map_batch = {t.id: t for t, _ in batch}
+
             results = await asyncio.gather(*[
-                _translate_single(sk.id, sk.key, sk.english_text, language_code, db)
-                for sk in batch
+                _translate_single(t.id, sk.key, sk.english_text, language_code, db)
+                for t, sk in batch
             ])
 
             for result in results:
@@ -1206,17 +1213,13 @@ async def _run_auto_translation(language_code: str, db: AsyncSession) -> None:
                     errors.append(f"{result['key_name']}: {result['error']}")
                     log.warning("auto_translate failed for key %s: %s", result["key_name"], result["error"])
                 else:
-                    db.add(
-                        Translation(
-                            string_key_id=result["key_id"],
-                            language_code=language_code,
-                            translated_text=result["translated_text"],
-                            status="draft",
-                            translated_by=result["service_used"],
-                        )
-                    )
-                    translated += 1
-                    log.info("Translated key %s via %s", result["key_name"], result["service_used"])
+                    t_obj = trans_map_batch.get(result["key_id"])
+                    if t_obj is not None:
+                        t_obj.translated_text = result["translated_text"]
+                        t_obj.status = "draft"
+                        t_obj.translated_by = result["service_used"]
+                        translated += 1
+                        log.info("Translated key %s via %s", result["key_name"], result["service_used"])
 
             await db.commit()
 
@@ -1247,23 +1250,16 @@ async def auto_translate(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(require_admin),
 ) -> dict:
-    existing_result = await db.execute(
-        select(Translation.string_key_id).where(
-            Translation.language_code == body.language_code
+    missing_count_result = await db.execute(
+        select(func.count(Translation.id)).where(
+            Translation.language_code == body.language_code,
+            Translation.status == "missing",
         )
     )
-    already_translated = {row[0] for row in existing_result.all()}
+    missing_count = missing_count_result.scalar() or 0
 
-    keys_result = await db.execute(
-        select(StringKey).where(
-            StringKey.is_active == True,
-            StringKey.id.not_in(already_translated) if already_translated else True,
-        )
-    )
-    keys_to_translate = keys_result.scalars().all()
-
-    if not keys_to_translate:
-        return {"status": "no_op", "language_code": body.language_code, "translated": 0, "skipped": len(already_translated), "failed": 0}
+    if missing_count == 0:
+        return {"status": "no_op", "language_code": body.language_code, "translated": 0, "skipped": 0, "failed": 0}
 
     background_tasks.add_task(_run_auto_translation, body.language_code, db)
     return {"status": "translation_started", "language_code": body.language_code}
