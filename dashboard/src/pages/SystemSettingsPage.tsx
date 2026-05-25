@@ -921,6 +921,7 @@ function LanguagesTab() {
   const [approvingAllDraft, setApprovingAllDraft] = useState(false);
   const [optimisticDraftClear, setOptimisticDraftClear] = useState(false);
   const [translateStartTime, setTranslateStartTime] = useState<number | null>(null);
+  const [nearCompleteCount, setNearCompleteCount] = useState(0);
   const [translationsLoadingImmediate, setTranslationsLoadingImmediate] = useState(false);
   const [approvingRowId, setApprovingRowId] = useState<string | null>(null);
   const [activatingLang, setActivatingLang] = useState<string | null>(null);
@@ -1068,19 +1069,32 @@ function LanguagesTab() {
       prev !== null ? { completed, total: prev.total } : null
     );
     const total = translateProgress?.total ?? 0;
-    // FIX 7: stall check — trigger completion if stuck at total-1 for > 60s
+    // Grace period: when within 1 of target, wait 3 more polls before declaring stall
+    if (completed >= total - 1 && completed < total && total > 0) {
+      setNearCompleteCount(prev => prev + 1);
+      if (nearCompleteCount < 3) return;
+    }
     const elapsed = Date.now() - (translateStartTime ?? Date.now());
-    const isStalled = elapsed > 60000 && total > 0 && completed === total - 1;
+    const isStalled = elapsed > 120000 && total > 0 && completed < total - 2;
     if ((completed >= total && total > 0) || isStalled) {
+      if (completed >= total) setNearCompleteCount(0);
       const langName = languages.find((l) => l.code === autoTranslatingLang)?.name ?? autoTranslatingLang.toUpperCase();
       const msg = isStalled
         ? `Auto-translation complete with ${total - completed} string(s) that could not be translated. Review the queue.`
         : `Auto-translation complete for ${langName}. Review the queue before publishing.`;
-      setTimeout(() => {
+      const completedLang = autoTranslatingLang;
+      setTimeout(async () => {
         setAutoTranslatingLang(null);
         setTranslateProgress(null);
         setTranslateMsg(msg);
         setTranslateStartTime(null);
+        setNearCompleteCount(0);
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ['languages'] }),
+          queryClient.invalidateQueries({ queryKey: ['string-keys'] }),
+          queryClient.invalidateQueries({ queryKey: ['translations', completedLang] }),
+          queryClient.invalidateQueries({ queryKey: ['queue-status'] }),
+        ]);
         setTimeout(() => setTranslateMsg(''), 8000);
       }, 1500);
     }
@@ -1260,6 +1274,7 @@ function LanguagesTab() {
       const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? "Publish failed. Please try again.";
       setShowPublishConfirm(false);
       setPublishMsg({ text: detail, type: "error" });
+      window.scrollTo({ top: 0, behavior: 'smooth' });
       // publishingLang kept for retry
     } finally {
       setIsPublishingApi(false);
@@ -1703,6 +1718,18 @@ function LanguagesTab() {
                           const hasMissing = (st?.missing ?? 0) > 0 || (st?.draft ?? 0) > 0;
                           if (!hasMissing) {
                             return null;
+                          }
+                          const isOtherTranslating = autoTranslatingLang !== null && autoTranslatingLang !== lang.code;
+                          if (isOtherTranslating) {
+                            return (
+                              <button
+                                style={{ ...sL.actionBtn, background: "#fffbeb", color: "#d97706", border: "1px solid #fcd34d", opacity: 0.4, cursor: "not-allowed" }}
+                                onClick={() => {}}
+                                title="Auto-translation in progress for another language. Please wait."
+                              >
+                                Auto-translate
+                              </button>
+                            );
                           }
                           return (
                             <button

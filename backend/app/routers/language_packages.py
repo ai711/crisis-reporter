@@ -456,8 +456,18 @@ async def publish_language_package(
     )
     approved = {t.string_key_id: t for t in approved_result.scalars().all()}
 
-    # Gate: every active key must have an approved translation
-    missing = [k.key for k in all_keys if k.id not in approved]
+    # Collect already-published translations — keys with a published translation
+    # from a previous cycle do not need to be re-approved for this publish run
+    published_ids_result = await db.execute(
+        select(Translation.string_key_id).where(
+            Translation.language_code == language_code,
+            Translation.status == "published",
+        )
+    )
+    already_published_ids = {row[0] for row in published_ids_result.all()}
+
+    # Gate: every active key must have an approved OR already-published translation
+    missing = [k.key for k in all_keys if k.id not in approved and k.id not in already_published_ids]
     if missing:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
