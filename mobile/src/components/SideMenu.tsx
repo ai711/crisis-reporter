@@ -83,7 +83,7 @@ export default function SideMenu({ visible, onClose }: SideMenuProps) {
                     <MaterialIcons name={item.icon} size={scale(22)} color="#414751" />
                     <Text style={styles.menuItemLabel}>{item.label}</Text>
                     <MaterialIcons
-                      name="chevron_right"
+                      name="chevron-right"
                       size={scale(18)}
                       color="#C1C7D2"
                       style={styles.chevron}

@@ -142,7 +142,7 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
           style={styles.headerBtn}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <MaterialIcons name="arrow_back" size={scale(24)} color="#0468B1" />
+          <MaterialIcons name="arrow-back" size={scale(24)} color="#0468B1" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{t("settings.title")}</Text>
         <View style={styles.headerBtn} />
@@ -193,7 +193,7 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
               <Text style={styles.rowLabel}>{t("settings.country")}</Text>
               <Text style={styles.rowSubtitle}>{currentCountry || "Not set"}</Text>
             </View>
-            <MaterialIcons name="chevron_right" size={scale(20)} color="#C1C7D2" />
+            <MaterialIcons name="chevron-right" size={scale(20)} color="#C1C7D2" />
           </TouchableOpacity>
 
           <View style={styles.separator} />
@@ -210,7 +210,7 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
               <Text style={styles.rowLabel}>{t("settings.language")}</Text>
               <Text style={styles.rowSubtitle}>{currentLangName}</Text>
             </View>
-            <MaterialIcons name="chevron_right" size={scale(20)} color="#C1C7D2" />
+            <MaterialIcons name="chevron-right" size={scale(20)} color="#C1C7D2" />
           </TouchableOpacity>
         </View>
 
@@ -241,7 +241,7 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
             <View style={styles.rowContent}>
               <Text style={styles.rowLabel}>Privacy Policy</Text>
             </View>
-            <MaterialIcons name="chevron_right" size={scale(20)} color="#C1C7D2" />
+            <MaterialIcons name="chevron-right" size={scale(20)} color="#C1C7D2" />
           </TouchableOpacity>
         </View>
 

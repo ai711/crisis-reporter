@@ -208,7 +208,7 @@ export default function MapScreen() {
 
         {/* Offline banner — full-width strip below header */}
         <View style={styles.offlineBanner}>
-          <MaterialIcons name="cloud_off" size={scale(16)} color="#FFDEB8" />
+          <MaterialIcons name="cloud-off" size={scale(16)} color="#FFDEB8" />
           <Text style={styles.offlineBannerText}>Working Offline</Text>
         </View>
 
@@ -222,7 +222,7 @@ export default function MapScreen() {
                 { transform: [{ scale: pulseAnim }] },
               ]}
             >
-              <MaterialIcons name="wifi_off" size={scale(36)} color="#717782" />
+              <MaterialIcons name="wifi-off" size={scale(36)} color="#717782" />
             </Animated.View>
 
             <Text style={styles.offlineTitle}>Map unavailable</Text>
@@ -234,7 +234,7 @@ export default function MapScreen() {
             {/* GPS note row */}
             <View style={styles.gpsNoteRow}>
               <MaterialIcons
-                name="location_searching"
+                name="location-searching"
                 size={scale(18)}
                 color="#0468B1"
                 style={{ marginTop: 2 }}
@@ -335,7 +335,7 @@ export default function MapScreen() {
       {/* Location pill — floating top-center below header */}
       <View style={[styles.locationPillWrap, { top: insets.top + 64 }]}>
         <View style={styles.locationPill}>
-          <MaterialIcons name="my_location" size={scale(14)} color="#FFFFFF" />
+          <MaterialIcons name="my-location" size={scale(14)} color="#FFFFFF" />
           <Text style={styles.locationPillText}>Near you — 50 mi radius</Text>
         </View>
       </View>
@@ -346,7 +346,7 @@ export default function MapScreen() {
         onPress={recentreMap}
         activeOpacity={0.85}
       >
-        <MaterialIcons name="gps_fixed" size={scale(24)} color="#FFFFFF" />
+        <MaterialIcons name="gps-fixed" size={scale(24)} color="#FFFFFF" />
       </TouchableOpacity>
 
       {/* Popup card — shown when a pin is tapped */}

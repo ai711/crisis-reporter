@@ -363,7 +363,7 @@ export default function MyReportsScreen() {
 
                   {/* ROW 2: Location */}
                   <View style={styles.cardRow2}>
-                    <MaterialIcons name="location_on" color="#0468B1" size={scale(16)} />
+                    <MaterialIcons name="location-on" color="#0468B1" size={scale(16)} />
                     <Text style={styles.locationText} numberOfLines={1}>
                       {getQueuedLocationLabel(report)}
                     </Text>
@@ -470,11 +470,11 @@ export default function MyReportsScreen() {
 
                   {/* ROW 2: Location + tappability chevron */}
                   <View style={styles.cardRow2}>
-                    <MaterialIcons name="location_on" color="#0468B1" size={scale(16)} />
+                    <MaterialIcons name="location-on" color="#0468B1" size={scale(16)} />
                     <Text style={styles.locationText} numberOfLines={1}>
                       {getSubmittedLocationLabel(report)}
                     </Text>
-                    <MaterialIcons name="chevron_right" color="#C1C7D2" size={scale(18)} />
+                    <MaterialIcons name="chevron-right" color="#C1C7D2" size={scale(18)} />
                   </View>
 
                   {/* ROW 3: Damage pill */}

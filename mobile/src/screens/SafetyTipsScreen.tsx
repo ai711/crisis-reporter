@@ -241,7 +241,7 @@ export default function SafetyTipsScreen() {
       <View style={[styles.container, { paddingTop: insets.top }]}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerBack}>
-            <MaterialIcons name="arrow_back" size={scale(22)} color="#0468B1" />
+            <MaterialIcons name="arrow-back" size={scale(22)} color="#0468B1" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Safety Tips</Text>
           <View style={styles.headerSpacer} />
@@ -313,7 +313,7 @@ export default function SafetyTipsScreen() {
           <View style={styles.partCard}>
             <View style={styles.cardRow}>
               <View style={[styles.iconContainer, { backgroundColor: 'rgba(4,104,177,0.1)' }]}>
-                <MaterialIcons name="medical_services" size={scale(22)} color="#0468B1" />
+                <MaterialIcons name="medical-services" size={scale(22)} color="#0468B1" />
               </View>
               <View style={{ flex: 1, marginLeft: 12 }}>
                 <Text style={styles.cardTitle}>Part C — First Aid Tips</Text>
@@ -359,7 +359,7 @@ export default function SafetyTipsScreen() {
             onPress={() => setViewState({ screen: 'overview' })}
             style={styles.headerBack}
           >
-            <MaterialIcons name="arrow_back" size={scale(22)} color="#0468B1" />
+            <MaterialIcons name="arrow-back" size={scale(22)} color="#0468B1" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Part A — Safety Tips</Text>
           <View style={styles.headerSpacer} />
@@ -388,15 +388,15 @@ export default function SafetyTipsScreen() {
               </View>
               <Text style={styles.disasterLabel}>{dt.label}</Text>
               {progressA[dt.key] ? (
-                <MaterialIcons name="check_circle" size={scale(22)} color="#38A169" />
+                <MaterialIcons name="check-circle" size={scale(22)} color="#38A169" />
               ) : (
-                <MaterialIcons name="chevron_right" size={scale(20)} color="#C1C7D2" />
+                <MaterialIcons name="chevron-right" size={scale(20)} color="#C1C7D2" />
               )}
             </TouchableOpacity>
           ))}
 
           <View style={styles.offlineInfoCard}>
-            <MaterialIcons name="cloud_done" size={scale(22)} color="#0468B1" />
+            <MaterialIcons name="cloud-done" size={scale(22)} color="#0468B1" />
             <Text style={styles.offlineInfoText}>Content works offline once loaded</Text>
             <Text style={styles.offlineInfoSubText}>Available in all supported languages</Text>
           </View>
@@ -465,7 +465,7 @@ export default function SafetyTipsScreen() {
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <TouchableOpacity onPress={handleSlideBack} style={styles.headerBack}>
-          <MaterialIcons name="arrow_back" size={scale(22)} color="#0468B1" />
+          <MaterialIcons name="arrow-back" size={scale(22)} color="#0468B1" />
         </TouchableOpacity>
         <Text
           style={[styles.headerTitle, { flex: 1, textAlign: 'center' }]}
@@ -488,7 +488,7 @@ export default function SafetyTipsScreen() {
       {/* Offline state */}
       {loadState === 'offline' && (
         <View style={styles.offlineState}>
-          <MaterialIcons name="wifi_off" size={scale(48)} color="#C1C7D2" />
+          <MaterialIcons name="wifi-off" size={scale(48)} color="#C1C7D2" />
           <Text style={styles.offlineTitle}>Content not available offline</Text>
           <Text style={styles.offlineBody}>
             Connect to the internet to load Safety Tips

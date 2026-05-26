@@ -246,7 +246,7 @@ export default function ReporterProfileScreen() {
           style={styles.headerBtn}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <MaterialIcons name="arrow_back" size={scale(24)} color="#0468B1" />
+          <MaterialIcons name="arrow-back" size={scale(24)} color="#0468B1" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Reporter Profile</Text>
         <View style={styles.headerBtn} />
@@ -268,7 +268,7 @@ export default function ReporterProfileScreen() {
               </View>
             )}
             <View style={styles.cameraBadge}>
-              <MaterialIcons name="photo_camera" size={scale(16)} color="#FFFFFF" />
+              <MaterialIcons name="photo-camera" size={scale(16)} color="#FFFFFF" />
             </View>
           </TouchableOpacity>
           <Text style={styles.photoLabel}>{photoUrl ? "Change Photo" : "Add Profile Photo"}</Text>
@@ -287,7 +287,7 @@ export default function ReporterProfileScreen() {
             <View style={[styles.progressFill, { width: `${completion}%` as any }]} />
           </View>
           <View style={styles.completionHintRow}>
-            <MaterialIcons name="info_outline" size={scale(14)} color="#717782" />
+            <MaterialIcons name="info-outline" size={scale(14)} color="#717782" />
             <Text style={styles.completionHint}>
               Add your email or phone number to unlock badges
             </Text>
@@ -381,7 +381,7 @@ export default function ReporterProfileScreen() {
         {/* Success banner */}
         {saveSuccess && (
           <View style={styles.successBanner}>
-            <MaterialIcons name="check_circle" size={scale(16)} color="#2E7D32" />
+            <MaterialIcons name="check-circle" size={scale(16)} color="#2E7D32" />
             <Text style={styles.successBannerText}>Profile saved</Text>
           </View>
         )}
