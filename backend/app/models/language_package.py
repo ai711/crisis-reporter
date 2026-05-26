@@ -1,6 +1,7 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import String, Boolean, DateTime, Text, ForeignKey, UniqueConstraint, Index
+from typing import Optional
+from sqlalchemy import String, Boolean, DateTime, Text, ForeignKey, UniqueConstraint, Index, Integer
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID
 from app.database import Base
@@ -130,6 +131,12 @@ class LanguagePackage(Base):
 
     published_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
+    )
+    string_count: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True, default=None
+    )
+    published_by: Mapped[Optional[str]] = mapped_column(
+        String(255), nullable=True, default=None
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=datetime.utcnow, nullable=False
