@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "../stores/authStore";
 import api from "../services/api";
@@ -896,6 +896,8 @@ function LanguagesTab() {
   const isAdmin = user?.role === "admin" || user?.role === "superadmin";
   const isSuperadmin = user?.role === "superadmin";
 
+  const translationSectionRef = useRef<HTMLDivElement>(null);
+
   // ── State ────────────────────────────────────────────────────────────────
   const [selectedLang, setSelectedLang] = useState("ar");
   const [filterTab, setFilterTab] = useState<FilterStatus>("draft");
@@ -1737,10 +1739,16 @@ function LanguagesTab() {
                             return (
                               <button
                                 style={{ ...sL.actionBtn, border: "1px solid #C1C7D2", color: "#717782", background: "transparent" }}
-                                onClick={() => { setSelectedLang(lang.code); setFilterTab("draft"); }}
+                                onClick={() => {
+                                  setSelectedLang(lang.code);
+                                  setFilterTab("draft");
+                                  setTimeout(() => {
+                                    translationSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                                  }, 100);
+                                }}
                                 title="All strings are translated. Review and approve drafts before publishing."
                               >
-                                Approve Drafts →
+                                Review Drafts →
                               </button>
                             );
                           }
@@ -1847,7 +1855,7 @@ function LanguagesTab() {
       </div>
 
       {/* ── Translation Editor ───────────────────────────────────────────── */}
-      <div style={{ ...sL.sectionCard, position: "relative" }}>
+      <div ref={translationSectionRef} style={{ ...sL.sectionCard, position: "relative" }}>
         {(lockLoading || transLoading || translationsLoadingImmediate) && (
           <div style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", background: "rgba(255,255,255,0.8)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10, borderRadius: 12 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
