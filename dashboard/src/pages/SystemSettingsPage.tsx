@@ -137,9 +137,13 @@ interface LanguagePkg {
   published_at: string | null;
   created_at: string;
   string_count: number;
+  // TODO: published_by needs to be added to LanguagePackage model + list endpoint
+  published_by?: string | null;
 }
 
 type FilterStatus = "all" | "missing" | "draft" | "approved" | "published";
+
+const AUDIT_PAGE_SIZE = 10;
 
 const TRANSLATION_LANGS = [
   { code: "ar", name: "Arabic" },
@@ -908,7 +912,6 @@ function LanguagesTab() {
   const [deprecateModal, setDeprecateModal] = useState<{ code: string; name: string } | null>(null);
   const [deprecateComment, setDeprecateComment] = useState("");
   const [auditOpen, setAuditOpen] = useState(false);
-  const [auditPage, setAuditPage] = useState(1);
   const [translateMsg, setTranslateMsg] = useState<string>("");
   const [translateProgress, setTranslateProgress] = useState<{ completed: number; total: number } | null>(null);
   const [showAddLanguageModal, setShowAddLanguageModal] = useState(false);
@@ -927,6 +930,8 @@ function LanguagesTab() {
   const [activatingLang, setActivatingLang] = useState<string | null>(null);
   const [langPage, setLangPage] = useState(1);
   const [transPage, setTransPage] = useState(1);
+  const [publishHistoryPage, setPublishHistoryPage] = useState(1);
+  const [auditTrailPage, setAuditTrailPage] = useState(1);
   const [regeneratingRowId, setRegeneratingRowId] = useState<string | null>(null);
   const [regeneratingAllDraft, setRegeneratingAllDraft] = useState(false);
 
@@ -1072,15 +1077,15 @@ function LanguagesTab() {
     // Grace period: when within 1 of target, wait 3 more polls before declaring stall
     if (completed >= total - 1 && completed < total && total > 0) {
       setNearCompleteCount(prev => prev + 1);
-      if (nearCompleteCount < 3) return;
+      if (nearCompleteCount < 6) return;
     }
     const elapsed = Date.now() - (translateStartTime ?? Date.now());
-    const isStalled = elapsed > 120000 && total > 0 && completed < total - 2;
+    const isStalled = elapsed > 180000 && total > 0 && completed < total - 2;
     if ((completed >= total && total > 0) || isStalled) {
       if (completed >= total) setNearCompleteCount(0);
       const langName = languages.find((l) => l.code === autoTranslatingLang)?.name ?? autoTranslatingLang.toUpperCase();
       const msg = isStalled
-        ? `Auto-translation complete with ${total - completed} string(s) that could not be translated. Review the queue.`
+        ? `Auto-translation may still be running. If strings remain missing after 2 minutes, use Regenerate All Draft to retry.`
         : `Auto-translation complete for ${langName}. Review the queue before publishing.`;
       const completedLang = autoTranslatingLang;
       setTimeout(async () => {
@@ -1101,9 +1106,9 @@ function LanguagesTab() {
   }, [queueStatus]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const { data: auditData } = useQuery({
-    queryKey: ["translation-audit", auditPage],
+    queryKey: ["translation-audit", auditTrailPage],
     queryFn: async () => {
-      const res = await api.get(`/api/translations/audit-log?page=${auditPage}&page_size=20`);
+      const res = await api.get(`/api/translations/audit-log?page=${auditTrailPage}&page_size=${AUDIT_PAGE_SIZE}`);
       return res.data as { total: number; page: number; items: AuditEntry[] };
     },
     enabled: auditOpen,
@@ -1183,6 +1188,14 @@ function LanguagesTab() {
   const TRANS_PAGE_SIZE = 50;
   const totalTransPages = Math.ceil((filtered.length || 1) / TRANS_PAGE_SIZE);
   const pagedTrans = filtered.slice((transPage - 1) * TRANS_PAGE_SIZE, transPage * TRANS_PAGE_SIZE);
+
+  // Publish History pagination — 10 rows per page
+  const PUBLISH_HISTORY_PAGE_SIZE = 10;
+  const totalPublishHistoryPages = Math.ceil((packages.length || 1) / PUBLISH_HISTORY_PAGE_SIZE);
+  const pagedPackages = packages.slice(
+    (publishHistoryPage - 1) * PUBLISH_HISTORY_PAGE_SIZE,
+    publishHistoryPage * PUBLISH_HISTORY_PAGE_SIZE,
+  );
 
   const selectedLangData = languages.find((l) => l.code === selectedLang);
   const lockHeld = lockInfo?.locked === true;
@@ -1713,12 +1726,25 @@ function LanguagesTab() {
                               </div>
                             );
                           }
-                          // FIX 4: only show Auto-translate when language has missing/draft translations
                           const st = statusByLang[lang.code];
-                          const hasMissing = (st?.missing ?? 0) > 0 || (st?.draft ?? 0) > 0;
-                          if (!hasMissing) {
-                            return null;
+                          const missingCount = st?.missing ?? 0;
+                          const isDraftOnly = missingCount === 0 && (st?.draft ?? 0) > 0;
+                          const isUpToDate = missingCount === 0 && (st?.draft ?? 0) === 0 && (st?.approved ?? 0) === 0;
+                          if (isUpToDate) {
+                            return <span style={{ fontSize: 13, color: "#38A169" }}>Up to date</span>;
                           }
+                          if (isDraftOnly) {
+                            return (
+                              <button
+                                style={{ ...sL.actionBtn, border: "1px solid #C1C7D2", color: "#717782", background: "transparent" }}
+                                onClick={() => { setSelectedLang(lang.code); setFilterTab("draft"); }}
+                                title="All strings are translated. Review and approve drafts before publishing."
+                              >
+                                Approve Drafts →
+                              </button>
+                            );
+                          }
+                          if (missingCount === 0) return null;
                           const isOtherTranslating = autoTranslatingLang !== null && autoTranslatingLang !== lang.code;
                           if (isOtherTranslating) {
                             return (
@@ -2095,37 +2121,61 @@ function LanguagesTab() {
         {packages.length === 0 ? (
           <div style={{ padding: "24px 28px", color: "#718096", fontSize: 13, fontStyle: "italic" }}>No language packages published yet.</div>
         ) : (
-          <div style={s.tableWrap}>
-            <table style={s.table}>
-              <thead>
-                <tr style={s.thead}>
-                  <th style={s.th}>Language</th>
-                  <th style={s.th}>Version</th>
-                  <th style={s.th}>Status</th>
-                  <th style={s.th}>Published</th>
-                  <th style={{ ...s.th, textAlign: "right" as const }}>Strings</th>
-                </tr>
-              </thead>
-              <tbody>
-                {packages.map((pkg) => (
-                  <tr key={pkg.id} style={s.tr}>
-                    <td style={s.td}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <span style={s.codeBadge}>{pkg.language_code}</span>
-                        <span style={{ color: "#4a5568" }}>{languages.find((l) => l.code === pkg.language_code)?.name ?? pkg.language_code}</span>
-                      </div>
-                    </td>
-                    <td style={s.td}><span style={{ fontWeight: 600, color: "#1A2B4A" }}>v{pkg.version}</span></td>
-                    <td style={s.td}><span style={statusBadgeStyle(pkg.status === "archived" ? "missing" : "published")}>{pkg.status}</span></td>
-                    <td style={{ ...s.td, color: "#718096", fontSize: 12 }}>
-                      {pkg.published_at ? new Date(pkg.published_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—"}
-                    </td>
-                    <td style={{ ...s.td, textAlign: "right" as const, fontWeight: 600, color: "#1A2B4A" }}>{pkg.string_count}</td>
+          <>
+            <div style={s.tableWrap}>
+              <table style={s.table}>
+                <thead>
+                  <tr style={s.thead}>
+                    <th style={s.th}>Language</th>
+                    <th style={s.th}>Version</th>
+                    <th style={s.th}>Status</th>
+                    <th style={s.th}>Published</th>
+                    {/* TODO: PUBLISHED BY column needs published_by field on LanguagePackage model + list endpoint */}
+                    <th style={s.th}>Published By</th>
+                    <th style={{ ...s.th, textAlign: "right" as const }}>Strings</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {pagedPackages.map((pkg) => (
+                    <tr key={pkg.id} style={s.tr}>
+                      <td style={s.td}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <span style={s.codeBadge}>{pkg.language_code}</span>
+                          <span style={{ color: "#4a5568" }}>{languages.find((l) => l.code === pkg.language_code)?.name ?? pkg.language_code}</span>
+                        </div>
+                      </td>
+                      <td style={s.td}><span style={{ fontWeight: 600, color: "#1A2B4A" }}>v{pkg.version}</span></td>
+                      <td style={s.td}><span style={statusBadgeStyle(pkg.status === "archived" ? "missing" : "published")}>{pkg.status}</span></td>
+                      <td style={{ ...s.td, color: "#718096", fontSize: 12 }}>
+                        {pkg.published_at ? new Date(pkg.published_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—"}
+                      </td>
+                      <td style={{ ...s.td, color: "#718096", fontSize: 12 }}>{pkg.published_by ?? "—"}</td>
+                      <td style={{ ...s.td, textAlign: "right" as const, fontWeight: 600, color: "#1A2B4A" }}>{pkg.string_count}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {totalPublishHistoryPages > 1 && (
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8, padding: "12px 16px", borderTop: "1px solid #f0f4f8" }}>
+                <button
+                  onClick={() => setPublishHistoryPage((p) => Math.max(1, p - 1))}
+                  disabled={publishHistoryPage === 1}
+                  style={{ height: 32, borderRadius: 6, border: "1px solid #e2e8f0", padding: "0 12px", fontSize: 13, cursor: publishHistoryPage === 1 ? "default" : "pointer", opacity: publishHistoryPage === 1 ? 0.5 : 1, background: "#fff" }}
+                >
+                  Previous
+                </button>
+                <span style={{ fontSize: 13, color: "#4a5568" }}>Page {publishHistoryPage} of {totalPublishHistoryPages}</span>
+                <button
+                  onClick={() => setPublishHistoryPage((p) => Math.min(totalPublishHistoryPages, p + 1))}
+                  disabled={publishHistoryPage === totalPublishHistoryPages}
+                  style={{ height: 32, borderRadius: 6, border: "1px solid #e2e8f0", padding: "0 12px", fontSize: 13, cursor: publishHistoryPage === totalPublishHistoryPages ? "default" : "pointer", opacity: publishHistoryPage === totalPublishHistoryPages ? 0.5 : 1, background: "#fff" }}
+                >
+                  Next
+                </button>
+              </div>
+            )}
+          </>
         )}
       </div>
 
@@ -2173,10 +2223,22 @@ function LanguagesTab() {
                 </table>
               </div>
             )}
-            {auditData && auditData.total > auditPage * 20 && (
-              <div style={{ padding: "12px 24px" }}>
-                <button style={{ ...sL.actionBtn, background: "#EBF5FB", color: BLUE, border: `1px solid #bee3f8` }} onClick={() => setAuditPage((p) => p + 1)}>
-                  Load more
+            {auditData && Math.ceil(auditData.total / AUDIT_PAGE_SIZE) > 1 && (
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8, padding: "12px 16px", borderTop: "1px solid #f0f4f8" }}>
+                <button
+                  onClick={() => setAuditTrailPage((p) => Math.max(1, p - 1))}
+                  disabled={auditTrailPage === 1}
+                  style={{ height: 32, borderRadius: 6, border: "1px solid #e2e8f0", padding: "0 12px", fontSize: 13, cursor: auditTrailPage === 1 ? "default" : "pointer", opacity: auditTrailPage === 1 ? 0.5 : 1, background: "#fff" }}
+                >
+                  Previous
+                </button>
+                <span style={{ fontSize: 13, color: "#4a5568" }}>Page {auditTrailPage} of {Math.ceil(auditData.total / AUDIT_PAGE_SIZE)}</span>
+                <button
+                  onClick={() => setAuditTrailPage((p) => Math.min(Math.ceil(auditData.total / AUDIT_PAGE_SIZE), p + 1))}
+                  disabled={auditTrailPage === Math.ceil(auditData.total / AUDIT_PAGE_SIZE)}
+                  style={{ height: 32, borderRadius: 6, border: "1px solid #e2e8f0", padding: "0 12px", fontSize: 13, cursor: auditTrailPage === Math.ceil(auditData.total / AUDIT_PAGE_SIZE) ? "default" : "pointer", opacity: auditTrailPage === Math.ceil(auditData.total / AUDIT_PAGE_SIZE) ? 0.5 : 1, background: "#fff" }}
+                >
+                  Next
                 </button>
               </div>
             )}

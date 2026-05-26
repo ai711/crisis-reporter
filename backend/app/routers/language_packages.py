@@ -126,6 +126,8 @@ class LanguagePackageListOut(BaseModel):
     published_at: Optional[datetime]
     created_at: datetime
     string_count: int
+    # TODO: add published_by once the column exists on LanguagePackage model
+    published_by: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -570,6 +572,15 @@ async def publish_language_package(
         )
     )
     next_version = f"1.{(count_result.scalar() or 0)}"
+
+    # TODO: string_count needs a migration to add it as a column on LanguagePackage.
+    # When the column exists, store len(approved) here so archived rows show the
+    # correct snapshot count rather than the current live count.
+    # strings_being_published = len(approved)
+
+    # TODO: published_by needs a migration to add it as a column on LanguagePackage.
+    # When the column exists, store current_user.email (or .full_name) here so the
+    # dashboard Publish History table can show who published each package.
 
     pkg = LanguagePackage(
         language_code=language_code,
