@@ -11,6 +11,7 @@ import {
   type NativeSyntheticEvent,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 import {
   Map as MLMap,
   Camera,
@@ -66,6 +67,7 @@ const normaliseDamageLevel = (raw: any): DamageLevel => {
 
 export default function MapScreen() {
   const insets = useSafeAreaInsets();
+  const navigation = useNavigation<any>();
   const [reports, setReports] = useState<ReportPin[]>([]);
   const [loading, setLoading] = useState(true);
   const [isOnline, setIsOnline] = useState(true);
@@ -202,13 +204,13 @@ export default function MapScreen() {
     return (
       <View style={styles.offlineRoot}>
         {/* Header */}
-        <View style={[styles.header, { paddingTop: insets.top + 14 }]}>
+        <View style={[styles.header, { paddingTop: insets.top, height: 56 + insets.top }]}>
           <Text style={styles.headerTitle}>Crisis Reporter</Text>
         </View>
 
         {/* Offline banner — full-width strip below header */}
         <View style={styles.offlineBanner}>
-          <MaterialIcons name="cloud-off" size={scale(16)} color="#FFDEB8" />
+          <MaterialIcons name="cloud-off" size={scale(16)} color="#FFFFFF" />
           <Text style={styles.offlineBannerText}>Working Offline</Text>
         </View>
 
@@ -278,6 +280,30 @@ export default function MapScreen() {
             </Animated.View>
           </View>
         </View>
+
+        {/* Bottom navigation — Map tab is active */}
+        <View style={[styles.bottomNav, { paddingBottom: insets.bottom }]}>
+          <TouchableOpacity
+            style={styles.navItem}
+            onPress={() => navigation.navigate('Home')}
+          >
+            <Text style={styles.navIconInactive}>🏠</Text>
+            <Text style={styles.navLabelInactive}>HOME</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.navItem}>
+            <View style={styles.activeNavPill}>
+              <Text style={styles.navIconActive}>🗺</Text>
+              <Text style={styles.navLabelActive}>MAP</Text>
+            </View>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.navItem}
+            onPress={() => navigation.navigate('MyReports')}
+          >
+            <Text style={styles.navIconInactive}>📋</Text>
+            <Text style={styles.navLabelInactive}>REPORTS</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   }
@@ -328,7 +354,7 @@ export default function MapScreen() {
       )}
 
       {/* Floating header with glassmorphism — sits above map */}
-      <View style={[styles.header, styles.headerAbsolute, { paddingTop: insets.top + 14 }]}>
+      <View style={[styles.header, styles.headerAbsolute, { paddingTop: insets.top, height: 56 + insets.top }]}>
         <Text style={styles.headerTitle}>Crisis Reporter</Text>
       </View>
 
@@ -398,6 +424,30 @@ export default function MapScreen() {
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
+
+      {/* Bottom navigation — Map tab is active */}
+      <View style={[styles.bottomNav, styles.bottomNavAbsolute, { paddingBottom: insets.bottom }]}>
+        <TouchableOpacity
+          style={styles.navItem}
+          onPress={() => navigation.navigate('Home')}
+        >
+          <Text style={styles.navIconInactive}>🏠</Text>
+          <Text style={styles.navLabelInactive}>HOME</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.navItem}>
+          <View style={styles.activeNavPill}>
+            <Text style={styles.navIconActive}>🗺</Text>
+            <Text style={styles.navLabelActive}>MAP</Text>
+          </View>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.navItem}
+          onPress={() => navigation.navigate('MyReports')}
+        >
+          <Text style={styles.navIconInactive}>📋</Text>
+          <Text style={styles.navLabelInactive}>REPORTS</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
@@ -418,8 +468,8 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: scale(17),
-    fontWeight: '700',
-    color: '#0468B1',
+    fontWeight: '600',
+    color: '#1B1C1C',
     textAlign: 'center',
   },
 
@@ -433,11 +483,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     height: 40,
-    backgroundColor: '#8C5B00',
+    backgroundColor: '#F5A623',
     gap: 8,
   },
   offlineBannerText: {
-    color: '#FFDEB8',
+    color: '#FFFFFF',
     fontSize: scale(13),
     fontWeight: '700',
     letterSpacing: 0.5,
@@ -543,7 +593,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: 'rgba(30,30,30,0.82)',
+    backgroundColor: 'rgba(27,28,28,0.85)',
     borderRadius: 20,
     paddingVertical: 8,
     paddingHorizontal: 16,
@@ -607,7 +657,7 @@ const styles = StyleSheet.create({
   },
   popupReportsText: {
     fontSize: scale(11),
-    color: '#6B7280',
+    color: '#717782',
   },
   popupCoords: {
     fontSize: scale(11),
@@ -619,5 +669,62 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#0468B1',
     marginTop: 4,
+  },
+
+  // ── Bottom navigation ────────────────────────────────────────────────────
+  bottomNav: {
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    paddingTop: 12,
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 24,
+    elevation: 8,
+  },
+  bottomNavAbsolute: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    zIndex: 20,
+  },
+  navItem: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 64,
+    minHeight: 44,
+  },
+  activeNavPill: {
+    backgroundColor: 'rgba(4,104,177,0.1)',
+    borderRadius: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 6,
+    alignItems: 'center',
+    gap: 2,
+  },
+  navIconActive: {
+    fontSize: scale(24),
+    color: '#0468B1',
+  },
+  navLabelActive: {
+    fontSize: scale(10),
+    fontWeight: '600',
+    color: '#0468B1',
+    letterSpacing: 1.2,
+  },
+  navIconInactive: {
+    fontSize: scale(24),
+    color: '#717782',
+  },
+  navLabelInactive: {
+    fontSize: scale(10),
+    fontWeight: '500',
+    color: '#717782',
+    letterSpacing: 1.2,
+    marginTop: 2,
   },
 });

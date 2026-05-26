@@ -381,7 +381,7 @@ export default function ReporterProfileScreen() {
         {/* Success banner */}
         {saveSuccess && (
           <View style={styles.successBanner}>
-            <MaterialIcons name="check-circle" size={scale(16)} color="#2E7D32" />
+            <MaterialIcons name="check-circle" size={scale(16)} color="#38A169" />
             <Text style={styles.successBannerText}>Profile saved</Text>
           </View>
         )}
@@ -433,11 +433,11 @@ const styles = StyleSheet.create({
   // Photo section
   photoSection: { alignItems: "center", marginTop: 24 },
   avatarWrapper: { position: "relative" },
-  avatar: { width: 96, height: 96, borderRadius: 48 },
+  avatar: { width: scale(96), height: scale(96), borderRadius: scale(48) },
   avatarEmpty: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
+    width: scale(96),
+    height: scale(96),
+    borderRadius: scale(48),
     backgroundColor: "#E4E2E1",
     justifyContent: "center",
     alignItems: "center",
@@ -446,9 +446,9 @@ const styles = StyleSheet.create({
     position: "absolute",
     bottom: 0,
     right: 0,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: scale(32),
+    height: scale(32),
+    borderRadius: scale(16),
     backgroundColor: "#0468B1",
     justifyContent: "center",
     alignItems: "center",
@@ -501,7 +501,7 @@ const styles = StyleSheet.create({
 
   // Info notice
   infoNotice: {
-    backgroundColor: "rgba(210,228,255,0.4)",
+    backgroundColor: "rgba(4,104,177,0.06)",
     borderRadius: 12,
     padding: 14,
     marginHorizontal: screenWidth * 0.05,
@@ -510,7 +510,7 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
     gap: 10,
   },
-  infoNoticeText: { fontSize: scale(13), color: "#00497F", flex: 1 },
+  infoNoticeText: { fontSize: scale(13), color: "#0468B1", flex: 1 },
 
   // Form card
   formCard: {
@@ -561,17 +561,17 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    backgroundColor: "#E8F5E9",
+    backgroundColor: "rgba(56,161,105,0.1)",
     borderRadius: 8,
     paddingHorizontal: 16,
     paddingVertical: 10,
     marginHorizontal: screenWidth * 0.05,
     marginTop: 12,
     borderLeftWidth: 3,
-    borderLeftColor: "#4CAF50",
+    borderLeftColor: "#38A169",
   },
   successBannerText: {
-    color: "#2E7D32",
+    color: "#38A169",
     fontSize: scale(14),
     fontWeight: "600",
   },

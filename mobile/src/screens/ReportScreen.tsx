@@ -613,7 +613,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
       }
 
       if (finalStatus !== "granted") {
-        console.log("Notification permission denied — report will sync on next app open");
+        console.warn("Notification permission denied — report will sync on next app open");
         return;
       }
 
@@ -641,7 +641,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
       }
     } catch (err) {
       // Non-blocking — push token failure never prevents report submission
-      console.log("Push token registration failed:", err);
+      console.warn("Push token registration failed:", err);
     }
   };
 
@@ -3606,9 +3606,9 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     zIndex: 10,
     borderWidth: 1,
-    borderColor: '#63B3ED',
+    borderColor: '#0468B1',
   },
-  microsoftNoteText: { color: '#2B6CB0', fontSize: scale(11) },
+  microsoftNoteText: { color: '#0468B1', fontSize: scale(11) },
 
   // GPS FAB
   mapRecentreBtn: {
@@ -3721,13 +3721,13 @@ const styles = StyleSheet.create({
     fontSize: scale(14),
     fontWeight: '700',
     color: '#FFFFFF',
-    lineHeight: 20,
+    lineHeight: scale(20),
     marginBottom: 2,
   },
   offlineBannerSecondary: {
     fontSize: scale(12),
     color: 'rgba(255,255,255,0.9)',
-    lineHeight: 17,
+    lineHeight: scale(17),
   },
   gpsIndicator: {
     flexDirection: 'row',
@@ -4048,7 +4048,7 @@ const styles = StyleSheet.create({
   },
   offlineSyncCard: {
     width: '100%',
-    backgroundColor: '#FFF9F0',
+    backgroundColor: 'rgba(245,166,35,0.08)',
     borderRadius: 16,
     padding: 20,
     paddingLeft: 26,
@@ -4265,66 +4265,45 @@ const styles = StyleSheet.create({
   // Legacy — kept to prevent TypeScript errors from any remaining references
   stepTitle: { fontSize: scale(17), fontWeight: '600', color: '#1B1C1C' },
   questionProgress: { fontSize: scale(13), fontWeight: '600', color: '#0468B1', textAlign: 'center' },
-  photoGrid: { flexDirection: 'row', gap: 10, flexWrap: 'wrap' },
-  thumbImage: { width: '100%', height: '100%' },
   removePhotoBtn: { position: 'absolute', top: 4, right: 4, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 12, width: 24, height: 24, alignItems: 'center', justifyContent: 'center' },
-  removePhotoBtnText: { color: '#fff', fontSize: 12 },
+  removePhotoBtnText: { color: '#fff', fontSize: scale(12) },
   photoButtons: { flexDirection: 'row', gap: 12 },
   photoOptionBtn: { flex: 1, backgroundColor: '#fff', borderRadius: 10, borderWidth: 1.5, borderColor: '#0468B1', padding: 16, alignItems: 'center', gap: 8 },
-  photoOptionIcon: { fontSize: 28 },
-  photoOptionText: { fontSize: 13, color: '#0468B1', fontWeight: '500' },
+  photoOptionIcon: { fontSize: scale(28) },
+  photoOptionText: { fontSize: scale(13), color: '#0468B1', fontWeight: '500' },
   photoSlotsRow: { flexDirection: 'row', justifyContent: 'space-between', marginHorizontal: 24, marginTop: 16, gap: 12 },
   photoSlot: { flex: 1, aspectRatio: 1, borderRadius: 12, overflow: 'hidden' },
-  photoSlotEmpty: { borderWidth: 2, borderColor: '#D0D0D0', borderStyle: 'dashed', backgroundColor: '#FAFAFA', justifyContent: 'center', alignItems: 'center' },
+  photoSlotEmpty: { borderWidth: 2, borderColor: '#D0D0D0', borderStyle: 'dashed', backgroundColor: '#F6F3F2', justifyContent: 'center', alignItems: 'center' },
   photoSlotFilled: { borderWidth: 0 },
   photoSlotInner: { justifyContent: 'center', alignItems: 'center', flex: 1 },
-  photoSlotPlus: { fontSize: 28, color: '#BBBBBB', lineHeight: 32 },
+  photoSlotPlus: { fontSize: scale(28), color: '#BBBBBB', lineHeight: scale(32) },
   photoThumb: { width: '100%', height: '100%', borderRadius: 12 },
-  maxPhotosNote: { textAlign: 'center', fontSize: 13, color: '#888888', marginTop: 12, marginHorizontal: 24 },
+  maxPhotosNote: { textAlign: 'center', fontSize: scale(13), color: '#9CA3AF', marginTop: 12, marginHorizontal: 24 },
   photoButtonsRow: { marginTop: 12, marginHorizontal: 24, gap: 10 },
-  guidelinesContainer: { marginTop: 20, marginHorizontal: 24, padding: 16, backgroundColor: '#F8F9FA', borderRadius: 12 },
-  guidelinesTitle: { fontSize: 13, fontWeight: '600', color: '#555555', marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 },
+  guidelinesTitle: { fontSize: scale(13), fontWeight: '600', color: '#414751', marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 },
   guidelineRow: { flexDirection: 'row', marginBottom: 8, alignItems: 'flex-start' },
-  guidelineBullet: { fontSize: 14, color: '#0468B1', marginRight: 8, lineHeight: 20 },
-  guidelineText: { flex: 1, fontSize: 13, color: '#555555', lineHeight: 20 },
-  radioRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 4, minHeight: 44 },
-  radioCircle: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: '#CCCCCC', marginRight: 12, justifyContent: 'center', alignItems: 'center' },
+  guidelineBullet: { fontSize: scale(14), color: '#0468B1', marginRight: 8, lineHeight: scale(20) },
+  guidelineText: { flex: 1, fontSize: scale(13), color: '#414751', lineHeight: scale(20) },
+  radioCircle: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: '#C1C7D2', marginRight: 12, justifyContent: 'center', alignItems: 'center' },
   radioCircleSelected: { borderColor: '#0468B1', backgroundColor: '#0468B1' },
   radioDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#FFFFFF' },
-  radioLabel: { flex: 1, fontSize: 15, color: '#333333', lineHeight: 21 },
+  radioLabel: { flex: 1, fontSize: scale(15), color: '#1B1C1C', lineHeight: scale(21) },
   radioLabelSelected: { color: '#0468B1', fontWeight: '500' },
-  checkRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
-  checkbox: { width: 22, height: 22, borderWidth: 2, borderColor: '#ccc', borderRadius: 4, alignItems: 'center', justifyContent: 'center' },
+  checkbox: { width: 22, height: 22, borderWidth: 2, borderColor: '#C1C7D2', borderRadius: 4, alignItems: 'center', justifyContent: 'center' },
   checkboxSelected: { borderColor: '#0468B1', backgroundColor: '#0468B1' },
-  checkmark: { color: '#fff', fontSize: 13, fontWeight: '700' },
-  checkRowText: { flex: 1, fontSize: 15, color: '#1B1C1C' },
-  optionBtn: { flexDirection: 'row', alignItems: 'center', gap: 16, padding: 16, borderRadius: 10, borderWidth: 1.5, borderColor: '#e0e0e0', backgroundColor: '#fff' },
+  checkmark: { color: '#fff', fontSize: scale(13), fontWeight: '700' },
+  checkRowText: { flex: 1, fontSize: scale(15), color: '#1B1C1C' },
   optionBtnSelected: { borderColor: '#0468B1', backgroundColor: '#E8F4FD' },
-  optionText: { fontSize: 16, fontWeight: '600', color: '#1B1C1C' },
-  typeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  typeBtn: { width: '47%', padding: 12, borderRadius: 8, borderWidth: 1.5, borderColor: '#e0e0e0', backgroundColor: '#fff', alignItems: 'center' },
+  optionText: { fontSize: scale(16), fontWeight: '600', color: '#1B1C1C' },
+  typeBtn: { width: '47%', padding: 12, borderRadius: 8, borderWidth: 1.5, borderColor: '#E4E2E1', backgroundColor: '#fff', alignItems: 'center' },
   typeBtnSelected: { borderColor: '#0468B1', backgroundColor: '#E8F4FD' },
-  typeBtnText: { fontSize: 13, fontWeight: '500', color: '#1B1C1C' },
+  typeBtnText: { fontSize: scale(13), fontWeight: '500', color: '#1B1C1C' },
   typeBtnTextSelected: { color: '#0468B1' },
-  textarea: { backgroundColor: '#fff', borderRadius: 8, borderWidth: 1, borderColor: '#e0e0e0', padding: 12, fontSize: 15, minHeight: 100, textAlignVertical: 'top' },
-  addPhotoBtn: { width: 100, height: 100, borderRadius: 8, borderWidth: 2, borderColor: '#ccc', borderStyle: 'dashed', backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', gap: 4 },
-  addPhotoIcon: { fontSize: 32 },
-  addPhotoText: { fontSize: 11, color: '#666' },
-  fieldLabel: { fontSize: 14, fontWeight: '500', color: '#666' },
-  confirmCheckCircle: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#22c55e', alignItems: 'center', justifyContent: 'center' },
-  confirmCheckIcon: { fontSize: 44, color: '#fff', lineHeight: 52 },
-  confirmRefBadge: { backgroundColor: '#f4f6f9', borderRadius: 20, paddingHorizontal: 20, paddingVertical: 8 },
-  confirmRefText: { fontSize: 14, color: '#666', letterSpacing: 0.5 },
-  goHomeText: { fontSize: 15, color: '#666', textDecorationLine: 'underline' },
-  confirmIconCircle: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#E8F5E9', justifyContent: 'center', alignItems: 'center', marginBottom: 24 },
-  confirmIconCircleQueue: { backgroundColor: '#FFF3E0' },
-  confirmIcon: { fontSize: 36 },
-  confirmScreenTitle: { fontSize: 24, fontWeight: 'bold', color: '#333333', textAlign: 'center', marginBottom: 12 },
-  confirmMessage: { fontSize: 15, color: '#555555', textAlign: 'center', lineHeight: 22, marginBottom: 24 },
-  queueSummaryCard: { width: '100%', backgroundColor: '#F8F9FA', borderRadius: 12, padding: 16, marginBottom: 24, borderWidth: 1, borderColor: '#EEEEEE' },
-  queueSummaryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: '#EEEEEE' },
-  queueSummaryLabel: { fontSize: 13, color: '#888888', flex: 1 },
-  queueSummaryValue: { fontSize: 14, color: '#333333', flex: 2, textAlign: 'right' },
-  reviewSection: { backgroundColor: '#F8F9FA', borderRadius: 12, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: '#EEEEEE' },
-  reviewTitle: { fontSize: 20, fontWeight: 'bold', color: '#333333', marginBottom: 20 },
+  textarea: { backgroundColor: '#fff', borderRadius: 8, borderWidth: 1, borderColor: '#E4E2E1', padding: 12, fontSize: scale(15), minHeight: 100, textAlignVertical: 'top' },
+  addPhotoBtn: { width: 100, height: 100, borderRadius: 8, borderWidth: 2, borderColor: '#C1C7D2', borderStyle: 'dashed', backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', gap: 4 },
+  addPhotoIcon: { fontSize: scale(32) },
+  addPhotoText: { fontSize: scale(11), color: '#717782' },
+  fieldLabel: { fontSize: scale(14), fontWeight: '500', color: '#717782' },
+  queueSummaryLabel: { fontSize: scale(13), color: '#9CA3AF', flex: 1 },
+  queueSummaryValue: { fontSize: scale(14), color: '#1B1C1C', flex: 2, textAlign: 'right' },
 });

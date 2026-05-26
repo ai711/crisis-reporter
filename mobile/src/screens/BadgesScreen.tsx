@@ -1,11 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, Dimensions,
 } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const { width: screenWidth } = Dimensions.get('window');
+const scale = (size: number) => Math.round((screenWidth / 375) * size);
 
 type Badge = {
   id: string;
@@ -76,7 +80,7 @@ export default function BadgesScreen() {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Text style={styles.backText}>← Back</Text>
+          <MaterialIcons name="arrow-back" size={scale(24)} color="#0468B1" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Badges</Text>
         <View style={styles.backBtn} />
@@ -118,38 +122,41 @@ export default function BadgesScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FFFFFF' },
+  container: { flex: 1, backgroundColor: '#F6F3F2' },
   header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 14,
-    borderBottomWidth: 1, borderBottomColor: '#E0E0E0',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    height: 56,
   },
-  backBtn: { width: 60 },
-  backText: { color: '#0468B1', fontSize: 15 },
-  headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#333333' },
+  backBtn: { minWidth: 44, minHeight: 44, justifyContent: 'center' },
+  headerTitle: { fontSize: scale(17), fontWeight: '600', color: '#1B1C1C' },
   gateContainer: {
     flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32,
   },
-  gateIcon: { fontSize: 48, marginBottom: 16 },
-  gateTitle: { fontSize: 18, fontWeight: 'bold', color: '#333333', textAlign: 'center', marginBottom: 8 },
-  gateBody: { fontSize: 14, color: '#666666', textAlign: 'center', lineHeight: 20, marginBottom: 24 },
+  gateIcon: { fontSize: scale(48), marginBottom: 16 },
+  gateTitle: { fontSize: scale(18), fontWeight: '600', color: '#1B1C1C', textAlign: 'center', marginBottom: 8 },
+  gateBody: { fontSize: scale(14), color: '#717782', textAlign: 'center', lineHeight: scale(20), marginBottom: 24 },
   gateBtn: {
     backgroundColor: '#0468B1', borderRadius: 28, height: 52,
     paddingHorizontal: 32, justifyContent: 'center', alignItems: 'center',
   },
-  gateBtnText: { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },
+  gateBtnText: { color: '#FFFFFF', fontSize: scale(16), fontWeight: '600' },
   scrollContent: { padding: 24 },
   badgeCard: {
     flexDirection: 'row', padding: 16, borderRadius: 12,
-    backgroundColor: '#F0F7FF', marginBottom: 16,
+    backgroundColor: 'rgba(4,104,177,0.06)', marginBottom: 16,
     borderWidth: 1, borderColor: '#0468B1',
   },
-  badgeCardLocked: { backgroundColor: '#F5F5F5', borderColor: '#E0E0E0' },
-  badgeIcon: { fontSize: 36, marginRight: 16 },
+  badgeCardLocked: { backgroundColor: '#F0EDED', borderColor: '#E4E2E1' },
+  badgeIcon: { fontSize: scale(36), marginRight: 16 },
   badgeInfo: { flex: 1 },
-  badgeName: { fontSize: 16, fontWeight: 'bold', color: '#0468B1', marginBottom: 4 },
-  badgeNameLocked: { color: '#999999' },
-  badgeDesc: { fontSize: 13, color: '#666666', lineHeight: 18, marginBottom: 6 },
-  badgeEarned: { fontSize: 13, color: '#4CAF50', fontWeight: '600' },
-  badgeLocked: { fontSize: 13, color: '#999999' },
+  badgeName: { fontSize: scale(16), fontWeight: 'bold', color: '#0468B1', marginBottom: 4 },
+  badgeNameLocked: { color: '#9CA3AF' },
+  badgeDesc: { fontSize: scale(13), color: '#717782', lineHeight: 18, marginBottom: 6 },
+  badgeEarned: { fontSize: scale(13), color: '#38A169', fontWeight: '600' },
+  badgeLocked: { fontSize: scale(13), color: '#9CA3AF' },
 });

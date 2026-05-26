@@ -288,6 +288,30 @@ export default function MyReportsScreen() {
             <Animated.View key={i} style={[styles.skeletonCard, { opacity: skeletonOpacity }]} />
           ))}
         </ScrollView>
+
+        {/* Bottom navigation — Reports tab is active */}
+        <View style={[styles.bottomNav, { paddingBottom: insets.bottom }]}>
+          <TouchableOpacity
+            style={styles.navItem}
+            onPress={() => navigation.navigate('Home')}
+          >
+            <Text style={styles.navIconInactive}>🏠</Text>
+            <Text style={styles.navLabelInactive}>HOME</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.navItem}
+            onPress={() => navigation.navigate('Map')}
+          >
+            <Text style={styles.navIconInactive}>🗺</Text>
+            <Text style={styles.navLabelInactive}>MAP</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.navItem}>
+            <View style={styles.activeNavPill}>
+              <Text style={styles.navIconActive}>📋</Text>
+              <Text style={styles.navLabelActive}>REPORTS</Text>
+            </View>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   }
@@ -502,8 +526,32 @@ export default function MyReportsScreen() {
           </View>
         )}
 
-        <View style={{ height: insets.bottom + 24 }} />
+        <View style={{ height: 60 + insets.bottom + 24 }} />
       </ScrollView>
+
+      {/* Bottom navigation — Reports tab is active */}
+      <View style={[styles.bottomNav, { paddingBottom: insets.bottom }]}>
+        <TouchableOpacity
+          style={styles.navItem}
+          onPress={() => navigation.navigate('Home')}
+        >
+          <Text style={styles.navIconInactive}>🏠</Text>
+          <Text style={styles.navLabelInactive}>HOME</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.navItem}
+          onPress={() => navigation.navigate('Map')}
+        >
+          <Text style={styles.navIconInactive}>🗺</Text>
+          <Text style={styles.navLabelInactive}>MAP</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.navItem}>
+          <View style={styles.activeNavPill}>
+            <Text style={styles.navIconActive}>📋</Text>
+            <Text style={styles.navLabelActive}>REPORTS</Text>
+          </View>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
@@ -777,7 +825,7 @@ const styles = StyleSheet.create({
 
   // ── Error ────────────────────────────────────────────────────────────────────
   errorBox: {
-    backgroundColor: '#FFF3F3',
+    backgroundColor: 'rgba(229,62,62,0.08)',
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
@@ -803,5 +851,55 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: scale(13),
     fontWeight: '600',
+  },
+
+  // ── Bottom navigation ────────────────────────────────────────────────────
+  bottomNav: {
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    paddingTop: 12,
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 24,
+    elevation: 8,
+  },
+  navItem: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 64,
+    minHeight: 44,
+  },
+  activeNavPill: {
+    backgroundColor: 'rgba(4,104,177,0.1)',
+    borderRadius: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 6,
+    alignItems: 'center',
+    gap: 2,
+  },
+  navIconActive: {
+    fontSize: scale(24),
+    color: '#0468B1',
+  },
+  navLabelActive: {
+    fontSize: scale(10),
+    fontWeight: '600',
+    color: '#0468B1',
+    letterSpacing: 1.2,
+  },
+  navIconInactive: {
+    fontSize: scale(24),
+    color: '#717782',
+  },
+  navLabelInactive: {
+    fontSize: scale(10),
+    fontWeight: '500',
+    color: '#717782',
+    letterSpacing: 1.2,
+    marginTop: 2,
   },
 });

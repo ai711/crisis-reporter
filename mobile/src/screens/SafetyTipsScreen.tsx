@@ -629,13 +629,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 14,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E4E2E1',
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    height: 56,
   },
-  headerBack: { width: 40 },
-  headerSpacer: { width: 40 },
-  headerTitle: { fontSize: scale(17), fontWeight: '700', color: '#1B1C1C' },
+  headerBack: { width: 44, minWidth: 44, minHeight: 44 },
+  headerSpacer: { width: 44 },
+  headerTitle: { fontSize: scale(17), fontWeight: '600', color: '#1B1C1C' },
 
   // ── Overview intro ───────────────────────────────────────────────────────────
   overviewIntro: {
@@ -688,7 +687,7 @@ const styles = StyleSheet.create({
 
   // ── Badge teaser ─────────────────────────────────────────────────────────────
   badgeTeaser: {
-    backgroundColor: 'rgba(210,228,255,0.3)',
+    backgroundColor: 'rgba(4,104,177,0.06)',
     borderRadius: 16,
     padding: 16,
     marginHorizontal: screenWidth * 0.05,
@@ -697,7 +696,7 @@ const styles = StyleSheet.create({
   },
   badgeTeaserText: {
     fontSize: scale(13),
-    color: '#00497F',
+    color: '#0468B1',
     textAlign: 'center',
     marginTop: 8,
   },

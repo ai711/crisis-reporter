@@ -427,7 +427,7 @@ const styles = StyleSheet.create({
   // ── Root ─────────────────────────────────────────────────────────────────────
   container: {
     flex: 1,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#F6F3F2",
   },
 
   // ── Header ───────────────────────────────────────────────────────────────────
@@ -448,30 +448,30 @@ const styles = StyleSheet.create({
   },
   menuIcon: {
     fontSize: scale(22),
-    color: "#49454F",
+    color: "#1B1C1C",
   },
   settingsIcon: {
     fontSize: scale(22),
-    color: "#49454F",
+    color: "#1B1C1C",
   },
   appName: {
     flex: 1,
-    fontSize: scale(18),
-    fontWeight: "700",
-    color: "#0468B1",
+    fontSize: scale(17),
+    fontWeight: "600",
+    color: "#1B1C1C",
     textAlign: "center",
   },
 
   // ── Active crisis banner ──────────────────────────────────────────────────────
   crisisBanner: {
-    backgroundColor: "#FFF3E0",
+    backgroundColor: "rgba(245,166,35,0.12)",
     paddingHorizontal: screenWidth * 0.06,
     paddingVertical: 10,
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#FFB74D",
+    borderBottomColor: "rgba(245,166,35,0.3)",
   },
   crisisBannerEmoji: {
     fontSize: scale(14),
@@ -479,7 +479,7 @@ const styles = StyleSheet.create({
   crisisBannerText: {
     flex: 1,
     fontSize: scale(13),
-    color: "#E65100",
+    color: "#92400E",
     fontWeight: "500",
     lineHeight: scale(13) * 1.5,
   },
@@ -518,7 +518,7 @@ const styles = StyleSheet.create({
 
   // ── Welcome card (existing functional) ───────────────────────────────────────
   welcomeCard: {
-    backgroundColor: "#E8F4FD",
+    backgroundColor: "rgba(4,104,177,0.06)",
     borderRadius: 16,
     padding: 16,
     marginTop: 20,
@@ -590,13 +590,13 @@ const styles = StyleSheet.create({
   },
   syncBannerIcon: {
     fontSize: scale(20),
-    color: "#291800",
+    color: "#1B1C1C",
   },
   syncBannerText: {
     flex: 1,
     fontSize: scale(13),
     fontWeight: "700",
-    color: "#291800",
+    color: "#1B1C1C",
     lineHeight: scale(13) * 1.5,
   },
 
@@ -652,6 +652,7 @@ const styles = StyleSheet.create({
   whatLink: {
     alignItems: "center",
     justifyContent: "center",
+    minWidth: 44,
     minHeight: 44,
     marginTop: 16,
   },
@@ -723,12 +724,12 @@ const styles = StyleSheet.create({
   },
   navIconInactive: {
     fontSize: scale(24),
-    color: "#6B7280",
+    color: "#717782",
   },
   navLabelInactive: {
     fontSize: scale(10),
     fontWeight: "500",
-    color: "#6B7280",
+    color: "#717782",
     letterSpacing: 1.2,
     marginTop: 2,
   },
@@ -796,6 +797,7 @@ const styles = StyleSheet.create({
   },
   popupBtnSkip: {
     height: 44,
+    minWidth: 44,
     justifyContent: "center",
     alignItems: "center",
   },

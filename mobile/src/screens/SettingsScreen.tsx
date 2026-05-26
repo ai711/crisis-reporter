@@ -168,11 +168,11 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
             </View>
             <View style={[
               styles.statusBadge,
-              { backgroundColor: isVerified ? "#d4edda" : "#E8F4FD" },
+              { backgroundColor: isVerified ? "rgba(56,161,105,0.12)" : "rgba(4,104,177,0.06)" },
             ]}>
               <Text style={[
                 styles.statusBadgeText,
-                { color: isVerified ? "#155724" : "#0468B1" },
+                { color: isVerified ? "#38A169" : "#0468B1" },
               ]}>
                 {isVerified ? "Verified" : "Anonymous"}
               </Text>
@@ -434,10 +434,10 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 16,
     borderWidth: 1.5,
-    borderColor: "#d32f2f",
+    borderColor: "#E53E3E",
     alignItems: "center",
   },
-  logoutBtnText: { color: "#d32f2f", fontSize: scale(15), fontWeight: "600" },
+  logoutBtnText: { color: "#E53E3E", fontSize: scale(15), fontWeight: "600" },
 
   // Pickers (country + language)
   pickerOverlay: {
@@ -461,7 +461,7 @@ const styles = StyleSheet.create({
   },
   pickerTitle: { fontSize: scale(18), fontWeight: "bold", color: "#1B1C1C" },
   pickerCloseBtn: { minWidth: 44, minHeight: 44, justifyContent: "center", alignItems: "center" },
-  pickerClose: { fontSize: 18, color: "#717782" },
+  pickerClose: { fontSize: scale(18), color: "#717782" },
   pickerSearch: {
     borderWidth: 1,
     borderColor: "#E4E2E1",
