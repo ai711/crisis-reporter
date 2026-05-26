@@ -192,6 +192,29 @@ async def get_active_package(
     )
 
 
+@router.get("/version")
+async def get_package_version(
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """
+    Return the version of the currently published question package.
+    Public endpoint — no authentication required.
+    Used by mobile apps to check whether a full package re-download is needed.
+    """
+    result = await db.execute(
+        select(QuestionPackage.version, QuestionPackage.published_at)
+        .where(QuestionPackage.status == "published")
+    )
+    row = result.one_or_none()
+    if row is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No published question package found",
+        )
+    published_at = row.published_at.isoformat() if row.published_at else None
+    return {"version": row.version, "published_at": published_at}
+
+
 @router.get("", response_model=list[PackageListItem])
 async def list_packages(
     db: AsyncSession = Depends(get_db),
@@ -511,70 +534,112 @@ async def publish_package(
 
 # ── Initial seed data ─────────────────────────────────────────────────────────
 
-# The 5 core UNDP questions for version 1.0.0
+# The 8 canonical UNDP RAPIDA questions for version 1.0.0
 _SEED_QUESTIONS: list[dict] = [
     {
-        "question_text": "What is the level of damage to the structure?",
+        "question_text": "How bad is the damage?",
         "question_type": "single_select",
         "order_index": 1,
         "is_mandatory": True,
         "options": [
-            {"option_text": "Minimal / No Damage", "option_value": "minimal", "order_index": 1},
-            {"option_text": "Partially Damaged",   "option_value": "partial", "order_index": 2},
-            {"option_text": "Completely Damaged",  "option_value": "complete","order_index": 3},
+            {"option_text": "Minimal / No damage — structurally sound and functional, showing only cosmetic or no visible damage", "option_value": "minimal",  "order_index": 1},
+            {"option_text": "Partially damaged — repairable, and remains usable with caution",                                    "option_value": "partial",  "order_index": 2},
+            {"option_text": "Completely damaged — structurally unsafe or destroyed",                                               "option_value": "complete", "order_index": 3},
         ],
     },
     {
-        "question_text": "What type of infrastructure is affected?",
+        "question_text": "What type of infrastructure is this?",
         "question_type": "multi_select",
         "order_index": 2,
         "is_mandatory": True,
         "options": [
-            {"option_text": "Residential",                          "option_value": "residential",    "order_index": 1},
-            {"option_text": "Commercial",                           "option_value": "commercial",     "order_index": 2},
-            {"option_text": "Educational",                          "option_value": "educational",    "order_index": 3},
-            {"option_text": "Healthcare",                           "option_value": "healthcare",     "order_index": 4},
-            {"option_text": "Government / Administrative",          "option_value": "government",     "order_index": 5},
-            {"option_text": "Infrastructure (roads, bridges, utilities)", "option_value": "infrastructure", "order_index": 6},
-            {"option_text": "Religious",                            "option_value": "religious",      "order_index": 7},
-            {"option_text": "Industrial",                           "option_value": "industrial",     "order_index": 8},
-            {"option_text": "Other",                                "option_value": "other",          "order_index": 9},
+            {"option_text": "Residential Infrastructure — houses and apartments",                                                                              "option_value": "residential",   "order_index": 1},
+            {"option_text": "Commercial Infrastructure — markets, malls, shops, hotels, banks, industries, etc.",                                              "option_value": "commercial",    "order_index": 2},
+            {"option_text": "Government Building — administrative buildings, courthouses, police stations, fire stations, etc.",                               "option_value": "government",    "order_index": 3},
+            {"option_text": "Utility Infrastructure — water pumps, power plants, waste treatment plants, etc.",                                                "option_value": "utility",       "order_index": 4},
+            {"option_text": "Transport and Communication Infrastructure — roads, cell towers, bridges, railway station, bus station, etc.",                    "option_value": "transport_comm","order_index": 5},
+            {"option_text": "Community Infrastructure — schools, hospitals, community halls, public toilets, etc.",                                            "option_value": "community",     "order_index": 6},
+            {"option_text": "Public Spaces / Recreation Infrastructure — stadiums, playgrounds, religious buildings, etc.",                                    "option_value": "public_spaces", "order_index": 7},
+            {"option_text": "Other — please specify",                                                                                                         "option_value": "other",         "order_index": 8},
         ],
     },
     {
-        "question_text": "What is the name or description of the affected infrastructure?",
+        "question_text": "Name or details of the infrastructure",
         "question_type": "text",
         "order_index": 3,
-        "is_mandatory": False,
+        "is_mandatory": True,
         "options": [],
     },
     {
-        "question_text": "What type of disaster caused the damage?",
+        "question_text": "What type of disaster is this?",
         "question_type": "single_select",
         "order_index": 4,
         "is_mandatory": True,
         "options": [
-            {"option_text": "Earthquake",         "option_value": "earthquake",        "order_index": 1},
-            {"option_text": "Flood",              "option_value": "flood",             "order_index": 2},
-            {"option_text": "Tsunami",            "option_value": "tsunami",           "order_index": 3},
-            {"option_text": "Hurricane / Cyclone","option_value": "hurricane_cyclone", "order_index": 4},
-            {"option_text": "Wildfire",           "option_value": "wildfire",          "order_index": 5},
-            {"option_text": "Explosion",          "option_value": "explosion",         "order_index": 6},
-            {"option_text": "Chemical Incident",  "option_value": "chemical_incident", "order_index": 7},
-            {"option_text": "Conflict",           "option_value": "conflict",          "order_index": 8},
-            {"option_text": "Civil Unrest",       "option_value": "civil_unrest",      "order_index": 9},
-            {"option_text": "Other",              "option_value": "other",             "order_index": 10},
+            {"option_text": "Earthquake",          "option_value": "earthquake",        "order_index": 1},
+            {"option_text": "Flood",               "option_value": "flood",             "order_index": 2},
+            {"option_text": "Tsunami",             "option_value": "tsunami",           "order_index": 3},
+            {"option_text": "Hurricane or Cyclone","option_value": "hurricane_cyclone", "order_index": 4},
+            {"option_text": "Wildfire",            "option_value": "wildfire",          "order_index": 5},
+            {"option_text": "Explosion",           "option_value": "explosion",         "order_index": 6},
+            {"option_text": "Chemical Incident",   "option_value": "chemical_incident", "order_index": 7},
+            {"option_text": "Conflict",            "option_value": "conflict",          "order_index": 8},
+            {"option_text": "Civil Unrest",        "option_value": "civil_unrest",      "order_index": 9},
         ],
     },
     {
-        "question_text": "Is debris blocking access to the structure?",
+        "question_text": "Is there debris that needs clearing near this location?",
         "question_type": "single_select",
         "order_index": 5,
         "is_mandatory": True,
         "options": [
-            {"option_text": "No debris blocking access",      "option_value": "none",    "order_index": 1},
-            {"option_text": "Partial debris blocking access", "option_value": "partial", "order_index": 2},
-            {"option_text": "Debris fully blocking access",   "option_value": "full",    "order_index": 3},
+            {"option_text": "Yes", "option_value": "yes", "order_index": 1},
+            {"option_text": "No",  "option_value": "no",  "order_index": 2},
+        ],
+    },
+    {
+        "question_text": "What is the current condition of electricity infrastructure in your community following the crisis?",
+        "question_type": "single_select",
+        "order_index": 6,
+        "is_mandatory": True,
+        "options": [
+            {"option_text": "No damage observed",                                                   "option_value": "no_damage", "order_index": 1},
+            {"option_text": "Minor damage — service disruptions but quickly repairable",             "option_value": "minor",     "order_index": 2},
+            {"option_text": "Moderate damage — partial outages requiring repairs",                  "option_value": "moderate",  "order_index": 3},
+            {"option_text": "Severe damage — major infrastructure damaged, prolonged outages",      "option_value": "severe",    "order_index": 4},
+            {"option_text": "Completely destroyed — no electricity infrastructure functioning",     "option_value": "destroyed", "order_index": 5},
+            {"option_text": "Unknown / cannot be assessed",                                         "option_value": "unknown",   "order_index": 6},
+        ],
+    },
+    {
+        "question_text": "How would you rate the overall functioning of health services in your community since the event?",
+        "question_type": "single_select",
+        "order_index": 7,
+        "is_mandatory": True,
+        "options": [
+            {"option_text": "Fully functional",       "option_value": "functional",     "order_index": 1},
+            {"option_text": "Partially functional",   "option_value": "partial",        "order_index": 2},
+            {"option_text": "Largely disrupted",      "option_value": "disrupted",      "order_index": 3},
+            {"option_text": "Not functioning at all", "option_value": "not_functioning","order_index": 4},
+            {"option_text": "Unknown",                "option_value": "unknown",        "order_index": 5},
+        ],
+    },
+    {
+        "question_text": "What are the most pressing needs?",
+        "question_type": "multi_select",
+        "order_index": 8,
+        "is_mandatory": True,
+        "options": [
+            {"option_text": "Food assistance and safe drinking water",                                                      "option_value": "food_water",    "order_index": 1},
+            {"option_text": "Cash or financial assistance",                                                                 "option_value": "cash",          "order_index": 2},
+            {"option_text": "Access to healthcare and essential medicines",                                                 "option_value": "healthcare",    "order_index": 3},
+            {"option_text": "Shelter, housing repair, or temporary accommodation",                                         "option_value": "shelter",       "order_index": 4},
+            {"option_text": "Restoration of livelihoods or income sources",                                                "option_value": "livelihoods",   "order_index": 5},
+            {"option_text": "Water, sanitation, and hygiene — toilets, washing facilities",                                "option_value": "wash",          "order_index": 6},
+            {"option_text": "Restoration of basic services and infrastructure — electricity, roads, schools",              "option_value": "basic_services","order_index": 7},
+            {"option_text": "Protection services and psychosocial support",                                                "option_value": "protection",    "order_index": 8},
+            {"option_text": "Support from local authorities and community organizations",                                  "option_value": "local_support", "order_index": 9},
+            {"option_text": "Other — please specify",                                                                      "option_value": "other",         "order_index": 10},
         ],
     },
 ]
@@ -582,14 +647,26 @@ _SEED_QUESTIONS: list[dict] = [
 
 async def seed_initial_package() -> None:
     """
-    Insert the v1.0.0 published question package if the table is empty.
-    Called from the app lifespan after create_all.
-    Safe to call on every restart — no-ops if data already exists.
+    Insert the v1.0.0 published question package on startup.
+    If fewer than 8 questions exist in the database, deletes all packages and reseeds.
+    Safe to call on every restart.
     """
+    from sqlalchemy import func as sqlfunc
+    from app.models.language_package import StringKey
+
     async with AsyncSessionLocal() as session:
-        result = await session.execute(select(QuestionPackage).limit(1))
-        if result.scalar_one_or_none() is not None:
-            return  # Already seeded
+        # Count questions across all packages — reseed if fewer than 8
+        q_count_result = await session.execute(select(sqlfunc.count(Question.id)))
+        question_count = q_count_result.scalar_one()
+
+        if question_count >= 8:
+            return  # Already seeded correctly
+
+        # Delete all existing packages (cascade deletes questions and options)
+        pkg_result = await session.execute(select(QuestionPackage))
+        for p in pkg_result.scalars().all():
+            await session.delete(p)
+        await session.flush()
 
         pkg = QuestionPackage(
             id=uuid.UUID("00000000-0000-0000-0000-000000000001"),
@@ -614,6 +691,21 @@ async def seed_initial_package() -> None:
             session.add(question)
             await session.flush()
 
+            n = q_data["order_index"]
+
+            # StringKey for question label
+            key_label = f"Q{n}_LABEL"
+            existing_label = (await session.execute(
+                select(StringKey).where(StringKey.key == key_label)
+            )).scalar_one_or_none()
+            if existing_label is None:
+                session.add(StringKey(
+                    key=key_label,
+                    category="question",
+                    english_text=q_data["question_text"],
+                    is_active=True,
+                ))
+
             for opt_data in q_data["options"]:
                 session.add(
                     QuestionOption(
@@ -623,5 +715,33 @@ async def seed_initial_package() -> None:
                         order_index=opt_data["order_index"],
                     )
                 )
+                # StringKey for option label
+                opt_key = f"Q{n}_OPT_{opt_data['option_value'].upper()}"
+                existing_opt = (await session.execute(
+                    select(StringKey).where(StringKey.key == opt_key)
+                )).scalar_one_or_none()
+                if existing_opt is None:
+                    session.add(StringKey(
+                        key=opt_key,
+                        category="answer",
+                        english_text=opt_data["option_text"],
+                        is_active=True,
+                    ))
+
+        await session.flush()
+
+        # Sync string key registry before committing
+        try:
+            from app.routers.language_packages import ensure_string_keys_synced
+            await ensure_string_keys_synced(session)
+        except Exception:
+            pass  # Non-blocking — sync failure does not prevent startup
 
         await session.commit()
+
+    # Trigger auto-translation outside the session
+    try:
+        from app.tasks import auto_translate_content
+        asyncio.create_task(auto_translate_content("question"))
+    except Exception:
+        pass  # Non-blocking — translation failure does not prevent startup

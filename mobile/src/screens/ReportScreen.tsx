@@ -142,7 +142,7 @@ const INFRA_LABELS: Record<string, string> = {
   commercial: "Commercial Infrastructure",
   government: "Government Building",
   utility: "Utility Infrastructure",
-  transport_communication: "Transport & Communication Infrastructure",
+  transport_comm: "Transport and Communication Infrastructure",
   community: "Community Infrastructure",
   public_spaces: "Public Spaces / Recreation Infrastructure",
   other: "Other",
@@ -151,11 +151,13 @@ const INFRA_LABELS: Record<string, string> = {
 const DISASTER_LABELS: Record<string, string> = {
   earthquake: "Earthquake",
   flood: "Flood",
-  cyclone: "Cyclone / Typhoon / Hurricane",
-  landslide: "Landslide",
-  fire: "Fire",
-  conflict: "Conflict / War",
-  other: "Other",
+  tsunami: "Tsunami",
+  hurricane_cyclone: "Hurricane or Cyclone",
+  wildfire: "Wildfire",
+  explosion: "Explosion",
+  chemical_incident: "Chemical Incident",
+  conflict: "Conflict",
+  civil_unrest: "Civil Unrest",
 };
 
 const DEBRIS_LABELS: Record<string, string> = {
@@ -173,16 +175,16 @@ const ELECTRICITY_LABELS: Record<string, string> = {
 };
 
 const HEALTH_LABELS: Record<string, string> = {
-  fully_functional: "Fully functional",
-  partially_functional: "Partially functional",
-  largely_disrupted: "Largely disrupted",
+  functional: "Fully functional",
+  partial: "Partially functional",
+  disrupted: "Largely disrupted",
   not_functioning: "Not functioning at all",
   unknown: "Unknown",
 };
 
 const PRESSING_NEEDS_LABELS: Record<string, string> = {
   food_water: "Food assistance and safe drinking water",
-  cash_financial: "Cash or financial assistance",
+  cash: "Cash or financial assistance",
   healthcare: "Access to healthcare and essential medicines",
   shelter: "Shelter, housing repair, or temporary accommodation",
   livelihoods: "Restoration of livelihoods or income sources",
@@ -354,33 +356,46 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
     init();
   }, []);
 
-  // Cache-first question package loading — AsyncStorage first, then API for latest
+  // Version-gated question package sync — loads cache immediately, only re-downloads if version changed
   useEffect(() => {
-    const loadQuestionPackage = async () => {
-      // Step 1: read from AsyncStorage cache written by HomeScreen on every app open
-      try {
-        const cached = await AsyncStorage.getItem('cr_question_package');
-        if (cached) {
-          setQuestionPackage(JSON.parse(cached));
+    const checkAndSyncQuestions = async () => {
+      const langCode = await AsyncStorage.getItem('selected_language') || 'en';
+
+      // Load cached package immediately so questions render without waiting for network
+      const cachedStr = await AsyncStorage.getItem('cr_question_package');
+      const cachedVersion = await AsyncStorage.getItem('cr_question_version');
+      if (cachedStr) {
+        try {
+          setQuestionPackage(JSON.parse(cachedStr));
+        } catch {
+          // Corrupt cache — ignore; will be replaced below
         }
-      } catch {
-        // cache read failed — continue to API fetch
       }
 
-      // Step 2: fetch latest from API (non-blocking, updates cache if newer)
+      // Check current version from backend
       try {
-        const langCode = (await AsyncStorage.getItem('cr_language')) ?? 'en';
+        const versionRes = await api.get('/api/question-packages/version');
+        const latestVersion = versionRes.data.version;
+
+        if (latestVersion && latestVersion === cachedVersion) {
+          // Version matches — no download needed
+          return;
+        }
+
+        // Version differs or no cache — download full package
         const response = await api.get<ActivePackage>(`/api/question-packages/active?lang=${langCode}`);
         if (response.data) {
           setQuestionPackage(response.data);
           await AsyncStorage.setItem('cr_question_package', JSON.stringify(response.data));
+          await AsyncStorage.setItem('cr_question_version', response.data.version || latestVersion);
         }
-      } catch {
-        // API unavailable — cached package or hardcoded fallbacks remain active
+      } catch (error) {
+        // Network error — use cached package silently
+        console.warn('Question package sync failed, using cache:', error);
       }
     };
 
-    loadQuestionPackage();
+    checkAndSyncQuestions();
   }, []);
 
   // Cleanup debounce timer on unmount
@@ -2497,15 +2512,14 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                     <Text style={styles.questionTitleLarge}>{qTitle(2, t('questions.q2.title'))}</Text>
                     <Text style={styles.questionSubtitle}>{t('questions.q2.hint')}</Text>
                     {qOptions(2, [
-                      { value: "residential", label: t('questions.q2.opt_residential') },
-                      { value: "commercial", label: t('questions.q2.opt_commercial') },
-                      { value: "government", label: t('questions.q2.opt_government') },
-                      { value: "educational", label: t('questions.q2.opt_educational') },
-                      { value: "healthcare", label: t('questions.q2.opt_healthcare') },
-                      { value: "critical_infrastructure", label: t('questions.q2.opt_critical_infrastructure') },
-                      { value: "agricultural", label: t('questions.q2.opt_agricultural') },
+                      { value: "residential",   label: t('questions.q2.opt_residential') },
+                      { value: "commercial",    label: t('questions.q2.opt_commercial') },
+                      { value: "government",    label: t('questions.q2.opt_government') },
+                      { value: "utility",       label: t('questions.q2.opt_utility') },
+                      { value: "transport_comm",label: t('questions.q2.opt_transport') },
+                      { value: "community",     label: t('questions.q2.opt_community') },
                       { value: "public_spaces", label: t('questions.q2.opt_public_spaces') },
-                      { value: "other", label: t('questions.q2.opt_other') },
+                      { value: "other",         label: t('questions.q2.opt_other') },
                     ]).map(({ value, label }) => {
                       const isSelected = infrastructureTypes.includes(value);
                       return (
@@ -2640,11 +2654,11 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                     <Text style={styles.questionTitleLarge}>{qTitle(7, t('questions.q7.title'))}</Text>
                     <View style={styles.optionGrid2Col}>
                       {qOptions(7, [
-                        { value: "fully_functional", label: t('questions.q7.opt_fully') },
-                        { value: "partially_functional", label: t('questions.q7.opt_partially') },
-                        { value: "largely_disrupted", label: t('questions.q7.opt_largely') },
+                        { value: "functional",    label: t('questions.q7.opt_fully') },
+                        { value: "partial",       label: t('questions.q7.opt_partially') },
+                        { value: "disrupted",     label: t('questions.q7.opt_largely') },
                         { value: "not_functioning", label: t('questions.q7.opt_not_functioning') },
-                        { value: "unknown", label: t('questions.q7.opt_unknown') },
+                        { value: "unknown",       label: t('questions.q7.opt_unknown') },
                       ]).map(({ value, label }) => {
                         const isSelected = healthServicesCondition === value;
                         return (
@@ -2667,7 +2681,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                     <Text style={styles.questionSubtitle}>{t('questions.q8.hint')}</Text>
                     {qOptions(8, [
                       { value: "food_water", label: t('questions.q8.opt_food_water') },
-                      { value: "cash_financial", label: t('questions.q8.opt_cash') },
+                      { value: "cash",       label: t('questions.q8.opt_cash') },
                       { value: "healthcare", label: t('questions.q8.opt_healthcare') },
                       { value: "shelter", label: t('questions.q8.opt_shelter') },
                       { value: "livelihoods", label: t('questions.q8.opt_livelihoods') },

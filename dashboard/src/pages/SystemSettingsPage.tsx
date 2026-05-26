@@ -65,6 +65,15 @@ interface QueueStatus {
   pending_count: number;
 }
 
+interface PackageListItem {
+  id: string;
+  version: string;
+  status: string;
+  created_at: string;
+  published_at: string | null;
+  question_count: number;
+}
+
 interface QueueStatusByLang {
   has_pending: boolean;
   total_pending: number;
@@ -2539,6 +2548,15 @@ function QuestionsTab({ isAdmin, onSwitchToLanguages }: { isAdmin: boolean; onSw
   const [showWarning, setShowWarning] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [successBanner, setSuccessBanner] = useState("");
+  const [editQuestionsMode, setEditQuestionsMode] = useState(false);
+  const [showPublishConfirm, setShowPublishConfirm] = useState(false);
+  const [publishBanner, setPublishBanner] = useState("");
+  const [publishError, setPublishError] = useState("");
+  const [publishLoading, setPublishLoading] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingQuestion, setEditingQuestion] = useState<ActiveQuestion | null>(null);
+  const [showDeactivateConfirm, setShowDeactivateConfirm] = useState(false);
+  const [deactivatingQuestion, setDeactivatingQuestion] = useState<ActiveQuestion | null>(null);
 
   // FIX 2: Fetch active package from backend
   const { data: pkg, isLoading } = useQuery<ActivePackage>({
@@ -2558,6 +2576,47 @@ function QuestionsTab({ isAdmin, onSwitchToLanguages }: { isAdmin: boolean; onSw
     },
   });
 
+  // Fetch all packages to detect a draft for the Publish button
+  const { data: allPackages = [] } = useQuery<PackageListItem[]>({
+    queryKey: ["question-packages-list"],
+    queryFn: async () => {
+      const res = await api.get<PackageListItem[]>("/api/question-packages");
+      return res.data;
+    },
+    enabled: isAdmin,
+  });
+  const draftPackage = allPackages.find((p) => p.status === "draft") ?? null;
+
+  async function handlePublishConfirm() {
+    if (!draftPackage) return;
+    setPublishLoading(true);
+    setPublishError("");
+    try {
+      await api.patch(`/api/question-packages/${draftPackage.version}/publish`);
+      queryClient.invalidateQueries({ queryKey: ["question-package-active"] });
+      queryClient.invalidateQueries({ queryKey: ["question-packages-list"] });
+      setShowPublishConfirm(false);
+      setPublishBanner("Question package published successfully");
+      setTimeout(() => setPublishBanner(""), 5000);
+    } catch (err: any) {
+      setPublishError(err?.response?.data?.detail ?? "Failed to publish. Please try again.");
+    } finally {
+      setPublishLoading(false);
+    }
+  }
+
+  async function handleDeactivateConfirm() {
+    if (!deactivatingQuestion) return;
+    try {
+      // TODO: backend endpoint PATCH /api/question-packages/draft/questions/{id} not yet implemented.
+      // When added, call: await api.patch(`/api/question-packages/draft/questions/${deactivatingQuestion.id}`, { is_active: false });
+      alert("Deactivate endpoint not yet implemented on the backend. Please add PATCH /api/question-packages/draft/questions/{id}.");
+    } finally {
+      setShowDeactivateConfirm(false);
+      setDeactivatingQuestion(null);
+    }
+  }
+
   function handleAddSuccess() {
     setShowAddModal(false);
     queryClient.invalidateQueries({ queryKey: ["question-package-active"] });
@@ -2573,6 +2632,8 @@ function QuestionsTab({ isAdmin, onSwitchToLanguages }: { isAdmin: boolean; onSw
   return (
     <div style={s.tabContent}>
       {successBanner && <div style={{ ...s.successBanner, marginBottom: 16 }}>{successBanner}</div>}
+      {publishBanner && <div style={{ ...s.successBanner, marginBottom: 16 }}>{publishBanner}</div>}
+      {publishError && <div style={{ background: "#fff5f5", border: "1.5px solid #fc8181", borderRadius: 8, padding: "10px 16px", color: "#c53030", fontSize: 13, marginBottom: 16 }}>{publishError}</div>}
 
       {/* Version header — FIX 13: real version and date */}
       <div style={s.versionHeader}>
@@ -2636,9 +2697,27 @@ function QuestionsTab({ isAdmin, onSwitchToLanguages }: { isAdmin: boolean; onSw
         </div>
       )}
 
-      {/* FIX 4: Add Question button (Admin only) */}
+      {/* Add Question + Publish Questions buttons (Admin only) */}
       {isAdmin && (
-        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, alignItems: "center" }}>
+          <button
+            style={{
+              height: 36,
+              padding: "0 16px",
+              background: draftPackage ? BLUE : "#a0aec0",
+              color: "#fff",
+              border: "none",
+              borderRadius: 6,
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: draftPackage ? "pointer" : "not-allowed",
+            }}
+            onClick={() => { if (draftPackage) setShowPublishConfirm(true); }}
+            disabled={!draftPackage}
+            title={draftPackage ? undefined : "No draft changes to publish"}
+          >
+            Publish Questions
+          </button>
           <button style={s.addBtn} onClick={() => setShowAddModal(true)}>
             + Add Question
           </button>
@@ -2655,7 +2734,7 @@ function QuestionsTab({ isAdmin, onSwitchToLanguages }: { isAdmin: boolean; onSw
               <div style={s.questionCardHeader}>
                 <span style={s.questionNum}>Q{idx + 1}</span>
                 <span style={s.typeBadge}>{q.question_type.replace("_", " ")}</span>
-                {/* FIX 3: Core badge */}
+                {/* Core badge */}
                 {q.is_core && (
                   <span style={{
                     fontSize: 11,
@@ -2668,7 +2747,7 @@ function QuestionsTab({ isAdmin, onSwitchToLanguages }: { isAdmin: boolean; onSw
                     Core
                   </span>
                 )}
-                {/* FIX 3: Required label for core mandatory questions */}
+                {/* Required / Mandatory label */}
                 {q.is_core ? (
                   <span style={{ fontSize: 11, fontWeight: 600, color: "#718096", marginLeft: "auto" }}>
                     {q.is_mandatory ? "Required" : "Optional"}
@@ -2679,7 +2758,7 @@ function QuestionsTab({ isAdmin, onSwitchToLanguages }: { isAdmin: boolean; onSw
                   </span>
                 )}
               </div>
-              {/* FIX 3: Core questions read-only */}
+              {/* Core questions are read-only */}
               <p style={s.questionText}>{q.question_text}</p>
               {q.question_type !== "text" && (
                 <div style={s.optionsList}>
@@ -2694,6 +2773,23 @@ function QuestionsTab({ isAdmin, onSwitchToLanguages }: { isAdmin: boolean; onSw
               {q.question_type === "text" && (
                 <div style={s.textFieldPreview}>Free text response</div>
               )}
+              {/* Edit / Deactivate controls — non-core questions only, in edit mode */}
+              {editQuestionsMode && !q.is_core && (
+                <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                  <button
+                    style={{ padding: "5px 14px", background: "#fff", border: `1.5px solid ${BLUE}`, borderRadius: 6, color: BLUE, fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+                    onClick={() => { setEditingQuestion(q); setShowEditModal(true); }}
+                  >
+                    Edit
+                  </button>
+                  <button
+                    style={{ padding: "5px 14px", background: "#fff", border: "1.5px solid #e53e3e", borderRadius: 6, color: "#e53e3e", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+                    onClick={() => { setDeactivatingQuestion(q); setShowDeactivateConfirm(true); }}
+                  >
+                    Deactivate
+                  </button>
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -2702,7 +2798,7 @@ function QuestionsTab({ isAdmin, onSwitchToLanguages }: { isAdmin: boolean; onSw
       {showWarning && (
         <EditQuestionsWarningModal
           onClose={() => setShowWarning(false)}
-          onConfirm={() => setShowWarning(false)}
+          onConfirm={() => { setShowWarning(false); setEditQuestionsMode(true); }}
         />
       )}
 
@@ -2712,6 +2808,181 @@ function QuestionsTab({ isAdmin, onSwitchToLanguages }: { isAdmin: boolean; onSw
           onSuccess={handleAddSuccess}
         />
       )}
+
+      {/* Publish confirmation modal */}
+      {showPublishConfirm && (
+        <div style={s.overlay} onClick={() => !publishLoading && setShowPublishConfirm(false)}>
+          <div style={{ ...s.modal, maxWidth: 420 }} onClick={(e) => e.stopPropagation()}>
+            <div style={s.modalHeader}>
+              <h2 style={s.modalTitle}>Publish Question Package</h2>
+              <button style={s.closeBtn} onClick={() => setShowPublishConfirm(false)}>✕</button>
+            </div>
+            <div style={{ padding: "24px" }}>
+              <p style={{ fontSize: 14, color: "#4a5568", margin: 0, lineHeight: 1.6 }}>
+                Publishing will make all draft question changes live for all reporters. Are you sure?
+              </p>
+            </div>
+            <div style={{ ...s.modalFooter, padding: "0 24px 24px" }}>
+              <button style={s.cancelBtn} onClick={() => setShowPublishConfirm(false)} disabled={publishLoading}>Cancel</button>
+              <button
+                style={{ ...s.submitBtn, opacity: publishLoading ? 0.7 : 1 }}
+                onClick={handlePublishConfirm}
+                disabled={publishLoading}
+              >
+                {publishLoading ? "Publishing…" : "Publish"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit question modal */}
+      {showEditModal && editingQuestion && (
+        <EditQuestionModal
+          question={editingQuestion}
+          onClose={() => { setShowEditModal(false); setEditingQuestion(null); }}
+          onSuccess={() => {
+            setShowEditModal(false);
+            setEditingQuestion(null);
+            queryClient.invalidateQueries({ queryKey: ["question-package-active"] });
+            setSuccessBanner("Question updated in draft.");
+            setTimeout(() => setSuccessBanner(""), 5000);
+          }}
+        />
+      )}
+
+      {/* Deactivate confirmation modal */}
+      {showDeactivateConfirm && deactivatingQuestion && (
+        <div style={s.overlay} onClick={() => setShowDeactivateConfirm(false)}>
+          <div style={{ ...s.modal, maxWidth: 420 }} onClick={(e) => e.stopPropagation()}>
+            <div style={s.modalHeader}>
+              <h2 style={s.modalTitle}>Deactivate Question</h2>
+              <button style={s.closeBtn} onClick={() => setShowDeactivateConfirm(false)}>✕</button>
+            </div>
+            <div style={{ padding: "24px" }}>
+              <p style={{ fontSize: 14, color: "#4a5568", margin: 0, lineHeight: 1.6 }}>
+                Deactivating this question will hide it from reporters. Historical answers are preserved.
+              </p>
+            </div>
+            <div style={{ ...s.modalFooter, padding: "0 24px 24px" }}>
+              <button style={s.cancelBtn} onClick={() => setShowDeactivateConfirm(false)}>Cancel</button>
+              <button
+                style={{ ...s.submitBtn, background: "#e53e3e" }}
+                onClick={handleDeactivateConfirm}
+              >
+                Deactivate
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Edit Question Modal ────────────────────────────────────────────────────────
+
+function EditQuestionModal({
+  question,
+  onClose,
+  onSuccess,
+}: {
+  question: ActiveQuestion;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const [questionText, setQuestionText] = useState(question.question_text);
+  const [isMandatory, setIsMandatory] = useState(question.is_mandatory);
+  const [options, setOptions] = useState<string[]>(question.options.map((o) => o.option_text));
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
+
+  const needsOptions = question.question_type === "single_select" || question.question_type === "multi_select";
+
+  function addOption() { setOptions((prev) => [...prev, ""]); }
+  function removeOption(idx: number) { setOptions((prev) => prev.filter((_, i) => i !== idx)); }
+  function updateOption(idx: number, val: string) { setOptions((prev) => { const n = [...prev]; n[idx] = val; return n; }); }
+
+  async function handleSave(ev: React.FormEvent) {
+    ev.preventDefault();
+    if (!questionText.trim()) { setSubmitError("Question text is required."); return; }
+    setSubmitError("");
+    setSubmitting(true);
+    try {
+      // TODO: PATCH /api/question-packages/draft/questions/{id} is not yet implemented on the backend.
+      // Add this endpoint to support inline question editing from the dashboard.
+      alert(`Edit endpoint not yet implemented. Please add:\nPATCH /api/question-packages/draft/questions/${question.id}`);
+      onClose();
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div style={s.overlay} onClick={onClose}>
+      <div style={{ ...s.modal, maxWidth: 540 }} onClick={(e) => e.stopPropagation()}>
+        <div style={s.modalHeader}>
+          <h2 style={s.modalTitle}>Edit Question</h2>
+          <button style={s.closeBtn} onClick={onClose}>✕</button>
+        </div>
+        <form onSubmit={handleSave} style={s.form}>
+          <Field label="Question Text" required>
+            <textarea
+              value={questionText}
+              onChange={(e) => setQuestionText(e.target.value)}
+              rows={3}
+              style={{ ...s.questionTextarea, marginBottom: 0 }}
+            />
+          </Field>
+          <Field label="Question Type">
+            <select value={question.question_type} disabled style={{ ...s.select, opacity: 0.6, cursor: "not-allowed" }}>
+              <option value="single_select">Single Select</option>
+              <option value="multi_select">Multi Select</option>
+              <option value="text">Free Text</option>
+            </select>
+          </Field>
+          <Field label="Response">
+            <div style={s.toggleRow}>
+              <ToggleSwitch checked={isMandatory} onChange={setIsMandatory} />
+              <span style={{ fontSize: 13, color: "#4a5568" }}>{isMandatory ? "Mandatory" : "Optional"}</span>
+            </div>
+          </Field>
+          {needsOptions && (
+            <Field label="Answer Options">
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {options.map((opt, idx) => (
+                  <div key={idx} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <input
+                      type="text"
+                      value={opt}
+                      onChange={(e) => updateOption(idx, e.target.value)}
+                      placeholder={`Option ${idx + 1}`}
+                      style={{ ...s.input, flex: 1 }}
+                    />
+                    {options.length > 2 && (
+                      <button type="button" onClick={() => removeOption(idx)}
+                        style={{ background: "none", border: "none", color: "#e53e3e", fontSize: 18, cursor: "pointer", lineHeight: 1 }}>
+                        ×
+                      </button>
+                    )}
+                  </div>
+                ))}
+                <button type="button" onClick={addOption}
+                  style={{ padding: "7px 14px", background: "#f7fafc", border: "1.5px dashed #cbd5e0", borderRadius: 7, fontSize: 13, color: "#4a5568", cursor: "pointer", textAlign: "left" }}>
+                  + Add option
+                </button>
+              </div>
+            </Field>
+          )}
+          {submitError && <div style={s.submitError}>{submitError}</div>}
+          <div style={s.modalFooter}>
+            <button type="button" style={s.cancelBtn} onClick={onClose}>Cancel</button>
+            <button type="submit" style={{ ...s.submitBtn, opacity: submitting ? 0.7 : 1 }} disabled={submitting}>
+              {submitting ? "Saving…" : "Save"}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }
