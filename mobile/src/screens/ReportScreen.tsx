@@ -363,7 +363,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
 
       // Load cached package immediately so questions render without waiting for network
       const cachedStr = await AsyncStorage.getItem('cr_question_package');
-      const cachedVersion = await AsyncStorage.getItem('cr_question_version');
+      const cachedVersion = await AsyncStorage.getItem('cr_question_content_version');
       if (cachedStr) {
         try {
           setQuestionPackage(JSON.parse(cachedStr));
@@ -375,7 +375,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
       // Check current version from backend
       try {
         const versionRes = await api.get('/api/question-packages/version');
-        const latestVersion = versionRes.data.version;
+        const latestVersion = String(versionRes.data.content_version ?? versionRes.data.version ?? '');
 
         if (latestVersion && latestVersion === cachedVersion) {
           // Version matches — no download needed
@@ -387,7 +387,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
         if (response.data) {
           setQuestionPackage(response.data);
           await AsyncStorage.setItem('cr_question_package', JSON.stringify(response.data));
-          await AsyncStorage.setItem('cr_question_version', response.data.version || latestVersion);
+          await AsyncStorage.setItem('cr_question_content_version', latestVersion || response.data.version);
         }
       } catch (error) {
         // Network error — use cached package silently

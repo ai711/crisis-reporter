@@ -146,8 +146,20 @@ interface LanguagePkg {
   published_at: string | null;
   created_at: string;
   string_count: number;
-  // TODO: published_by needs to be added to LanguagePackage model + list endpoint
   published_by?: string | null;
+}
+
+interface PublishReadiness {
+  can_publish: boolean;
+  has_draft: boolean;
+  draft_version: string | null;
+  blocking_languages: {
+    language_code: string;
+    language_name: string;
+    missing_count: number;
+    missing_keys: string[];
+  }[];
+  auto_language_publish_eligible: boolean;
 }
 
 type FilterStatus = "all" | "missing" | "draft" | "approved" | "published";
@@ -2365,6 +2377,10 @@ function LanguagesTab() {
                 <strong>{languages.find((l) => l.code === publishingLang)?.name ?? publishingLang}</strong>.
                 Reporters will receive these updates on their next app open. This cannot be undone.
               </p>
+              <p style={{ fontSize: 12, color: "#718096", margin: "12px 0 0 0", lineHeight: 1.5, display: "flex", gap: 6, alignItems: "flex-start" }}>
+                <span style={{ flexShrink: 0 }}>ℹ</span>
+                <span>If question changes are pending publication, their translations are included in this package and will be ready when the question package is published.</span>
+              </p>
             </div>
             <div style={{ ...s.modalFooter, padding: "0 24px 24px" }}>
               <button
@@ -2555,10 +2571,16 @@ function QuestionsTab({ isAdmin, onSwitchToLanguages }: { isAdmin: boolean; onSw
   const [publishLoading, setPublishLoading] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingQuestion, setEditingQuestion] = useState<ActiveQuestion | null>(null);
-  const [showDeactivateConfirm, setShowDeactivateConfirm] = useState(false);
   const [deactivatingQuestion, setDeactivatingQuestion] = useState<ActiveQuestion | null>(null);
+  const [showDeactivateModal, setShowDeactivateModal] = useState(false);
+  const [deactivateActionLoading, setDeactivateActionLoading] = useState(false);
+  const [deactivateError, setDeactivateError] = useState("");
+  const [reactivatingQuestion, setReactivatingQuestion] = useState<ActiveQuestion | null>(null);
+  const [showReactivateModal, setShowReactivateModal] = useState(false);
+  const [reactivateActionLoading, setReactivateActionLoading] = useState(false);
+  const [localDeactivated, setLocalDeactivated] = useState<Set<string>>(new Set());
 
-  // FIX 2: Fetch active package from backend
+  // Active package (published)
   const { data: pkg, isLoading } = useQuery<ActivePackage>({
     queryKey: ["question-package-active"],
     queryFn: async () => {
@@ -2567,39 +2589,73 @@ function QuestionsTab({ isAdmin, onSwitchToLanguages }: { isAdmin: boolean; onSw
     },
   });
 
-  // FIX 5: Fetch translation queue status
-  const { data: queueStatus } = useQuery<QueueStatus>({
-    queryKey: ["translation-queue-status"],
+  // Publish readiness — drives button state
+  const { data: publishReadiness, refetch: refetchReadiness } = useQuery<PublishReadiness>({
+    queryKey: ["question-publish-readiness"],
     queryFn: async () => {
-      const res = await api.get<QueueStatus>("/api/translations/queue-status");
-      return res.data;
-    },
-  });
-
-  // Fetch all packages to detect a draft for the Publish button
-  const { data: allPackages = [] } = useQuery<PackageListItem[]>({
-    queryKey: ["question-packages-list"],
-    queryFn: async () => {
-      const res = await api.get<PackageListItem[]>("/api/question-packages");
+      const res = await api.get<PublishReadiness>("/api/question-packages/draft/publish-readiness");
       return res.data;
     },
     enabled: isAdmin,
   });
-  const draftPackage = allPackages.find((p) => p.status === "draft") ?? null;
+
+  // Active crisis check — for mid-crisis publish warning
+  const { data: activeCrises = [] } = useQuery<any[]>({
+    queryKey: ["active-crises-q"],
+    queryFn: async () => {
+      const res = await api.get<any[]>("/api/crises/active");
+      return res.data;
+    },
+    enabled: isAdmin,
+  });
+  const activeCrisis = activeCrises.length > 0 ? activeCrises[0] : null;
+
+  // Derive question-level missing map from publishReadiness
+  const questionMissingMap: Record<string, string[]> = {};
+  if (publishReadiness?.blocking_languages) {
+    for (const bl of publishReadiness.blocking_languages) {
+      for (const key of bl.missing_keys) {
+        const match = key.match(/^Q(\d+)_/);
+        if (match) {
+          const n = match[1];
+          if (!questionMissingMap[n]) questionMissingMap[n] = [];
+          questionMissingMap[n].push(bl.language_code);
+        }
+      }
+    }
+  }
 
   async function handlePublishConfirm() {
-    if (!draftPackage) return;
+    if (!publishReadiness?.has_draft || !publishReadiness.draft_version) return;
     setPublishLoading(true);
     setPublishError("");
     try {
-      await api.patch(`/api/question-packages/${draftPackage.version}/publish`);
+      const res = await api.patch<{ auto_language_published?: boolean }>(
+        `/api/question-packages/${publishReadiness.draft_version}/publish`
+      );
       queryClient.invalidateQueries({ queryKey: ["question-package-active"] });
       queryClient.invalidateQueries({ queryKey: ["question-packages-list"] });
+      queryClient.invalidateQueries({ queryKey: ["question-publish-readiness"] });
+      queryClient.invalidateQueries({ queryKey: ["language-packages"] });
       setShowPublishConfirm(false);
-      setPublishBanner("Question package published successfully");
-      setTimeout(() => setPublishBanner(""), 5000);
+      if (res.data.auto_language_published) {
+        setPublishBanner("Question package and translation packages published. Reporters will sync on their next app open.");
+      } else {
+        setPublishBanner("Question package published. Reporters will sync on their next app open.");
+      }
+      setTimeout(() => setPublishBanner(""), 7000);
     } catch (err: any) {
-      setPublishError(err?.response?.data?.detail ?? "Failed to publish. Please try again.");
+      const errData = err?.response?.data;
+      if (err?.response?.status === 422 && errData?.detail?.error === "translation_incomplete") {
+        const bk: any[] = errData.detail.blocking ?? [];
+        const langs = bk.map((b: any) => b.language_name).join(", ");
+        setPublishError(`Cannot publish — translations are missing in ${bk.length} language${bk.length !== 1 ? "s" : ""}: ${langs}`);
+        queryClient.invalidateQueries({ queryKey: ["question-publish-readiness"] });
+        // Keep modal open so admin sees the error and can navigate to Languages tab
+      } else {
+        setPublishError(errData?.detail ?? "Failed to publish. Please try again.");
+        setShowPublishConfirm(false);
+      }
     } finally {
       setPublishLoading(false);
     }
@@ -2607,35 +2663,116 @@ function QuestionsTab({ isAdmin, onSwitchToLanguages }: { isAdmin: boolean; onSw
 
   async function handleDeactivateConfirm() {
     if (!deactivatingQuestion) return;
+    setDeactivateActionLoading(true);
+    setDeactivateError("");
     try {
-      // TODO: backend endpoint PATCH /api/question-packages/draft/questions/{id} not yet implemented.
-      // When added, call: await api.patch(`/api/question-packages/draft/questions/${deactivatingQuestion.id}`, { is_active: false });
-      alert("Deactivate endpoint not yet implemented on the backend. Please add PATCH /api/question-packages/draft/questions/{id}.");
-    } finally {
-      setShowDeactivateConfirm(false);
+      await api.patch(`/api/question-packages/draft/questions/${deactivatingQuestion.id}/deactivate`);
+      setLocalDeactivated((prev) => new Set([...prev, deactivatingQuestion.id]));
+      setShowDeactivateModal(false);
       setDeactivatingQuestion(null);
+      refetchReadiness();
+    } catch (err: any) {
+      if (err?.response?.status === 403) {
+        setDeactivateError("Core questions cannot be deactivated.");
+      } else {
+        setDeactivateError("Failed to deactivate question. Please try again.");
+      }
+    } finally {
+      setDeactivateActionLoading(false);
+    }
+  }
+
+  async function handleReactivateConfirm() {
+    if (!reactivatingQuestion) return;
+    setReactivateActionLoading(true);
+    try {
+      await api.patch(`/api/question-packages/draft/questions/${reactivatingQuestion.id}/reactivate`);
+      setLocalDeactivated((prev) => {
+        const n = new Set(prev);
+        n.delete(reactivatingQuestion.id);
+        return n;
+      });
+      setShowReactivateModal(false);
+      setReactivatingQuestion(null);
+      refetchReadiness();
+    } catch {
+      // Best-effort — silently ignore
+    } finally {
+      setReactivateActionLoading(false);
     }
   }
 
   function handleAddSuccess() {
     setShowAddModal(false);
     queryClient.invalidateQueries({ queryKey: ["question-package-active"] });
+    queryClient.invalidateQueries({ queryKey: ["question-publish-readiness"] });
     setSuccessBanner("Question saved to draft. Auto-translation is running in the background.");
     setTimeout(() => setSuccessBanner(""), 5000);
   }
 
-  // FIX 13: Format published date from backend data
   function formatDateTime(iso: string) {
     return new Date(iso).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
   }
 
+  // Publish button rendering based on readiness state
+  function renderPublishButton() {
+    if (!isAdmin) return null;
+    if (!publishReadiness) {
+      return (
+        <button
+          style={{ height: 36, padding: "0 16px", background: "#a0aec0", color: "#fff", border: "none", borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: "not-allowed" }}
+          disabled
+        >
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+            <div style={{ width: 10, height: 10, border: "2px solid #fff", borderTopColor: "transparent", borderRadius: "50%", animation: "cr-spin 0.8s linear infinite" }} />
+            Publish Questions
+          </span>
+        </button>
+      );
+    }
+    if (!publishReadiness.has_draft) {
+      return (
+        <button
+          style={{ height: 36, padding: "0 16px", background: "#fff", color: "#a0aec0", border: "1.5px solid #e2e8f0", borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: "not-allowed" }}
+          disabled
+          title="All question changes are already published"
+        >
+          No Pending Changes
+        </button>
+      );
+    }
+    if (!publishReadiness.can_publish) {
+      const blockingNames = publishReadiness.blocking_languages.map((b) => b.language_name).join(", ");
+      return (
+        <button
+          style={{ height: 36, padding: "0 16px", background: "#fff", color: "#92400e", border: "1.5px solid rgba(245,166,35,0.5)", borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: "not-allowed" }}
+          disabled
+          title={`Translations missing in: ${blockingNames} — run Auto-translate first`}
+        >
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+            <span>⚠</span>
+            Publish Questions
+          </span>
+        </button>
+      );
+    }
+    return (
+      <button
+        style={{ height: 36, padding: "0 16px", background: BLUE, color: "#fff", border: "none", borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+        onClick={() => { setPublishError(""); setShowPublishConfirm(true); }}
+      >
+        Publish Questions
+      </button>
+    );
+  }
+
   return (
     <div style={s.tabContent}>
+      <style>{`@keyframes cr-spin { from { transform: rotate(0deg) } to { transform: rotate(360deg) } }`}</style>
       {successBanner && <div style={{ ...s.successBanner, marginBottom: 16 }}>{successBanner}</div>}
       {publishBanner && <div style={{ ...s.successBanner, marginBottom: 16 }}>{publishBanner}</div>}
-      {publishError && <div style={{ background: "#fff5f5", border: "1.5px solid #fc8181", borderRadius: 8, padding: "10px 16px", color: "#c53030", fontSize: 13, marginBottom: 16 }}>{publishError}</div>}
 
-      {/* Version header — FIX 13: real version and date */}
+      {/* Version header */}
       <div style={s.versionHeader}>
         <div>
           <span style={s.versionLabel}>Current Version</span>
@@ -2651,16 +2788,7 @@ function QuestionsTab({ isAdmin, onSwitchToLanguages }: { isAdmin: boolean; onSw
           )}
         </div>
         <div style={{ display: "flex", gap: 10 }}>
-          {/* FIX 5: Publish blocked if queue not empty */}
-          {isAdmin && queueStatus?.has_pending && (
-            <button
-              style={{ ...s.editQuestionsBtn, cursor: "pointer" }}
-              onClick={onSwitchToLanguages}
-            >
-              Review Translations First →
-            </button>
-          )}
-          {isAdmin && !queueStatus?.has_pending && (
+          {isAdmin && (
             <button style={s.editQuestionsBtn} onClick={() => setShowWarning(true)}>
               Edit Questions
             </button>
@@ -2668,130 +2796,98 @@ function QuestionsTab({ isAdmin, onSwitchToLanguages }: { isAdmin: boolean; onSw
         </div>
       </div>
 
-      {/* FIX 5: Translation queue warning */}
-      {isAdmin && queueStatus?.has_pending && (
-        <div style={{
-          background: "#fffbeb",
-          border: "1px solid #fcd34d",
-          borderRadius: 10,
-          padding: "14px 20px",
-          display: "flex",
-          alignItems: "flex-start",
-          gap: 12,
-        }}>
-          <span style={{ fontSize: 20 }}>⚠️</span>
-          <div>
-            <div style={{ fontWeight: 700, fontSize: 14, color: "#92400e", marginBottom: 4 }}>
-              Translation review queue is not empty
-            </div>
-            <div style={{ fontSize: 13, color: "#92400e", lineHeight: 1.5 }}>
-              All translated strings must be reviewed and approved before publishing a new question package.{" "}
-              <button
-                onClick={onSwitchToLanguages}
-                style={{ background: "none", border: "none", color: "#92400e", textDecoration: "underline", cursor: "pointer", fontSize: 13, padding: 0 }}
-              >
-                Go to Languages tab to review →
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Add Question + Publish Questions buttons (Admin only) */}
       {isAdmin && (
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, alignItems: "center" }}>
-          <button
-            style={{
-              height: 36,
-              padding: "0 16px",
-              background: draftPackage ? BLUE : "#a0aec0",
-              color: "#fff",
-              border: "none",
-              borderRadius: 6,
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: draftPackage ? "pointer" : "not-allowed",
-            }}
-            onClick={() => { if (draftPackage) setShowPublishConfirm(true); }}
-            disabled={!draftPackage}
-            title={draftPackage ? undefined : "No draft changes to publish"}
-          >
-            Publish Questions
-          </button>
+          {renderPublishButton()}
           <button style={s.addBtn} onClick={() => setShowAddModal(true)}>
             + Add Question
           </button>
         </div>
       )}
 
-      {/* Question cards — FIX 2+3: from backend, core badge, locked */}
+      {/* Question cards */}
       {isLoading ? (
         <div style={s.loadingText}>Loading questions…</div>
       ) : (
         <div style={s.questionList}>
-          {(pkg?.questions ?? []).map((q, idx) => (
-            <div key={q.id} style={s.questionCard}>
-              <div style={s.questionCardHeader}>
-                <span style={s.questionNum}>Q{idx + 1}</span>
-                <span style={s.typeBadge}>{q.question_type.replace("_", " ")}</span>
-                {/* Core badge */}
-                {q.is_core && (
-                  <span style={{
-                    fontSize: 11,
-                    fontWeight: 700,
-                    color: "#fff",
-                    background: BLUE,
-                    padding: "2px 8px",
-                    borderRadius: 10,
-                  }}>
-                    Core
-                  </span>
+          {(pkg?.questions ?? []).map((q, idx) => {
+            const isDeactivated = localDeactivated.has(q.id);
+            const missingLangs = questionMissingMap[String(q.order_index)];
+            return (
+              <div key={q.id} style={{ ...s.questionCard, opacity: isDeactivated ? 0.7 : 1 }}>
+                <div style={s.questionCardHeader}>
+                  <span style={s.questionNum}>Q{idx + 1}</span>
+                  <span style={s.typeBadge}>{q.question_type.replace("_", " ")}</span>
+                  {q.is_core && (
+                    <span style={{ fontSize: 11, fontWeight: 700, color: "#fff", background: BLUE, padding: "2px 8px", borderRadius: 10 }}>
+                      Core
+                    </span>
+                  )}
+                  {isDeactivated && (
+                    <span style={{ fontSize: 11, fontWeight: 700, background: "#e2e8f0", color: "#718096", padding: "2px 8px", borderRadius: 10 }}>
+                      Deactivated
+                    </span>
+                  )}
+                  {q.is_core ? (
+                    <span style={{ fontSize: 11, fontWeight: 600, color: "#718096", marginLeft: "auto" }}>
+                      {q.is_mandatory ? "Required" : "Optional"}
+                    </span>
+                  ) : (
+                    <span style={{ fontSize: 11, fontWeight: 600, color: q.is_mandatory ? "#155724" : "#718096", marginLeft: "auto" }}>
+                      {q.is_mandatory ? "Mandatory" : "Optional"}
+                    </span>
+                  )}
+                </div>
+                <p style={s.questionText}>{q.question_text}</p>
+                {/* Translation missing pill */}
+                {missingLangs && missingLangs.length > 0 && (
+                  <div style={{ fontSize: 12, background: "rgba(245,166,35,0.12)", color: "#92400e", borderRadius: 8, padding: "3px 8px", display: "inline-block", marginBottom: 6 }}>
+                    ⚠ Translations missing — {missingLangs.length} language{missingLangs.length !== 1 ? "s" : ""}
+                  </div>
                 )}
-                {/* Required / Mandatory label */}
-                {q.is_core ? (
-                  <span style={{ fontSize: 11, fontWeight: 600, color: "#718096", marginLeft: "auto" }}>
-                    {q.is_mandatory ? "Required" : "Optional"}
-                  </span>
-                ) : (
-                  <span style={{ fontSize: 11, fontWeight: 600, color: q.is_mandatory ? "#155724" : "#718096", marginLeft: "auto" }}>
-                    {q.is_mandatory ? "Mandatory" : "Optional"}
-                  </span>
+                {q.question_type !== "text" && (
+                  <div style={s.optionsList}>
+                    {q.options.map((opt, oIdx) => (
+                      <div key={oIdx} style={s.optionItem}>
+                        <span style={s.optionBullet}>{q.question_type === "single_select" ? "◯" : "□"}</span>
+                        <span style={{ fontSize: 13, color: "#4a5568" }}>{opt.option_text}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {q.question_type === "text" && (
+                  <div style={s.textFieldPreview}>Free text response</div>
+                )}
+                {/* Edit / Deactivate / Reactivate controls — non-core questions in edit mode */}
+                {editQuestionsMode && !q.is_core && (
+                  <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                    <button
+                      style={{ padding: "5px 14px", background: "#fff", border: `1.5px solid ${BLUE}`, borderRadius: 6, color: BLUE, fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+                      onClick={() => { setEditingQuestion(q); setShowEditModal(true); }}
+                    >
+                      Edit
+                    </button>
+                    {isDeactivated ? (
+                      <button
+                        style={{ padding: "5px 14px", background: "#fff", border: "1.5px solid #22c55e", borderRadius: 6, color: "#22c55e", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+                        onClick={() => { setReactivatingQuestion(q); setShowReactivateModal(true); }}
+                      >
+                        Reactivate
+                      </button>
+                    ) : (
+                      <button
+                        style={{ padding: "5px 14px", background: "#fff", border: "1.5px solid #e53e3e", borderRadius: 6, color: "#e53e3e", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+                        onClick={() => { setDeactivatingQuestion(q); setDeactivateError(""); setShowDeactivateModal(true); }}
+                      >
+                        Deactivate
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
-              {/* Core questions are read-only */}
-              <p style={s.questionText}>{q.question_text}</p>
-              {q.question_type !== "text" && (
-                <div style={s.optionsList}>
-                  {q.options.map((opt, oIdx) => (
-                    <div key={oIdx} style={s.optionItem}>
-                      <span style={s.optionBullet}>{q.question_type === "single_select" ? "◯" : "□"}</span>
-                      <span style={{ fontSize: 13, color: "#4a5568" }}>{opt.option_text}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {q.question_type === "text" && (
-                <div style={s.textFieldPreview}>Free text response</div>
-              )}
-              {/* Edit / Deactivate controls — non-core questions only, in edit mode */}
-              {editQuestionsMode && !q.is_core && (
-                <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                  <button
-                    style={{ padding: "5px 14px", background: "#fff", border: `1.5px solid ${BLUE}`, borderRadius: 6, color: BLUE, fontSize: 12, fontWeight: 600, cursor: "pointer" }}
-                    onClick={() => { setEditingQuestion(q); setShowEditModal(true); }}
-                  >
-                    Edit
-                  </button>
-                  <button
-                    style={{ padding: "5px 14px", background: "#fff", border: "1.5px solid #e53e3e", borderRadius: 6, color: "#e53e3e", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
-                    onClick={() => { setDeactivatingQuestion(q); setShowDeactivateConfirm(true); }}
-                  >
-                    Deactivate
-                  </button>
-                </div>
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -2810,26 +2906,49 @@ function QuestionsTab({ isAdmin, onSwitchToLanguages }: { isAdmin: boolean; onSw
       )}
 
       {/* Publish confirmation modal */}
-      {showPublishConfirm && (
+      {showPublishConfirm && publishReadiness?.has_draft && (
         <div style={s.overlay} onClick={() => !publishLoading && setShowPublishConfirm(false)}>
-          <div style={{ ...s.modal, maxWidth: 420 }} onClick={(e) => e.stopPropagation()}>
+          <div style={{ ...s.modal, maxWidth: 480 }} onClick={(e) => e.stopPropagation()}>
             <div style={s.modalHeader}>
-              <h2 style={s.modalTitle}>Publish Question Package</h2>
-              <button style={s.closeBtn} onClick={() => setShowPublishConfirm(false)}>✕</button>
+              <h2 style={s.modalTitle}>Publish Question Changes</h2>
+              <button style={s.closeBtn} onClick={() => !publishLoading && setShowPublishConfirm(false)}>✕</button>
             </div>
-            <div style={{ padding: "24px" }}>
+            <div style={{ padding: "24px", display: "flex", flexDirection: "column" as const, gap: 12 }}>
+              {publishError && (
+                <div style={{ background: "#fff5f5", border: "1.5px solid #fc8181", borderRadius: 6, padding: "10px 14px", color: "#c53030", fontSize: 13 }}>
+                  {publishError}
+                </div>
+              )}
               <p style={{ fontSize: 14, color: "#4a5568", margin: 0, lineHeight: 1.6 }}>
-                Publishing will make all draft question changes live for all reporters. Are you sure?
+                Reporters will receive updated questions on their next app open.
               </p>
+              {publishReadiness.auto_language_publish_eligible && (
+                <div style={{ background: "#EBF5FB", border: "1px solid #bee3f8", borderRadius: 6, padding: "10px 14px", fontSize: 13, color: "#1e40af", display: "flex", alignItems: "flex-start", gap: 8 }}>
+                  <span style={{ flexShrink: 0 }}>ℹ</span>
+                  <span>Translation packages will also be published automatically — all approved translations will go live.</span>
+                </div>
+              )}
+              {activeCrisis && (
+                <div style={{ background: "#fffbeb", border: "1px solid #fcd34d", borderRadius: 6, padding: "10px 14px", fontSize: 13, color: "#92400e", display: "flex", alignItems: "flex-start", gap: 8 }}>
+                  <span style={{ flexShrink: 0 }}>⚠</span>
+                  <span>Active crisis detected. Publishing mid-crisis may affect data comparability across reports.</span>
+                </div>
+              )}
             </div>
             <div style={{ ...s.modalFooter, padding: "0 24px 24px" }}>
-              <button style={s.cancelBtn} onClick={() => setShowPublishConfirm(false)} disabled={publishLoading}>Cancel</button>
               <button
-                style={{ ...s.submitBtn, opacity: publishLoading ? 0.7 : 1 }}
+                style={{ ...s.cancelBtn, opacity: publishLoading ? 0.6 : 1 }}
+                onClick={() => !publishLoading && setShowPublishConfirm(false)}
+                disabled={publishLoading}
+              >
+                Cancel
+              </button>
+              <button
+                style={{ ...s.submitBtn, background: BLUE, opacity: publishLoading ? 0.7 : 1 }}
                 onClick={handlePublishConfirm}
                 disabled={publishLoading}
               >
-                {publishLoading ? "Publishing…" : "Publish"}
+                {publishLoading ? "Publishing…" : "Publish Now"}
               </button>
             </div>
           </div>
@@ -2845,6 +2964,7 @@ function QuestionsTab({ isAdmin, onSwitchToLanguages }: { isAdmin: boolean; onSw
             setShowEditModal(false);
             setEditingQuestion(null);
             queryClient.invalidateQueries({ queryKey: ["question-package-active"] });
+            queryClient.invalidateQueries({ queryKey: ["question-publish-readiness"] });
             setSuccessBanner("Question updated in draft.");
             setTimeout(() => setSuccessBanner(""), 5000);
           }}
@@ -2852,25 +2972,76 @@ function QuestionsTab({ isAdmin, onSwitchToLanguages }: { isAdmin: boolean; onSw
       )}
 
       {/* Deactivate confirmation modal */}
-      {showDeactivateConfirm && deactivatingQuestion && (
-        <div style={s.overlay} onClick={() => setShowDeactivateConfirm(false)}>
+      {showDeactivateModal && deactivatingQuestion && (
+        <div style={s.overlay} onClick={() => !deactivateActionLoading && setShowDeactivateModal(false)}>
           <div style={{ ...s.modal, maxWidth: 420 }} onClick={(e) => e.stopPropagation()}>
             <div style={s.modalHeader}>
               <h2 style={s.modalTitle}>Deactivate Question</h2>
-              <button style={s.closeBtn} onClick={() => setShowDeactivateConfirm(false)}>✕</button>
+              <button style={s.closeBtn} onClick={() => !deactivateActionLoading && setShowDeactivateModal(false)}>✕</button>
             </div>
-            <div style={{ padding: "24px" }}>
+            <div style={{ padding: "24px", display: "flex", flexDirection: "column" as const, gap: 12 }}>
+              {deactivateError && (
+                <div style={{ background: "#fff5f5", border: "1.5px solid #fc8181", borderRadius: 6, padding: "10px 14px", color: "#c53030", fontSize: 13 }}>
+                  {deactivateError}
+                </div>
+              )}
               <p style={{ fontSize: 14, color: "#4a5568", margin: 0, lineHeight: 1.6 }}>
-                Deactivating this question will hide it from reporters. Historical answers are preserved.
+                Deactivating this question will hide it from reporters on the next question package publish. All historical answers are preserved. You can reactivate this question at any time.
               </p>
+              <div style={{ background: "#fffbeb", border: "1px solid #fcd34d", borderRadius: 6, padding: "10px 14px", fontSize: 13, color: "#92400e" }}>
+                You will need to publish the question package after deactivating for this change to take effect.
+              </div>
             </div>
             <div style={{ ...s.modalFooter, padding: "0 24px 24px" }}>
-              <button style={s.cancelBtn} onClick={() => setShowDeactivateConfirm(false)}>Cancel</button>
               <button
-                style={{ ...s.submitBtn, background: "#e53e3e" }}
-                onClick={handleDeactivateConfirm}
+                style={{ ...s.cancelBtn, opacity: deactivateActionLoading ? 0.6 : 1 }}
+                onClick={() => !deactivateActionLoading && setShowDeactivateModal(false)}
+                disabled={deactivateActionLoading}
               >
-                Deactivate
+                Cancel
+              </button>
+              <button
+                style={{ ...s.cancelBtn, color: "#e53e3e", borderColor: "#e53e3e", opacity: deactivateActionLoading ? 0.6 : 1 }}
+                onClick={handleDeactivateConfirm}
+                disabled={deactivateActionLoading}
+              >
+                {deactivateActionLoading ? "Deactivating…" : "Deactivate"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reactivate confirmation modal */}
+      {showReactivateModal && reactivatingQuestion && (
+        <div style={s.overlay} onClick={() => !reactivateActionLoading && setShowReactivateModal(false)}>
+          <div style={{ ...s.modal, maxWidth: 420 }} onClick={(e) => e.stopPropagation()}>
+            <div style={s.modalHeader}>
+              <h2 style={s.modalTitle}>Reactivate Question</h2>
+              <button style={s.closeBtn} onClick={() => !reactivateActionLoading && setShowReactivateModal(false)}>✕</button>
+            </div>
+            <div style={{ padding: "24px", display: "flex", flexDirection: "column" as const, gap: 12 }}>
+              <p style={{ fontSize: 14, color: "#4a5568", margin: 0, lineHeight: 1.6 }}>
+                Reactivating this question will make it visible to reporters again on the next question package publish. Previously approved translations will be restored automatically.
+              </p>
+              <div style={{ background: "#fffbeb", border: "1px solid #fcd34d", borderRadius: 6, padding: "10px 14px", fontSize: 13, color: "#92400e" }}>
+                You will need to publish the question package after reactivating for this change to take effect.
+              </div>
+            </div>
+            <div style={{ ...s.modalFooter, padding: "0 24px 24px" }}>
+              <button
+                style={{ ...s.cancelBtn, opacity: reactivateActionLoading ? 0.6 : 1 }}
+                onClick={() => !reactivateActionLoading && setShowReactivateModal(false)}
+                disabled={reactivateActionLoading}
+              >
+                Cancel
+              </button>
+              <button
+                style={{ ...s.cancelBtn, color: "#22c55e", borderColor: "#22c55e", opacity: reactivateActionLoading ? 0.6 : 1 }}
+                onClick={handleReactivateConfirm}
+                disabled={reactivateActionLoading}
+              >
+                {reactivateActionLoading ? "Reactivating…" : "Reactivate"}
               </button>
             </div>
           </div>

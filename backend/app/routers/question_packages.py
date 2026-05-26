@@ -14,13 +14,14 @@ to insert v1.0.0 if the table is empty.
 """
 
 import asyncio
+import logging
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import select, or_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -29,6 +30,7 @@ from app.models.dashboard_user import DashboardUser
 from app.models.question_package import Question, QuestionOption, QuestionPackage
 from app.services.dependencies import get_current_dashboard_user, require_admin
 
+log = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/question-packages", tags=["Question Packages"])
 
 
@@ -93,6 +95,20 @@ class PackageOut(BaseModel):
         from_attributes = True
 
 
+class PublishPackageOut(BaseModel):
+    id: str
+    version: str
+    status: str
+    created_at: datetime
+    published_at: Optional[datetime]
+    questions: list[QuestionOut]
+    auto_language_published: bool = False
+    content_version: int = 1
+
+    class Config:
+        from_attributes = True
+
+
 # ── Request schemas ───────────────────────────────────────────────────────────
 
 
@@ -149,6 +165,122 @@ def _build_question_out(q: Question) -> QuestionOut:
             for o in q.options
         ],
     )
+
+
+# ── Content-version helpers ───────────────────────────────────────────────────
+
+async def get_questions_content_version(db: AsyncSession) -> int:
+    from app.models.app_setting import AppSetting
+    result = await db.execute(
+        select(AppSetting).where(AppSetting.key == "questions_content_version")
+    )
+    row = result.scalar_one_or_none()
+    if row and row.value:
+        return int(row.value.get("count", 1))
+    return 1
+
+
+async def increment_questions_content_version(db: AsyncSession) -> int:
+    from app.models.app_setting import AppSetting
+    result = await db.execute(
+        select(AppSetting).where(AppSetting.key == "questions_content_version")
+    )
+    row = result.scalar_one_or_none()
+    if row is None:
+        next_val = 2
+        db.add(AppSetting(key="questions_content_version", value={"count": next_val}))
+    else:
+        current = int(row.value.get("count", 1))
+        next_val = current + 1
+        row.value = {"count": next_val}
+    await db.commit()
+    return next_val
+
+
+async def _auto_publish_language(db: AsyncSession, language_code: str) -> bool:
+    """Publish language package without user auth. Returns True on success."""
+    from app.models.language_package import Language, StringKey, Translation, LanguagePackage
+    from app.services.translation_audit_service import write_translation_audit
+
+    pending_result = await db.execute(
+        select(func.count(Translation.id)).where(
+            Translation.language_code == language_code,
+            Translation.status.in_(["draft", "failed"]),
+        )
+    )
+    if (pending_result.scalar() or 0) > 0:
+        return False
+
+    all_keys_result = await db.execute(
+        select(StringKey).where(StringKey.is_active == True)
+    )
+    all_keys = all_keys_result.scalars().all()
+    if not all_keys:
+        return False
+
+    approved_result = await db.execute(
+        select(Translation).where(
+            Translation.language_code == language_code,
+            Translation.status == "approved",
+        )
+    )
+    approved = {t.string_key_id: t for t in approved_result.scalars().all()}
+
+    published_ids_result = await db.execute(
+        select(Translation.string_key_id).where(
+            Translation.language_code == language_code,
+            Translation.status == "published",
+        )
+    )
+    already_published_ids = {row[0] for row in published_ids_result.all()}
+
+    missing = [k.key for k in all_keys if k.id not in approved and k.id not in already_published_ids]
+    if missing:
+        return False
+
+    for translation in approved.values():
+        translation.status = "published"
+
+    prev_result = await db.execute(
+        select(LanguagePackage).where(
+            LanguagePackage.language_code == language_code,
+            LanguagePackage.status == "published",
+        )
+    )
+    for prev in prev_result.scalars().all():
+        prev.status = "archived"
+
+    count_result = await db.execute(
+        select(func.count(LanguagePackage.id)).where(
+            LanguagePackage.language_code == language_code
+        )
+    )
+    next_version = f"1.{(count_result.scalar() or 0)}"
+
+    from app.models.language_package import LanguagePackage as LP
+    db.add(LP(
+        language_code=language_code,
+        version=next_version,
+        status="published",
+        published_at=datetime.now(timezone.utc),
+        string_count=len(approved),
+        published_by="system_auto",
+    ))
+
+    try:
+        await write_translation_audit(
+            db,
+            event_type="package_published",
+            lang_code=language_code,
+            details={"version": next_version, "string_count": len(approved), "auto": True},
+            performed_by="system_auto",
+            dashboard_user_id="",
+        )
+    except Exception as exc:
+        log.warning("_auto_publish_language audit write failed for %s: %s", language_code, exc)
+
+    await db.commit()
+    return True
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
@@ -211,8 +343,9 @@ async def get_package_version(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="No published question package found",
         )
+    content_version = await get_questions_content_version(db)
     published_at = row.published_at.isoformat() if row.published_at else None
-    return {"version": row.version, "published_at": published_at}
+    return {"version": row.version, "content_version": content_version, "published_at": published_at}
 
 
 @router.get("", response_model=list[PackageListItem])
@@ -465,7 +598,171 @@ async def add_question_to_draft(
     )
 
 
-@router.patch("/{version}/publish", response_model=PackageOut)
+@router.get("/draft/publish-readiness")
+async def get_publish_readiness(
+    db: AsyncSession = Depends(get_db),
+    current_user: DashboardUser = Depends(require_admin),
+) -> dict:
+    """Return publish gate status without publishing. Admin only."""
+    from app.models.language_package import Language, StringKey, Translation
+
+    draft_result = await db.execute(
+        select(QuestionPackage)
+        .where(QuestionPackage.status == "draft")
+        .options(selectinload(QuestionPackage.questions).selectinload(Question.options))
+        .order_by(QuestionPackage.created_at.desc())
+    )
+    draft_pkg = draft_result.scalar_one_or_none()
+
+    if draft_pkg is None:
+        return {
+            "can_publish": False,
+            "has_draft": False,
+            "draft_version": None,
+            "blocking_languages": [],
+            "auto_language_publish_eligible": False,
+        }
+
+    # Collect string keys for active questions in draft
+    draft_question_keys: set[str] = set()
+    for question in draft_pkg.questions:
+        if not question.is_active:
+            continue
+        draft_question_keys.add(f"Q{question.order_index}_LABEL")
+        for option in question.options:
+            draft_question_keys.add(f"Q{question.order_index}_OPT_{option.option_value.upper()}")
+
+    # Find active languages (skip English — it is the source)
+    langs_result = await db.execute(
+        select(Language).where(
+            or_(Language.status == "active", Language.is_protected == True)
+        )
+    )
+    active_languages = langs_result.scalars().all()
+
+    # Check for MISSING translations per language
+    blocking = []
+    if draft_question_keys:
+        for lang in active_languages:
+            if lang.code == "en":
+                continue
+            missing_result = await db.execute(
+                select(StringKey.key)
+                .join(Translation, Translation.string_key_id == StringKey.id)
+                .where(
+                    StringKey.key.in_(draft_question_keys),
+                    Translation.language_code == lang.code,
+                    Translation.status == "missing",
+                )
+            )
+            missing_keys = [row[0] for row in missing_result.all()]
+            if missing_keys:
+                blocking.append({
+                    "language_code": lang.code,
+                    "language_name": lang.name,
+                    "missing_count": len(missing_keys),
+                    "missing_keys": missing_keys,
+                })
+
+    can_publish = len(blocking) == 0
+
+    # auto_language_publish_eligible: ALL active langs have zero missing AND zero draft
+    auto_eligible = False
+    if can_publish:
+        all_clean = True
+        for lang in active_languages:
+            if lang.code == "en":
+                continue
+            count_result = await db.execute(
+                select(func.count(Translation.id)).where(
+                    Translation.language_code == lang.code,
+                    Translation.status.in_(["missing", "draft"]),
+                )
+            )
+            if (count_result.scalar() or 0) > 0:
+                all_clean = False
+                break
+        auto_eligible = all_clean
+
+    return {
+        "can_publish": can_publish,
+        "has_draft": True,
+        "draft_version": draft_pkg.version,
+        "blocking_languages": blocking,
+        "auto_language_publish_eligible": auto_eligible,
+    }
+
+
+@router.patch("/draft/questions/{question_id}/deactivate")
+async def deactivate_question(
+    question_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: DashboardUser = Depends(require_admin),
+) -> dict:
+    """Set a non-core question inactive and mark its StringKeys inactive. Admin only."""
+    from app.models.language_package import StringKey
+
+    result = await db.execute(select(Question).where(Question.id == question_id))
+    question = result.scalar_one_or_none()
+    if question is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Question not found")
+    if question.is_core:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "error": "core_question_immutable",
+                "message": "Core questions cannot be deactivated from the dashboard",
+            },
+        )
+
+    question.is_active = False
+
+    key_prefix = f"Q{question.order_index}_"
+    sk_result = await db.execute(
+        select(StringKey).where(StringKey.key.like(f"{key_prefix}%"))
+    )
+    for sk in sk_result.scalars().all():
+        sk.is_active = False
+
+    await db.commit()
+    return {"question_id": str(question_id), "deactivated": True}
+
+
+@router.patch("/draft/questions/{question_id}/reactivate")
+async def reactivate_question(
+    question_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: DashboardUser = Depends(require_admin),
+) -> dict:
+    """Restore a deactivated question and its StringKeys. Admin only."""
+    from app.models.language_package import StringKey
+
+    result = await db.execute(select(Question).where(Question.id == question_id))
+    question = result.scalar_one_or_none()
+    if question is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Question not found")
+
+    question.is_active = True
+
+    key_prefix = f"Q{question.order_index}_"
+    sk_result = await db.execute(
+        select(StringKey).where(StringKey.key.like(f"{key_prefix}%"))
+    )
+    for sk in sk_result.scalars().all():
+        sk.is_active = True
+
+    await db.commit()
+
+    try:
+        from app.routers.language_packages import ensure_string_keys_synced
+        await ensure_string_keys_synced(db)
+    except Exception as exc:
+        log.warning("reactivate_question: ensure_string_keys_synced failed: %s", exc)
+
+    return {"question_id": str(question_id), "reactivated": True}
+
+
+@router.patch("/{version}/publish", response_model=PublishPackageOut)
 async def publish_package(
     version: str,
     db: AsyncSession = Depends(get_db),
@@ -479,6 +776,8 @@ async def publish_package(
 
     Admin only.
     """
+    from app.models.language_package import Language, StringKey, Translation
+
     # Fetch the target package
     result = await db.execute(
         select(QuestionPackage)
@@ -499,6 +798,56 @@ async def publish_package(
             detail=f"Package is '{pkg.status}' — only draft packages can be published",
         )
 
+    # ── Gate: block only on MISSING translations for draft's active questions ──
+
+    draft_question_keys: set[str] = set()
+    for question in pkg.questions:
+        if not question.is_active:
+            continue
+        draft_question_keys.add(f"Q{question.order_index}_LABEL")
+        for option in question.options:
+            draft_question_keys.add(f"Q{question.order_index}_OPT_{option.option_value.upper()}")
+
+    if draft_question_keys:
+        langs_result = await db.execute(
+            select(Language).where(
+                or_(Language.status == "active", Language.is_protected == True)
+            )
+        )
+        active_languages = langs_result.scalars().all()
+
+        blocking = []
+        for lang in active_languages:
+            if lang.code == "en":
+                continue
+            missing_result = await db.execute(
+                select(StringKey.key)
+                .join(Translation, Translation.string_key_id == StringKey.id)
+                .where(
+                    StringKey.key.in_(draft_question_keys),
+                    Translation.language_code == lang.code,
+                    Translation.status == "missing",
+                )
+            )
+            missing_keys = [row[0] for row in missing_result.all()]
+            if missing_keys:
+                blocking.append({
+                    "language_code": lang.code,
+                    "language_name": lang.name,
+                    "missing_count": len(missing_keys),
+                    "missing_keys": missing_keys,
+                })
+
+        if blocking:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={
+                    "error": "translation_incomplete",
+                    "message": "Cannot publish — question translations are missing in some languages",
+                    "blocking": blocking,
+                },
+            )
+
     # Archive the current published package (there should be at most one)
     prev_result = await db.execute(
         select(QuestionPackage).where(QuestionPackage.status == "published")
@@ -512,6 +861,47 @@ async def publish_package(
 
     await db.commit()
 
+    # Increment content version after successful publish
+    content_version = await increment_questions_content_version(db)
+
+    # Auto-publish language packages if all languages have zero missing + draft
+    auto_language_published = False
+    try:
+        langs_result2 = await db.execute(
+            select(Language).where(
+                or_(Language.status == "active", Language.is_protected == True)
+            )
+        )
+        all_active_langs = langs_result2.scalars().all()
+        all_clean = True
+        for lang in all_active_langs:
+            if lang.code == "en":
+                continue
+            count_result = await db.execute(
+                select(func.count(Translation.id)).where(
+                    Translation.language_code == lang.code,
+                    Translation.status.in_(["missing", "draft"]),
+                )
+            )
+            if (count_result.scalar() or 0) > 0:
+                all_clean = False
+                break
+
+        if all_clean:
+            published_any = False
+            for lang in all_active_langs:
+                if lang.code == "en":
+                    continue
+                try:
+                    ok = await _auto_publish_language(db, lang.code)
+                    if ok:
+                        published_any = True
+                except Exception as exc:
+                    log.warning("auto-publish failed for %s: %s", lang.code, exc)
+            auto_language_published = published_any
+    except Exception as exc:
+        log.warning("auto-language-publish check failed: %s", exc)
+
     # Re-fetch to return current state
     result = await db.execute(
         select(QuestionPackage)
@@ -522,13 +912,15 @@ async def publish_package(
     )
     pkg = result.scalar_one()
 
-    return PackageOut(
+    return PublishPackageOut(
         id=str(pkg.id),
         version=pkg.version,
         status=pkg.status,
         created_at=pkg.created_at,
         published_at=pkg.published_at,
         questions=[_build_question_out(q) for q in pkg.questions],
+        auto_language_published=auto_language_published,
+        content_version=content_version,
     )
 
 

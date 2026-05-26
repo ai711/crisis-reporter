@@ -13,6 +13,7 @@ import NetInfo from "@react-native-community/netinfo";
 import * as SecureStore from "expo-secure-store";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import SideMenu from "../components/SideMenu";
+import { loadDynamicLanguagePackage } from "../i18n";
 
 const { width: screenWidth } = Dimensions.get("window");
 const scale = (size: number) => Math.round((screenWidth / 375) * size);
@@ -83,32 +84,50 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
     };
   }, []);
 
-  // Background question package version check — once per app session
+  // Background version check — questions + language package, once per app session
   useEffect(() => {
-    const syncQuestionPackage = async () => {
+    const checkVersionsAndSync = async () => {
       if (packageSyncDone.current) return;
       packageSyncDone.current = true;
 
       const netState = await NetInfo.fetch();
       if (!netState.isConnected) return;
 
+      const langCode = (await AsyncStorage.getItem("cr_language")) ?? "en";
+
+      // Question package: version-gate on content_version
       try {
-        const langCode = (await AsyncStorage.getItem("cr_language")) ?? "en";
-        const response = await api.get(`/api/question-packages/active?lang=${langCode}`);
-        const newPackage = response.data;
-
-        const cached = await AsyncStorage.getItem("cr_question_package");
-        const cachedParsed = cached ? JSON.parse(cached) : null;
-
-        if (!cachedParsed || cachedParsed.version !== newPackage.version) {
-          await AsyncStorage.setItem("cr_question_package", JSON.stringify(newPackage));
+        const versionRes = await api.get("/api/question-packages/version");
+        const latestContent = String(versionRes.data.content_version ?? versionRes.data.version ?? "");
+        const cachedContent = await AsyncStorage.getItem("cr_question_content_version");
+        if (latestContent && latestContent !== cachedContent) {
+          const pkgRes = await api.get(`/api/question-packages/active?lang=${langCode}`);
+          await AsyncStorage.setItem("cr_question_package", JSON.stringify(pkgRes.data));
+          await AsyncStorage.setItem("cr_question_content_version", latestContent);
         }
       } catch {
         // Non-blocking — cached package will be used
       }
+
+      // Language package: version-gate on lang version
+      if (langCode !== "en") {
+        try {
+          const langVerRes = await api.get(`/api/language-packages/${langCode}/version`);
+          const latestLangVer = String(langVerRes.data.version ?? "");
+          const cachedLangVer = await AsyncStorage.getItem(`cr_lang_version_${langCode}`);
+          if (latestLangVer && latestLangVer !== cachedLangVer) {
+            const langPkgRes = await api.get(`/api/language-packages/active/${langCode}`);
+            await AsyncStorage.setItem(`cr_lang_package_${langCode}`, JSON.stringify(langPkgRes.data));
+            await AsyncStorage.setItem(`cr_lang_version_${langCode}`, latestLangVer);
+            await loadDynamicLanguagePackage(langCode);
+          }
+        } catch {
+          // Non-blocking — cached language package will be used
+        }
+      }
     };
 
-    syncQuestionPackage();
+    checkVersionsAndSync();
   }, []);
 
   // Active crisis banner — best-effort, no loading state
