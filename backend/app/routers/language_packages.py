@@ -380,11 +380,27 @@ async def get_available_languages(
     return result
 
 
-@packages_router.get("/active/{language_code}", response_model=dict[str, str])
+@packages_router.get("/active/{language_code}")
 async def get_active_package(
     language_code: str,
     db: AsyncSession = Depends(get_db),
-) -> dict[str, str]:
+) -> dict:
+    """Public endpoint — returns the full published string package for a language.
+
+    Response shape:
+        {
+          "version": "1.3",          # version string from LanguagePackage row
+          "language_code": "ar",
+          "strings": {"KEY": "translated text", ...}
+        }
+
+    Every active string key is guaranteed to appear in "strings". Keys that
+    have a published translation use that translation. Keys that do not have
+    a published translation fall back to the English source text, so the
+    mobile app never receives an incomplete bundle.
+
+    Returns version=None and strings={} when no published package exists yet.
+    """
     pkg_result = await db.execute(
         select(LanguagePackage).where(
             LanguagePackage.language_code == language_code,
@@ -393,8 +409,13 @@ async def get_active_package(
     )
     pkg = pkg_result.scalar_one_or_none()
     if not pkg:
-        return {}
+        return {
+            "version": None,
+            "language_code": language_code,
+            "strings": {},
+        }
 
+    # Fetch all published translations for this language
     result = await db.execute(
         select(StringKey.key, Translation.translated_text)
         .join(Translation, Translation.string_key_id == StringKey.id)
@@ -404,7 +425,57 @@ async def get_active_package(
             StringKey.is_active == True,
         )
     )
-    return {row.key: row.translated_text for row in result.all()}
+    strings_dict = {row.key: row.translated_text for row in result.all()}
+
+    # English fallback: fetch any active string keys with no published translation
+    # and substitute the English source text so no key is ever silently dropped.
+    published_keys = set(strings_dict.keys())
+    missing_result = await db.execute(
+        select(StringKey.key, StringKey.english_text)
+        .where(
+            StringKey.is_active == True,
+            StringKey.key.not_in(published_keys) if published_keys else True,
+        )
+    )
+    for row in missing_result.all():
+        strings_dict[row.key] = row.english_text  # English fallback
+
+    return {
+        "version": pkg.version,
+        "language_code": language_code,
+        "strings": strings_dict,
+    }
+
+
+@packages_router.get("/{language_code}/version")
+async def get_package_version(
+    language_code: str,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Public endpoint — returns only the current published version for a language.
+
+    Used by the mobile app to check whether a newer package is available
+    before downloading the full string payload. No auth required.
+
+    Response shape:
+        {
+          "language_code": "ar",
+          "version": "1.3",   # None when no published package exists
+          "has_package": true
+        }
+    """
+    pkg_result = await db.execute(
+        select(LanguagePackage).where(
+            LanguagePackage.language_code == language_code,
+            LanguagePackage.status == "published",
+        )
+    )
+    pkg = pkg_result.scalar_one_or_none()
+    return {
+        "language_code": language_code,
+        "version": pkg.version if pkg else None,
+        "has_package": pkg is not None,
+    }
 
 
 @packages_router.post(
