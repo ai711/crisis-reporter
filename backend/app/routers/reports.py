@@ -1,3 +1,4 @@
+import json
 import uuid
 from datetime import datetime, timezone
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status, Request, Query
@@ -72,6 +73,7 @@ class ReportSubmitRequest(BaseModel):
     submission_submitted_at: Optional[str] = None
     photo_metadata: Optional[str] = None
     photo_exif_data: Optional[str] = None
+    photos_metadata: Optional[List[dict]] = None
 
     # UNDP question fields
     infrastructure_other: Optional[str] = None
@@ -96,6 +98,10 @@ class ReportSubmitRequest(BaseModel):
     mcc: Optional[str] = None
     mnc: Optional[str] = None
     carrier_name: Optional[str] = None
+
+    # Device identification
+    device_id: Optional[str] = None
+    os_device_id: Optional[str] = None
 
     # Offline queue tracking
     was_queued: bool = False
@@ -345,7 +351,7 @@ async def submit_report(
         flow_started_at=request.flow_started_at,
         submission_started_at=submission_started_at,
         submission_submitted_at=submission_submitted_at,
-        photo_metadata=request.photo_metadata,
+        photo_metadata=json.dumps(request.photos_metadata) if request.photos_metadata else request.photo_metadata,
         photo_exif_data=request.photo_exif_data,
         # Cellular
         mcc=request.mcc,
@@ -353,6 +359,8 @@ async def submit_report(
         carrier_name=request.carrier_name,
         ip_address_encrypted=ip_encrypted,
         ip_address_hash=ip_hash,
+        device_id=request.device_id,
+        os_device_id=request.os_device_id,
         was_queued=request.was_queued,
         queued_at=request.queued_at,
         synced_at=datetime.now(timezone.utc) if request.was_queued else None,

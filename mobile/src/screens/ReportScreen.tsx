@@ -1293,6 +1293,8 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
 
     // TODO: MCC reading requires expo-cellular — install with: expo install expo-cellular
     // mcc, mnc, carrier_name are intentionally omitted until expo-cellular is added
+    const deviceId = await SecureStore.getItemAsync("cr_device_id");
+    const osDeviceId = await SecureStore.getItemAsync("cr_os_device_id");
     const reportPayload = {
       crisis_id: crisisId ?? undefined,
       flow_started_at: flowStartedAt ?? new Date().toISOString(),
@@ -1321,40 +1323,49 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
         location_address: buildLocationAddress(),
         location_landmark: locationLandmark || null,
         location_building_name: locationBuildingName || null,
+        location_note: locationNote || null,
+        location_entry_method: locationMethod ?? (
+          selectedBuilding ? 'map_selection' :
+          pinCoords ? 'pin_drop' :
+          (locationAddress || locationLandmark || locationBuildingName) ? 'manual' :
+          null
+        ),
+        location_internet_available: isOnlineAtLocation,
+        building_name_osm: selectedBuilding?.name || null,
+        building_centroid_lat: selectedBuilding?.centroid
+          ? selectedBuilding.centroid[1]
+          : null,
+        building_centroid_lng: selectedBuilding?.centroid
+          ? selectedBuilding.centroid[0]
+          : null,
       },
-      location_note: locationNote || undefined,
-      location_method: locationMethod ?? (
-        selectedBuilding ? 'map_selection' :
-        pinCoords ? 'pin_drop' :
-        (locationAddress || locationLandmark || locationBuildingName) ? 'manual' :
-        undefined
-      ),
-      internet_available_at_location: isOnlineAtLocation,
       offline_map_pack_used: false,
       building_name: editableBuildingName || selectedBuilding?.name || undefined,
-      building_name_osm: selectedBuilding?.name ?? undefined,
       building_type: selectedBuilding?.building ?? undefined,
       gps_accuracy: locationGpsCoords?.accuracy ?? undefined,
       reporter_id: reporterId || undefined,
+      device_id: deviceId || null,
+      os_device_id: osDeviceId || null,
       language_code: languageCode,
       question_package_version: questionPackage?.version ?? null,
       question_package_translation_version: questionPackage?.translation_version ?? null,
-      photos: photos.map((photo, index) => ({
-        uri: photo.uri,
+      photos_metadata: photos.map((photo, index) => ({
         index,
-        original_size: photo.originalSize,
-        final_size: photo.finalSize,
-        compression_applied: photo.compressionApplied,
-        format_converted: photo.formatConverted,
-        mime_type: photo.mimeType,
-        exif_date_taken: photo.exif.dateTaken,
-        exif_width: photo.exif.width,
-        exif_height: photo.exif.height,
+        original_size_kb: photo.originalSize ? Math.round(photo.originalSize / 1024) : null,
+        final_size_kb: photo.finalSize ? Math.round(photo.finalSize / 1024) : null,
+        compression_applied: photo.compressionApplied || false,
+        compression_ratio: (photo.originalSize && photo.finalSize && photo.originalSize > 0)
+          ? Math.round((photo.finalSize / photo.originalSize) * 100) / 100
+          : null,
+        mime_type: photo.mimeType || null,
+        exif_date_taken: photo.exif?.dateTaken || null,
+        exif_width: photo.exif?.width || null,
+        exif_height: photo.exif?.height || null,
       })),
-      additional_answers: Object.entries(additionalAnswers).map(([questionId, answer]) => ({
+      question_answers: Object.entries(additionalAnswers).map(([questionId, answer]) => ({
         question_id: questionId,
-        answer: Array.isArray(answer) ? undefined : answer,
-        answers: Array.isArray(answer) ? answer : undefined,
+        answer: Array.isArray(answer) ? null : answer,
+        answers: Array.isArray(answer) ? answer : null,
       })),
       was_queued: false,
     };

@@ -121,6 +121,10 @@ class Report(Base):
     mnc: Mapped[str | None] = mapped_column(String(10), nullable=True)
     carrier_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
+    # Device identification
+    device_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    os_device_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+
     # IP address (encrypted at application level)
     ip_address_encrypted: Mapped[bytes | None] = mapped_column(
         String(500), nullable=True
