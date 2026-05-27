@@ -3632,7 +3632,7 @@ const styles = StyleSheet.create({
 
   // Pin marker
   pinMarker: { alignItems: 'center', justifyContent: 'center' },
-  pinMarkerIcon: { fontSize: 32, lineHeight: 36 },
+  pinMarkerIcon: { fontSize: scale(32), lineHeight: 36 },
 
   // Bottom panel (building name / pin note / location note)
   mapBottomPanel: {
@@ -4184,7 +4184,7 @@ const styles = StyleSheet.create({
     alignSelf: 'center', marginBottom: 8,
   },
   optionRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 16, minHeight: 52 },
-  optionIcon: { fontSize: 20, width: 36 },
+  optionIcon: { fontSize: scale(20), width: 36 },
   optionLabel: { fontSize: scale(16), color: '#333333' },
   optionLabelDanger: { color: '#E53E3E' },
   optionDivider: { height: 1, backgroundColor: '#F0F0F0' },
