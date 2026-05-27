@@ -23,7 +23,7 @@ const BADGE_DEFINITIONS: Badge[] = [
   {
     id: 'safety_training',
     name: 'Safety Training',
-    description: 'Completed both Part A and Part B of the Safety Tips training.',
+    description: 'Completed all three parts of the Safety Tips training.',
     earned: false,
     icon: '🛡️',
   },
@@ -55,7 +55,8 @@ export default function BadgesScreen() {
       // Check local safety completion for badge eligibility
       const safetyA = await AsyncStorage.getItem('cr_safety_a_complete');
       const safetyB = await AsyncStorage.getItem('cr_safety_b_complete');
-      const safetyEarned = safetyA === 'true' && safetyB === 'true';
+      const partC = await AsyncStorage.getItem('cr_safety_c_complete');
+      const safetyEarned = safetyA === 'true' && safetyB === 'true' && partC === 'true';
 
       setBadges((prev) =>
         prev.map((b) =>

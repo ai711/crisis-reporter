@@ -70,7 +70,6 @@ export default function OnboardingScreen() {
   const [search, setSearch] = useState("");
   const [selectedCountry, setSelectedCountry] = useState<Country | null>(null);
   const [selectedLang, setSelectedLang] = useState<string | null>(null);
-  const [officialLang, setOfficialLang] = useState<{ code: string; label: string } | null>(null);
   const [officialLangLoading, setOfficialLangLoading] = useState(false);
   const [countryDropdownOpen, setCountryDropdownOpen] = useState(false);
   const [availableLangs, setAvailableLangs] = useState<{code: string, name: string, is_un_language: boolean}[]>([]);

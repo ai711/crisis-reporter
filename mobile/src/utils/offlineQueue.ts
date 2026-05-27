@@ -1,5 +1,4 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import * as FileSystem from "expo-file-system";
 import type { QueuedReport, QueuedPhoto, ReportSubmitRequest } from "../types";
 import { tokenStorage } from "../services/api";
 

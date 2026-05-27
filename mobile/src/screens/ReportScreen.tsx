@@ -360,7 +360,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
   // Version-gated question package sync — loads cache immediately, only re-downloads if version changed
   useEffect(() => {
     const checkAndSyncQuestions = async () => {
-      const langCode = await AsyncStorage.getItem('selected_language') || 'en';
+      const langCode = await AsyncStorage.getItem('cr_language') || 'en';
 
       // Load cached package immediately so questions render without waiting for network
       const cachedStr = await AsyncStorage.getItem('cr_question_package');
@@ -1299,7 +1299,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
     const netState = await NetInfo.fetch();
     const networkType = netState.type || 'unknown';
     const appVersion = Constants.expoConfig?.version || (Constants as any).manifest?.version || '1.0.0';
-    const reporterCountry = await AsyncStorage.getItem('selected_country');
+    const reporterCountry = await AsyncStorage.getItem('cr_country_code');
     const deviceModel = Device.modelName || 'Unknown';
     const deviceBrand = Device.brand || null;
     const deviceOsVersion = Device.osVersion || null;

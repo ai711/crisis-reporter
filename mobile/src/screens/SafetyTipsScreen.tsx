@@ -196,7 +196,7 @@ export default function SafetyTipsScreen() {
           'Safety Training Complete! 🎉',
           'You have completed all three parts. Check your Badges to see your Safety Training Badge.',
           [
-            { text: 'View Badges', onPress: () => navigation.navigate('Badges') },
+            { text: 'View Badges', onPress: () => navigation.navigate('BadgesScreen') },
             { text: 'Done' },
           ],
         );
@@ -210,6 +210,7 @@ export default function SafetyTipsScreen() {
       const newProgressA = { ...progressA, [disasterType]: true };
       setProgressA(newProgressA);
       await AsyncStorage.setItem('cr_tips_progress_a', JSON.stringify(newProgressA));
+      await AsyncStorage.setItem('cr_safety_a_complete', 'true');
       syncProgress(newProgressA, progressB, progressC);
       checkBadge(newProgressA, progressB, progressC);
       setViewState({ screen: 'part_a_list' });
@@ -220,6 +221,7 @@ export default function SafetyTipsScreen() {
   const handlePartBComplete = useCallback(async () => {
     setProgressB(true);
     await AsyncStorage.setItem('cr_tips_progress_b', 'true');
+    await AsyncStorage.setItem('cr_safety_b_complete', 'true');
     syncProgress(progressA, true, progressC);
     checkBadge(progressA, true, progressC);
     setViewState({ screen: 'overview' });
@@ -228,6 +230,7 @@ export default function SafetyTipsScreen() {
   const handlePartCComplete = useCallback(async () => {
     setProgressC(true);
     await AsyncStorage.setItem('cr_tips_progress_c', 'true');
+    await AsyncStorage.setItem('cr_safety_c_complete', 'true');
     syncProgress(progressA, progressB, true);
     checkBadge(progressA, progressB, true);
     setViewState({ screen: 'overview' });
@@ -341,7 +344,7 @@ export default function SafetyTipsScreen() {
             <Text style={styles.badgeTeaserText}>
               Complete all three parts to unlock your Safety Training Badge
             </Text>
-            <TouchableOpacity onPress={() => navigation.navigate('Badges')}>
+            <TouchableOpacity onPress={() => navigation.navigate('BadgesScreen')}>
               <Text style={styles.badgeTeaserLink}>View Badges →</Text>
             </TouchableOpacity>
           </View>
