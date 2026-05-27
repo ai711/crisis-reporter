@@ -25,6 +25,7 @@ import {
 } from "@maplibre/maplibre-react-native";
 import { useAuthStore } from "../stores/authStore";
 import api from "../services/api";
+import * as Device from 'expo-device';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as FileSystem from 'expo-file-system';
 import { addToQueue, syncQueue } from "../utils/offlineQueue";
@@ -1299,7 +1300,9 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
     const networkType = netState.type || 'unknown';
     const appVersion = Constants.expoConfig?.version || (Constants as any).manifest?.version || '1.0.0';
     const reporterCountry = await AsyncStorage.getItem('selected_country');
-    const deviceModel = Platform.OS === 'android' ? 'Android Device' : 'iOS Device';
+    const deviceModel = Device.modelName || 'Unknown';
+    const deviceBrand = Device.brand || null;
+    const deviceOsVersion = Device.osVersion || null;
     const reportPayload = {
       crisis_id: crisisId ?? undefined,
       flow_started_at: flowStartedAt ?? new Date().toISOString(),
@@ -1353,8 +1356,8 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
       os_device_id: osDeviceId || null,
       app_version: appVersion,
       device_model: deviceModel,
-      device_brand: null,
-      device_os_version: null,
+      device_brand: deviceBrand,
+      device_os_version: deviceOsVersion,
       network_type_at_submission: networkType,
       reporter_country: reporterCountry || null,
       language_code: languageCode,
