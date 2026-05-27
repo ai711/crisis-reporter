@@ -102,6 +102,13 @@ class ReportSubmitRequest(BaseModel):
     # Device identification
     device_id: Optional[str] = None
     os_device_id: Optional[str] = None
+    device_model: Optional[str] = None
+    device_brand: Optional[str] = None
+    device_os_version: Optional[str] = None
+
+    # Submission context
+    network_type_at_submission: Optional[str] = None
+    reporter_country: Optional[str] = None
 
     # Offline queue tracking
     was_queued: bool = False
@@ -237,10 +244,11 @@ async def submit_report(
         )
 
     # Validate platform
-    if request.platform not in ["android", "pwa", "web"]:
+    valid_platforms = {"android", "pwa", "web", "Native App Android", "Native App iOS"}
+    if request.platform not in valid_platforms:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="platform must be android, pwa, or web",
+            detail="platform must be android, pwa, web, Native App Android, or Native App iOS",
         )
 
     # Resolve reporter — use JWT reporter if available,
@@ -361,6 +369,11 @@ async def submit_report(
         ip_address_hash=ip_hash,
         device_id=request.device_id,
         os_device_id=request.os_device_id,
+        device_model=request.device_model,
+        device_brand=request.device_brand,
+        device_os_version=request.device_os_version,
+        network_type=request.network_type_at_submission,
+        reporter_country=request.reporter_country,
         was_queued=request.was_queued,
         queued_at=request.queued_at,
         synced_at=datetime.now(timezone.utc) if request.was_queued else None,

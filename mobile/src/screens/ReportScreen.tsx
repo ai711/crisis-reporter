@@ -1295,6 +1295,11 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
     // mcc, mnc, carrier_name are intentionally omitted until expo-cellular is added
     const deviceId = await SecureStore.getItemAsync("cr_device_id");
     const osDeviceId = await SecureStore.getItemAsync("cr_os_device_id");
+    const netState = await NetInfo.fetch();
+    const networkType = netState.type || 'unknown';
+    const appVersion = Constants.expoConfig?.version || (Constants as any).manifest?.version || '1.0.0';
+    const reporterCountry = await AsyncStorage.getItem('selected_country');
+    const deviceModel = Platform.OS === 'android' ? 'Android Device' : 'iOS Device';
     const reportPayload = {
       crisis_id: crisisId ?? undefined,
       flow_started_at: flowStartedAt ?? new Date().toISOString(),
@@ -1308,7 +1313,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
       health_services_condition: healthServicesCondition,
       pressing_needs: pressingNeeds,
       ...(pressingNeeds.includes("other") && { pressing_needs_other: pressingNeedsOther }),
-      platform: "android" as const,
+      platform: Platform.OS === 'android' ? 'Native App Android' : 'Native App iOS',
       submitted_at: submitTappedAt,
       building_id: selectedBuilding ? String(selectedBuilding.id) : null,
       location: {
@@ -1346,6 +1351,12 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
       reporter_id: reporterId || undefined,
       device_id: deviceId || null,
       os_device_id: osDeviceId || null,
+      app_version: appVersion,
+      device_model: deviceModel,
+      device_brand: null,
+      device_os_version: null,
+      network_type_at_submission: networkType,
+      reporter_country: reporterCountry || null,
       language_code: languageCode,
       question_package_version: questionPackage?.version ?? null,
       question_package_translation_version: questionPackage?.translation_version ?? null,

@@ -94,9 +94,14 @@ class Report(Base):
 
     # Submission metadata
     platform: Mapped[str] = mapped_column(
-        String(20), nullable=False, index=True
-    )  # android, pwa, web
+        String(50), nullable=False, index=True
+    )  # android, pwa, web, Native App Android, Native App iOS
     app_version: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    device_model: Mapped[str | None] = mapped_column(String(200), nullable=True, default=None)
+    device_brand: Mapped[str | None] = mapped_column(String(100), nullable=True, default=None)
+    device_os_version: Mapped[str | None] = mapped_column(String(50), nullable=True, default=None)
+    network_type: Mapped[str | None] = mapped_column(String(20), nullable=True, default=None)
+    reporter_country: Mapped[str | None] = mapped_column(String(10), nullable=True, default=None)
     language_code: Mapped[str] = mapped_column(
         String(10), default="en", nullable=False
     )
