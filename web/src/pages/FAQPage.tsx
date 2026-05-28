@@ -15,7 +15,7 @@ function IconBack() {
       height={22}
       viewBox="0 0 24 24"
       fill="none"
-      stroke="#fff"
+      stroke="#0468B1"
       strokeWidth={2}
       strokeLinecap="round"
       strokeLinejoin="round"
@@ -109,52 +109,22 @@ export default function FAQPage() {
   }
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        background: "#fff",
-        display: "flex",
-        flexDirection: "column",
-        maxWidth: 480,
-        margin: "0 auto",
-      }}
-    >
+    <div style={{ flex: 1, background: "#F6F3F2", display: "flex", flexDirection: "column" }}>
       {/* Header */}
-      <div
-        style={{
-          background: BLUE,
-          padding: "14px 16px",
-          display: "flex",
-          alignItems: "center",
-          gap: 10,
-          flexShrink: 0,
-        }}
-      >
-        <button
-          onClick={() => navigate("/")}
-          style={{
-            background: "none",
-            border: "none",
-            cursor: "pointer",
-            padding: 4,
-            display: "flex",
-            alignItems: "center",
-          }}
-          aria-label="Back"
-        >
+      <header className="page-header">
+        <button className="page-header-back" onClick={() => navigate("/")} aria-label="Back">
           <IconBack />
         </button>
-        <span style={{ color: "#fff", fontWeight: 700, fontSize: 18, flex: 1 }}>
-          FAQ
-        </span>
-      </div>
+        <span className="page-header-title">FAQ</span>
+        <div className="page-header-spacer" />
+      </header>
 
       {/* Accordion */}
-      <div style={{ flex: 1 }}>
+      <div style={{ flex: 1, padding: "12px 0" }}>
         {FAQS.map((item, i) => {
           const expanded = openIndex === i;
           return (
-            <div key={i} style={{ borderBottom: "1px solid #E2E8F0" }}>
+            <div key={i} style={{ background: "#fff", borderRadius: 16, margin: "0 16px 8px", border: "1px solid #E2E8F0", overflow: "hidden" }}>
               <button
                 onClick={() => toggle(i)}
                 style={{
@@ -210,9 +180,8 @@ export default function FAQPage() {
 
         {/* E3: Contact Support link */}
         <div style={{
-          borderTop: "1px solid #E2E8F0",
           textAlign: "center",
-          padding: "24px 20px 40px",
+          padding: "16px 20px 40px",
         }}>
           <p style={{ color: "#718096", fontSize: "0.875rem", margin: "0 0 8px" }}>
             Can't find what you're looking for?

@@ -1582,6 +1582,7 @@ export default function ReportPage() {
       <div style={styles.header}>
         <button style={styles.backBtn} onClick={() => navigate(-1)}>←</button>
         <h1 style={styles.title}>{t("report.title")}</h1>
+        <div style={{ minWidth: 44, flexShrink: 0 }} />
       </div>
 
       {/* 5-step labeled stepper */}
@@ -2699,30 +2700,46 @@ export default function ReportPage() {
 const styles: Record<string, React.CSSProperties> = {
   container: {
     minHeight: "100dvh",
-    background: "#f4f6f9",
+    background: "#F6F3F2",
     display: "flex",
     flexDirection: "column",
   },
   header: {
-    background: "#1A2B4A",
-    padding: "16px 20px",
+    position: "sticky" as const,
+    top: 0,
+    zIndex: 50,
+    background: "rgba(255,255,255,0.92)",
+    backdropFilter: "blur(12px)",
+    WebkitBackdropFilter: "blur(12px)",
+    height: 56,
     display: "flex",
     alignItems: "center",
-    gap: 16,
+    justifyContent: "space-between",
+    padding: "0 20px",
     flexShrink: 0,
+    boxSizing: "border-box" as const,
   },
   backBtn: {
     background: "transparent",
     border: "none",
-    color: "#fff",
+    color: "#0468B1",
     fontSize: 22,
     cursor: "pointer",
+    minWidth: 44,
+    minHeight: 44,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
   },
   title: {
-    color: "#fff",
-    fontSize: 18,
-    fontWeight: 700,
-    flex: 1,
+    color: "#1B1C1C",
+    fontSize: 17,
+    fontWeight: 600,
+    position: "absolute" as const,
+    left: "50%",
+    transform: "translateX(-50%)",
+    whiteSpace: "nowrap" as const,
   },
   content: {
     flex: 1,
@@ -3057,11 +3074,12 @@ const styles: Record<string, React.CSSProperties> = {
     background: "#0468B1",
     color: "#fff",
     border: "none",
-    borderRadius: 8,
+    borderRadius: 9999,
     fontSize: 16,
     fontWeight: 600,
     cursor: "pointer",
     maxHeight: 56,
+    fontFamily: "inherit",
   },
   secondaryButton: {
     padding: "16px 20px",

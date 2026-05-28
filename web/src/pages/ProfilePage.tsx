@@ -56,7 +56,7 @@ function IconBack() {
       height={22}
       viewBox="0 0 24 24"
       fill="none"
-      stroke="#fff"
+      stroke="#0468B1"
       strokeWidth={2}
       strokeLinecap="round"
       strokeLinejoin="round"
@@ -218,7 +218,7 @@ export default function ProfilePage() {
             <IconBack />
           </button>
           <span style={s.headerTitle}>My Profile</span>
-          <div style={{ width: 36 }} />
+          <div style={{ minWidth: 44, flexShrink: 0 }} />
         </header>
         <div style={s.anonGate}>
           <p style={s.anonGateHeading}>
@@ -256,7 +256,7 @@ export default function ProfilePage() {
             <IconBack />
           </button>
           <span style={s.headerTitle}>My Profile</span>
-          <div style={{ width: 36 }} />
+          <div style={{ minWidth: 44, flexShrink: 0 }} />
         </header>
         <div style={s.loadingWrap}>
           <div style={s.spinner} />
@@ -424,35 +424,47 @@ export default function ProfilePage() {
 
 const s: Record<string, React.CSSProperties> = {
   page: {
-    minHeight: "100vh",
-    background: "#F7FAFC",
+    flex: 1,
+    background: "#F6F3F2",
     display: "flex",
     flexDirection: "column",
-    maxWidth: 480,
-    margin: "0 auto",
   },
   header: {
-    background: "#0468B1",
-    padding: "16px 20px",
+    position: "sticky" as const,
+    top: 0,
+    zIndex: 50,
+    background: "rgba(255,255,255,0.92)",
+    backdropFilter: "blur(12px)",
+    WebkitBackdropFilter: "blur(12px)",
+    height: 56,
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
+    padding: "0 20px",
     flexShrink: 0,
+    boxSizing: "border-box" as const,
   },
   backBtn: {
     background: "transparent",
     border: "none",
     cursor: "pointer",
-    padding: 4,
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 6,
+    minWidth: 44,
+    minHeight: 44,
+    borderRadius: 22,
+    flexShrink: 0,
+    color: "#0468B1",
   },
   headerTitle: {
-    color: "#fff",
-    fontSize: 18,
-    fontWeight: 700,
+    color: "#1B1C1C",
+    fontSize: 17,
+    fontWeight: 600,
+    position: "absolute" as const,
+    left: "50%",
+    transform: "translateX(-50%)",
+    whiteSpace: "nowrap" as const,
   },
   // C8: Anonymous gate styles
   anonGate: {
@@ -553,8 +565,8 @@ const s: Record<string, React.CSSProperties> = {
     gap: 10,
   },
   avatarCircle: {
-    width: 80,
-    height: 80,
+    width: 96,
+    height: 96,
     borderRadius: "50%",
     background: "#E3F2FD",
     display: "flex",
@@ -631,10 +643,11 @@ const s: Record<string, React.CSSProperties> = {
     background: "#0468B1",
     color: "#fff",
     border: "none",
-    borderRadius: 10,
+    borderRadius: 9999,
     fontSize: 16,
     fontWeight: 600,
     transition: "opacity 0.15s",
+    fontFamily: "inherit",
   },
   successMsg: {
     background: "#F0FFF4",

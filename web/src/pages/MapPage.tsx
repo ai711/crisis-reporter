@@ -206,7 +206,7 @@ async function fetchBuildings(mapInstance: maplibregl.Map): Promise<void> {
 
 function IconGPS() {
   return (
-    <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#0468B1" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+    <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
       <circle cx="12" cy="12" r="3" />
       <path d="M12 2v3M12 19v3M2 12h3M19 12h3" />
       <circle cx="12" cy="12" r="8" strokeDasharray="3 3" />
@@ -540,7 +540,7 @@ const s: Record<string, React.CSSProperties> = {
   },
   zoomHint: {
     position: "absolute",
-    bottom: 60, // above GPS button
+    bottom: 140,
     left: "50%",
     transform: "translateX(-50%)",
     background: "rgba(26,43,74,0.82)",
@@ -553,21 +553,21 @@ const s: Record<string, React.CSSProperties> = {
     whiteSpace: "nowrap",
     zIndex: 10,
   },
-  // D35: GPS recentre button
+  // D35: GPS recentre button — sits above fixed bottom nav (~80px)
   gpsBtn: {
     position: "absolute",
-    bottom: 16,
-    right: 52, // sits left of MapLibre NavigationControl (~44px wide)
+    bottom: 88,
+    right: 16,
     width: 44,
     height: 44,
     borderRadius: "50%",
-    background: "#fff",
+    background: "#0468B1",
     border: "none",
     cursor: "pointer",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+    boxShadow: "0 2px 8px rgba(4,104,177,0.35)",
     zIndex: 10,
   },
   // D33/D34: Panel overlay and panels
@@ -580,7 +580,7 @@ const s: Record<string, React.CSSProperties> = {
   // Desktop: right side panel
   rightPanel: {
     position: "fixed",
-    top: 64, // AppLayout desktop nav height
+    top: 56,
     right: 0,
     bottom: 0,
     width: 360,
@@ -599,7 +599,7 @@ const s: Record<string, React.CSSProperties> = {
     right: 0,
     maxHeight: "60vh",
     background: "#fff",
-    borderRadius: "16px 16px 0 0",
+    borderRadius: "20px 20px 0 0",
     boxShadow: "0 -4px 24px rgba(0,0,0,0.12)",
     zIndex: 201,
     display: "flex",

@@ -11,7 +11,7 @@ function IconBack() {
       height={22}
       viewBox="0 0 24 24"
       fill="none"
-      stroke="#fff"
+      stroke="#0468B1"
       strokeWidth={2}
       strokeLinecap="round"
       strokeLinejoin="round"
@@ -28,7 +28,7 @@ function Card({ children, style }: { children: React.ReactNode; style?: React.CS
     <div
       style={{
         background: "#fff",
-        borderRadius: 12,
+        borderRadius: 16,
         border: "1px solid #e2e8f0",
         overflow: "hidden",
         boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
@@ -110,57 +110,15 @@ export default function AboutPage() {
   const navigate = useNavigate();
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        background: "#f4f6f9",
-        display: "flex",
-        flexDirection: "column",
-        maxWidth: 480,
-        margin: "0 auto",
-      }}
-    >
+    <div style={{ flex: 1, background: "#F6F3F2", display: "flex", flexDirection: "column" }}>
       {/* ── Header ── */}
-      <div
-        style={{
-          background: BLUE,
-          padding: "14px 16px",
-          display: "flex",
-          alignItems: "center",
-          gap: 10,
-          position: "sticky",
-          top: 0,
-          zIndex: 50,
-          flexShrink: 0,
-        }}
-      >
-        <button
-          onClick={() => navigate("/")}
-          aria-label="Back"
-          style={{
-            background: "transparent",
-            border: "none",
-            padding: 4,
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            flexShrink: 0,
-          }}
-        >
+      <header className="page-header">
+        <button className="page-header-back" onClick={() => navigate("/")} aria-label="Back">
           <IconBack />
         </button>
-        <h1
-          style={{
-            color: "#fff",
-            fontSize: 17,
-            fontWeight: 700,
-            margin: 0,
-            letterSpacing: 0.2,
-          }}
-        >
-          About Crisis Reporter
-        </h1>
-      </div>
+        <span className="page-header-title">About Crisis Reporter</span>
+        <div className="page-header-spacer" />
+      </header>
 
       {/* ── Scrollable content ── */}
       <div
@@ -184,7 +142,7 @@ export default function AboutPage() {
             gap: 6,
           }}
         >
-          <div style={{ fontSize: 40, marginBottom: 4 }}>🆘</div>
+          <div style={{ width: 72, height: 72, borderRadius: "50%", background: "#0468B1", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 4, fontSize: 32 }}>🆘</div>
           <p
             style={{
               fontSize: 28,

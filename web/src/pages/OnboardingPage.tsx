@@ -212,7 +212,7 @@ function TermsScreen({
   showDeclineMsg: boolean;
 }) {
   return (
-    <div style={s.page}>
+    <div className="app-container">
       <div style={s.scrollArea}>
         <OnboardingHeader />
         <div style={s.section}>
@@ -411,7 +411,7 @@ export default function OnboardingPage() {
   ];
 
   return (
-    <div style={s.page}>
+    <div className="app-container">
       <div style={s.scrollArea}>
         <OnboardingHeader />
 
@@ -606,15 +606,6 @@ export default function OnboardingPage() {
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const s: Record<string, React.CSSProperties> = {
-  page: {
-    minHeight: "100vh",
-    background: "#FAFBFC",
-    display: "flex",
-    flexDirection: "column",
-    maxWidth: 480,
-    margin: "0 auto",
-    position: "relative",
-  },
   scrollArea: {
     flex: 1,
     overflowY: "auto",
@@ -622,14 +613,13 @@ const s: Record<string, React.CSSProperties> = {
   headerArea: {
     textAlign: "center",
     padding: "40px 24px 28px",
-    background: "#fff",
-    borderBottom: "1px solid #EDF2F7",
+    background: "#0468B1",
   },
   shieldContainer: {
     width: 64,
     height: 64,
     borderRadius: 32,
-    background: "#0468B1",
+    background: "rgba(255,255,255,0.2)",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
@@ -638,13 +628,13 @@ const s: Record<string, React.CSSProperties> = {
   appName: {
     fontSize: 22,
     fontWeight: 700,
-    color: "#1A2B4A",
+    color: "#FFFFFF",
     margin: "0 0 6px",
     letterSpacing: -0.3,
   },
   appSubtitle: {
     fontSize: 13,
-    color: "#718096",
+    color: "rgba(255,255,255,0.8)",
     maxWidth: 280,
     margin: "0 auto",
     lineHeight: 1.55,
@@ -765,7 +755,7 @@ const s: Record<string, React.CSSProperties> = {
   continueBtn: {
     width: "100%",
     height: 56,
-    borderRadius: 12,
+    borderRadius: 9999,
     border: "none",
     fontSize: 16,
     transition: "background 0.15s, opacity 0.15s",

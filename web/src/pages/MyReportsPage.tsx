@@ -101,7 +101,7 @@ function useWindowWidth(): number {
 const PAGE_SIZE = 20;
 
 export default function MyReportsPage() {
-  const { t } = useTranslation();
+  useTranslation();
   const { reporterId } = useAuthStore();
   const navigate = useNavigate();
   const width = useWindowWidth();
@@ -187,9 +187,6 @@ export default function MyReportsPage() {
     return (
       <div style={styles.container}>
         <style>{`@keyframes cr-spin { to { transform: rotate(360deg); } }`}</style>
-        <div style={styles.header}>
-          <h1 style={styles.title}>{t("home.myReports")}</h1>
-        </div>
         <div style={{ flex: 1, padding: "0 16px 32px" }}>
           <button onClick={() => setSelectedReport(null)} style={styles.backBtn}>
             ← Back to My Reports
@@ -204,9 +201,6 @@ export default function MyReportsPage() {
   return (
     <div style={styles.container}>
       <style>{`@keyframes cr-spin { to { transform: rotate(360deg); } }`}</style>
-      <div style={styles.header}>
-        <h1 style={styles.title}>{t("home.myReports")}</h1>
-      </div>
 
       <div style={styles.content}>
         {/* A3: Login prompt for anonymous reporters — always shown when not logged in */}
@@ -343,24 +337,14 @@ export default function MyReportsPage() {
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
-    minHeight: "100vh",
-    background: "#f4f6f9",
+    flex: 1,
+    background: "#F6F3F2",
     display: "flex",
     flexDirection: "column",
   },
-  header: {
-    background: "#1A2B4A",
-    padding: "16px 20px",
-    display: "flex",
-    alignItems: "center",
-    gap: 16,
-  },
-  title: { color: "#fff", fontSize: 18, fontWeight: 700, margin: 0 },
   content: {
     flex: 1,
     padding: 16,
-    maxWidth: 600,
-    margin: "0 auto",
     width: "100%",
     boxSizing: "border-box",
   },
@@ -477,7 +461,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   card: {
     background: "#fff",
-    borderRadius: 12,
+    borderRadius: 16,
     display: "flex",
     overflow: "hidden",
     boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
@@ -530,7 +514,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   detailPanel: {
     position: "fixed",
-    top: 64,
+    top: 56,
     right: 0,
     width: 380,
     height: "calc(100dvh - 64px)",

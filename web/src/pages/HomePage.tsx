@@ -276,7 +276,7 @@ export default function HomePage() {
 const s: Record<string, React.CSSProperties> = {
   page: {
     flex: 1,
-    background: "#fff",
+    background: "var(--color-background)",
     display: "flex",
     flexDirection: "column",
   },
@@ -316,16 +316,18 @@ const s: Record<string, React.CSSProperties> = {
   },
   reportBtn: {
     width: "100%",
-    padding: "20px",
-    background: "#0468B1",
+    padding: "16px 20px",
+    background: "var(--color-primary)",
     color: "#fff",
     border: "none",
-    borderRadius: 12,
+    borderRadius: 9999,
     fontSize: 18,
     fontWeight: 700,
     cursor: "pointer",
     letterSpacing: 0.2,
     boxShadow: "0 4px 16px rgba(4,104,177,0.28)",
+    fontFamily: "var(--font-family)",
+    minHeight: 52,
   },
   // B15: "What can I report?" link
   whatLink: {
@@ -341,9 +343,9 @@ const s: Record<string, React.CSSProperties> = {
     marginTop: -8, // pull up closer to the button
   },
   reportsCard: {
-    background: "#F7FAFC",
-    border: "1px solid #E2E8F0",
-    borderRadius: 10,
+    background: "var(--color-white)",
+    border: "1px solid var(--color-border)",
+    borderRadius: 16,
     padding: "16px",
   },
   reportsRow: {

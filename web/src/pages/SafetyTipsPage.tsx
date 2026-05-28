@@ -176,7 +176,7 @@ const PART_C_SLIDES: Slide[] = [
 
 function IconBack() {
   return (
-    <svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+    <svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke="#0468B1" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
       <polyline points="15 18 9 12 15 6" />
     </svg>
   );
@@ -400,13 +400,14 @@ export default function SafetyTipsPage() {
   if (activePart === "A" && selectedDisaster) {
     const disaster = DISASTERS.find((d) => d.id === selectedDisaster)!;
     return (
-      <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: "#fff", maxWidth: 480, margin: "0 auto" }}>
-        <div style={{ background: BLUE, padding: "14px 16px", display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-          <button onClick={() => navigate("/")} style={{ background: "none", border: "none", cursor: "pointer", padding: 4, display: "flex" }}>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+        <header className="page-header">
+          <button className="page-header-back" onClick={() => navigate("/")}>
             <IconBack />
           </button>
-          <span style={{ color: "#fff", fontWeight: 700, fontSize: 18, flex: 1 }}>Safety Tips</span>
-        </div>
+          <span className="page-header-title">Safety Tips</span>
+          <div className="page-header-spacer" />
+        </header>
         <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
           <SlideViewer
             slides={disaster.slides}
@@ -424,13 +425,14 @@ export default function SafetyTipsPage() {
   // Part B: show slide viewer directly
   if (activePart === "B") {
     return (
-      <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: "#fff", maxWidth: 480, margin: "0 auto" }}>
-        <div style={{ background: BLUE, padding: "14px 16px", display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-          <button onClick={() => navigate("/")} style={{ background: "none", border: "none", cursor: "pointer", padding: 4, display: "flex" }}>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+        <header className="page-header">
+          <button className="page-header-back" onClick={() => navigate("/")}>
             <IconBack />
           </button>
-          <span style={{ color: "#fff", fontWeight: 700, fontSize: 18, flex: 1 }}>Safety Tips</span>
-        </div>
+          <span className="page-header-title">Safety Tips</span>
+          <div className="page-header-spacer" />
+        </header>
         <div style={{ display: "flex", background: "#fff", borderBottom: "1px solid #e2e8f0", flexShrink: 0 }}>
           {tabs.map((tab) => (
             <button
@@ -470,13 +472,14 @@ export default function SafetyTipsPage() {
   // Part C: show slide viewer directly
   if (activePart === "C") {
     return (
-      <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: "#fff", maxWidth: 480, margin: "0 auto" }}>
-        <div style={{ background: BLUE, padding: "14px 16px", display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-          <button onClick={() => navigate("/")} style={{ background: "none", border: "none", cursor: "pointer", padding: 4, display: "flex" }}>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+        <header className="page-header">
+          <button className="page-header-back" onClick={() => navigate("/")}>
             <IconBack />
           </button>
-          <span style={{ color: "#fff", fontWeight: 700, fontSize: 18, flex: 1 }}>Safety Tips</span>
-        </div>
+          <span className="page-header-title">Safety Tips</span>
+          <div className="page-header-spacer" />
+        </header>
         <div style={{ display: "flex", background: "#fff", borderBottom: "1px solid #e2e8f0", flexShrink: 0 }}>
           {tabs.map((tab) => (
             <button
@@ -520,14 +523,15 @@ export default function SafetyTipsPage() {
   void completionRevision;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: "#f7fafc", maxWidth: 480, margin: "0 auto" }}>
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", background: "#F6F3F2" }}>
       {/* Header */}
-      <div style={{ background: BLUE, padding: "14px 16px", display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-        <button onClick={() => navigate("/")} style={{ background: "none", border: "none", cursor: "pointer", padding: 4, display: "flex" }}>
+      <header className="page-header">
+        <button className="page-header-back" onClick={() => navigate("/")}>
           <IconBack />
         </button>
-        <span style={{ color: "#fff", fontWeight: 700, fontSize: 18, flex: 1 }}>Safety Tips</span>
-      </div>
+        <span className="page-header-title">Safety Tips</span>
+        <div className="page-header-spacer" />
+      </header>
 
       {/* Tabs */}
       <div style={{ display: "flex", background: "#fff", borderBottom: "1px solid #e2e8f0", flexShrink: 0 }}>

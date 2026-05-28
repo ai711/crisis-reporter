@@ -56,7 +56,7 @@ function IconBack() {
       height={22}
       viewBox="0 0 24 24"
       fill="none"
-      stroke="#fff"
+      stroke="#0468B1"
       strokeWidth={2}
       strokeLinecap="round"
       strokeLinejoin="round"
@@ -250,36 +250,20 @@ export default function BadgesPage() {
     return (
       <div
         style={{
+          flex: 1,
           display: "flex",
           flexDirection: "column",
-          minHeight: "100vh",
-          background: "#f7fafc",
-          maxWidth: 480,
-          margin: "0 auto",
+          background: "#F6F3F2",
         }}
       >
         {/* Header */}
-        <div
-          style={{
-            background: BLUE,
-            padding: "14px 16px",
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-            flexShrink: 0,
-          }}
-        >
-          <button
-            onClick={() => navigate("/")}
-            style={{ background: "none", border: "none", cursor: "pointer", padding: 4, display: "flex", alignItems: "center" }}
-            aria-label="Back"
-          >
+        <header className="page-header">
+          <button className="page-header-back" onClick={() => navigate("/")} aria-label="Back">
             <IconBack />
           </button>
-          <span style={{ color: "#fff", fontWeight: 700, fontSize: 18, flex: 1 }}>
-            Badges &amp; Certifications
-          </span>
-        </div>
+          <span className="page-header-title">Badges &amp; Certifications</span>
+          <div className="page-header-spacer" />
+        </header>
 
         {/* Login prompt */}
         <div style={{ textAlign: "center", padding: "40px 24px 24px" }}>
@@ -340,36 +324,13 @@ export default function BadgesPage() {
       }}
     >
       {/* Header */}
-      <div
-        style={{
-          background: BLUE,
-          padding: "14px 16px",
-          display: "flex",
-          alignItems: "center",
-          gap: 10,
-          flexShrink: 0,
-        }}
-      >
-        <button
-          onClick={() => navigate("/")}
-          style={{
-            background: "none",
-            border: "none",
-            cursor: "pointer",
-            padding: 4,
-            display: "flex",
-            alignItems: "center",
-          }}
-          aria-label="Back"
-        >
+      <header className="page-header">
+        <button className="page-header-back" onClick={() => navigate("/")} aria-label="Back">
           <IconBack />
         </button>
-        <span
-          style={{ color: "#fff", fontWeight: 700, fontSize: 18, flex: 1 }}
-        >
-          Badges &amp; Certifications
-        </span>
-      </div>
+        <span className="page-header-title">Badges &amp; Certifications</span>
+        <div className="page-header-spacer" />
+      </header>
 
       <p
         style={{

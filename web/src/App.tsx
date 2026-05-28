@@ -38,7 +38,7 @@ function LoadingSpinner() {
       alignItems: "center",
       justifyContent: "center",
       height: "100vh",
-      background: "#f4f6f9",
+      background: "#E4E2E1",
     }}>
       <div style={{
         width: 40,
