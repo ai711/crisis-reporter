@@ -1,4 +1,4 @@
-import { useNavigate, useLocation } from "react-router-dom";
+import { NavLink } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useAuthStore } from "../stores/authStore";
 import { getReviewQueueCounts, getDashboardProjects } from "../services/api";
@@ -19,7 +19,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-// ── Navigation item definitions ───────────────────────────────────────────────
+// ── Nav item type ─────────────────────────────────────────────────────────────
 
 type NavItem = {
   path: string;
@@ -28,26 +28,43 @@ type NavItem = {
   sectionKey: string | null;
 };
 
-const NAV_ITEMS: NavItem[] = [
-  { path: "/map",               icon: Map,               label: "Main Map View",            sectionKey: "main_map_view"            },
-  { path: "/reports",           icon: FileText,          label: "Reports Page",             sectionKey: "reports_page"             },
-  { path: "/locations",         icon: MapPin,            label: "Location Page",            sectionKey: "location_page"            },
-  { path: "/review-queue",      icon: AlertCircle,       label: "Review Queue",             sectionKey: "review_queue"             },
-  { path: "/analytics",         icon: BarChart2,         label: "Analytics and Statistics", sectionKey: "analytics_and_statistics" },
-  { path: "/reporters",         icon: Users,             label: "Reporter Profiles",        sectionKey: "reporter_profiles"        },
-  { path: "/export",            icon: Download,          label: "Export",                   sectionKey: "export"                   },
-  { path: "/projects",          icon: Folder,            label: "Projects",                 sectionKey: "projects"                 },
-  { path: "/users",             icon: UserCog,           label: "Manage Users",             sectionKey: "manage_users"             },
-  { path: "/roles",             icon: Shield,            label: "Manage Roles",             sectionKey: "manage_roles"             },
-  { path: "/settings",          icon: Settings,          label: "App Configuration",        sectionKey: "app_configuration"        },
-  { path: "/dashboard-settings",icon: SlidersHorizontal, label: "Dashboard Settings",       sectionKey: null                       },
+// ── Navigation definitions ────────────────────────────────────────────────────
+
+const MAIN_NAV: NavItem[] = [
+  { path: "/map",          icon: Map,         label: "Map View",          sectionKey: "main_map_view"            },
+  { path: "/reports",      icon: FileText,    label: "Reports",           sectionKey: "reports_page"             },
+  { path: "/locations",    icon: MapPin,      label: "Locations",         sectionKey: "location_page"            },
+  { path: "/review-queue", icon: AlertCircle, label: "Review Queue",      sectionKey: "review_queue"             },
+  { path: "/analytics",    icon: BarChart2,   label: "Analytics",         sectionKey: "analytics_and_statistics" },
+  { path: "/reporters",    icon: Users,       label: "Reporter Profiles", sectionKey: "reporter_profiles"        },
+  { path: "/export",       icon: Download,    label: "Export",            sectionKey: "export"                   },
+  { path: "/projects",     icon: Folder,      label: "Projects",          sectionKey: "projects"                 },
 ];
+
+const ADMIN_NAV: NavItem[] = [
+  { path: "/users",               icon: UserCog,           label: "Manage Users",       sectionKey: "manage_users"       },
+  { path: "/roles",               icon: Shield,            label: "Manage Roles",       sectionKey: "manage_roles"       },
+  { path: "/settings",            icon: Settings,          label: "App Configuration",  sectionKey: "app_configuration"  },
+  { path: "/dashboard-settings",  icon: SlidersHorizontal, label: "Dashboard Settings", sectionKey: null                 },
+];
+
+// ── Shield brand mark ─────────────────────────────────────────────────────────
+
+function BrandShield() {
+  return (
+    <svg width={26} height={26} viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ flexShrink: 0 }}>
+      <path
+        d="M12 2L3 7v5c0 5.25 3.75 10.15 9 11.25C17.25 22.15 21 17.25 21 12V7L12 2z"
+        fill="white"
+        fillOpacity={0.88}
+      />
+    </svg>
+  );
+}
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function Sidebar() {
-  const navigate = useNavigate();
-  const location = useLocation();
   const { user } = useAuthStore();
 
   const { data: countsData } = useQuery<ReviewQueueCounts>({
@@ -75,213 +92,115 @@ export default function Sidebar() {
   });
 
   const activeProjectCount = activeProjectsData?.total ?? 0;
-
   const isAdminOrAbove = user?.role === "superadmin" || user?.role === "admin";
 
-  const visibleItems = NAV_ITEMS.filter((item) => {
-    // Dashboard Settings — Superadmin only
+  function isVisible(item: NavItem): boolean {
     if (item.path === "/dashboard-settings") return user?.role === "superadmin";
-    // Unknown section key — show by default
     if (!item.sectionKey) return true;
-    // Superadmin and Admin see everything
     if (isAdminOrAbove) return true;
-    // Custom roles: check view permission
-    const perms = user?.role_permissions?.[item.sectionKey];
-    return perms?.view === true;
-  });
+    return user?.role_permissions?.[item.sectionKey]?.view === true;
+  }
+
+  const visibleMain = MAIN_NAV.filter(isVisible);
+  const visibleAdmin = ADMIN_NAV.filter(isVisible);
+  const avatarLetter = user?.full_name?.charAt(0)?.toUpperCase() ?? "U";
 
   return (
-    <div style={styles.sidebar}>
-      {/* Brand logo */}
-      <div style={styles.logo}>
-        <svg
-          width={28}
-          height={28}
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="#7AAFD4"
-          strokeWidth={2}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden="true"
-          style={{ flexShrink: 0 }}
-        >
-          <circle cx="12" cy="12" r="10" />
-          <line x1="12" y1="8" x2="12" y2="12" />
-          <line x1="12" y1="16" x2="12.01" y2="16" />
-        </svg>
-        <div>
-          <div style={styles.logoTitle}>Crisis Reporter</div>
-          <div style={styles.logoSub}>UNDP Dashboard</div>
+    <aside className="sidebar">
+
+      {/* ── Brand ──────────────────────────────────────────────────────────── */}
+      <div className="sidebar-brand">
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <BrandShield />
+          <div>
+            <div className="sidebar-brand-name">Crisis Reporter</div>
+            <div className="sidebar-brand-sub">Sovereign Lens Dashboard</div>
+          </div>
         </div>
       </div>
 
-      {/* Navigation */}
-      <nav style={styles.nav} aria-label="Primary navigation">
-        {visibleItems.map((item) => {
-          const isActive = location.pathname === item.path;
-          const IconComponent = item.icon;
-          return (
-            <button
-              key={item.path}
-              style={{
-                ...styles.navItem,
-                background: isActive ? "#0468B1" : "transparent",
-                color: isActive ? "#fff" : "#A0B4CC",
-              }}
-              onClick={() => navigate(item.path)}
-              aria-current={isActive ? "page" : undefined}
-            >
-              <IconComponent
-                size={18}
-                color={isActive ? "#fff" : "#A0B4CC"}
-                style={{ flexShrink: 0 }}
-              />
-              <span style={styles.navLabel}>{item.label}</span>
-              {item.path === "/review-queue" && totalQueueCount > 0 && (
-                <span style={{
-                  background: "#f44336",
-                  color: "#fff",
-                  fontSize: 11,
-                  fontWeight: 700,
-                  borderRadius: 10,
-                  padding: "2px 7px",
-                  minWidth: 18,
-                  textAlign: "center" as const,
-                  lineHeight: 1.4,
-                  flexShrink: 0,
-                }}>
-                  {totalQueueCount}
-                </span>
-              )}
-              {item.path === "/projects" && activeProjectCount > 0 && (
-                <span style={{
-                  background: "#0468B1",
-                  color: "#fff",
-                  fontSize: 11,
-                  fontWeight: 700,
-                  borderRadius: 10,
-                  padding: "2px 7px",
-                  minWidth: 18,
-                  textAlign: "center" as const,
-                  lineHeight: 1.4,
-                  flexShrink: 0,
-                }}>
-                  {activeProjectCount}
-                </span>
-              )}
-            </button>
-          );
-        })}
+      {/* ── Navigation ─────────────────────────────────────────────────────── */}
+      <nav className="sidebar-nav" aria-label="Primary navigation">
+
+        {visibleMain.map((item) => (
+          <NavLink
+            key={item.path}
+            to={item.path}
+            className={({ isActive }) => `sidebar-item${isActive ? " active" : ""}`}
+          >
+            <item.icon size={16} style={{ flexShrink: 0 }} />
+            <span style={{ flex: 1, lineHeight: 1.3 }}>{item.label}</span>
+            {item.path === "/review-queue" && totalQueueCount > 0 && (
+              <span className="sidebar-badge">{totalQueueCount}</span>
+            )}
+            {item.path === "/projects" && activeProjectCount > 0 && (
+              <span
+                className="sidebar-badge"
+                style={{ background: "var(--c-primary-container)" }}
+              >
+                {activeProjectCount}
+              </span>
+            )}
+          </NavLink>
+        ))}
+
+        {visibleAdmin.length > 0 && (
+          <>
+            <div className="sidebar-section-label">Administration</div>
+            {visibleAdmin.map((item) => (
+              <NavLink
+                key={item.path}
+                to={item.path}
+                className={({ isActive }) => `sidebar-item${isActive ? " active" : ""}`}
+              >
+                <item.icon size={16} style={{ flexShrink: 0 }} />
+                <span style={{ flex: 1, lineHeight: 1.3 }}>{item.label}</span>
+              </NavLink>
+            ))}
+          </>
+        )}
+
       </nav>
 
-      {/* User info */}
-      <div style={styles.userSection}>
-        <div style={styles.userAvatar}>
-          {user?.full_name?.charAt(0)?.toUpperCase() ?? "U"}
+      {/* ── User footer ────────────────────────────────────────────────────── */}
+      <div className="sidebar-footer">
+        <div
+          style={{
+            width: 32,
+            height: 32,
+            borderRadius: "50%",
+            background: "rgba(255,255,255,0.15)",
+            color: "#fff",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: 14,
+            fontWeight: 700,
+            flexShrink: 0,
+            overflow: "hidden",
+          }}
+        >
+          {user?.profile_photo_url ? (
+            <img
+              src={user.profile_photo_url}
+              alt="Profile"
+              style={{ width: "100%", height: "100%", objectFit: "cover" }}
+            />
+          ) : (
+            avatarLetter
+          )}
         </div>
-        <div style={styles.userInfo}>
-          <div style={styles.userName}>{user?.full_name}</div>
-          <div style={styles.userRole}>{user?.role}</div>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div
+            className="sidebar-footer-name"
+            style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+          >
+            {user?.full_name}
+          </div>
+          <div className="sidebar-footer-role">{user?.role}</div>
         </div>
       </div>
-    </div>
+
+    </aside>
   );
 }
-
-// ── Styles ────────────────────────────────────────────────────────────────────
-
-const styles: Record<string, React.CSSProperties> = {
-  sidebar: {
-    width: 240,
-    minWidth: 240,
-    background: "#1A2B4A",
-    height: "100vh",
-    display: "flex",
-    flexDirection: "column",
-    position: "fixed",
-    left: 0,
-    top: 0,
-    bottom: 0,
-    zIndex: 100,
-  },
-  logo: {
-    display: "flex",
-    alignItems: "center",
-    gap: 12,
-    padding: "20px 20px",
-    borderBottom: "1px solid rgba(255,255,255,0.1)",
-  },
-  logoTitle: {
-    color: "#fff",
-    fontWeight: 700,
-    fontSize: 15,
-    lineHeight: 1.2,
-  },
-  logoSub: {
-    color: "#7AAFD4",
-    fontSize: 11,
-  },
-  nav: {
-    flex: 1,
-    padding: "12px 10px",
-    display: "flex",
-    flexDirection: "column",
-    gap: 2,
-    overflowY: "auto",
-  },
-  navItem: {
-    display: "flex",
-    alignItems: "center",
-    gap: 10,
-    padding: "9px 14px",
-    borderRadius: 7,
-    border: "none",
-    cursor: "pointer",
-    textAlign: "left",
-    fontSize: 13,
-    fontWeight: 500,
-    transition: "all 0.12s",
-    width: "100%",
-  },
-  navLabel: {
-    flex: 1,
-    lineHeight: 1.3,
-  },
-  userSection: {
-    padding: "14px 16px",
-    borderTop: "1px solid rgba(255,255,255,0.1)",
-    display: "flex",
-    alignItems: "center",
-    gap: 10,
-  },
-  userAvatar: {
-    width: 34,
-    height: 34,
-    borderRadius: "50%",
-    background: "rgba(255,255,255,0.15)",
-    color: "#fff",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontSize: 15,
-    fontWeight: 700,
-    flexShrink: 0,
-  },
-  userInfo: {
-    minWidth: 0,
-  },
-  userName: {
-    color: "#fff",
-    fontSize: 13,
-    fontWeight: 600,
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap" as React.CSSProperties["whiteSpace"],
-  },
-  userRole: {
-    color: "#7AAFD4",
-    fontSize: 11,
-    textTransform: "capitalize" as React.CSSProperties["textTransform"],
-  },
-};

@@ -15,27 +15,11 @@ export default function Layout({ children }: LayoutProps) {
   useIdleTimer(user?.inactivity_timeout_minutes ?? 30);
 
   return (
-    <div style={styles.container}>
+    <div className="dashboard-shell">
       <Sidebar />
-      <div style={styles.main}>
+      <div className="main-content">
         {children}
       </div>
     </div>
   );
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  container: {
-    display: "flex",
-    minHeight: "100vh",
-    background: "#f4f6f9",
-  },
-  main: {
-    flex: 1,
-    marginLeft: 240,
-    display: "flex",
-    flexDirection: "column",
-    minHeight: "100vh",
-    overflow: "auto",
-  },
-};
