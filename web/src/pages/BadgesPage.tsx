@@ -5,7 +5,7 @@ import api from "../services/api";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
-const BLUE = "#0468B1";
+const BLUE = "var(--color-primary)";
 const GOLD = "#F6AD55";
 const GREY_BORDER = "#E2E8F0";
 
@@ -104,7 +104,7 @@ function BadgeCard({
   return (
     <div
       style={{
-        background: "#fff",
+        background: "var(--color-white)",
         border: `1.5px solid ${borderColor}`,
         borderRadius: 16,
         padding: "24px 20px",
@@ -253,7 +253,7 @@ export default function BadgesPage() {
           flex: 1,
           display: "flex",
           flexDirection: "column",
-          background: "#F6F3F2",
+          background: "var(--color-background)",
         }}
       >
         {/* Header */}
@@ -276,7 +276,7 @@ export default function BadgesPage() {
           <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap", marginBottom: 32 }}>
             <button
               onClick={() => navigate("/login")}
-              style={{ background: BLUE, color: "#fff", border: "none", borderRadius: 8, padding: "12px 24px", fontWeight: 700, cursor: "pointer", fontSize: 15 }}
+              style={{ background: BLUE, color: "var(--color-white)", border: "none", borderRadius: 8, padding: "12px 24px", fontWeight: 700, cursor: "pointer", fontSize: 15 }}
             >
               Log In
             </button>
@@ -318,7 +318,7 @@ export default function BadgesPage() {
         display: "flex",
         flexDirection: "column",
         minHeight: "100vh",
-        background: "#f7fafc",
+        background: "var(--color-background)",
         maxWidth: 480,
         margin: "0 auto",
       }}
