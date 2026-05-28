@@ -6,8 +6,8 @@ import api from "../services/api";
 // ── Constants ──────────────────────────────────────────────────────────────────
 
 const BLUE = "var(--color-primary)";
-const GOLD = "#F6AD55";
-const GREY_BORDER = "#E2E8F0";
+const GOLD = "var(--color-amber)";
+const GREY_BORDER = "var(--color-input-bg)";
 
 const DISASTER_IDS = [
   "earthquake",
@@ -56,7 +56,7 @@ function IconBack() {
       height={22}
       viewBox="0 0 24 24"
       fill="none"
-      stroke="#0468B1"
+      stroke="currentColor"
       strokeWidth={2}
       strokeLinecap="round"
       strokeLinejoin="round"
@@ -95,8 +95,8 @@ function BadgeCard({
   const labelMap: Record<BadgeStatus, { text: string; color: string; bg: string }> = {
     earned: { text: `Earned ✓`, color: "#276749", bg: "#f0fff4" },
     claim: { text: "Add email or phone to claim", color: "#92400e", bg: "#fffbeb" },
-    locked: { text: "Locked", color: "#718096", bg: "#f7fafc" },
-    "coming-soon": { text: "Coming Soon", color: "#718096", bg: "#f7fafc" },
+    locked: { text: "Locked", color: "var(--color-text-muted)", bg: "#f7fafc" },
+    "coming-soon": { text: "Coming Soon", color: "var(--color-text-muted)", bg: "#f7fafc" },
   };
 
   const label = labelMap[status];
@@ -122,7 +122,7 @@ function BadgeCard({
           width: 80,
           height: 80,
           borderRadius: "50%",
-          background: locked ? "#e2e8f0" : earned ? "#fef3c7" : "#ebf8ff",
+          background: locked ? "var(--color-input-bg)" : earned ? "rgba(245,166,35,0.12)" : "#ebf8ff",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -150,7 +150,7 @@ function BadgeCard({
         style={{
           margin: "0 0 16px",
           fontSize: 13,
-          color: locked ? "#a0aec0" : "#718096",
+          color: locked ? "#a0aec0" : "var(--color-text-muted)",
           lineHeight: 1.5,
           maxWidth: 280,
         }}
@@ -174,7 +174,7 @@ function BadgeCard({
       </div>
 
       {status === "earned" && earnedDate && (
-        <p style={{ margin: "6px 0 0", fontSize: 11, color: "#718096" }}>
+        <p style={{ margin: "6px 0 0", fontSize: 11, color: "var(--color-text-muted)" }}>
           {earnedDate}
         </p>
       )}
@@ -270,7 +270,7 @@ export default function BadgesPage() {
           <p style={{ fontSize: "1.1rem", fontWeight: 700, color: "#1A2B4A", margin: "0 0 8px" }}>
             Badges are available to reporters with a verified account.
           </p>
-          <p style={{ color: "#718096", fontSize: "0.875rem", margin: "0 0 24px", lineHeight: 1.5 }}>
+          <p style={{ color: "var(--color-text-muted)", fontSize: "0.875rem", margin: "0 0 24px", lineHeight: 1.5 }}>
             Log in or create a free account to earn and view your badges.
           </p>
           <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap", marginBottom: 32 }}>
@@ -336,7 +336,7 @@ export default function BadgesPage() {
         style={{
           margin: "14px 20px 4px",
           fontSize: 12,
-          color: "#718096",
+          color: "var(--color-text-muted)",
           lineHeight: 1.5,
         }}
       >
