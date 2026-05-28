@@ -148,7 +148,7 @@ export default function PushNotificationSheet({
       const vapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY;
       const sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: urlB64ToUint8Array(vapidKey),
+        applicationServerKey: urlB64ToUint8Array(vapidKey) as Uint8Array<ArrayBuffer>,
       });
 
       const json = sub.toJSON();

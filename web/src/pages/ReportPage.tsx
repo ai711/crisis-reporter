@@ -8,7 +8,6 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import { GeocodingControl } from "@maptiler/geocoding-control/maplibregl";
 import { useAuthStore } from "../stores/authStore";
 import api from "../services/api";
-import { addToQueue } from "../utils/offlineQueue";
 import { validatePhoto } from "../utils/photoValidation";
 import { compressPhoto } from "../utils/photoCompression";
 import { extractExif } from "../utils/exifExtraction";
@@ -341,8 +340,8 @@ export default function ReportPage() {
   const [preparingPhotos, setPreparingPhotos] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
-  const [wasQueued, setWasQueued] = useState(false);
-  const [submittedReportId, setSubmittedReportId] = useState<string | null>(null);
+  const [_wasQueued, setWasQueued] = useState(false);
+  const [_submittedReportId, setSubmittedReportId] = useState<string | null>(null);
   const [showDupeWarning, setShowDupeWarning] = useState(false);
   const [error, setError] = useState("");
   const [crisisId, setCrisisId] = useState<string | null>(null);

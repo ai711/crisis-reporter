@@ -13,7 +13,7 @@ export default defineConfig({
         short_name: "Crisis Reporter",
         description: "UNDP Crisis Damage Reporting System",
         theme_color: "#0468B1",
-        background_color: "#ffffff",
+        background_color: "#F6F3F2",
         display: "standalone",
         orientation: "portrait",
         scope: "/",

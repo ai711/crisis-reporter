@@ -229,7 +229,7 @@ interface SlideViewerProps {
   title: string;
 }
 
-function SlideViewer({ slides, totalLabel, completionKey, onComplete, onBack, title }: SlideViewerProps) {
+function SlideViewer({ slides, totalLabel: _totalLabel, completionKey, onComplete, onBack, title }: SlideViewerProps) {
   const [current, setCurrent] = useState(0);
   const [done, setDone] = useState(() => isComplete(completionKey.part, completionKey.id));
   const total = slides.length;
