@@ -8,7 +8,6 @@ import {
   formatDateTime,
   formatProfileType,
   formatProfileStatus,
-  PROFILE_STATUS_COLOURS,
 } from "../utils/formatters";
 
 // ── Debounce hook ─────────────────────────────────────────────────────────────
@@ -174,7 +173,7 @@ function FilterPanel({ filters, onChange, onClear, onClose }: FilterPanelProps) 
               value={filters.dateFrom}
               onChange={(e) => onChange({ ...filters, dateFrom: e.target.value })}
             />
-            <span style={{ color: "#999", fontSize: 12 }}>–</span>
+            <span style={{ color: "var(--c-text-subtle)", fontSize: "var(--text-xs)" }}>–</span>
             <input
               type="date"
               style={{ ...fp.textInput, flex: 1 }}
@@ -220,10 +219,10 @@ const fp: Record<string, React.CSSProperties> = {
     position: "absolute",
     top: 54,
     right: 0,
-    background: "#fff",
-    border: "1.5px solid #d0dce8",
-    borderRadius: 12,
-    boxShadow: "0 8px 32px rgba(0,0,0,0.13)",
+    background: "var(--c-surface-lowest)",
+    border: "1.5px solid var(--c-border)",
+    borderRadius: "var(--radius-xl)",
+    boxShadow: "var(--shadow-float)",
     padding: "16px 20px 20px",
     width: 340,
     maxHeight: "80vh",
@@ -236,12 +235,12 @@ const fp: Record<string, React.CSSProperties> = {
     alignItems: "center",
     marginBottom: 16,
   },
-  title: { fontSize: 15, fontWeight: 700, color: "#1A2B4A" },
+  title: { fontSize: "var(--text-md)", fontWeight: 700, color: "var(--c-text-primary)" },
   clearBtn: {
     background: "none",
     border: "none",
-    color: "#0468B1",
-    fontSize: 12,
+    color: "var(--c-primary-container)",
+    fontSize: "var(--text-xs)",
     fontWeight: 600,
     cursor: "pointer",
     padding: 0,
@@ -251,16 +250,16 @@ const fp: Record<string, React.CSSProperties> = {
     background: "none",
     border: "none",
     cursor: "pointer",
-    color: "#888",
+    color: "var(--c-text-muted)",
     padding: 2,
     display: "flex",
     alignItems: "center",
   },
   section: { marginBottom: 18 },
   sectionTitle: {
-    fontSize: 11,
+    fontSize: "var(--text-xs)",
     fontWeight: 700,
-    color: "#888",
+    color: "var(--c-text-muted)",
     textTransform: "uppercase",
     letterSpacing: 0.5,
     marginBottom: 8,
@@ -268,17 +267,18 @@ const fp: Record<string, React.CSSProperties> = {
   checkRow: {
     display: "flex",
     alignItems: "center",
-    fontSize: 13,
-    color: "#2d3748",
+    fontSize: "var(--text-sm)",
+    color: "var(--c-text-secondary)",
     marginBottom: 6,
     cursor: "pointer",
   },
   textInput: {
-    border: "1.5px solid #d0dce8",
-    borderRadius: 7,
+    border: "1.5px solid var(--c-border)",
+    borderRadius: "var(--radius-md)",
     padding: "7px 10px",
-    fontSize: 13,
-    color: "#1A2B4A",
+    fontSize: "var(--text-sm)",
+    color: "var(--c-text-primary)",
+    background: "var(--c-surface-lowest)",
     outline: "none",
     width: "100%",
     boxSizing: "border-box" as const,
@@ -288,22 +288,12 @@ const fp: Record<string, React.CSSProperties> = {
 // ── StatusPill ────────────────────────────────────────────────────────────────
 
 function StatusPill({ status }: { status: string }) {
-  const colours = PROFILE_STATUS_COLOURS[status] ?? { bg: "#f4f6f9", text: "#666" };
-  return (
-    <span
-      style={{
-        display: "inline-block",
-        padding: "3px 10px",
-        borderRadius: 20,
-        fontSize: 12,
-        fontWeight: 700,
-        background: colours.bg,
-        color: colours.text,
-      }}
-    >
-      {formatProfileStatus(status)}
-    </span>
-  );
+  const cls =
+    status === "active" ? "chip chip-green" :
+    status === "flagged" ? "chip chip-amber" :
+    status === "blocked" ? "chip chip-red" :
+    "chip chip-grey";
+  return <span className={cls}>{formatProfileStatus(status)}</span>;
 }
 
 // ── Main page ─────────────────────────────────────────────────────────────────
@@ -404,9 +394,9 @@ export default function ReportersPage() {
             <button
               style={{
                 ...s.filterBtn,
-                background: showFilters || activeFilterCount > 0 ? "#EBF5FB" : "#fff",
-                borderColor: showFilters || activeFilterCount > 0 ? "#0468B1" : "#d0dce8",
-                color: showFilters || activeFilterCount > 0 ? "#0468B1" : "#444",
+                background: showFilters || activeFilterCount > 0 ? "rgba(4,104,177,0.08)" : "var(--c-surface-lowest)",
+                borderColor: showFilters || activeFilterCount > 0 ? "var(--c-primary-container)" : "var(--c-border)",
+                color: showFilters || activeFilterCount > 0 ? "var(--c-primary-container)" : "var(--c-text-secondary)",
               }}
               onClick={() => setShowFilters((v) => !v)}
             >
@@ -428,12 +418,12 @@ export default function ReportersPage() {
         </div>
 
         {/* Table */}
-        <div style={s.tableCard}>
+        <div className="card" style={{ overflow: "hidden" }}>
           {isLoading ? (
             <div style={s.loading}>Loading reporter profiles…</div>
           ) : allItems.length === 0 ? (
             <div style={s.emptyState}>
-              <Users size={48} color="#ccc" />
+              <Users size={48} color="var(--c-text-subtle)" />
               <p style={s.emptyText}>No reporter profiles found.</p>
             </div>
           ) : (
@@ -522,10 +512,15 @@ const s: Record<string, React.CSSProperties> = {
   content: { flex: 1, padding: "24px 32px", overflow: "auto" },
 
   searchRow: {
+    background: "var(--c-surface-lowest)",
+    borderRadius: "var(--radius-lg)",
+    padding: "12px 20px",
+    boxShadow: "var(--shadow-sm)",
+    marginBottom: 24,
     display: "flex",
-    alignItems: "center",
     gap: 12,
-    marginBottom: 14,
+    alignItems: "center",
+    flexWrap: "wrap" as const,
   },
   searchWrap: {
     flex: 1,
@@ -536,13 +531,13 @@ const s: Record<string, React.CSSProperties> = {
   searchInput: {
     width: "100%",
     padding: "9px 36px 9px 14px",
-    border: "1.5px solid #d0dce8",
-    borderRadius: 8,
-    fontSize: 13,
-    color: "#1A2B4A",
+    border: "1.5px solid var(--c-border)",
+    borderRadius: "var(--radius-md)",
+    fontSize: "var(--text-sm)",
+    color: "var(--c-text-primary)",
     outline: "none",
-    background: "#fff",
-    boxSizing: "border-box",
+    background: "var(--c-surface-lowest)",
+    boxSizing: "border-box" as const,
   },
   searchClear: {
     position: "absolute",
@@ -550,7 +545,7 @@ const s: Record<string, React.CSSProperties> = {
     background: "none",
     border: "none",
     cursor: "pointer",
-    color: "#999",
+    color: "var(--c-text-muted)",
     display: "flex",
     alignItems: "center",
     padding: 2,
@@ -560,69 +555,62 @@ const s: Record<string, React.CSSProperties> = {
     alignItems: "center",
     padding: "8px 14px",
     border: "1.5px solid",
-    borderRadius: 8,
-    fontSize: 13,
+    borderRadius: "var(--radius-md)",
+    fontSize: "var(--text-sm)",
     fontWeight: 600,
     cursor: "pointer",
-    whiteSpace: "nowrap",
+    whiteSpace: "nowrap" as const,
   },
   filterBadge: {
     marginLeft: 8,
-    background: "#0468B1",
+    background: "var(--c-primary-container)",
     color: "#fff",
-    fontSize: 11,
+    fontSize: "var(--text-xs)",
     fontWeight: 700,
     borderRadius: 10,
     padding: "2px 7px",
   },
 
-  tableCard: {
-    background: "#fff",
-    borderRadius: 12,
-    boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
-    overflow: "hidden",
-    border: "1px solid #e8eef4",
-  },
-  loading: { padding: 40, textAlign: "center", color: "#666", fontSize: 14 },
+  loading: { padding: 40, textAlign: "center" as const, color: "var(--c-text-muted)", fontSize: "var(--text-sm)" },
   emptyState: {
     display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
+    flexDirection: "column" as const,
+    alignItems: "center" as const,
     padding: "64px 0",
     gap: 16,
   },
-  emptyText: { fontSize: 14, color: "#999", fontStyle: "italic" },
+  emptyText: { fontSize: "var(--text-sm)", color: "var(--c-text-subtle)", fontStyle: "italic" },
   countRow: {
     padding: "10px 16px",
-    fontSize: 12,
-    color: "#888",
-    borderBottom: "1px solid #f0f4f8",
+    fontSize: "var(--text-xs)",
+    color: "var(--c-text-muted)",
+    borderBottom: "1px solid var(--c-border-ghost)",
   },
 
-  table: { width: "100%", borderCollapse: "collapse" },
-  thead: { background: "#f4f6f9" },
+  table: { width: "100%", borderCollapse: "collapse" as const },
+  thead: { background: "var(--c-surface-low)" },
   th: {
     padding: "11px 14px",
-    textAlign: "left",
-    fontSize: 11,
+    textAlign: "left" as const,
+    fontSize: "var(--text-xs)",
     fontWeight: 700,
-    color: "#718096",
-    textTransform: "uppercase",
+    color: "var(--c-text-muted)",
+    textTransform: "uppercase" as const,
     letterSpacing: 0.5,
-    borderBottom: "1px solid #e2e8f0",
-    whiteSpace: "nowrap",
+    borderBottom: "1px solid var(--c-border-ghost)",
+    whiteSpace: "nowrap" as const,
   },
   tr: {
-    borderBottom: "1px solid #f0f4f8",
+    borderBottom: "1px solid var(--c-border-ghost)",
     cursor: "pointer",
     transition: "background 0.1s",
   },
-  td: { padding: "12px 14px", fontSize: 13, color: "#2d3748", verticalAlign: "middle" },
+  td: { padding: "12px 14px", fontSize: "var(--text-sm)", color: "var(--c-text-primary)", verticalAlign: "middle" as const },
   linkBtn: {
     background: "none",
     border: "none",
-    color: "#0468B1",
-    fontSize: 13,
+    color: "var(--c-primary-container)",
+    fontSize: "var(--text-sm)",
     fontWeight: 600,
     cursor: "pointer",
     padding: 0,
@@ -636,16 +624,16 @@ const s: Record<string, React.CSSProperties> = {
     justifyContent: "space-between",
     alignItems: "center",
     padding: "12px 16px",
-    borderTop: "1px solid #f0f4f8",
+    borderTop: "1px solid var(--c-border-ghost)",
   },
-  paginationInfo: { fontSize: 12, color: "#888" },
+  paginationInfo: { fontSize: "var(--text-xs)", color: "var(--c-text-muted)" },
   loadMoreBtn: {
     padding: "8px 20px",
-    background: "#fff",
-    border: "1.5px solid #0468B1",
-    borderRadius: 7,
-    color: "#0468B1",
-    fontSize: 13,
+    background: "var(--c-surface-lowest)",
+    border: "1.5px solid var(--c-primary-container)",
+    borderRadius: "var(--radius-md)",
+    color: "var(--c-primary-container)",
+    fontSize: "var(--text-sm)",
     fontWeight: 600,
   },
 };

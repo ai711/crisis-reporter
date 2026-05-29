@@ -8,9 +8,9 @@ import type { Property, PropertiesListResponse, ProjectListRow, ProjectsListResp
 // ── Damage colours ────────────────────────────────────────────────────────────
 
 const DAMAGE_COLORS: Record<string, string> = {
-  completely_destroyed: "#f44336",
-  partially_damaged: "#ff9800",
-  minimal_or_no_damage: "#4caf50",
+  completely_destroyed: "var(--c-flag-red)",
+  partially_damaged: "var(--c-flag-orange)",
+  minimal_or_no_damage: "var(--c-flag-green)",
 };
 
 // ── Inline SVG icons ──────────────────────────────────────────────────────────
@@ -46,23 +46,6 @@ function FilterIcon() {
   );
 }
 
-function ChevronUpIcon() {
-  return (
-    <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor"
-      strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <polyline points="18 15 12 9 6 15" />
-    </svg>
-  );
-}
-
-function ChevronDownIcon() {
-  return (
-    <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor"
-      strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <polyline points="6 9 12 15 18 9" />
-    </svg>
-  );
-}
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -264,9 +247,9 @@ export default function LocationsPage() {
             <button
               style={{
                 ...styles.filterBtn,
-                background: activeFilterCount > 0 ? "#e8f0fb" : "#f4f6f9",
-                border: activeFilterCount > 0 ? "1.5px solid #0468B1" : "1.5px solid #e0e0e0",
-                color: activeFilterCount > 0 ? "#0468B1" : "#444",
+                background: activeFilterCount > 0 ? "rgba(4,104,177,0.08)" : "var(--c-surface-low)",
+                border: activeFilterCount > 0 ? "1.5px solid var(--c-primary-container)" : "1.5px solid var(--c-border)",
+                color: activeFilterCount > 0 ? "var(--c-primary-container)" : "var(--c-text-secondary)",
               }}
               onClick={() => {
                 setPendingFilters({ ...filters });
@@ -296,7 +279,7 @@ export default function LocationsPage() {
                       }
                       style={{ marginRight: 8 }}
                     />
-                    <span style={{ color: "#e65100", fontWeight: 500 }}>
+                    <span style={{ color: "var(--c-flag-orange)", fontWeight: 500 }}>
                       Properties with conflicting assessments
                     </span>
                   </label>
@@ -411,9 +394,9 @@ export default function LocationsPage() {
                         style={{ marginRight: 8 }}
                       />
                       <span style={{
-                        color: opt.value === "completely_destroyed" ? "#c62828"
-                          : opt.value === "partially_damaged" ? "#e65100"
-                          : "#2e7d32",
+                        color: opt.value === "completely_destroyed" ? "var(--c-flag-red)"
+                          : opt.value === "partially_damaged" ? "var(--c-flag-orange)"
+                          : "var(--c-flag-green)",
                         fontWeight: 500,
                       }}>
                         {opt.label}
@@ -439,7 +422,7 @@ export default function LocationsPage() {
                       </option>
                     ))}
                   </select>
-                  <div style={{ fontSize: 11, color: "#9aa5b4", marginTop: 6 }}>
+                  <div style={{ fontSize: "var(--text-xs)", color: "var(--c-text-subtle)", marginTop: 6 }}>
                     Filtering by project shows only properties with reports linked to that project.
                   </div>
                 </div>
@@ -463,7 +446,7 @@ export default function LocationsPage() {
             <div
               style={{
                 ...styles.toggle,
-                background: showUnreviewed ? "#0468B1" : "#ccc",
+                background: showUnreviewed ? "var(--c-primary-container)" : "var(--c-text-subtle)",
               }}
               onClick={() => { setShowUnreviewed((v) => !v); resetPagination(); }}
               role="switch"
@@ -478,7 +461,7 @@ export default function LocationsPage() {
                 }}
               />
             </div>
-            <span style={{ marginLeft: 10, fontSize: 13, color: "#444" }}>
+            <span style={{ marginLeft: 10, fontSize: "var(--text-sm)", color: "var(--c-text-secondary)" }}>
               Show unreviewed properties
             </span>
           </label>
@@ -552,10 +535,10 @@ export default function LocationsPage() {
                 {items.map((prop) => {
                   const isUnreviewed = showUnreviewed && !prop.confirmed_status;
                   const dmgColor = prop.current_damage_level
-                    ? DAMAGE_COLORS[prop.current_damage_level] ?? "#888"
+                    ? DAMAGE_COLORS[prop.current_damage_level] ?? "var(--c-text-muted)"
                     : null;
                   const confirmedColor = prop.confirmed_status
-                    ? DAMAGE_COLORS[prop.confirmed_status] ?? "#888"
+                    ? DAMAGE_COLORS[prop.confirmed_status] ?? "var(--c-text-muted)"
                     : null;
 
                   return (
@@ -563,7 +546,7 @@ export default function LocationsPage() {
                       key={prop.property_id}
                       style={{
                         ...styles.tr,
-                        background: isUnreviewed ? "#FFF8E1" : "#fff",
+                        background: isUnreviewed ? "rgba(245,166,35,0.06)" : "var(--c-surface-lowest)",
                       }}
                     >
                       {/* Property ID */}
@@ -645,8 +628,8 @@ export default function LocationsPage() {
                         <span
                           style={{
                             fontWeight: 600,
-                            fontSize: 13,
-                            color: prop.property_status === "Active" ? "#2e7d32" : "#9aa5b4",
+                            fontSize: "var(--text-sm)",
+                            color: prop.property_status === "Active" ? "var(--c-flag-green)" : "var(--c-text-muted)",
                           }}
                         >
                           {prop.property_status}
@@ -715,39 +698,45 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 0,
   },
   toolbar: {
+    background: "var(--c-surface-lowest)",
+    borderRadius: "var(--radius-lg)",
+    padding: "12px 20px",
+    boxShadow: "var(--shadow-sm)",
+    marginBottom: 24,
     display: "flex",
     alignItems: "center",
     gap: 12,
-    marginBottom: 14,
+    flexWrap: "wrap" as const,
   },
   searchInput: {
     flex: 1,
     padding: "9px 14px",
-    border: "1.5px solid #d0dce8",
-    borderRadius: 8,
-    fontSize: 13,
-    color: "#1A2B4A",
+    border: "1.5px solid var(--c-border)",
+    borderRadius: "var(--radius-md)",
+    fontSize: "var(--text-sm)",
+    color: "var(--c-text-primary)",
     outline: "none",
-    background: "#fff",
+    background: "var(--c-surface-lowest)",
+    minWidth: 280,
   },
   filterBtn: {
     display: "flex",
     alignItems: "center",
     padding: "9px 16px",
-    borderRadius: 8,
-    fontSize: 13,
+    borderRadius: "var(--radius-md)",
+    fontSize: "var(--text-sm)",
     fontWeight: 500,
     cursor: "pointer",
     gap: 0,
-    whiteSpace: "nowrap",
+    whiteSpace: "nowrap" as const,
   },
   filterBadge: {
     marginLeft: 8,
-    background: "#0468B1",
+    background: "var(--c-primary-container)",
     color: "#fff",
     borderRadius: 10,
     padding: "1px 7px",
-    fontSize: 11,
+    fontSize: "var(--text-xs)",
     fontWeight: 700,
   },
   filterPanel: {
@@ -755,27 +744,27 @@ const styles: Record<string, React.CSSProperties> = {
     top: "calc(100% + 6px)",
     right: 0,
     width: 360,
-    background: "#fff",
-    border: "1px solid #e0e8f0",
-    borderRadius: 12,
-    boxShadow: "0 8px 32px rgba(0,0,0,0.14)",
+    background: "var(--c-surface-lowest)",
+    border: "1px solid var(--c-border)",
+    borderRadius: "var(--radius-xl)",
+    boxShadow: "var(--shadow-float)",
     zIndex: 50,
     padding: "20px 20px 16px",
   },
   filterTitle: {
-    fontSize: 14,
+    fontSize: "var(--text-base)",
     fontWeight: 700,
-    color: "#1A2B4A",
+    color: "var(--c-text-primary)",
     marginBottom: 16,
   },
   filterSection: {
     marginBottom: 16,
   },
   filterLabel: {
-    fontSize: 11,
+    fontSize: "var(--text-xs)",
     fontWeight: 600,
-    color: "#9aa5b4",
-    textTransform: "uppercase",
+    color: "var(--c-text-muted)",
+    textTransform: "uppercase" as const,
     letterSpacing: 0.5,
     marginBottom: 8,
     display: "flex",
@@ -785,60 +774,61 @@ const styles: Record<string, React.CSSProperties> = {
   filterCheckLabel: {
     display: "flex",
     alignItems: "center",
-    fontSize: 13,
-    color: "#1A2B4A",
+    fontSize: "var(--text-sm)",
+    color: "var(--c-text-primary)",
     marginBottom: 6,
     cursor: "pointer",
   },
   filterRadioLabel: {
     display: "flex",
     alignItems: "center",
-    fontSize: 13,
-    color: "#1A2B4A",
+    fontSize: "var(--text-sm)",
+    color: "var(--c-text-primary)",
     marginBottom: 6,
     cursor: "pointer",
   },
   filterInput: {
     width: "100%",
     padding: "8px 12px",
-    border: "1.5px solid #d0dce8",
-    borderRadius: 8,
-    fontSize: 13,
-    color: "#1A2B4A",
+    border: "1.5px solid var(--c-border)",
+    borderRadius: "var(--radius-md)",
+    fontSize: "var(--text-sm)",
+    color: "var(--c-text-primary)",
+    background: "var(--c-surface-lowest)",
     outline: "none",
-    boxSizing: "border-box",
+    boxSizing: "border-box" as const,
   },
   disabledBadge: {
-    background: "#f0f4f8",
-    color: "#9aa5b4",
-    borderRadius: 6,
+    background: "var(--c-surface-low)",
+    color: "var(--c-text-muted)",
+    borderRadius: "var(--radius-sm)",
     padding: "2px 7px",
     fontSize: 10,
     fontWeight: 600,
   },
   filterActions: {
     display: "flex",
-    justifyContent: "flex-end",
+    justifyContent: "flex-end" as const,
     gap: 10,
     paddingTop: 8,
-    borderTop: "1px solid #f0f4f8",
+    borderTop: "1px solid var(--c-border-ghost)",
   },
   filterClearBtn: {
     padding: "8px 16px",
-    background: "#f4f6f9",
+    background: "var(--c-surface-high)",
     border: "none",
-    borderRadius: 8,
-    fontSize: 13,
-    color: "#444",
+    borderRadius: "var(--radius-md)",
+    fontSize: "var(--text-sm)",
+    color: "var(--c-text-primary)",
     cursor: "pointer",
     fontWeight: 500,
   },
   filterApplyBtn: {
     padding: "8px 18px",
-    background: "#0468B1",
+    background: "var(--c-primary-container)",
     border: "none",
-    borderRadius: 8,
-    fontSize: 13,
+    borderRadius: "var(--radius-md)",
+    fontSize: "var(--text-sm)",
     fontWeight: 600,
     color: "#fff",
     cursor: "pointer",
@@ -874,55 +864,55 @@ const styles: Record<string, React.CSSProperties> = {
     transition: "transform 0.2s",
   },
   pageSizeLabel: {
-    fontSize: 12,
-    color: "#9aa5b4",
+    fontSize: "var(--text-xs)",
+    color: "var(--c-text-muted)",
   },
   pageSizeSelect: {
     padding: "5px 8px",
-    border: "1px solid #d0dce8",
-    borderRadius: 6,
-    fontSize: 13,
-    color: "#1A2B4A",
-    background: "#fff",
+    border: "1px solid var(--c-border)",
+    borderRadius: "var(--radius-sm)",
+    fontSize: "var(--text-sm)",
+    color: "var(--c-text-primary)",
+    background: "var(--c-surface-lowest)",
     cursor: "pointer",
   },
   tableWrap: {
     flex: 1,
     overflowX: "auto",
-    border: "1px solid #e8eef4",
-    borderRadius: 10,
-    background: "#fff",
+    borderRadius: "var(--radius-lg)",
+    background: "var(--c-surface-lowest)",
+    boxShadow: "var(--shadow-card)",
   },
   table: {
     width: "100%",
-    borderCollapse: "collapse",
-    fontSize: 13,
+    borderCollapse: "collapse" as const,
+    fontSize: "var(--text-sm)",
   },
   thead: {
-    background: "#f8fafc",
+    background: "var(--c-surface-low)",
   },
   th: {
     padding: "11px 14px",
-    textAlign: "left",
-    fontSize: 11,
+    textAlign: "left" as const,
+    fontSize: "var(--text-xs)",
     fontWeight: 700,
-    color: "#9aa5b4",
-    textTransform: "uppercase",
+    color: "var(--c-text-muted)",
+    textTransform: "uppercase" as const,
     letterSpacing: 0.5,
-    borderBottom: "1px solid #e8eef4",
+    borderBottom: "1px solid var(--c-border-ghost)",
     cursor: "pointer",
-    userSelect: "none",
-    whiteSpace: "nowrap",
+    userSelect: "none" as const,
+    whiteSpace: "nowrap" as const,
   },
   tr: {
-    borderBottom: "1px solid #f0f4f8",
+    borderBottom: "1px solid var(--c-border-ghost)",
     transition: "background 0.1s",
   },
   td: {
     padding: "10px 14px",
-    color: "#1A2B4A",
-    verticalAlign: "middle",
-    whiteSpace: "nowrap",
+    color: "var(--c-text-primary)",
+    verticalAlign: "middle" as const,
+    whiteSpace: "nowrap" as const,
   },
   pill: {
     display: "inline-flex",
@@ -930,31 +920,31 @@ const styles: Record<string, React.CSSProperties> = {
     padding: "3px 10px",
     borderRadius: 12,
     color: "#fff",
-    fontSize: 12,
+    fontSize: "var(--text-xs)",
     fontWeight: 600,
   },
   idLink: {
-    color: "#0468B1",
+    color: "var(--c-primary-container)",
     fontWeight: 600,
     cursor: "pointer",
     fontFamily: "monospace",
-    fontSize: 12,
+    fontSize: "var(--text-xs)",
   },
   muted: {
-    color: "#ccc",
+    color: "var(--c-text-subtle)",
   },
   conflictIcon: {
-    color: "#e65100",
+    color: "var(--c-flag-orange)",
     display: "inline-flex",
     alignItems: "center",
   },
   sortNeutral: {
-    color: "#ccc",
+    color: "var(--c-text-subtle)",
     marginLeft: 4,
     fontSize: 10,
   },
   sortActive: {
-    color: "#0468B1",
+    color: "var(--c-primary-container)",
     marginLeft: 4,
     fontSize: 10,
   },
@@ -963,48 +953,48 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: "center",
     gap: 12,
     padding: "16px 0 0",
-    justifyContent: "flex-end",
+    justifyContent: "flex-end" as const,
   },
   paginationInfo: {
-    fontSize: 13,
-    color: "#9aa5b4",
+    fontSize: "var(--text-sm)",
+    color: "var(--c-text-muted)",
     marginRight: "auto",
   },
   pageBtn: {
     padding: "8px 18px",
-    background: "#fff",
-    border: "1.5px solid #d0dce8",
-    borderRadius: 8,
-    fontSize: 13,
+    background: "var(--c-surface-lowest)",
+    border: "1.5px solid var(--c-border)",
+    borderRadius: "var(--radius-md)",
+    fontSize: "var(--text-sm)",
     fontWeight: 500,
-    color: "#1A2B4A",
+    color: "var(--c-text-primary)",
   },
   loadingMsg: {
     padding: 60,
-    textAlign: "center",
-    color: "#9aa5b4",
-    fontSize: 14,
+    textAlign: "center" as const,
+    color: "var(--c-text-muted)",
+    fontSize: "var(--text-sm)",
   },
   errorMsg: {
     padding: 40,
-    textAlign: "center",
-    color: "#c62828",
-    fontSize: 14,
+    textAlign: "center" as const,
+    color: "var(--c-flag-red)",
+    fontSize: "var(--text-sm)",
   },
   emptyState: {
     padding: 80,
-    textAlign: "center",
+    textAlign: "center" as const,
     display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
+    flexDirection: "column" as const,
+    alignItems: "center" as const,
     gap: 16,
   },
   emptyIcon: {
     fontSize: 48,
   },
   emptyText: {
-    fontSize: 14,
-    color: "#9aa5b4",
+    fontSize: "var(--text-sm)",
+    color: "var(--c-text-muted)",
     maxWidth: 440,
     lineHeight: 1.6,
   },

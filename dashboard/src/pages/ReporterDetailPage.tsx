@@ -22,8 +22,38 @@ import {
   formatDamageLevel,
   formatProfileType,
   formatProfileStatus,
-  PROFILE_STATUS_COLOURS,
 } from "../utils/formatters";
+
+// ── Chip class helpers ─────────────────────────────────────────────────────────
+
+function flagChipClass(status: string): string {
+  switch (status) {
+    case "green": return "chip chip-green";
+    case "orange": return "chip chip-amber";
+    case "red": return "chip chip-red";
+    case "discarded": return "chip chip-grey";
+    default: return "chip chip-grey";
+  }
+}
+
+function damageChipClass(level: string | null): string {
+  switch (level) {
+    case "completely_destroyed":
+    case "complete": return "chip chip-red";
+    case "partially_damaged":
+    case "partial": return "chip chip-amber";
+    case "minimal_or_no_damage":
+    case "minimal": return "chip chip-green";
+    default: return "chip chip-grey";
+  }
+}
+
+function statusChipClass(status: string): string {
+  return status === "active" ? "chip chip-green"
+    : status === "flagged" ? "chip chip-amber"
+    : status === "blocked" ? "chip chip-red"
+    : "chip chip-grey";
+}
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -38,50 +68,7 @@ const ACTION_LABELS: Record<string, string> = {
   auto_block_expired: "Auto-block confirmed automatically after 72-hour window",
 };
 
-const FLAG_COLOURS: Record<string, { bg: string; color: string }> = {
-  grey:      { bg: "#F5F5F5",  color: "#757575" },
-  green:     { bg: "#E8F5E9",  color: "#2E7D32" },
-  orange:    { bg: "#FFF3E0",  color: "#E65100" },
-  red:       { bg: "#FDECEA",  color: "#C62828" },
-  discarded: { bg: "#ECEFF1",  color: "#546E7A" },
-};
-
-const DAMAGE_COLOURS: Record<string, { bg: string; color: string }> = {
-  completely_destroyed: { bg: "#FFF5F5", color: "#C53030" },
-  complete:             { bg: "#FFF5F5", color: "#C53030" },
-  partially_damaged:    { bg: "#FFF8F0", color: "#C05621" },
-  partial:              { bg: "#FFF8F0", color: "#C05621" },
-  minimal_or_no_damage: { bg: "#F0FFF4", color: "#276749" },
-  minimal:              { bg: "#F0FFF4", color: "#276749" },
-};
-
 // ── Helpers ────────────────────────────────────────────────────────────────────
-
-function flagPillStyle(status: string) {
-  const c = FLAG_COLOURS[status] ?? { bg: "#f4f6f9", color: "#666" };
-  return {
-    display: "inline-block",
-    padding: "3px 10px",
-    borderRadius: 20,
-    fontSize: 11,
-    fontWeight: 700 as const,
-    background: c.bg,
-    color: c.color,
-  };
-}
-
-function damagePillStyle(level: string | null) {
-  const c = DAMAGE_COLOURS[level ?? ""] ?? { bg: "#f4f6f9", color: "#666" };
-  return {
-    display: "inline-block",
-    padding: "3px 10px",
-    borderRadius: 20,
-    fontSize: 11,
-    fontWeight: 700 as const,
-    background: c.bg,
-    color: c.color,
-  };
-}
 
 function platformDisplay(reporter: ReporterDetail): string {
   if (!reporter.platform) return "—";
@@ -105,8 +92,8 @@ function Toast({ message, onDone }: { message: string; onDone: () => void }) {
 
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div style={s.card}>
-      <h2 style={s.cardTitle}>{title}</h2>
+    <div className="card card-padded">
+      <h2 className="section-label" style={{ marginBottom: 16, paddingBottom: 10, borderBottom: "1px solid var(--c-border-ghost)", display: "block" }}>{title}</h2>
       {children}
     </div>
   );
@@ -116,16 +103,16 @@ function DetailRow({ label, value }: { label: string; value: React.ReactNode }) 
   return (
     <div style={s.detailRow}>
       <span style={s.detailLabel}>{label}</span>
-      <span style={s.detailValue}>{value ?? <em style={{ color: "#bbb" }}>—</em>}</span>
+      <span style={s.detailValue}>{value ?? <em style={{ color: "var(--c-text-subtle)" }}>—</em>}</span>
     </div>
   );
 }
 
 function StatBox({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div style={s.statBox}>
-      <div style={s.statValue}>{value}</div>
-      <div style={s.statLabel}>{label}</div>
+    <div className="metric-card">
+      <div className="metric-value" style={{ fontSize: "var(--text-xl)", marginBottom: 4 }}>{value}</div>
+      <div className="metric-label">{label}</div>
     </div>
   );
 }
@@ -167,7 +154,7 @@ function StatusChangeModal({ newStatus, onConfirm, onCancel, isSubmitting, error
               onChange={(e) => setComment(e.target.value)}
               disabled={isSubmitting}
             />
-            <div style={{ ...s.charCounter, color: isValid ? "#4caf50" : "#999" }}>
+            <div style={{ ...s.charCounter, color: isValid ? "var(--c-flag-green)" : "var(--c-text-subtle)" }}>
               {trimmedLen} / 10 minimum
             </div>
           </div>
@@ -228,7 +215,7 @@ function PauseRemovalModal({
               onChange={(e) => setComment(e.target.value)}
               disabled={isSubmitting}
             />
-            <div style={{ ...s.charCounter, color: isValid ? "#4caf50" : "#999" }}>
+            <div style={{ ...s.charCounter, color: isValid ? "var(--c-flag-green)" : "var(--c-text-subtle)" }}>
               {trimmedLen} / 10 minimum
             </div>
           </div>
@@ -283,22 +270,10 @@ function StatusControlSection({
     },
   });
 
-  const colours = PROFILE_STATUS_COLOURS[currentStatus] ?? { bg: "#f4f6f9", text: "#666" };
-
   return (
     <Card title="Profile Status">
       <div style={{ marginBottom: 16 }}>
-        <span
-          style={{
-            display: "inline-block",
-            padding: "6px 18px",
-            borderRadius: 20,
-            fontSize: 14,
-            fontWeight: 700,
-            background: colours.bg,
-            color: colours.text,
-          }}
-        >
+        <span className={statusChipClass(currentStatus)} style={{ padding: "6px 18px", fontSize: "var(--text-base)" }}>
           {formatProfileStatus(currentStatus)}
         </span>
       </div>
@@ -306,10 +281,11 @@ function StatusControlSection({
         {(["active", "flagged", "blocked"] as const).map((st) => (
           <button
             key={st}
+            className={st === "blocked" ? "btn btn-danger" : st === "flagged" ? "btn btn-danger" : "btn btn-secondary"}
             style={{
-              ...s.statusBtn,
               opacity: st === currentStatus ? 0.4 : 1,
               cursor: st === currentStatus ? "not-allowed" : "pointer",
+              background: st === "blocked" ? "rgba(229,62,62,0.2)" : undefined,
             }}
             disabled={st === currentStatus || mutation.isPending}
             onClick={() => { setError(null); setPendingStatus(st); }}
@@ -369,7 +345,8 @@ function PauseSection({
             high submission volume.
           </div>
           <button
-            style={s.removePauseBtn}
+            className="btn btn-secondary"
+            style={{ border: "1.5px solid var(--c-flag-red)", color: "var(--c-flag-red)" }}
             onClick={() => { setError(null); setShowModal(true); }}
           >
             Remove Pause
@@ -425,7 +402,7 @@ function ReportsSection({ reporterId }: { reporterId: string }) {
           <option value="red">Red</option>
           <option value="discarded">Discarded</option>
         </select>
-        <span style={{ fontSize: 12, color: "#888" }}>{total} reports</span>
+        <span style={{ fontSize: "var(--text-xs)", color: "var(--c-text-muted)" }}>{total} reports</span>
       </div>
 
       {isLoading ? (
@@ -461,14 +438,14 @@ function ReportsSection({ reporterId }: { reporterId: string }) {
                     <td style={s.subTd}>{formatDateTime(r.created_at)}</td>
                     <td style={s.subTd}>{r.country || "—"}</td>
                     <td style={s.subTd}>
-                      <span style={damagePillStyle(r.damage_level)}>
+                      <span className={damageChipClass(r.damage_level)}>
                         {formatDamageLevel(r.damage_level)}
                       </span>
                     </td>
                     <td style={s.subTd}>{r.infrastructure_type || "—"}</td>
                     <td style={s.subTd}>{r.disaster_type || "—"}</td>
                     <td style={s.subTd}>
-                      <span style={flagPillStyle(r.flag_status)}>
+                      <span className={flagChipClass(r.flag_status)}>
                         {r.flag_status.charAt(0).toUpperCase() + r.flag_status.slice(1)}
                       </span>
                     </td>
@@ -486,7 +463,7 @@ function ReportsSection({ reporterId }: { reporterId: string }) {
               >
                 ← Previous
               </button>
-              <span style={{ fontSize: 12, color: "#888", alignSelf: "center" }}>
+              <span style={{ fontSize: "var(--text-xs)", color: "var(--c-text-muted)", alignSelf: "center" }}>
                 Page {page} of {totalPages}
               </span>
               <button
@@ -527,11 +504,11 @@ function BadgesSection({ reporterId }: { reporterId: string }) {
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           {data.badges.map((b, i) => (
             <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontWeight: 700, fontSize: 13, color: "#1A2B4A" }}>{b.badge_name}</span>
+              <span style={{ fontWeight: 700, fontSize: "var(--text-sm)", color: "var(--c-text-primary)" }}>{b.badge_name}</span>
               {b.earned_at ? (
-                <span style={{ fontSize: 12, color: "#888" }}>{formatDateTime(b.earned_at)}</span>
+                <span style={{ fontSize: "var(--text-xs)", color: "var(--c-text-muted)" }}>{formatDateTime(b.earned_at)}</span>
               ) : (
-                <em style={{ fontSize: 12, color: "#bbb" }}>Not yet earned</em>
+                <em style={{ fontSize: "var(--text-xs)", color: "var(--c-text-subtle)" }}>Not yet earned</em>
               )}
             </div>
           ))}
@@ -573,27 +550,27 @@ function ActivityLogSection({ reporterId }: { reporterId: string }) {
                   key={entry.id}
                   style={{
                     ...s.activityEntry,
-                    background: isSystem ? "#F5F5F5" : "#fff",
+                    background: isSystem ? "var(--c-surface-low)" : "var(--c-surface-lowest)",
                   }}
                 >
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
                     <div style={{ flex: 1 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 4 }}>
                         {isSystem ? (
-                          <em style={{ fontSize: 12, color: "#888" }}>System</em>
+                          <em style={{ fontSize: "var(--text-xs)", color: "var(--c-text-muted)" }}>System</em>
                         ) : (
-                          <strong style={{ fontSize: 13, color: "#1A2B4A" }}>{entry.source}</strong>
+                          <strong style={{ fontSize: "var(--text-sm)", color: "var(--c-text-primary)" }}>{entry.source}</strong>
                         )}
-                        <span style={{ fontSize: 13, color: "#444" }}>
+                        <span style={{ fontSize: "var(--text-sm)", color: "var(--c-text-secondary)" }}>
                           {ACTION_LABELS[entry.action] ?? entry.action.replace(/_/g, " ")}
                         </span>
                         {entry.previous_value && entry.new_value && (
                           <span
                             style={{
-                              fontSize: 12,
-                              color: "#666",
-                              background: "#f0f4f8",
-                              borderRadius: 4,
+                              fontSize: "var(--text-xs)",
+                              color: "var(--c-text-muted)",
+                              background: "var(--c-surface-low)",
+                              borderRadius: "var(--radius-sm)",
                               padding: "1px 6px",
                             }}
                           >
@@ -604,10 +581,10 @@ function ActivityLogSection({ reporterId }: { reporterId: string }) {
                       {entry.comment && (
                         <div
                           style={{
-                            fontSize: 12,
-                            color: "#555",
+                            fontSize: "var(--text-xs)",
+                            color: "var(--c-text-secondary)",
                             paddingLeft: 16,
-                            borderLeft: "2px solid #e0e0e0",
+                            borderLeft: "2px solid var(--c-border)",
                             marginTop: 4,
                             marginBottom: 4,
                             lineHeight: 1.5,
@@ -618,7 +595,7 @@ function ActivityLogSection({ reporterId }: { reporterId: string }) {
                       )}
                       {entry.matched_reporter_id && (
                         <div style={{ marginTop: 4 }}>
-                          <span style={{ fontSize: 12, color: "#888" }}>Matched reporter: </span>
+                          <span style={{ fontSize: "var(--text-xs)", color: "var(--c-text-muted)" }}>Matched reporter: </span>
                           <button
                             style={s.linkBtn}
                             onClick={() =>
@@ -630,7 +607,7 @@ function ActivityLogSection({ reporterId }: { reporterId: string }) {
                         </div>
                       )}
                     </div>
-                    <span style={{ fontSize: 11, color: "#aaa", flexShrink: 0, paddingTop: 2 }}>
+                    <span style={{ fontSize: "var(--text-xs)", color: "var(--c-text-subtle)", flexShrink: 0, paddingTop: 2 }}>
                       {formatDateTime(entry.created_at)}
                     </span>
                   </div>
@@ -647,7 +624,7 @@ function ActivityLogSection({ reporterId }: { reporterId: string }) {
               >
                 ← Previous
               </button>
-              <span style={{ fontSize: 12, color: "#888", alignSelf: "center" }}>
+              <span style={{ fontSize: "var(--text-xs)", color: "var(--c-text-muted)", alignSelf: "center" }}>
                 Page {page} of {totalPages}
               </span>
               <button
@@ -691,7 +668,7 @@ export default function ReporterDetailPage() {
         <Header title="Reporter Profile" />
         <div style={s.fullLoading}>
           <div style={s.spinner} />
-          <span style={{ marginTop: 16, fontSize: 14, color: "#888" }}>Loading reporter profile…</span>
+          <span style={{ marginTop: 16, fontSize: "var(--text-sm)", color: "var(--c-text-muted)" }}>Loading reporter profile…</span>
         </div>
       </div>
     );
@@ -702,13 +679,12 @@ export default function ReporterDetailPage() {
       <div style={s.container}>
         <Header title="Reporter Profile" />
         <div style={s.fullLoading}>
-          <p style={{ fontSize: 14, color: "#C62828" }}>Failed to load reporter profile. Please refresh the page.</p>
+          <p style={{ fontSize: "var(--text-sm)", color: "var(--c-flag-red)" }}>Failed to load reporter profile. Please refresh the page.</p>
         </div>
       </div>
     );
   }
 
-  const statusColours = PROFILE_STATUS_COLOURS[reporter.profile_status] ?? { bg: "#f4f6f9", text: "#666" };
   const displayName = reporter.reporter_id;
 
   return (
@@ -722,23 +698,13 @@ export default function ReporterDetailPage() {
         {/* Section 1: Profile header */}
         <div style={s.profileHeader}>
           <div style={s.avatarCircle}>
-            <User size={36} color="#aaa" />
+            <User size={36} color="var(--c-text-subtle)" />
           </div>
           <div style={{ flex: 1 }}>
             <div style={s.profileName}>{displayName}</div>
             <div style={s.profileType}>{formatProfileType(reporter.profile_type)}</div>
             <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-              <span
-                style={{
-                  display: "inline-block",
-                  padding: "5px 16px",
-                  borderRadius: 20,
-                  fontSize: 13,
-                  fontWeight: 700,
-                  background: statusColours.bg,
-                  color: statusColours.text,
-                }}
-              >
+              <span className={statusChipClass(reporter.profile_status)}>
                 {formatProfileStatus(reporter.profile_status)}
               </span>
               <span style={s.memberSince}>
@@ -827,60 +793,44 @@ const s: Record<string, React.CSSProperties> = {
   fullLoading: {
     flex: 1,
     display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
+    flexDirection: "column" as const,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
     padding: 60,
   },
   spinner: {
     width: 36,
     height: 36,
-    border: "3px solid #e2e8f0",
-    borderTop: "3px solid #0468B1",
+    border: "3px solid var(--c-border)",
+    borderTop: "3px solid var(--c-primary-container)",
     borderRadius: "50%",
     animation: "spin 0.8s linear infinite",
   },
 
   profileHeader: {
-    background: "#fff",
-    borderRadius: 12,
+    background: "var(--c-surface-lowest)",
+    borderRadius: "var(--radius-lg)",
     padding: "24px 28px",
-    boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
-    border: "1px solid #e8eef4",
+    boxShadow: "var(--shadow-card)",
+    border: "1px solid var(--c-border)",
     display: "flex",
-    alignItems: "flex-start",
+    alignItems: "flex-start" as const,
     gap: 20,
   },
   avatarCircle: {
     width: 72,
     height: 72,
     borderRadius: "50%",
-    background: "#f4f6f9",
-    border: "2px solid #e0e8f0",
+    background: "var(--c-surface-high)",
+    border: "2px solid var(--c-border)",
     display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
     flexShrink: 0,
   },
-  profileName: { fontSize: 22, fontWeight: 700, color: "#1A2B4A", fontFamily: "monospace" },
-  profileType: { fontSize: 13, color: "#888", marginTop: 4 },
-  memberSince: { fontSize: 12, color: "#aaa" },
-
-  card: {
-    background: "#fff",
-    borderRadius: 12,
-    padding: "20px 24px",
-    boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
-    border: "1px solid #e8eef4",
-  },
-  cardTitle: {
-    fontSize: 14,
-    fontWeight: 700,
-    color: "#1A2B4A",
-    marginBottom: 16,
-    paddingBottom: 10,
-    borderBottom: "1px solid #f0f4f8",
-  },
+  profileName: { fontSize: "var(--text-xl)", fontWeight: 700, color: "var(--c-text-primary)", fontFamily: "monospace" },
+  profileType: { fontSize: "var(--text-sm)", color: "var(--c-text-muted)", marginTop: 4 },
+  memberSince: { fontSize: "var(--text-xs)", color: "var(--c-text-subtle)" },
 
   twoColGrid: {
     display: "grid",
@@ -889,19 +839,19 @@ const s: Record<string, React.CSSProperties> = {
   },
   detailRow: {
     display: "flex",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
+    justifyContent: "space-between" as const,
+    alignItems: "flex-start" as const,
     padding: "8px 0",
-    borderBottom: "1px solid #f4f6f9",
+    borderBottom: "1px solid var(--c-border-ghost)",
     gap: 12,
   },
-  detailLabel: { fontSize: 12, color: "#888", flexShrink: 0, paddingTop: 1 },
+  detailLabel: { fontSize: "var(--text-sm)", color: "var(--c-text-muted)", flexShrink: 0, paddingTop: 1 },
   detailValue: {
-    fontSize: 13,
-    color: "#1A2B4A",
+    fontSize: "var(--text-sm)",
+    color: "var(--c-text-primary)",
     fontWeight: 500,
-    textAlign: "right",
-    wordBreak: "break-word",
+    textAlign: "right" as const,
+    wordBreak: "break-word" as const,
   },
 
   statGrid: {
@@ -909,83 +859,54 @@ const s: Record<string, React.CSSProperties> = {
     gridTemplateColumns: "repeat(3, 1fr)",
     gap: 12,
   },
-  statBox: {
-    background: "#f8fafc",
-    borderRadius: 8,
-    padding: "16px",
-    border: "1px solid #e8eef4",
-    textAlign: "center",
-  },
-  statValue: { fontSize: 24, fontWeight: 700, color: "#1A2B4A", marginBottom: 4 },
-  statLabel: { fontSize: 11, color: "#888", textTransform: "uppercase", letterSpacing: 0.5 },
-
-  statusBtn: {
-    padding: "8px 18px",
-    border: "1.5px solid #d0dce8",
-    borderRadius: 7,
-    background: "#fff",
-    color: "#1A2B4A",
-    fontSize: 13,
-    fontWeight: 600,
-  },
 
   amberBanner: {
     background: "#FFF3E0",
     border: "1px solid #FFB74D",
-    borderRadius: 8,
+    borderRadius: "var(--radius-md)",
     padding: "12px 16px",
-    fontSize: 13,
+    fontSize: "var(--text-sm)",
     color: "#E65100",
     marginBottom: 12,
     lineHeight: 1.5,
   },
-  removePauseBtn: {
-    padding: "8px 18px",
-    background: "#fff",
-    border: "1.5px solid #C62828",
-    borderRadius: 7,
-    color: "#C62828",
-    fontSize: 13,
-    fontWeight: 600,
-    cursor: "pointer",
-  },
 
-  mutedText: { fontSize: 13, color: "#999", fontStyle: "italic" },
+  mutedText: { fontSize: "var(--text-sm)", color: "var(--c-text-subtle)", fontStyle: "italic" },
 
   filterSelect: {
-    border: "1.5px solid #d0dce8",
-    borderRadius: 7,
+    border: "1.5px solid var(--c-border)",
+    borderRadius: "var(--radius-md)",
     padding: "6px 10px",
-    fontSize: 13,
-    color: "#1A2B4A",
-    background: "#fff",
+    fontSize: "var(--text-sm)",
+    color: "var(--c-text-primary)",
+    background: "var(--c-surface-lowest)",
     outline: "none",
     cursor: "pointer",
   },
 
-  subLoading: { padding: "24px 0", textAlign: "center", color: "#888", fontSize: 13 },
+  subLoading: { padding: "24px 0", textAlign: "center" as const, color: "var(--c-text-muted)", fontSize: "var(--text-sm)" },
 
-  subTable: { width: "100%", borderCollapse: "collapse", minWidth: 700 },
-  subThead: { background: "#f7fafc" },
+  subTable: { width: "100%", borderCollapse: "collapse" as const, minWidth: 700 },
+  subThead: { background: "var(--c-surface-low)" },
   subTh: {
     padding: "9px 12px",
-    textAlign: "left",
-    fontSize: 11,
+    textAlign: "left" as const,
+    fontSize: "var(--text-xs)",
     fontWeight: 700,
-    color: "#718096",
-    textTransform: "uppercase",
+    color: "var(--c-text-muted)",
+    textTransform: "uppercase" as const,
     letterSpacing: 0.5,
-    borderBottom: "1px solid #e2e8f0",
-    whiteSpace: "nowrap",
+    borderBottom: "1px solid var(--c-border-ghost)",
+    whiteSpace: "nowrap" as const,
   },
-  subTr: { borderBottom: "1px solid #f0f4f8" },
-  subTd: { padding: "10px 12px", fontSize: 13, color: "#2d3748", verticalAlign: "middle" },
+  subTr: { borderBottom: "1px solid var(--c-border-ghost)" },
+  subTd: { padding: "10px 12px", fontSize: "var(--text-sm)", color: "var(--c-text-secondary)", verticalAlign: "middle" as const },
 
   linkBtn: {
     background: "none",
     border: "none",
-    color: "#0468B1",
-    fontSize: 13,
+    color: "var(--c-primary-container)",
+    fontSize: "var(--text-sm)",
     fontWeight: 600,
     cursor: "pointer",
     padding: 0,
@@ -996,18 +917,18 @@ const s: Record<string, React.CSSProperties> = {
 
   pageBtn: {
     padding: "7px 14px",
-    background: "#fff",
-    border: "1.5px solid #d0dce8",
-    borderRadius: 7,
-    fontSize: 12,
+    background: "var(--c-surface-lowest)",
+    border: "1.5px solid var(--c-border)",
+    borderRadius: "var(--radius-md)",
+    fontSize: "var(--text-xs)",
     fontWeight: 600,
-    color: "#444",
+    color: "var(--c-text-secondary)",
     cursor: "pointer",
   },
 
   activityEntry: {
     padding: "12px 0",
-    borderBottom: "1px solid #f4f6f9",
+    borderBottom: "1px solid var(--c-border-ghost)",
   },
 
   // Modal
@@ -1022,104 +943,105 @@ const s: Record<string, React.CSSProperties> = {
     inset: 0,
     zIndex: 901,
     display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
     padding: 24,
   },
   modal: {
-    background: "#fff",
-    borderRadius: 14,
+    background: "var(--c-surface-lowest)",
+    borderRadius: "var(--radius-xl)",
     padding: "28px 28px 24px",
     width: "100%",
     maxWidth: 480,
-    boxShadow: "0 20px 60px rgba(0,0,0,0.22)",
-    border: "1px solid #e0e8f0",
+    boxShadow: "var(--shadow-float)",
+    border: "1px solid var(--c-border)",
   },
   modalTitle: {
-    fontSize: 17,
+    fontSize: "var(--text-lg)",
     fontWeight: 700,
-    color: "#1A2B4A",
+    color: "var(--c-text-primary)",
     marginBottom: 12,
   },
   modalWarning: {
-    fontSize: 13,
-    color: "#666",
+    fontSize: "var(--text-sm)",
+    color: "var(--c-text-secondary)",
     background: "#FFF3E0",
     border: "1px solid #FFB74D",
-    borderRadius: 7,
+    borderRadius: "var(--radius-md)",
     padding: "10px 12px",
     marginBottom: 16,
     lineHeight: 1.5,
   },
   fieldLabel: {
     display: "block",
-    fontSize: 12,
+    fontSize: "var(--text-xs)",
     fontWeight: 600,
-    color: "#555",
+    color: "var(--c-text-muted)",
     marginBottom: 6,
-    textTransform: "uppercase",
+    textTransform: "uppercase" as const,
     letterSpacing: 0.4,
   },
   textarea: {
     width: "100%",
     padding: "10px 12px",
-    border: "1.5px solid #d0dce8",
-    borderRadius: 8,
-    fontSize: 13,
-    color: "#1A2B4A",
-    resize: "vertical",
+    border: "1.5px solid var(--c-border)",
+    borderRadius: "var(--radius-md)",
+    fontSize: "var(--text-sm)",
+    color: "var(--c-text-primary)",
+    resize: "vertical" as const,
     outline: "none",
     fontFamily: "inherit",
     lineHeight: 1.5,
-    boxSizing: "border-box",
+    boxSizing: "border-box" as const,
+    background: "var(--c-surface-lowest)",
   },
   charCounter: {
-    fontSize: 11,
+    fontSize: "var(--text-xs)",
     marginTop: 5,
-    textAlign: "right",
+    textAlign: "right" as const,
     transition: "color 0.15s",
   },
   errorBox: {
-    background: "#fff3f3",
-    border: "1px solid #f44336",
-    borderRadius: 7,
+    background: "rgba(229,62,62,0.06)",
+    border: "1px solid var(--c-flag-red)",
+    borderRadius: "var(--radius-md)",
     padding: "10px 14px",
-    fontSize: 13,
-    color: "#c62828",
+    fontSize: "var(--text-sm)",
+    color: "var(--c-flag-red)",
     marginBottom: 16,
   },
   modalActions: {
     display: "flex",
-    justifyContent: "flex-end",
+    justifyContent: "flex-end" as const,
     gap: 10,
     paddingTop: 4,
   },
   cancelBtn: {
     padding: "9px 20px",
-    background: "#f4f6f9",
+    background: "var(--c-surface-high)",
     border: "none",
-    borderRadius: 8,
-    fontSize: 13,
+    borderRadius: "var(--radius-md)",
+    fontSize: "var(--text-sm)",
     fontWeight: 500,
-    color: "#444",
+    color: "var(--c-text-primary)",
     cursor: "pointer",
   },
   confirmBtn: {
     padding: "9px 22px",
-    background: "#0468B1",
+    background: "var(--c-primary-container)",
     border: "none",
-    borderRadius: 8,
-    fontSize: 13,
+    borderRadius: "var(--radius-md)",
+    fontSize: "var(--text-sm)",
     fontWeight: 600,
     color: "#fff",
     transition: "opacity 0.12s",
   },
   confirmBtnRed: {
     padding: "9px 22px",
-    background: "#C62828",
+    background: "var(--c-flag-red)",
     border: "none",
-    borderRadius: 8,
-    fontSize: 13,
+    borderRadius: "var(--radius-md)",
+    fontSize: "var(--text-sm)",
     fontWeight: 600,
     color: "#fff",
     transition: "opacity 0.12s",
@@ -1130,13 +1052,13 @@ const s: Record<string, React.CSSProperties> = {
     bottom: 28,
     left: "50%",
     transform: "translateX(-50%)",
-    background: "#1A2B4A",
+    background: "var(--c-text-primary)",
     color: "#fff",
     padding: "10px 22px",
-    borderRadius: 8,
-    fontSize: 13,
+    borderRadius: "var(--radius-md)",
+    fontSize: "var(--text-sm)",
     fontWeight: 500,
     zIndex: 999,
-    boxShadow: "0 4px 16px rgba(0,0,0,0.2)",
+    boxShadow: "var(--shadow-float)",
   },
 };

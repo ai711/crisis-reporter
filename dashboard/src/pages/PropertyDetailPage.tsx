@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Header from "../components/Header";
 import {
   getPropertyDetail,
@@ -20,20 +20,20 @@ import type { PropertyDetail, PropertyComment, VersionHistoryEntry, ReporterRow,
 // ── Colours ───────────────────────────────────────────────────────────────────
 
 const DAMAGE_COLORS: Record<string, string> = {
-  completely_destroyed: "#f44336",
-  partially_damaged: "#ff9800",
-  minimal_or_no_damage: "#4caf50",
-  complete: "#f44336",
-  partial: "#ff9800",
-  minimal: "#4caf50",
+  completely_destroyed: "var(--c-flag-red)",
+  partially_damaged: "var(--c-flag-orange)",
+  minimal_or_no_damage: "var(--c-flag-green)",
+  complete: "var(--c-flag-red)",
+  partial: "var(--c-flag-orange)",
+  minimal: "var(--c-flag-green)",
 };
 
 const FLAG_COLORS: Record<string, string> = {
-  grey: "#9aa5b4",
-  green: "#4caf50",
-  orange: "#ff9800",
-  red: "#f44336",
-  discarded: "#bbb",
+  grey: "var(--c-flag-grey)",
+  green: "var(--c-flag-green)",
+  orange: "var(--c-flag-amber)",
+  red: "var(--c-flag-red)",
+  discarded: "var(--c-flag-grey)",
 };
 
 // ── Inline SVGs ───────────────────────────────────────────────────────────────
@@ -125,7 +125,7 @@ function ConfirmedStatusModal({
               rows={4}
               disabled={isSubmitting}
             />
-            <div style={{ ...mStyles.charCounter, color: isValid ? "#4caf50" : "#999" }}>
+            <div style={{ ...mStyles.charCounter, color: isValid ? "var(--c-flag-green)" : "var(--c-text-subtle)" }}>
               {trimmedLen} / 10 minimum
             </div>
           </div>
@@ -197,7 +197,7 @@ function RecoveryModal({ isOpen, onClose, action, onConfirm, isSubmitting, error
               rows={4}
               disabled={isSubmitting}
             />
-            <div style={{ ...mStyles.charCounter, color: isValid ? "#4caf50" : "#999" }}>
+            <div style={{ ...mStyles.charCounter, color: isValid ? "var(--c-flag-green)" : "var(--c-text-subtle)" }}>
               {trimmedLen} / 10 minimum
             </div>
           </div>
@@ -263,7 +263,7 @@ function ReporterVersionRow({
       <tr
         style={{
           ...s.tr,
-          background: isUnreviewed ? "#FFF8E1" : "#fff",
+          background: isUnreviewed ? "rgba(245,166,35,0.06)" : "var(--c-surface-lowest)",
         }}
       >
         <td style={s.td}>
@@ -302,18 +302,18 @@ function ReporterVersionRow({
       </tr>
 
       {expanded && (
-        <tr style={{ background: "#f8fafc" }}>
+        <tr style={{ background: "var(--c-surface-low)" }}>
           <td colSpan={7} style={{ padding: "12px 20px" }}>
             {loadingVersions && (
-              <div style={{ color: "#9aa5b4", fontSize: 13 }}>Loading version history…</div>
+              <div style={{ color: "var(--c-text-muted)", fontSize: "var(--text-sm)" }}>Loading version history…</div>
             )}
             {!loadingVersions && versions !== null && versions.length === 0 && (
-              <div style={{ color: "#9aa5b4", fontSize: 13 }}>
+              <div style={{ color: "var(--c-text-muted)", fontSize: "var(--text-sm)" }}>
                 This is the only submission from this reporter for this property.
               </div>
             )}
             {!loadingVersions && versions !== null && versions.length === 1 && (
-              <div style={{ color: "#9aa5b4", fontSize: 13 }}>
+              <div style={{ color: "var(--c-text-muted)", fontSize: "var(--text-sm)" }}>
                 This is the only submission from this reporter for this property.
               </div>
             )}
@@ -322,7 +322,7 @@ function ReporterVersionRow({
                 <thead>
                   <tr>
                     {["Report ID", "Submitted At", "Damage Level", "Flag Status", "Change Note"].map((h) => (
-                      <th key={h} style={{ padding: "6px 12px", textAlign: "left", color: "#9aa5b4", fontWeight: 600, borderBottom: "1px solid #e8eef4" }}>
+                      <th key={h} style={{ padding: "6px 12px", textAlign: "left", color: "var(--c-text-muted)", fontWeight: 600, borderBottom: "1px solid var(--c-border-ghost)", fontSize: "var(--text-xs)", textTransform: "uppercase" as const, letterSpacing: "0.06em" }}>
                         {h}
                       </th>
                     ))}
@@ -344,16 +344,16 @@ function ReporterVersionRow({
                       </td>
                       <td style={{ padding: "6px 12px" }}>{formatDateTime(v.submitted_at)}</td>
                       <td style={{ padding: "6px 12px" }}>
-                        <span style={{ ...s.pill, background: DAMAGE_COLORS[v.damage_level] ?? "#888", fontSize: 11 }}>
+                        <span style={{ ...s.pill, background: DAMAGE_COLORS[v.damage_level] ?? "var(--c-text-muted)", fontSize: "var(--text-xs)" }}>
                           {formatDamageLevel(v.damage_level)}
                         </span>
                       </td>
                       <td style={{ padding: "6px 12px" }}>
-                        <span style={{ ...s.pill, background: FLAG_COLORS[v.flag_status] ?? "#888", fontSize: 11 }}>
+                        <span style={{ ...s.pill, background: FLAG_COLORS[v.flag_status] ?? "var(--c-text-muted)", fontSize: "var(--text-xs)" }}>
                           {v.flag_status.charAt(0).toUpperCase() + v.flag_status.slice(1)}
                         </span>
                       </td>
-                      <td style={{ padding: "6px 12px", color: "#5a6878" }}>
+                      <td style={{ padding: "6px 12px", color: "var(--c-text-secondary)", fontSize: "var(--text-xs)" }}>
                         {v.change_note ?? <span style={s.muted}>—</span>}
                       </td>
                     </tr>
@@ -430,7 +430,7 @@ function CommentsThread({ propertyId, crisisId }: { propertyId: string; crisisId
 
       <div ref={threadRef} style={s.commentsThread}>
         {comments.length === 0 && (
-          <div style={{ color: "#9aa5b4", fontSize: 13, textAlign: "center", padding: "24px 0" }}>
+          <div style={{ color: "var(--c-text-muted)", fontSize: "var(--text-sm)", textAlign: "center", padding: "24px 0" }}>
             No comments yet. Be the first to add a note.
           </div>
         )}
@@ -439,8 +439,8 @@ function CommentsThread({ propertyId, crisisId }: { propertyId: string; crisisId
             key={c.id}
             style={{
               ...s.commentEntry,
-              background: c.is_system_generated ? "#F5F5F5" : "#fff",
-              border: c.is_system_generated ? "1px solid #ebebeb" : "1px solid #f0f4f8",
+              background: c.is_system_generated ? "var(--c-surface-low)" : "var(--c-surface-lowest)",
+              border: c.is_system_generated ? "1px solid var(--c-border-ghost)" : "1px solid var(--c-border-ghost)",
             }}
           >
             <div style={s.commentHeader}>
@@ -469,10 +469,10 @@ function CommentsThread({ propertyId, crisisId }: { propertyId: string; crisisId
           disabled={posting}
         />
         <div style={s.commentFooter}>
-          <span style={{ fontSize: 11, color: commentText.length >= 1900 ? "#e65100" : "#9aa5b4" }}>
+          <span style={{ fontSize: "var(--text-xs)", color: commentText.length >= 1900 ? "var(--c-flag-orange)" : "var(--c-text-subtle)" }}>
             {commentText.length}/2000
           </span>
-          {postError && <span style={{ fontSize: 12, color: "#c62828" }}>{postError}</span>}
+          {postError && <span style={{ fontSize: "var(--text-xs)", color: "var(--c-flag-red)" }}>{postError}</span>}
           <button
             style={{
               ...s.postBtn,
@@ -642,8 +642,8 @@ export default function PropertyDetailPage() {
   const pageTitle = isLoading ? "Loading…" : isError ? "Error" : displayName;
 
   const dmgColor = property?.current_damage_level
-    ? DAMAGE_COLORS[property.current_damage_level] ?? "#888"
-    : "#888";
+    ? DAMAGE_COLORS[property.current_damage_level] ?? "var(--c-text-muted)"
+    : "var(--c-text-muted)";
 
   const confirmedColor = property?.confirmed_status
     ? DAMAGE_COLORS[property.confirmed_status] ?? "#888"
@@ -653,7 +653,7 @@ export default function PropertyDetailPage() {
     return (
       <div style={s.page}>
         <Header title="Loading…" />
-        <div style={{ padding: 60, textAlign: "center", color: "#9aa5b4" }}>
+        <div style={{ padding: 60, textAlign: "center", color: "var(--c-text-muted)" }}>
           Loading property details…
         </div>
       </div>
@@ -664,7 +664,7 @@ export default function PropertyDetailPage() {
     return (
       <div style={s.page}>
         <Header title="Property Detail" />
-        <div style={{ padding: 60, textAlign: "center", color: "#c62828" }}>
+        <div style={{ padding: 60, textAlign: "center", color: "var(--c-flag-red)" }}>
           Failed to load property. Check the Property ID and try again.
         </div>
       </div>
@@ -784,11 +784,11 @@ export default function PropertyDetailPage() {
                 <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
                   <span style={{
                     fontWeight: 700,
-                    fontSize: 13,
-                    color: property.property_status === "Active" ? "#2e7d32" : "#9aa5b4",
+                    fontSize: "var(--text-sm)",
+                    color: property.property_status === "Active" ? "var(--c-flag-green)" : "var(--c-text-muted)",
                     padding: "4px 12px",
-                    borderRadius: 12,
-                    background: property.property_status === "Active" ? "#e8f5e9" : "#f0f4f8",
+                    borderRadius: "var(--radius-pill)",
+                    background: property.property_status === "Active" ? "rgba(56,161,105,0.12)" : "var(--c-surface-low)",
                   }}>
                     {property.property_status}
                   </span>
@@ -813,7 +813,7 @@ export default function PropertyDetailPage() {
               {/* Flag for review — edit access only */}
               {canEditLocations && (
                 <button
-                  style={{ ...s.secondaryBtn, borderColor: "#ff9800", color: "#e65100" }}
+                  style={{ ...s.secondaryBtn, borderColor: "var(--c-flag-amber)", color: "var(--c-flag-orange)" }}
                   onClick={() => setFlagPanelOpen((o) => !o)}
                 >
                   {property.is_flagged_for_review ? "Flagged for Review" : "Flag for Review"}
@@ -822,7 +822,7 @@ export default function PropertyDetailPage() {
 
               {flagPanelOpen && (
                 <div style={s.flagPanel}>
-                  <div style={{ fontSize: 13, marginBottom: 8, color: "#444" }}>
+                  <div style={{ fontSize: "var(--text-sm)", marginBottom: 8, color: "var(--c-text-secondary)" }}>
                     Optional note:
                   </div>
                   <textarea
@@ -859,7 +859,7 @@ export default function PropertyDetailPage() {
               <strong>Conflicting assessments</strong> — reporters have submitted different damage
               levels for this property.
               {cwd && (
-                <span style={{ marginLeft: 6, color: "#5a3a00" }}>
+                <span style={{ marginLeft: 6, color: "var(--c-text-primary)" }}>
                   Majority: {formatDamageLevel(cwd.majority_level)}.{" "}
                   {cwd.minority_count} reporter{cwd.minority_count !== 1 ? "s" : ""}{" "}
                   ({cwd.minority_percentage}%) disagree.
@@ -915,7 +915,7 @@ export default function PropertyDetailPage() {
               {overrideSubmitting ? "Saving…" : "Save Override"}
             </button>
             {overrideSuccess && (
-              <span style={{ color: "#2e7d32", fontSize: 13, fontWeight: 500 }}>
+              <span style={{ color: "var(--c-flag-green)", fontSize: "var(--text-sm)", fontWeight: 500 }}>
                 Override saved successfully.
               </span>
             )}
@@ -943,7 +943,7 @@ export default function PropertyDetailPage() {
             <div style={s.distBarOuter}>
               {destroyedPct > 0 && (
                 <div
-                  style={{ ...s.distBarSeg, background: "#f44336", width: `${destroyedPct}%` }}
+                  style={{ ...s.distBarSeg, background: "var(--c-flag-red)", width: `${destroyedPct}%` }}
                   title={`Completely Destroyed: ${destroyedPct}%`}
                 >
                   {destroyedPct > 8 && `${destroyedPct}%`}
@@ -951,7 +951,7 @@ export default function PropertyDetailPage() {
               )}
               {partialPct > 0 && (
                 <div
-                  style={{ ...s.distBarSeg, background: "#ff9800", width: `${partialPct}%` }}
+                  style={{ ...s.distBarSeg, background: "var(--c-flag-orange)", width: `${partialPct}%` }}
                   title={`Partially Damaged: ${partialPct}%`}
                 >
                   {partialPct > 8 && `${partialPct}%`}
@@ -959,7 +959,7 @@ export default function PropertyDetailPage() {
               )}
               {minimalPct > 0 && (
                 <div
-                  style={{ ...s.distBarSeg, background: "#4caf50", width: `${minimalPct}%` }}
+                  style={{ ...s.distBarSeg, background: "var(--c-flag-green)", width: `${minimalPct}%` }}
                   title={`Minimal or No Damage: ${minimalPct}%`}
                 >
                   {minimalPct > 8 && `${minimalPct}%`}
@@ -977,7 +977,7 @@ export default function PropertyDetailPage() {
               <div
                 style={{
                   ...s.toggle,
-                  background: showUnreviewed ? "#0468B1" : "#ccc",
+                  background: showUnreviewed ? "var(--c-primary-container)" : "var(--c-text-subtle)",
                 }}
                 onClick={() => setShowUnreviewed((v) => !v)}
                 role="switch"
@@ -987,14 +987,14 @@ export default function PropertyDetailPage() {
               >
                 <div style={{ ...s.toggleThumb, transform: showUnreviewed ? "translateX(20px)" : "translateX(2px)" }} />
               </div>
-              <span style={{ fontSize: 12, color: "#5a6878" }}>Show unreviewed reports</span>
+              <span style={{ fontSize: "var(--text-xs)", color: "var(--c-text-muted)" }}>Show unreviewed reports</span>
             </label>
           </div>
 
           <div style={{ overflowX: "auto" }}>
             <table style={s.table}>
               <thead>
-                <tr style={{ background: "#f8fafc" }}>
+                <tr style={{ background: "var(--c-surface-low)" }}>
                   {["Reporter ID", "Name", "Most Recent Damage", "Submitted At", "Platform", "Flag", ""].map((h) => (
                     <th key={h} style={s.th}>{h}</th>
                   ))}
@@ -1016,7 +1016,7 @@ export default function PropertyDetailPage() {
                   ))}
                 {reporter_rows.length === 0 && (
                   <tr>
-                    <td colSpan={7} style={{ padding: "32px", textAlign: "center", color: "#9aa5b4", fontSize: 13 }}>
+                    <td colSpan={7} style={{ padding: "32px", textAlign: "center", color: "var(--c-text-muted)", fontSize: "var(--text-sm)" }}>
                       No reporter assessments yet.
                     </td>
                   </tr>
@@ -1069,35 +1069,38 @@ const mStyles: Record<string, React.CSSProperties> = {
     display: "flex", alignItems: "center", justifyContent: "center", padding: 24,
   },
   modal: {
-    background: "#fff", borderRadius: 14, padding: "28px 28px 24px",
+    background: "var(--c-surface-lowest)", borderRadius: "var(--radius-xl)", padding: "28px 28px 24px",
     width: "100%", maxWidth: 480,
-    boxShadow: "0 20px 60px rgba(0,0,0,0.22)", border: "1px solid #e0e8f0",
+    boxShadow: "var(--shadow-float)", border: "1px solid var(--c-border)",
   },
-  title: { fontSize: 18, fontWeight: 700, color: "#1A2B4A", margin: "0 0 8px" },
-  subtitle: { fontSize: 13, color: "#555", margin: "0 0 20px", lineHeight: 1.5 },
+  title: { fontSize: "var(--text-lg)", fontWeight: 700, color: "var(--c-text-primary)", margin: "0 0 8px" },
+  subtitle: { fontSize: "var(--text-sm)", color: "var(--c-text-secondary)", margin: "0 0 20px", lineHeight: 1.5 },
   field: { marginBottom: 16 },
   fieldLabel: {
-    display: "block", fontSize: 12, fontWeight: 600, color: "#555",
-    marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.4,
+    display: "block", fontSize: "var(--text-xs)", fontWeight: 600, color: "var(--c-text-muted)",
+    marginBottom: 6, textTransform: "uppercase" as const, letterSpacing: 0.4,
   },
   textarea: {
-    width: "100%", padding: "10px 12px", border: "1.5px solid #d0dce8",
-    borderRadius: 8, fontSize: 13, color: "#1A2B4A", resize: "vertical",
-    outline: "none", fontFamily: "inherit", lineHeight: 1.5, boxSizing: "border-box",
+    width: "100%", padding: "10px 12px", border: "1.5px solid var(--c-border)",
+    borderRadius: "var(--radius-md)", fontSize: "var(--text-sm)", color: "var(--c-text-primary)",
+    resize: "vertical" as const, outline: "none", fontFamily: "inherit", lineHeight: 1.5,
+    boxSizing: "border-box" as const, background: "var(--c-surface-lowest)",
   },
-  charCounter: { fontSize: 11, marginTop: 5, textAlign: "right", transition: "color 0.15s" },
+  charCounter: { fontSize: "var(--text-xs)", marginTop: 5, textAlign: "right" as const, transition: "color 0.15s" },
   errorBox: {
-    background: "#fff3f3", border: "1px solid #f44336", borderRadius: 7,
-    padding: "10px 14px", fontSize: 13, color: "#c62828", marginBottom: 16,
+    background: "rgba(229,62,62,0.06)", border: "1px solid var(--c-flag-red)",
+    borderRadius: "var(--radius-md)", padding: "10px 14px",
+    fontSize: "var(--text-sm)", color: "var(--c-flag-red)", marginBottom: 16,
   },
-  actions: { display: "flex", justifyContent: "flex-end", gap: 10, paddingTop: 4 },
+  actions: { display: "flex", justifyContent: "flex-end" as const, gap: 10, paddingTop: 4 },
   cancelBtn: {
-    padding: "9px 20px", background: "#f4f6f9", border: "none",
-    borderRadius: 8, fontSize: 13, fontWeight: 500, color: "#444", cursor: "pointer",
+    padding: "9px 20px", background: "var(--c-surface-high)", border: "none",
+    borderRadius: "var(--radius-md)", fontSize: "var(--text-sm)", fontWeight: 500,
+    color: "var(--c-text-primary)", cursor: "pointer",
   },
   confirmBtn: {
-    padding: "9px 22px", background: "#0468B1", border: "none",
-    borderRadius: 8, fontSize: 13, fontWeight: 600, color: "#fff",
+    padding: "9px 22px", background: "var(--c-primary-container)", border: "none",
+    borderRadius: "var(--radius-md)", fontSize: "var(--text-sm)", fontWeight: 600, color: "#fff",
   },
 };
 
@@ -1112,135 +1115,140 @@ const s: Record<string, React.CSSProperties> = {
     display: "flex", flexDirection: "column", gap: 16,
   },
   card: {
-    background: "#fff", border: "1px solid #e8eef4",
-    borderRadius: 12, padding: "24px 28px",
+    background: "var(--c-surface-lowest)", border: "1px solid var(--c-border)",
+    borderRadius: "var(--radius-lg)", padding: "24px 28px",
+    boxShadow: "var(--shadow-card)",
   },
   cardTitle: {
-    fontSize: 15, fontWeight: 700, color: "#1A2B4A", marginBottom: 16,
+    fontSize: "var(--text-md)", fontWeight: 700, color: "var(--c-text-primary)", marginBottom: 16,
   },
   summaryGrid: {
     display: "grid", gridTemplateColumns: "1fr auto", gap: 32, alignItems: "start",
   },
-  summaryLeft: { display: "flex", flexDirection: "column", gap: 8 },
+  summaryLeft: { display: "flex", flexDirection: "column" as const, gap: 8 },
   summaryRight: {
-    display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 0, minWidth: 260,
+    display: "flex", flexDirection: "column" as const, alignItems: "flex-start" as const, gap: 0, minWidth: 260,
   },
   propertyName: {
-    fontSize: 22, fontWeight: 800, color: "#1A2B4A", marginBottom: 8, lineHeight: 1.2,
+    fontSize: "var(--text-2xl)", fontWeight: 800, color: "var(--c-text-primary)", marginBottom: 8, lineHeight: 1.2,
   },
-  summaryRow: { display: "flex", gap: 12, alignItems: "baseline" },
+  summaryRow: { display: "flex", gap: 12, alignItems: "baseline" as const },
   summaryLabel: {
-    fontSize: 11, fontWeight: 700, color: "#9aa5b4", textTransform: "uppercase",
+    fontSize: "var(--text-xs)", fontWeight: 700, color: "var(--c-text-muted)", textTransform: "uppercase" as const,
     letterSpacing: 0.5, minWidth: 60,
   },
-  summaryVal: { fontSize: 13, color: "#1A2B4A" },
+  summaryVal: { fontSize: "var(--text-sm)", color: "var(--c-text-primary)" },
   pill: {
     display: "inline-flex", alignItems: "center", padding: "4px 12px",
-    borderRadius: 12, color: "#fff", fontSize: 12, fontWeight: 600,
+    borderRadius: 12, color: "#fff", fontSize: "var(--text-xs)", fontWeight: 600,
   },
   confirmedBadge: {
-    marginLeft: 8, fontSize: 11, fontWeight: 500,
+    marginLeft: 8, fontSize: "var(--text-xs)", fontWeight: 500,
     background: "rgba(255,255,255,0.25)", padding: "2px 7px", borderRadius: 10,
   },
   confirmedBtn: {
-    width: "100%", padding: "10px 16px", border: "1.5px solid #d0dce8",
-    borderRadius: 8, background: "#f8fafc", color: "#1A2B4A",
-    fontSize: 13, fontWeight: 500, textAlign: "left", cursor: "pointer",
+    width: "100%", padding: "10px 16px", border: "1.5px solid var(--c-border)",
+    borderRadius: "var(--radius-md)", background: "var(--c-surface-low)", color: "var(--c-text-primary)",
+    fontSize: "var(--text-sm)", fontWeight: 500, textAlign: "left" as const, cursor: "pointer",
   },
   dropdown: {
     position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0,
-    background: "#fff", border: "1px solid #e0e0e0", borderRadius: 8,
-    boxShadow: "0 4px 16px rgba(0,0,0,0.12)", zIndex: 30, overflow: "hidden",
+    background: "var(--c-surface-lowest)", border: "1px solid var(--c-border)",
+    borderRadius: "var(--radius-md)", boxShadow: "var(--shadow-float)", zIndex: 30, overflow: "hidden",
   },
   dropdownItem: {
     display: "block", width: "100%", padding: "10px 16px",
-    background: "none", border: "none", borderBottom: "1px solid #f0f4f8",
-    textAlign: "left", fontSize: 13, color: "#1A2B4A", cursor: "pointer",
+    background: "none", border: "none", borderBottom: "1px solid var(--c-border-ghost)",
+    textAlign: "left" as const, fontSize: "var(--text-sm)", color: "var(--c-text-primary)", cursor: "pointer",
   },
   secondaryBtn: {
-    padding: "7px 14px", background: "transparent", border: "1.5px solid #d0dce8",
-    borderRadius: 8, fontSize: 12, fontWeight: 600, color: "#444", cursor: "pointer",
-    whiteSpace: "nowrap",
+    padding: "7px 14px", background: "transparent", border: "1.5px solid var(--c-border)",
+    borderRadius: "var(--radius-md)", fontSize: "var(--text-xs)", fontWeight: 600,
+    color: "var(--c-text-secondary)", cursor: "pointer", whiteSpace: "nowrap" as const,
   },
   primaryBtn: {
-    padding: "9px 20px", background: "#0468B1", border: "none",
-    borderRadius: 8, fontSize: 13, fontWeight: 600, color: "#fff", cursor: "pointer",
+    padding: "9px 20px", background: "var(--c-primary-container)", border: "none",
+    borderRadius: "var(--radius-md)", fontSize: "var(--text-sm)", fontWeight: 600,
+    color: "#fff", cursor: "pointer",
   },
   cancelBtn: {
-    padding: "9px 16px", background: "#f4f6f9", border: "none",
-    borderRadius: 8, fontSize: 13, fontWeight: 500, color: "#444", cursor: "pointer",
+    padding: "9px 16px", background: "var(--c-surface-high)", border: "none",
+    borderRadius: "var(--radius-md)", fontSize: "var(--text-sm)", fontWeight: 500,
+    color: "var(--c-text-primary)", cursor: "pointer",
   },
   flagPanel: {
-    marginTop: 8, background: "#fff8e1", border: "1px solid #ffe082",
-    borderRadius: 8, padding: 14, width: "100%",
+    marginTop: 8, background: "rgba(245,166,35,0.06)", border: "1px solid rgba(245,166,35,0.3)",
+    borderRadius: "var(--radius-md)", padding: 14, width: "100%",
   },
   flagTextarea: {
-    width: "100%", padding: "8px 12px", border: "1.5px solid #ffe082",
-    borderRadius: 8, fontSize: 13, color: "#1A2B4A", resize: "vertical",
-    boxSizing: "border-box", fontFamily: "inherit",
+    width: "100%", padding: "8px 12px", border: "1.5px solid rgba(245,166,35,0.4)",
+    borderRadius: "var(--radius-md)", fontSize: "var(--text-sm)", color: "var(--c-text-primary)",
+    resize: "vertical" as const, boxSizing: "border-box" as const, fontFamily: "inherit",
+    background: "var(--c-surface-lowest)",
   },
   conflictBanner: {
-    display: "flex", alignItems: "flex-start", gap: 12,
-    background: "#fff8e1", border: "1.5px solid #ffcc02",
-    borderRadius: 10, padding: "14px 20px", color: "#5a3a00", fontSize: 13, lineHeight: 1.5,
+    display: "flex", alignItems: "flex-start" as const, gap: 12,
+    background: "rgba(245,166,35,0.08)", border: "1.5px solid rgba(245,166,35,0.4)",
+    borderRadius: "var(--radius-lg)", padding: "14px 20px",
+    color: "var(--c-text-secondary)", fontSize: "var(--text-sm)", lineHeight: 1.5,
   },
   overrideGrid: {
     display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20,
   },
-  fieldGroup: { display: "flex", flexDirection: "column", gap: 6 },
+  fieldGroup: { display: "flex", flexDirection: "column" as const, gap: 6 },
   fieldLabel: {
-    fontSize: 11, fontWeight: 600, color: "#9aa5b4",
-    textTransform: "uppercase", letterSpacing: 0.5,
+    fontSize: "var(--text-xs)", fontWeight: 600, color: "var(--c-text-muted)",
+    textTransform: "uppercase" as const, letterSpacing: 0.5,
   },
   textInput: {
-    padding: "9px 12px", border: "1.5px solid #d0dce8", borderRadius: 8,
-    fontSize: 13, color: "#1A2B4A", outline: "none", background: "#fff",
-    boxSizing: "border-box", width: "100%",
+    padding: "9px 12px", border: "1.5px solid var(--c-border)", borderRadius: "var(--radius-md)",
+    fontSize: "var(--text-sm)", color: "var(--c-text-primary)", outline: "none",
+    background: "var(--c-surface-lowest)", boxSizing: "border-box" as const, width: "100%",
   },
   statsRow: {
     display: "flex", gap: 12,
   },
   statBox: {
-    flex: 1, background: "#fff", border: "1px solid #e8eef4",
-    borderRadius: 10, padding: "16px 20px",
+    flex: 1, background: "var(--c-surface-lowest)", border: "1px solid var(--c-border)",
+    borderRadius: "var(--radius-lg)", padding: "16px 20px", boxShadow: "var(--shadow-sm)",
   },
   statNum: {
-    fontSize: 22, fontWeight: 800, color: "#1A2B4A", lineHeight: 1.1, marginBottom: 4,
+    fontSize: "var(--text-2xl)", fontWeight: 800, color: "var(--c-text-primary)", lineHeight: 1.1, marginBottom: 4,
   },
   statLbl: {
-    fontSize: 11, fontWeight: 600, color: "#9aa5b4",
-    textTransform: "uppercase", letterSpacing: 0.5,
+    fontSize: "var(--text-xs)", fontWeight: 600, color: "var(--c-text-muted)",
+    textTransform: "uppercase" as const, letterSpacing: 0.5,
   },
   distBarOuter: {
-    display: "flex", height: 20, borderRadius: 6, overflow: "hidden",
-    background: "#f0f4f8", marginTop: 8,
+    display: "flex", height: 20, borderRadius: "var(--radius-sm)", overflow: "hidden",
+    background: "var(--c-surface-low)", marginTop: 8,
   },
   distBarSeg: {
-    display: "flex", alignItems: "center", justifyContent: "center",
-    color: "#fff", fontSize: 11, fontWeight: 600,
+    display: "flex", alignItems: "center" as const, justifyContent: "center" as const,
+    color: "#fff", fontSize: "var(--text-xs)", fontWeight: 600,
     transition: "width 0.3s",
   },
-  table: { width: "100%", borderCollapse: "collapse", fontSize: 13 },
+  table: { width: "100%", borderCollapse: "collapse" as const, fontSize: "var(--text-sm)" },
   th: {
-    padding: "10px 14px", textAlign: "left", fontSize: 11, fontWeight: 700,
-    color: "#9aa5b4", textTransform: "uppercase", letterSpacing: 0.5,
-    borderBottom: "1px solid #e8eef4", whiteSpace: "nowrap",
+    padding: "10px 14px", textAlign: "left" as const, fontSize: "var(--text-xs)", fontWeight: 700,
+    color: "var(--c-text-muted)", textTransform: "uppercase" as const, letterSpacing: 0.5,
+    borderBottom: "1px solid var(--c-border-ghost)", whiteSpace: "nowrap" as const,
   },
-  tr: { borderBottom: "1px solid #f0f4f8" },
-  td: { padding: "10px 14px", color: "#1A2B4A", verticalAlign: "middle", whiteSpace: "nowrap" },
+  tr: { borderBottom: "1px solid var(--c-border-ghost)" },
+  td: { padding: "10px 14px", color: "var(--c-text-primary)", verticalAlign: "middle" as const, whiteSpace: "nowrap" as const },
   link: {
-    color: "#0468B1", fontWeight: 600, cursor: "pointer",
-    fontFamily: "monospace", fontSize: 12,
+    color: "var(--c-primary-container)", fontWeight: 600, cursor: "pointer",
+    fontFamily: "monospace", fontSize: "var(--text-xs)",
   },
-  muted: { color: "#ccc" },
+  muted: { color: "var(--c-text-subtle)" },
   platformBadge: {
-    background: "#f0f4f8", color: "#5a6878", padding: "2px 8px",
-    borderRadius: 6, fontSize: 11, fontWeight: 600,
+    background: "var(--c-surface-low)", color: "var(--c-text-muted)", padding: "2px 8px",
+    borderRadius: "var(--radius-sm)", fontSize: "var(--text-xs)", fontWeight: 600,
   },
   expandBtn: {
-    background: "none", border: "1px solid #e0e0e0", borderRadius: 6,
+    background: "none", border: "1px solid var(--c-border)", borderRadius: "var(--radius-sm)",
     cursor: "pointer", padding: "3px 8px", display: "inline-flex",
-    alignItems: "center", color: "#5a6878",
+    alignItems: "center" as const, color: "var(--c-text-muted)",
   },
   toggle: {
     width: 40, height: 22, borderRadius: 11, position: "relative",
@@ -1251,47 +1259,48 @@ const s: Record<string, React.CSSProperties> = {
     background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.2)", transition: "transform 0.2s",
   },
   commentsSection: {
-    background: "#fff", border: "1px solid #e8eef4", borderRadius: 12, padding: "24px 28px",
+    background: "var(--c-surface-lowest)", border: "1px solid var(--c-border)",
+    borderRadius: "var(--radius-lg)", padding: "24px 28px", boxShadow: "var(--shadow-card)",
   },
-  sectionTitle: { fontSize: 15, fontWeight: 700, color: "#1A2B4A", marginBottom: 16 },
+  sectionTitle: { fontSize: "var(--text-xs)", fontWeight: 700, color: "var(--c-text-muted)", marginBottom: 16, textTransform: "uppercase" as const, letterSpacing: "0.1em" },
   commentsThread: {
-    maxHeight: 420, overflowY: "auto", display: "flex", flexDirection: "column",
+    maxHeight: 420, overflowY: "auto", display: "flex", flexDirection: "column" as const,
     gap: 10, marginBottom: 16,
   },
   commentEntry: {
-    borderRadius: 8, padding: "10px 14px",
+    borderRadius: "var(--radius-md)", padding: "10px 14px",
   },
   commentHeader: {
-    display: "flex", alignItems: "center", gap: 8, marginBottom: 6,
+    display: "flex", alignItems: "center" as const, gap: 8, marginBottom: 6,
   },
-  commentAuthor: { fontSize: 13, fontWeight: 700, color: "#1A2B4A" },
-  systemLabel: { fontSize: 12, fontStyle: "italic", color: "#9aa5b4" },
+  commentAuthor: { fontSize: "var(--text-sm)", fontWeight: 700, color: "var(--c-text-primary)" },
+  systemLabel: { fontSize: "var(--text-xs)", fontStyle: "italic", color: "var(--c-text-muted)" },
   eventBadge: {
-    background: "#f0f4f8", color: "#5a6878", padding: "2px 8px",
-    borderRadius: 6, fontSize: 11, fontWeight: 600,
+    background: "var(--c-surface-low)", color: "var(--c-text-muted)", padding: "2px 8px",
+    borderRadius: "var(--radius-sm)", fontSize: "var(--text-xs)", fontWeight: 600,
   },
-  commentTime: { fontSize: 11, color: "#9aa5b4", marginLeft: "auto" },
-  commentText: { fontSize: 13, color: "#1A2B4A", lineHeight: 1.5 },
-  commentInputWrap: { borderTop: "1px solid #f0f4f8", paddingTop: 14 },
+  commentTime: { fontSize: "var(--text-xs)", color: "var(--c-text-subtle)", marginLeft: "auto" },
+  commentText: { fontSize: "var(--text-sm)", color: "var(--c-text-secondary)", lineHeight: 1.5 },
+  commentInputWrap: { borderTop: "1px solid var(--c-border-ghost)", paddingTop: 14 },
   commentTextarea: {
-    width: "100%", padding: "10px 12px", border: "1.5px solid #d0dce8",
-    borderRadius: 8, fontSize: 13, color: "#1A2B4A", resize: "vertical",
-    outline: "none", fontFamily: "inherit", lineHeight: 1.5,
-    boxSizing: "border-box",
+    width: "100%", padding: "10px 12px", border: "1.5px solid var(--c-border)",
+    borderRadius: "var(--radius-md)", fontSize: "var(--text-sm)", color: "var(--c-text-primary)",
+    resize: "vertical" as const, outline: "none", fontFamily: "inherit", lineHeight: 1.5,
+    boxSizing: "border-box" as const, background: "var(--c-surface-lowest)",
   },
   commentFooter: {
-    display: "flex", alignItems: "center", gap: 12, marginTop: 8,
-    justifyContent: "flex-end",
+    display: "flex", alignItems: "center" as const, gap: 12, marginTop: 8,
+    justifyContent: "flex-end" as const,
   },
   postBtn: {
-    padding: "8px 18px", background: "#0468B1", border: "none",
-    borderRadius: 8, fontSize: 13, fontWeight: 600, color: "#fff",
+    padding: "8px 18px", background: "var(--c-primary-container)", border: "none",
+    borderRadius: "var(--radius-md)", fontSize: "var(--text-sm)", fontWeight: 600, color: "#fff",
     transition: "opacity 0.15s",
   },
   toast: {
     position: "fixed", bottom: 32, left: "50%", transform: "translateX(-50%)",
-    background: "#1A2B4A", color: "#fff", padding: "12px 24px",
-    borderRadius: 8, fontSize: 13, fontWeight: 500,
-    boxShadow: "0 4px 20px rgba(0,0,0,0.22)", zIndex: 999,
+    background: "var(--c-text-primary)", color: "#fff", padding: "12px 24px",
+    borderRadius: "var(--radius-md)", fontSize: "var(--text-sm)", fontWeight: 500,
+    boxShadow: "var(--shadow-float)", zIndex: 999,
   },
 };
