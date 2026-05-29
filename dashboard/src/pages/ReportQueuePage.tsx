@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useNavigate } from "react-router-dom";
 import Header from "../components/Header";
 import { useAuthStore } from "../stores/authStore";
 import { useSSE } from "../hooks/useSSE";
@@ -79,7 +78,6 @@ function Spinner({ size = 28 }: { size?: number }) {
 // ── Component ──────────────────────────────────────────────────────────────────
 
 export default function ReportQueuePage() {
-  const navigate = useNavigate();
   const { activeCrisisId } = useAuthStore();
 
   const [items, setItems] = useState<QueueReport[]>([]);

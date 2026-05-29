@@ -8,16 +8,7 @@ import Header from "../components/Header";
 
 const BLUE = "var(--c-primary-container)";
 
-const UN_LANGUAGES = [
-  { name: "Arabic", code: "ar" },
-  { name: "Chinese", code: "zh" },
-  { name: "English", code: "en" },
-  { name: "French", code: "fr" },
-  { name: "Russian", code: "ru" },
-  { name: "Spanish", code: "es" },
-];
-
-type Tab = "countries" | "languages" | "questions" | "map" | "app-content";
+type Tab ="countries" | "languages" | "questions" | "map" | "app-content";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -27,12 +18,6 @@ interface Country {
   official_language: string;
   is_active: boolean;
   dialling_code?: string;
-}
-
-interface Language {
-  name: string;
-  code: string;
-  is_active: boolean;
 }
 
 interface QuestionOption {
@@ -58,20 +43,6 @@ interface ActivePackage {
   version: string;
   published_at: string;
   questions: ActiveQuestion[];
-}
-
-interface QueueStatus {
-  has_pending: boolean;
-  pending_count: number;
-}
-
-interface PackageListItem {
-  id: string;
-  version: string;
-  status: string;
-  created_at: string;
-  published_at: string | null;
-  question_count: number;
 }
 
 interface QueueStatusByLang {
@@ -165,14 +136,6 @@ interface PublishReadiness {
 type FilterStatus = "all" | "missing" | "draft" | "approved" | "published";
 
 const AUDIT_PAGE_SIZE = 10;
-
-const TRANSLATION_LANGS = [
-  { code: "ar", name: "Arabic" },
-  { code: "zh", name: "Chinese" },
-  { code: "fr", name: "French" },
-  { code: "ru", name: "Russian" },
-  { code: "es", name: "Spanish" },
-];
 
 function statusBadgeStyle(st: string): React.CSSProperties {
   const map: Record<string, [string, string, string]> = {
@@ -1028,7 +991,7 @@ function LanguagesTab() {
   useEffect(() => {
     api.post('/api/translations/sync-string-keys')
       .then(res => {
-        const { created, retired } = res.data as { created: number; retired: number };
+        const { created } = res.data as { created: number; retired: number };
         if (created > 0) {
           setSyncMsg(`${created} new string${created > 1 ? 's' : ''} added to translation pipeline.`);
           setTimeout(() => setSyncMsg(''), 6000);
@@ -1150,17 +1113,6 @@ function LanguagesTab() {
   const activeKeys = stringKeys.filter((k) => k.is_active);
   const totalActive = activeKeys.length;
   const categoryMap = Object.fromEntries(stringKeys.map((k) => [k.key, k.category]));
-
-  const coverageByLang = Object.fromEntries(
-    languages.map((lang) => {
-      let approved = 0;
-      for (const key of activeKeys) {
-        const st = key.translations[lang.code];
-        if (st === "approved" || st === "published") approved++;
-      }
-      return [lang.code, totalActive > 0 ? Math.round((approved / totalActive) * 100) : 0];
-    })
-  );
 
   // Per-language translation status counts for the Translation Status pills (FIX 2)
   const statusByLang = Object.fromEntries(
@@ -1657,7 +1609,6 @@ function LanguagesTab() {
               {langsLoading ? (
                 <tr><td colSpan={5} style={{ ...s.td, textAlign: "center", color: "var(--c-text-muted)" }}>Loading…</td></tr>
               ) : pagedLanguages.map((lang) => {
-                const pct = coverageByLang[lang.code] ?? 0;
                 const langQEntry = queueStatus?.by_language.find((l) => l.lang_code === lang.code);
                 const pending = (langQEntry?.draft_count ?? 0) + (langQEntry?.failed_count ?? 0);
                 const approvedCount = activeKeys.filter(k => k.translations?.[lang.code] === "approved").length;
@@ -2559,7 +2510,7 @@ function AddQuestionModal({
   );
 }
 
-function QuestionsTab({ isAdmin, onSwitchToLanguages }: { isAdmin: boolean; onSwitchToLanguages: () => void }) {
+function QuestionsTab({ isAdmin, onSwitchToLanguages: _onSwitchToLanguages }: { isAdmin: boolean; onSwitchToLanguages: () => void }) {
   const queryClient = useQueryClient();
   const [showWarning, setShowWarning] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -3056,7 +3007,7 @@ function QuestionsTab({ isAdmin, onSwitchToLanguages }: { isAdmin: boolean; onSw
 function EditQuestionModal({
   question,
   onClose,
-  onSuccess,
+  onSuccess: _onSuccess,
 }: {
   question: ActiveQuestion;
   onClose: () => void;
