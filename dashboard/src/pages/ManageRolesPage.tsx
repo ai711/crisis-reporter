@@ -8,7 +8,7 @@ import type { Role } from "../types";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
-const BLUE = "#0468B1";
+const BLUE = "var(--c-primary-container)";
 
 // ── Section definitions ────────────────────────────────────────────────────────
 // Keys MUST match the backend require_section_access keys and seed permissions
@@ -94,7 +94,7 @@ function PermCheck({
         height: 22,
         borderRadius: 5,
         border: `2px solid ${disabled ? "#cbd5e0" : checked ? BLUE : "#cbd5e0"}`,
-        background: checked ? (disabled ? "#a0aec0" : BLUE) : "#fff",
+        background: checked ? (disabled ? "#a0aec0" : BLUE) : "var(--c-surface-lowest)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -104,7 +104,7 @@ function PermCheck({
       }}
     >
       {checked && (
-        <span style={{ color: "#fff", fontSize: 13, lineHeight: 1, fontWeight: 700 }}>✓</span>
+        <span style={{ color: "var(--c-surface-lowest)", fontSize: 13, lineHeight: 1, fontWeight: 700 }}>✓</span>
       )}
     </button>
   );
@@ -143,9 +143,9 @@ function PermissionsTable({
         return (
           <div
             key={sec.key}
-            style={{ ...s.permRow, background: i % 2 === 0 ? "#fff" : "#f9fafb" }}
+            style={{ ...s.permRow, background: i % 2 === 0 ? "var(--c-surface-lowest)" : "#f9fafb" }}
           >
-            <div style={{ ...s.permCell, flex: 1, color: "#2d3748", fontWeight: 500 }}>
+            <div style={{ ...s.permCell, flex: 1, color: "var(--c-text-primary)", fontWeight: 500 }}>
               {sec.label}
             </div>
             <div style={s.permCheckCell}>
@@ -205,7 +205,7 @@ export default function ManageRolesPage() {
     return (
       <div style={s.page}>
         <div style={s.accessDenied}>
-          <ShieldOff size={52} color="#718096" />
+          <ShieldOff size={52} color="var(--c-text-muted)" />
           <div style={s.accessTitle}>Admin access required</div>
           <div style={s.accessNote}>
             Manage Roles is restricted to Admin accounts. Contact your administrator if you need access.
@@ -343,7 +343,7 @@ export default function ManageRolesPage() {
                 maxLength={100}
                 placeholder="e.g. Field Analyst"
                 onChange={(e) => { setFormName(e.target.value); setNameError(""); }}
-                style={{ ...s.input, borderColor: nameError ? "#e53e3e" : "#e2e8f0", maxWidth: 400 }}
+                style={{ ...s.input, borderColor: nameError ? "#e53e3e" : "var(--c-surface-high)", maxWidth: 400 }}
               />
               {nameError && <span style={s.fieldErr}>{nameError}</span>}
             </div>
@@ -429,7 +429,7 @@ export default function ManageRolesPage() {
                 <tr key={role.id} style={s.tr}>
                   <td style={s.td}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <Lock size={14} color="#718096" />
+                      <Lock size={14} color="var(--c-text-muted)" />
                       <button
                         style={s.roleNameBtn}
                         onClick={() => navigate(`/roles/${role.id}`)}
@@ -458,13 +458,13 @@ export default function ManageRolesPage() {
               {/* Custom roles */}
               {isLoading ? (
                 <tr>
-                  <td colSpan={5} style={{ ...s.td, textAlign: "center", color: "#718096", padding: 32 }}>
+                  <td colSpan={5} style={{ ...s.td, textAlign: "center", color: "var(--c-text-muted)", padding: 32 }}>
                     Loading roles…
                   </td>
                 </tr>
               ) : filteredCustomRoles.length === 0 ? (
                 <tr>
-                  <td colSpan={5} style={{ ...s.td, textAlign: "center", color: "#718096", padding: 32 }}>
+                  <td colSpan={5} style={{ ...s.td, textAlign: "center", color: "var(--c-text-muted)", padding: 32 }}>
                     {searchTerm
                       ? "No roles match your search."
                       : "No custom roles yet. Create one to get started."}
@@ -522,7 +522,7 @@ const s: Record<string, React.CSSProperties> = {
     display: "flex",
     flexDirection: "column",
     height: "100vh",
-    background: "#f4f6f9",
+    background: "var(--c-surface-low)",
   },
   accessDenied: {
     flex: 1,
@@ -533,10 +533,10 @@ const s: Record<string, React.CSSProperties> = {
     gap: 14,
     padding: 60,
   },
-  accessTitle: { fontSize: 22, fontWeight: 700, color: "#1A2B4A" },
-  accessNote: { fontSize: 14, color: "#718096", maxWidth: 400, textAlign: "center" },
+  accessTitle: { fontSize: 22, fontWeight: 700, color: "var(--c-text-primary)" },
+  accessNote: { fontSize: 14, color: "var(--c-text-muted)", maxWidth: 400, textAlign: "center" },
   headerRow: {
-    background: "#fff",
+    background: "var(--c-surface-lowest)",
     borderBottom: "1px solid #e0e0e0",
     padding: "16px 32px",
     display: "flex",
@@ -546,12 +546,12 @@ const s: Record<string, React.CSSProperties> = {
     top: 0,
     zIndex: 50,
   },
-  pageTitle: { fontSize: 20, fontWeight: 700, color: "#1A2B4A", margin: 0 },
-  pageSubtitle: { fontSize: 13, color: "#718096", marginTop: 4, marginBottom: 0 },
+  pageTitle: { fontSize: 20, fontWeight: 700, color: "var(--c-text-primary)", margin: 0 },
+  pageSubtitle: { fontSize: 13, color: "var(--c-text-muted)", marginTop: 4, marginBottom: 0 },
   addBtn: {
     padding: "10px 20px",
     background: BLUE,
-    color: "#fff",
+    color: "var(--c-surface-lowest)",
     border: "none",
     borderRadius: 8,
     fontSize: 14,
@@ -583,16 +583,16 @@ const s: Record<string, React.CSSProperties> = {
     borderRadius: 7,
     border: "1.5px solid #e2e8f0",
     fontSize: 13,
-    color: "#2d3748",
+    color: "var(--c-text-primary)",
     outline: "none",
     width: 320,
-    background: "#fff",
+    background: "var(--c-surface-lowest)",
   },
   tableWrap: {
-    background: "#fff",
+    background: "var(--c-surface-lowest)",
     borderRadius: 12,
     overflow: "hidden",
-    boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+    boxShadow: "var(--shadow-card)",
   },
   table: { width: "100%", borderCollapse: "collapse" },
   thead: { background: "#f7fafc" },
@@ -601,13 +601,13 @@ const s: Record<string, React.CSSProperties> = {
     textAlign: "left",
     fontSize: 11,
     fontWeight: 700,
-    color: "#718096",
+    color: "var(--c-text-muted)",
     textTransform: "uppercase",
     letterSpacing: 0.5,
     borderBottom: "1px solid #e2e8f0",
   },
   tr: { borderBottom: "1px solid #f0f4f8" },
-  td: { padding: "14px 16px", fontSize: 13, color: "#2d3748", verticalAlign: "middle" },
+  td: { padding: "14px 16px", fontSize: 13, color: "var(--c-text-primary)", verticalAlign: "middle" },
   roleNameBtn: {
     background: "transparent",
     border: "none",
@@ -619,10 +619,10 @@ const s: Record<string, React.CSSProperties> = {
     textDecoration: "underline",
     textUnderlineOffset: 2,
   },
-  roleDesc: { fontSize: 12, color: "#718096", marginTop: 3 },
+  roleDesc: { fontSize: 12, color: "var(--c-text-muted)", marginTop: 3 },
   userCount: { fontSize: 13, color: "#4a5568" },
-  dateText: { fontSize: 13, color: "#718096" },
-  mutedText: { fontSize: 13, color: "#718096" },
+  dateText: { fontSize: 13, color: "var(--c-text-muted)" },
+  mutedText: { fontSize: 13, color: "var(--c-text-muted)" },
   creatorLink: {
     background: "transparent",
     border: "none",
@@ -656,10 +656,10 @@ const s: Record<string, React.CSSProperties> = {
   // Form
   formContent: { flex: 1, overflowY: "auto", padding: "28px 32px" },
   formCard: {
-    background: "#fff",
+    background: "var(--c-surface-lowest)",
     borderRadius: 12,
     padding: "28px",
-    boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+    boxShadow: "var(--shadow-card)",
     display: "flex",
     flexDirection: "column",
     gap: 28,
@@ -673,14 +673,14 @@ const s: Record<string, React.CSSProperties> = {
     borderRadius: 7,
     border: "1.5px solid",
     fontSize: 14,
-    color: "#1A2B4A",
+    color: "var(--c-text-primary)",
     outline: "none",
-    background: "#fff",
+    background: "var(--c-surface-lowest)",
     width: "100%",
     boxSizing: "border-box" as const,
   },
   fieldErr: { fontSize: 12, color: "#e53e3e", fontWeight: 500 },
-  permHint: { fontSize: 13, color: "#718096", margin: "0 0 8px" },
+  permHint: { fontSize: 13, color: "var(--c-text-muted)", margin: "0 0 8px" },
   permTable: { border: "1px solid #e2e8f0", borderRadius: 8, overflow: "hidden" },
   permHeaderRow: {
     display: "flex",
@@ -700,7 +700,7 @@ const s: Record<string, React.CSSProperties> = {
     width: 80,
     fontSize: 11,
     fontWeight: 700,
-    color: "#718096",
+    color: "var(--c-text-muted)",
     textTransform: "uppercase",
     letterSpacing: 0.5,
     textAlign: "center" as const,
@@ -715,7 +715,7 @@ const s: Record<string, React.CSSProperties> = {
   },
   cancelBtn: {
     padding: "10px 20px",
-    background: "#fff",
+    background: "var(--c-surface-lowest)",
     color: "#4a5568",
     border: "1px solid #cbd5e0",
     borderRadius: 7,
@@ -726,7 +726,7 @@ const s: Record<string, React.CSSProperties> = {
   saveBtn: {
     padding: "10px 28px",
     background: BLUE,
-    color: "#fff",
+    color: "var(--c-surface-lowest)",
     border: "none",
     borderRadius: 7,
     fontSize: 14,

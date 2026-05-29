@@ -6,7 +6,7 @@ import Header from "../components/Header";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
-const BLUE = "#0468B1";
+const BLUE = "var(--c-primary-container)";
 
 const UN_LANGUAGES = [
   { name: "Arabic", code: "ar" },
@@ -176,12 +176,12 @@ const TRANSLATION_LANGS = [
 
 function statusBadgeStyle(st: string): React.CSSProperties {
   const map: Record<string, [string, string, string]> = {
-    missing:   ["#f7fafc", "#a0aec0", "#e2e8f0"],
+    missing:   ["#f7fafc", "#a0aec0", "var(--c-surface-high)"],
     draft:     ["#fffbeb", "#d97706", "#fcd34d"],
     approved:  ["#d4edda", "#155724", "#c3e6cb"],
     published: ["#EBF5FB", BLUE,      "#bee3f8"],
   };
-  const [bg, color, border] = map[st] ?? ["#f7fafc", "#718096", "#e2e8f0"];
+  const [bg, color, border] = map[st] ?? ["#f7fafc", "var(--c-text-muted)", "var(--c-surface-high)"];
   return {
     display: "inline-block",
     padding: "3px 10px",
@@ -264,7 +264,7 @@ function ToggleSwitch({
           width: 18,
           height: 18,
           borderRadius: "50%",
-          background: "#fff",
+          background: "var(--c-surface-lowest)",
           transition: "left 0.2s",
           boxShadow: "0 1px 4px rgba(0,0,0,0.2)",
         }}
@@ -374,7 +374,7 @@ function AddCountryModal({
               value={name}
               onChange={(e) => { setName(e.target.value); clearErr("name"); }}
               placeholder="e.g. Haiti"
-              style={{ ...s.input, borderColor: errors.name ? "#e53e3e" : "#e2e8f0" }}
+              style={{ ...s.input, borderColor: errors.name ? "#e53e3e" : "var(--c-surface-high)" }}
             />
           </Field>
           <Field label="Country Code (2 letters)" required error={errors.code}>
@@ -384,7 +384,7 @@ function AddCountryModal({
               onChange={(e) => { setCode(e.target.value); clearErr("code"); }}
               placeholder="e.g. HT"
               maxLength={2}
-              style={{ ...s.input, borderColor: errors.code ? "#e53e3e" : "#e2e8f0", textTransform: "uppercase" }}
+              style={{ ...s.input, borderColor: errors.code ? "#e53e3e" : "var(--c-surface-high)", textTransform: "uppercase" }}
             />
           </Field>
           <Field label="Official Language" required error={errors.lang}>
@@ -393,7 +393,7 @@ function AddCountryModal({
               value={lang}
               onChange={(e) => { setLang(e.target.value); clearErr("lang"); }}
               placeholder="e.g. French"
-              style={{ ...s.input, borderColor: errors.lang ? "#e53e3e" : "#e2e8f0" }}
+              style={{ ...s.input, borderColor: errors.lang ? "#e53e3e" : "var(--c-surface-high)" }}
             />
           </Field>
           <Field label="Dialling Code">
@@ -408,7 +408,7 @@ function AddCountryModal({
           <Field label="Initial Status">
             <div style={s.toggleRow}>
               <ToggleSwitch checked={isActive} onChange={setIsActive} />
-              <span style={{ fontSize: 13, color: isActive ? "#155724" : "#718096", fontWeight: 500 }}>
+              <span style={{ fontSize: 13, color: isActive ? "#155724" : "var(--c-text-muted)", fontWeight: 500 }}>
                 {isActive ? "Active" : "Inactive"}
               </span>
             </div>
@@ -587,7 +587,7 @@ function AddLanguageModal({
                 <span style={{ display: "inline-block", padding: "3px 10px", borderRadius: 5, background: "#f0f4f8", color: "#4a5568", fontSize: 12, fontWeight: 700, letterSpacing: 0.5, fontFamily: "monospace" }}>
                   {selected.code}
                 </span>
-                <span style={{ fontSize: 14, fontWeight: 600, color: "#1A2B4A", flex: 1 }}>{selected.name}</span>
+                <span style={{ fontSize: 14, fontWeight: 600, color: "var(--c-text-primary)", flex: 1 }}>{selected.name}</span>
                 <button
                   type="button"
                   onClick={() => { setSelected(null); setSearch(""); }}
@@ -606,7 +606,7 @@ function AddLanguageModal({
                   onFocus={() => setDropdownOpen(true)}
                   onBlur={() => setTimeout(() => setDropdownOpen(false), 150)}
                   placeholder="Search by name or code…"
-                  style={{ padding: "10px 12px", borderRadius: 7, border: "1.5px solid #e2e8f0", fontSize: 14, color: "#1A2B4A", outline: "none", background: "#fff", width: "100%", boxSizing: "border-box" as const }}
+                  style={{ padding: "10px 12px", borderRadius: 7, border: "1.5px solid #e2e8f0", fontSize: 14, color: "var(--c-text-primary)", outline: "none", background: "var(--c-surface-lowest)", width: "100%", boxSizing: "border-box" as const }}
                   autoComplete="off"
                 />
                 {dropdownOpen && (
@@ -615,7 +615,7 @@ function AddLanguageModal({
                     top: "calc(100% + 4px)",
                     left: 0,
                     right: 0,
-                    background: "#fff",
+                    background: "var(--c-surface-lowest)",
                     border: "1.5px solid #e2e8f0",
                     borderRadius: 7,
                     boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
@@ -650,7 +650,7 @@ function AddLanguageModal({
                             cursor: "pointer",
                             textAlign: "left" as const,
                             fontSize: 13,
-                            color: "#1A2B4A",
+                            color: "var(--c-text-primary)",
                           }}
                         >
                           <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: 4, background: "#f0f4f8", color: "#4a5568", fontSize: 11, fontWeight: 700, fontFamily: "monospace", minWidth: 32, textAlign: "center" as const }}>
@@ -682,7 +682,7 @@ function AddLanguageModal({
             </button>
           </div>
           {addingLanguage && (
-            <p style={{ fontSize: 12, color: "#718096", textAlign: "center", margin: "8px 0 0", padding: "0 24px 16px" }}>
+            <p style={{ fontSize: 12, color: "var(--c-text-muted)", textAlign: "center", margin: "8px 0 0", padding: "0 24px 16px" }}>
               Adding language and setting up translation keys...
             </p>
           )}
@@ -805,7 +805,7 @@ function CountriesTab() {
       ) : filtered.length === 0 ? (
         <div style={s.emptyState}>
           <div style={{ fontSize: 40 }}>🌍</div>
-          <div style={{ color: "#718096", fontSize: 14 }}>
+          <div style={{ color: "var(--c-text-muted)", fontSize: 14 }}>
             {search ? "No countries match your search." : "No countries configured yet."}
           </div>
         </div>
@@ -833,7 +833,7 @@ function CountriesTab() {
                   }}
                 >
                   <td style={s.td}>
-                    <span style={{ fontWeight: 600, color: "#1A2B4A" }}>{country.name}</span>
+                    <span style={{ fontWeight: 600, color: "var(--c-text-primary)" }}>{country.name}</span>
                   </td>
                   <td style={s.td}>
                     <span style={{ fontFamily: "monospace", fontSize: 12, color: "#6b7280", background: "#f9fafb", padding: "2px 6px", borderRadius: 4 }}>
@@ -844,7 +844,7 @@ function CountriesTab() {
                     <span style={{ color: "#4a5568" }}>{country.official_language}</span>
                   </td>
                   <td style={s.td}>
-                    <span style={{ color: "#718096", fontSize: 13 }}>{country.dialling_code ?? "—"}</span>
+                    <span style={{ color: "var(--c-text-muted)", fontSize: 13 }}>{country.dialling_code ?? "—"}</span>
                   </td>
                   <td style={s.td}>
                     <div style={s.toggleRow}>
@@ -856,7 +856,7 @@ function CountriesTab() {
                       <span style={{
                         fontSize: 12,
                         fontWeight: 600,
-                        color: country.is_active ? "#155724" : "#718096",
+                        color: country.is_active ? "#155724" : "var(--c-text-muted)",
                       }}>
                         {country.is_active ? "Active" : "Inactive"}
                       </span>
@@ -900,7 +900,7 @@ function LangStatusPill({ lang }: { lang: LanguageLifecycle }) {
     pending:    ["#fffbeb", "#92400e", "#fcd34d"],
     deprecated: ["#fff5f5", "#c53030", "#fc8181"],
   };
-  const [bg, color, border] = map[lang.status] ?? ["#f7fafc", "#718096", "#e2e8f0"];
+  const [bg, color, border] = map[lang.status] ?? ["#f7fafc", "var(--c-text-muted)", "var(--c-surface-high)"];
   const label = lang.status === "deprecated" && lang.removal_scheduled_at
     ? `Deprecated · ${daysUntil(lang.removal_scheduled_at)}d left`
     : lang.status.charAt(0).toUpperCase() + lang.status.slice(1);
@@ -1512,7 +1512,7 @@ function LanguagesTab() {
                 style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", borderRadius: 10, border: selectedLang === l.lang_code ? `2px solid ${BLUE}` : "1px solid #e2e8f0", background: selectedLang === l.lang_code ? "#EBF5FB" : "#fafafa", cursor: "pointer" }}
               >
                 <span style={s.codeBadge}>{l.lang_code}</span>
-                <span style={{ fontSize: 13, fontWeight: 600, color: "#1A2B4A" }}>{l.lang_name}</span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: "var(--c-text-primary)" }}>{l.lang_name}</span>
                 {l.draft_count > 0 && (
                   <span style={{ ...sL.countBadge, background: "#fcd34d", color: "#92400e" }}>{l.draft_count} draft</span>
                 )}
@@ -1525,7 +1525,7 @@ function LanguagesTab() {
         ) : (
           <div style={{ padding: "16px 24px" }}>
             {!queueStatus ? (
-              <div style={{ color: "#718096", fontSize: 13, fontStyle: "italic" }}>Loading queue status…</div>
+              <div style={{ color: "var(--c-text-muted)", fontSize: 13, fontStyle: "italic" }}>Loading queue status…</div>
             ) : totalMissingAllLangs > 0 ? (
               <div style={{ background: "#fef3c7", color: "#92400e", borderRadius: 6, padding: "10px 14px", fontSize: 13 }}>
                 {totalMissingAllLangs} string{totalMissingAllLangs !== 1 ? "s are" : " is"} missing translations across {langsWithMissing} language{langsWithMissing !== 1 ? "s" : ""}. Run Auto-translate to generate them.
@@ -1535,7 +1535,7 @@ function LanguagesTab() {
                 All translations reviewed. Ready to publish.
               </div>
             ) : (
-              <div style={{ color: "#718096", fontSize: 13, fontStyle: "italic" }}>No pending translations — all clear.</div>
+              <div style={{ color: "var(--c-text-muted)", fontSize: 13, fontStyle: "italic" }}>No pending translations — all clear.</div>
             )}
           </div>
         )}
@@ -1562,7 +1562,7 @@ function LanguagesTab() {
           {translateProgress && translateProgress.total > 0 ? (
             <>
               <div style={{ marginTop: 8, background: "#e5e7eb", borderRadius: 9999, height: 8, overflow: "hidden" }}>
-                <div style={{ height: "100%", background: "#0468b1", borderRadius: 9999, width: `${Math.round((translateProgress.completed / translateProgress.total) * 100)}%`, transition: "width 0.5s ease" }} />
+                <div style={{ height: "100%", background: "var(--c-primary-container)", borderRadius: 9999, width: `${Math.round((translateProgress.completed / translateProgress.total) * 100)}%`, transition: "width 0.5s ease" }} />
               </div>
               <div style={{ marginTop: 4, fontSize: 12, color: "#6b7280" }}>
                 {translateProgress.completed} of {translateProgress.total} strings translated
@@ -1582,7 +1582,7 @@ function LanguagesTab() {
           <span>{publishMsg.text}</span>
           {publishMsg.type === "error" && (
             <button
-              style={{ ...sL.actionBtn, background: "#fff", color: "#991b1b", border: "1px solid #fca5a5", marginLeft: 12 }}
+              style={{ ...sL.actionBtn, background: "var(--c-surface-lowest)", color: "#991b1b", border: "1px solid #fca5a5", marginLeft: 12 }}
               onClick={() => { if (publishingLang) setShowPublishConfirm(true); }}
             >
               Retry
@@ -1603,7 +1603,7 @@ function LanguagesTab() {
             </span>
             {isAdmin && (
               <button
-                style={{ padding: "8px 16px", background: BLUE, color: "#fff", border: "none", borderRadius: 6, fontSize: 14, fontWeight: 600, cursor: "pointer" }}
+                style={{ padding: "8px 16px", background: BLUE, color: "var(--c-surface-lowest)", border: "none", borderRadius: 6, fontSize: 14, fontWeight: 600, cursor: "pointer" }}
                 onClick={() => setShowAddLanguageModal(true)}
               >
                 + Add Language
@@ -1655,7 +1655,7 @@ function LanguagesTab() {
             </thead>
             <tbody>
               {langsLoading ? (
-                <tr><td colSpan={5} style={{ ...s.td, textAlign: "center", color: "#718096" }}>Loading…</td></tr>
+                <tr><td colSpan={5} style={{ ...s.td, textAlign: "center", color: "var(--c-text-muted)" }}>Loading…</td></tr>
               ) : pagedLanguages.map((lang) => {
                 const pct = coverageByLang[lang.code] ?? 0;
                 const langQEntry = queueStatus?.by_language.find((l) => l.lang_code === lang.code);
@@ -1670,7 +1670,7 @@ function LanguagesTab() {
                     <td style={s.td}>
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                         <span style={s.codeBadge}>{lang.code}</span>
-                        <span style={{ fontWeight: 600, color: "#1A2B4A" }}>{lang.name}</span>
+                        <span style={{ fontWeight: 600, color: "var(--c-text-primary)" }}>{lang.name}</span>
                       </div>
                     </td>
                     <td style={s.td}>
@@ -1822,7 +1822,7 @@ function LanguagesTab() {
                             </button>
                             {isSuperadmin && isPastRemoval && (
                               <button
-                                style={{ ...sL.actionBtn, background: "#1A2B4A", color: "#fff", border: "none" }}
+                                style={{ ...sL.actionBtn, background: "var(--c-text-primary)", color: "var(--c-surface-lowest)", border: "none" }}
                                 onClick={() => handleRemoveLang(lang.code, lang.name)}
                               >
                                 Remove now
@@ -1859,7 +1859,7 @@ function LanguagesTab() {
             <button
               onClick={() => setLangPage((p) => Math.max(1, p - 1))}
               disabled={langPage === 1}
-              style={{ outline: "1px solid #e2e8f0", border: "none", borderRadius: 4, padding: "4px 12px", fontSize: 13, cursor: langPage === 1 ? "default" : "pointer", opacity: langPage === 1 ? 0.5 : 1, background: "#fff" }}
+              style={{ outline: "1px solid #e2e8f0", border: "none", borderRadius: 4, padding: "4px 12px", fontSize: 13, cursor: langPage === 1 ? "default" : "pointer", opacity: langPage === 1 ? 0.5 : 1, background: "var(--c-surface-lowest)" }}
             >
               Previous
             </button>
@@ -1867,7 +1867,7 @@ function LanguagesTab() {
             <button
               onClick={() => setLangPage((p) => Math.min(totalLangPages, p + 1))}
               disabled={langPage === totalLangPages}
-              style={{ outline: "1px solid #e2e8f0", border: "none", borderRadius: 4, padding: "4px 12px", fontSize: 13, cursor: langPage === totalLangPages ? "default" : "pointer", opacity: langPage === totalLangPages ? 0.5 : 1, background: "#fff" }}
+              style={{ outline: "1px solid #e2e8f0", border: "none", borderRadius: 4, padding: "4px 12px", fontSize: 13, cursor: langPage === totalLangPages ? "default" : "pointer", opacity: langPage === totalLangPages ? 0.5 : 1, background: "var(--c-surface-lowest)" }}
             >
               Next
             </button>
@@ -1903,11 +1903,11 @@ function LanguagesTab() {
 
         {/* Edit lock banner */}
         {lockLoading ? (
-          <div style={{ padding: "10px 24px", fontSize: 13, color: "#718096" }}>Acquiring edit lock…</div>
+          <div style={{ padding: "10px 24px", fontSize: 13, color: "var(--c-text-muted)" }}>Acquiring edit lock…</div>
         ) : lockHeld ? (
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 24px", background: "#d4edda", borderBottom: "1px solid #c3e6cb" }}>
             <span style={{ fontSize: 13, fontWeight: 600, color: "#155724" }}>You are editing — {selectedLangData?.name ?? selectedLang}</span>
-            <button style={{ ...sL.actionBtn, background: "#fff", color: "#155724", border: "1px solid #c3e6cb" }} onClick={() => releaseLock(selectedLang)}>Release lock</button>
+            <button style={{ ...sL.actionBtn, background: "var(--c-surface-lowest)", color: "#155724", border: "1px solid #c3e6cb" }} onClick={() => releaseLock(selectedLang)}>Release lock</button>
           </div>
         ) : (
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 24px", background: "#fffbeb", borderBottom: "1px solid #fcd34d" }}>
@@ -1917,9 +1917,9 @@ function LanguagesTab() {
                 : "Edit lock not held — click to acquire."}
             </span>
             <div style={{ display: "flex", gap: 8 }}>
-              <button style={{ ...sL.actionBtn, background: "#fff", color: "#d97706", border: "1px solid #fcd34d" }} onClick={() => acquireLock(selectedLang)}>Acquire lock</button>
+              <button style={{ ...sL.actionBtn, background: "var(--c-surface-lowest)", color: "#d97706", border: "1px solid #fcd34d" }} onClick={() => acquireLock(selectedLang)}>Acquire lock</button>
               {isSuperadmin && lockInfo?.locked_by && (
-                <button style={{ ...sL.actionBtn, background: "#c53030", color: "#fff", border: "none" }} onClick={() => forceReleaseLock(selectedLang)}>Force release</button>
+                <button style={{ ...sL.actionBtn, background: "#c53030", color: "var(--c-surface-lowest)", border: "none" }} onClick={() => forceReleaseLock(selectedLang)}>Force release</button>
               )}
             </div>
           </div>
@@ -1930,11 +1930,11 @@ function LanguagesTab() {
           {(["all", "missing", "draft", "approved", "published"] as FilterStatus[]).map((tab) => (
             <button
               key={tab}
-              style={{ ...sL.filterTabBtn, borderBottom: filterTab === tab ? `2px solid ${BLUE}` : "2px solid transparent", color: filterTab === tab ? BLUE : "#718096", fontWeight: filterTab === tab ? 700 : 500 }}
+              style={{ ...sL.filterTabBtn, borderBottom: filterTab === tab ? `2px solid ${BLUE}` : "2px solid transparent", color: filterTab === tab ? BLUE : "var(--c-text-muted)", fontWeight: filterTab === tab ? 700 : 500 }}
               onClick={() => setFilterTab(tab)}
             >
               {tab.charAt(0).toUpperCase() + tab.slice(1)}
-              <span style={{ ...sL.countBadge, background: filterTab === tab ? BLUE : "#e2e8f0", color: filterTab === tab ? "#fff" : "#4a5568" }}>{counts[tab]}</span>
+              <span style={{ ...sL.countBadge, background: filterTab === tab ? BLUE : "var(--c-surface-high)", color: filterTab === tab ? "var(--c-surface-lowest)" : "#4a5568" }}>{counts[tab]}</span>
             </button>
           ))}
           <div style={{ flex: 1 }} />
@@ -1985,7 +1985,7 @@ function LanguagesTab() {
           {isSuperadmin && (
             <button
               title={!publishReady ? (hasPending ? "Review queue has pending strings" : "Coverage is not 100%") : "Publish translations"}
-              style={{ ...sL.actionBtn, margin: "6px 8px", background: publishReady ? "#d4edda" : "#f0f4f8", color: publishReady ? "#155724" : "#a0aec0", border: `1px solid ${publishReady ? "#c3e6cb" : "#e2e8f0"}`, cursor: publishReady ? "pointer" : "default" }}
+              style={{ ...sL.actionBtn, margin: "6px 8px", background: publishReady ? "#d4edda" : "#f0f4f8", color: publishReady ? "#155724" : "#a0aec0", border: `1px solid ${publishReady ? "#c3e6cb" : "var(--c-surface-high)"}`, cursor: publishReady ? "pointer" : "default" }}
               onClick={() => handlePublish()}
               disabled={!publishReady || showPublishConfirm}
             >
@@ -2021,9 +2021,9 @@ function LanguagesTab() {
             </thead>
             <tbody>
               {transLoading ? (
-                <tr><td colSpan={7} style={{ ...s.td, textAlign: "center", color: "#718096" }}>Loading translations…</td></tr>
+                <tr><td colSpan={7} style={{ ...s.td, textAlign: "center", color: "var(--c-text-muted)" }}>Loading translations…</td></tr>
               ) : filtered.length === 0 ? (
-                <tr><td colSpan={7} style={{ ...s.td, textAlign: "center", color: "#718096", fontStyle: "italic" }}>No {filterTab === "all" ? "" : filterTab + " "}translations.</td></tr>
+                <tr><td colSpan={7} style={{ ...s.td, textAlign: "center", color: "var(--c-text-muted)", fontStyle: "italic" }}>No {filterTab === "all" ? "" : filterTab + " "}translations.</td></tr>
               ) : pagedTrans.map((t) => {
                 const isSaving = savingKeys.has(t.string_key);
                 const currentText = editedTexts[t.string_key] ?? t.translated_text;
@@ -2072,7 +2072,7 @@ function LanguagesTab() {
                       <div style={{ display: "flex", gap: 4, justifyContent: "center", flexWrap: "wrap" as const }}>
                         {canApprove && (
                           approvingRowId === t.id ? (
-                            <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 10px", fontSize: 11, color: "#718096" }}>
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 10px", fontSize: 11, color: "var(--c-text-muted)" }}>
                               <div style={{ width: 10, height: 10, border: "2px solid #718096", borderTopColor: "transparent", borderRadius: "50%", animation: "cr-spin 0.8s linear infinite" }} />
                               Approving...
                             </span>
@@ -2090,7 +2090,7 @@ function LanguagesTab() {
                         {/* FIX 14A: Row-wise regenerate button for draft translations */}
                         {t.status === "draft" && !!t.id && (
                           regeneratingRowId === t.id ? (
-                            <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 6px", fontSize: 11, color: "#718096" }}>
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 6px", fontSize: 11, color: "var(--c-text-muted)" }}>
                               <div style={{ width: 10, height: 10, border: "2px solid #718096", borderTopColor: "transparent", borderRadius: "50%", animation: "cr-spin 0.8s linear infinite" }} />
                             </span>
                           ) : (
@@ -2128,7 +2128,7 @@ function LanguagesTab() {
             <button
               onClick={() => setTransPage((p) => Math.max(1, p - 1))}
               disabled={transPage === 1}
-              style={{ outline: "1px solid #e2e8f0", border: "none", borderRadius: 4, padding: "4px 12px", fontSize: 13, cursor: transPage === 1 ? "default" : "pointer", opacity: transPage === 1 ? 0.5 : 1, background: "#fff" }}
+              style={{ outline: "1px solid #e2e8f0", border: "none", borderRadius: 4, padding: "4px 12px", fontSize: 13, cursor: transPage === 1 ? "default" : "pointer", opacity: transPage === 1 ? 0.5 : 1, background: "var(--c-surface-lowest)" }}
             >
               Previous
             </button>
@@ -2136,7 +2136,7 @@ function LanguagesTab() {
             <button
               onClick={() => setTransPage((p) => Math.min(totalTransPages, p + 1))}
               disabled={transPage === totalTransPages}
-              style={{ outline: "1px solid #e2e8f0", border: "none", borderRadius: 4, padding: "4px 12px", fontSize: 13, cursor: transPage === totalTransPages ? "default" : "pointer", opacity: transPage === totalTransPages ? 0.5 : 1, background: "#fff" }}
+              style={{ outline: "1px solid #e2e8f0", border: "none", borderRadius: 4, padding: "4px 12px", fontSize: 13, cursor: transPage === totalTransPages ? "default" : "pointer", opacity: transPage === totalTransPages ? 0.5 : 1, background: "var(--c-surface-lowest)" }}
             >
               Next
             </button>
@@ -2148,7 +2148,7 @@ function LanguagesTab() {
       <div style={sL.sectionCard}>
         <div style={sL.sectionHeader}><span style={sL.sectionTitle}>Publish History</span></div>
         {packages.length === 0 ? (
-          <div style={{ padding: "24px 28px", color: "#718096", fontSize: 13, fontStyle: "italic" }}>No language packages published yet.</div>
+          <div style={{ padding: "24px 28px", color: "var(--c-text-muted)", fontSize: 13, fontStyle: "italic" }}>No language packages published yet.</div>
         ) : (
           <>
             <div style={s.tableWrap}>
@@ -2173,13 +2173,13 @@ function LanguagesTab() {
                           <span style={{ color: "#4a5568" }}>{languages.find((l) => l.code === pkg.language_code)?.name ?? pkg.language_code}</span>
                         </div>
                       </td>
-                      <td style={s.td}><span style={{ fontWeight: 600, color: "#1A2B4A" }}>v{pkg.version}</span></td>
+                      <td style={s.td}><span style={{ fontWeight: 600, color: "var(--c-text-primary)" }}>v{pkg.version}</span></td>
                       <td style={s.td}><span style={statusBadgeStyle(pkg.status === "archived" ? "missing" : "published")}>{pkg.status}</span></td>
-                      <td style={{ ...s.td, color: "#718096", fontSize: 12 }}>
+                      <td style={{ ...s.td, color: "var(--c-text-muted)", fontSize: 12 }}>
                         {pkg.published_at ? new Date(pkg.published_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—"}
                       </td>
-                      <td style={{ ...s.td, color: "#718096", fontSize: 12 }}>{pkg.published_by ?? "—"}</td>
-                      <td style={{ ...s.td, textAlign: "right" as const, fontWeight: 600, color: "#1A2B4A" }}>{pkg.string_count}</td>
+                      <td style={{ ...s.td, color: "var(--c-text-muted)", fontSize: 12 }}>{pkg.published_by ?? "—"}</td>
+                      <td style={{ ...s.td, textAlign: "right" as const, fontWeight: 600, color: "var(--c-text-primary)" }}>{pkg.string_count}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -2190,7 +2190,7 @@ function LanguagesTab() {
                 <button
                   onClick={() => setPublishHistoryPage((p) => Math.max(1, p - 1))}
                   disabled={publishHistoryPage === 1}
-                  style={{ height: 32, borderRadius: 6, border: "1px solid #e2e8f0", padding: "0 12px", fontSize: 13, cursor: publishHistoryPage === 1 ? "default" : "pointer", opacity: publishHistoryPage === 1 ? 0.5 : 1, background: "#fff" }}
+                  style={{ height: 32, borderRadius: 6, border: "1px solid #e2e8f0", padding: "0 12px", fontSize: 13, cursor: publishHistoryPage === 1 ? "default" : "pointer", opacity: publishHistoryPage === 1 ? 0.5 : 1, background: "var(--c-surface-lowest)" }}
                 >
                   Previous
                 </button>
@@ -2198,7 +2198,7 @@ function LanguagesTab() {
                 <button
                   onClick={() => setPublishHistoryPage((p) => Math.min(totalPublishHistoryPages, p + 1))}
                   disabled={publishHistoryPage === totalPublishHistoryPages}
-                  style={{ height: 32, borderRadius: 6, border: "1px solid #e2e8f0", padding: "0 12px", fontSize: 13, cursor: publishHistoryPage === totalPublishHistoryPages ? "default" : "pointer", opacity: publishHistoryPage === totalPublishHistoryPages ? 0.5 : 1, background: "#fff" }}
+                  style={{ height: 32, borderRadius: 6, border: "1px solid #e2e8f0", padding: "0 12px", fontSize: 13, cursor: publishHistoryPage === totalPublishHistoryPages ? "default" : "pointer", opacity: publishHistoryPage === totalPublishHistoryPages ? 0.5 : 1, background: "var(--c-surface-lowest)" }}
                 >
                   Next
                 </button>
@@ -2217,9 +2217,9 @@ function LanguagesTab() {
         {auditOpen && (
           <div>
             {!auditData ? (
-              <div style={{ padding: "16px 24px", color: "#718096", fontSize: 13 }}>Loading audit log…</div>
+              <div style={{ padding: "16px 24px", color: "var(--c-text-muted)", fontSize: 13 }}>Loading audit log…</div>
             ) : auditData.items.length === 0 ? (
-              <div style={{ padding: "16px 24px", color: "#718096", fontSize: 13, fontStyle: "italic" }}>No audit entries yet.</div>
+              <div style={{ padding: "16px 24px", color: "var(--c-text-muted)", fontSize: 13, fontStyle: "italic" }}>No audit entries yet.</div>
             ) : (
               <div style={s.tableWrap}>
                 <table style={s.table}>
@@ -2241,9 +2241,9 @@ function LanguagesTab() {
                           </span>
                         </td>
                         <td style={{ ...s.td, color: "#4a5568" }}>{entry.lang_code ?? "—"}</td>
-                        <td style={{ ...s.td, fontSize: 11, color: "#718096", wordBreak: "break-word" as const }}>{entry.string_key ?? "—"}</td>
+                        <td style={{ ...s.td, fontSize: 11, color: "var(--c-text-muted)", wordBreak: "break-word" as const }}>{entry.string_key ?? "—"}</td>
                         <td style={{ ...s.td, color: "#4a5568" }}>{entry.performed_by ?? "system"}</td>
-                        <td style={{ ...s.td, fontSize: 12, color: "#718096" }}>
+                        <td style={{ ...s.td, fontSize: 12, color: "var(--c-text-muted)" }}>
                           {new Date(entry.created_at).toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
                         </td>
                       </tr>
@@ -2257,7 +2257,7 @@ function LanguagesTab() {
                 <button
                   onClick={() => setAuditTrailPage((p) => Math.max(1, p - 1))}
                   disabled={auditTrailPage === 1}
-                  style={{ height: 32, borderRadius: 6, border: "1px solid #e2e8f0", padding: "0 12px", fontSize: 13, cursor: auditTrailPage === 1 ? "default" : "pointer", opacity: auditTrailPage === 1 ? 0.5 : 1, background: "#fff" }}
+                  style={{ height: 32, borderRadius: 6, border: "1px solid #e2e8f0", padding: "0 12px", fontSize: 13, cursor: auditTrailPage === 1 ? "default" : "pointer", opacity: auditTrailPage === 1 ? 0.5 : 1, background: "var(--c-surface-lowest)" }}
                 >
                   Previous
                 </button>
@@ -2265,7 +2265,7 @@ function LanguagesTab() {
                 <button
                   onClick={() => setAuditTrailPage((p) => Math.min(Math.ceil(auditData.total / AUDIT_PAGE_SIZE), p + 1))}
                   disabled={auditTrailPage === Math.ceil(auditData.total / AUDIT_PAGE_SIZE)}
-                  style={{ height: 32, borderRadius: 6, border: "1px solid #e2e8f0", padding: "0 12px", fontSize: 13, cursor: auditTrailPage === Math.ceil(auditData.total / AUDIT_PAGE_SIZE) ? "default" : "pointer", opacity: auditTrailPage === Math.ceil(auditData.total / AUDIT_PAGE_SIZE) ? 0.5 : 1, background: "#fff" }}
+                  style={{ height: 32, borderRadius: 6, border: "1px solid #e2e8f0", padding: "0 12px", fontSize: 13, cursor: auditTrailPage === Math.ceil(auditData.total / AUDIT_PAGE_SIZE) ? "default" : "pointer", opacity: auditTrailPage === Math.ceil(auditData.total / AUDIT_PAGE_SIZE) ? 0.5 : 1, background: "var(--c-surface-lowest)" }}
                 >
                   Next
                 </button>
@@ -2377,7 +2377,7 @@ function LanguagesTab() {
                 <strong>{languages.find((l) => l.code === publishingLang)?.name ?? publishingLang}</strong>.
                 Reporters will receive these updates on their next app open. This cannot be undone.
               </p>
-              <p style={{ fontSize: 12, color: "#718096", margin: "12px 0 0 0", lineHeight: 1.5, display: "flex", gap: 6, alignItems: "flex-start" }}>
+              <p style={{ fontSize: 12, color: "var(--c-text-muted)", margin: "12px 0 0 0", lineHeight: 1.5, display: "flex", gap: 6, alignItems: "flex-start" }}>
                 <span style={{ flexShrink: 0 }}>ℹ</span>
                 <span>If question changes are pending publication, their translations are included in this package and will be ready when the question package is published.</span>
               </p>
@@ -2720,7 +2720,7 @@ function QuestionsTab({ isAdmin, onSwitchToLanguages }: { isAdmin: boolean; onSw
     if (!publishReadiness) {
       return (
         <button
-          style={{ height: 36, padding: "0 16px", background: "#a0aec0", color: "#fff", border: "none", borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: "not-allowed" }}
+          style={{ height: 36, padding: "0 16px", background: "#a0aec0", color: "var(--c-surface-lowest)", border: "none", borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: "not-allowed" }}
           disabled
         >
           <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
@@ -2733,7 +2733,7 @@ function QuestionsTab({ isAdmin, onSwitchToLanguages }: { isAdmin: boolean; onSw
     if (!publishReadiness.has_draft) {
       return (
         <button
-          style={{ height: 36, padding: "0 16px", background: "#fff", color: "#a0aec0", border: "1.5px solid #e2e8f0", borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: "not-allowed" }}
+          style={{ height: 36, padding: "0 16px", background: "var(--c-surface-lowest)", color: "#a0aec0", border: "1.5px solid #e2e8f0", borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: "not-allowed" }}
           disabled
           title="All question changes are already published"
         >
@@ -2745,7 +2745,7 @@ function QuestionsTab({ isAdmin, onSwitchToLanguages }: { isAdmin: boolean; onSw
       const blockingNames = publishReadiness.blocking_languages.map((b) => b.language_name).join(", ");
       return (
         <button
-          style={{ height: 36, padding: "0 16px", background: "#fff", color: "#92400e", border: "1.5px solid rgba(245,166,35,0.5)", borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: "not-allowed" }}
+          style={{ height: 36, padding: "0 16px", background: "var(--c-surface-lowest)", color: "#92400e", border: "1.5px solid rgba(245,166,35,0.5)", borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: "not-allowed" }}
           disabled
           title={`Translations missing in: ${blockingNames} — run Auto-translate first`}
         >
@@ -2758,7 +2758,7 @@ function QuestionsTab({ isAdmin, onSwitchToLanguages }: { isAdmin: boolean; onSw
     }
     return (
       <button
-        style={{ height: 36, padding: "0 16px", background: BLUE, color: "#fff", border: "none", borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+        style={{ height: 36, padding: "0 16px", background: BLUE, color: "var(--c-surface-lowest)", border: "none", borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: "pointer" }}
         onClick={() => { setPublishError(""); setShowPublishConfirm(true); }}
       >
         Publish Questions
@@ -2820,21 +2820,21 @@ function QuestionsTab({ isAdmin, onSwitchToLanguages }: { isAdmin: boolean; onSw
                   <span style={s.questionNum}>Q{idx + 1}</span>
                   <span style={s.typeBadge}>{q.question_type.replace("_", " ")}</span>
                   {q.is_core && (
-                    <span style={{ fontSize: 11, fontWeight: 700, color: "#fff", background: BLUE, padding: "2px 8px", borderRadius: 10 }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: "var(--c-surface-lowest)", background: BLUE, padding: "2px 8px", borderRadius: 10 }}>
                       Core
                     </span>
                   )}
                   {isDeactivated && (
-                    <span style={{ fontSize: 11, fontWeight: 700, background: "#e2e8f0", color: "#718096", padding: "2px 8px", borderRadius: 10 }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, background: "var(--c-surface-high)", color: "var(--c-text-muted)", padding: "2px 8px", borderRadius: 10 }}>
                       Deactivated
                     </span>
                   )}
                   {q.is_core ? (
-                    <span style={{ fontSize: 11, fontWeight: 600, color: "#718096", marginLeft: "auto" }}>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: "var(--c-text-muted)", marginLeft: "auto" }}>
                       {q.is_mandatory ? "Required" : "Optional"}
                     </span>
                   ) : (
-                    <span style={{ fontSize: 11, fontWeight: 600, color: q.is_mandatory ? "#155724" : "#718096", marginLeft: "auto" }}>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: q.is_mandatory ? "#155724" : "var(--c-text-muted)", marginLeft: "auto" }}>
                       {q.is_mandatory ? "Mandatory" : "Optional"}
                     </span>
                   )}
@@ -2863,21 +2863,21 @@ function QuestionsTab({ isAdmin, onSwitchToLanguages }: { isAdmin: boolean; onSw
                 {editQuestionsMode && !q.is_core && (
                   <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
                     <button
-                      style={{ padding: "5px 14px", background: "#fff", border: `1.5px solid ${BLUE}`, borderRadius: 6, color: BLUE, fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+                      style={{ padding: "5px 14px", background: "var(--c-surface-lowest)", border: `1.5px solid ${BLUE}`, borderRadius: 6, color: BLUE, fontSize: 12, fontWeight: 600, cursor: "pointer" }}
                       onClick={() => { setEditingQuestion(q); setShowEditModal(true); }}
                     >
                       Edit
                     </button>
                     {isDeactivated ? (
                       <button
-                        style={{ padding: "5px 14px", background: "#fff", border: "1.5px solid #22c55e", borderRadius: 6, color: "#22c55e", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+                        style={{ padding: "5px 14px", background: "var(--c-surface-lowest)", border: "1.5px solid #22c55e", borderRadius: 6, color: "#22c55e", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
                         onClick={() => { setReactivatingQuestion(q); setShowReactivateModal(true); }}
                       >
                         Reactivate
                       </button>
                     ) : (
                       <button
-                        style={{ padding: "5px 14px", background: "#fff", border: "1.5px solid #e53e3e", borderRadius: 6, color: "#e53e3e", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+                        style={{ padding: "5px 14px", background: "var(--c-surface-lowest)", border: "1.5px solid #e53e3e", borderRadius: 6, color: "#e53e3e", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
                         onClick={() => { setDeactivatingQuestion(q); setDeactivateError(""); setShowDeactivateModal(true); }}
                       >
                         Deactivate
@@ -3301,7 +3301,7 @@ function MapSettingsTab() {
                 {activeCountries.map((c) => (
                   <div key={c.code} style={{ display: "flex", alignItems: "center", gap: 12 }}>
                     <span style={{ ...s.codeBadge, minWidth: 36 }}>{c.code}</span>
-                    <span style={{ fontSize: 13, color: "#2d3748", flex: 1 }}>{c.name}</span>
+                    <span style={{ fontSize: 13, color: "var(--c-text-primary)", flex: 1 }}>{c.name}</span>
                     <input
                       type="number"
                       min={0}
@@ -3316,7 +3316,7 @@ function MapSettingsTab() {
                       })}
                       style={{ ...s.input, width: 80, textAlign: "center" }}
                     />
-                    <span style={{ fontSize: 12, color: "#718096" }}>mi</span>
+                    <span style={{ fontSize: 12, color: "var(--c-text-muted)" }}>mi</span>
                   </div>
                 ))}
               </div>
@@ -3426,7 +3426,7 @@ function AccordionSection({
   children: React.ReactNode;
 }) {
   return (
-    <div style={{ background: "#fff", borderRadius: 12, boxShadow: "0 2px 8px rgba(0,0,0,0.06)", overflow: "hidden" }}>
+    <div style={{ background: "var(--c-surface-lowest)", borderRadius: 12, boxShadow: "var(--shadow-card)", overflow: "hidden" }}>
       <button
         onClick={onToggle}
         style={{
@@ -3443,14 +3443,14 @@ function AccordionSection({
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <span style={{ fontSize: 15, fontWeight: 700, color: "#1A2B4A" }}>{label}</span>
+          <span style={{ fontSize: 15, fontWeight: 700, color: "var(--c-text-primary)" }}>{label}</span>
           {badge && (
             <span style={{ fontSize: 11, fontWeight: 600, background: "#EBF5FB", color: BLUE, padding: "2px 8px", borderRadius: 10 }}>
               {badge}
             </span>
           )}
         </div>
-        <span style={{ fontSize: 14, color: "#718096" }}>{isOpen ? "▲" : "▼"}</span>
+        <span style={{ fontSize: 14, color: "var(--c-text-muted)" }}>{isOpen ? "▲" : "▼"}</span>
       </button>
       {isOpen && <div>{children}</div>}
     </div>
@@ -3536,7 +3536,7 @@ function TextSection({
   }
 
   if (isLoading) {
-    return <div style={{ padding: "20px 24px", color: "#718096", fontSize: 13 }}>Loading…</div>;
+    return <div style={{ padding: "20px 24px", color: "var(--c-text-muted)", fontSize: 13 }}>Loading…</div>;
   }
 
   return (
@@ -3549,11 +3549,11 @@ function TextSection({
           </span>
         </div>
       )}
-      <div style={{ display: "flex", gap: 16, fontSize: 12, color: "#718096", marginBottom: 14 }}>
-        <span>Version <strong style={{ color: "#1A2B4A" }}>{data?.version ?? 1}</strong></span>
+      <div style={{ display: "flex", gap: 16, fontSize: 12, color: "var(--c-text-muted)", marginBottom: 14 }}>
+        <span>Version <strong style={{ color: "var(--c-text-primary)" }}>{data?.version ?? 1}</strong></span>
         <span>
           Last updated:{" "}
-          <strong style={{ color: "#1A2B4A" }}>
+          <strong style={{ color: "var(--c-text-primary)" }}>
             {data?.updated_at ? new Date(data.updated_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "Never"}
           </strong>
         </span>
@@ -3571,7 +3571,7 @@ function TextSection({
               borderRadius: 8,
               fontSize: 13,
               fontFamily: "inherit",
-              color: "#1A2B4A",
+              color: "var(--c-text-primary)",
               resize: "vertical",
               outline: "none",
               boxSizing: "border-box",
@@ -3685,25 +3685,25 @@ function DisasterTypeRow({ typeKey, label, isAdmin }: { typeKey: string; label: 
           textAlign: "left",
         }}
       >
-        <span style={{ fontSize: 14, fontWeight: 600, color: "#2d3748" }}>{label}</span>
+        <span style={{ fontSize: 14, fontWeight: 600, color: "var(--c-text-primary)" }}>{label}</span>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <span style={{ fontSize: 12, color: "#a0aec0" }}>
             {data?.slides.length ?? 0} slide{(data?.slides.length ?? 0) !== 1 ? "s" : ""}
           </span>
-          <span style={{ fontSize: 12, color: "#718096" }}>{isOpen ? "▲" : "▼"}</span>
+          <span style={{ fontSize: 12, color: "var(--c-text-muted)" }}>{isOpen ? "▲" : "▼"}</span>
         </div>
       </button>
 
       {isOpen && (
         <div style={{ padding: "0 20px 18px" }}>
           {isLoading ? (
-            <div style={{ color: "#718096", fontSize: 13, padding: "8px 0" }}>Loading…</div>
+            <div style={{ color: "var(--c-text-muted)", fontSize: 13, padding: "8px 0" }}>Loading…</div>
           ) : editing ? (
             <div>
               {draftSlides.map((slide, idx) => (
                 <div key={idx} style={{ background: "#f7fafc", border: "1px solid #e2e8f0", borderRadius: 10, padding: "16px", marginBottom: 12 }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: "#718096", textTransform: "uppercase" }}>Slide {idx + 1}</span>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: "var(--c-text-muted)", textTransform: "uppercase" }}>Slide {idx + 1}</span>
                     {draftSlides.length > 1 && (
                       <button
                         onClick={() => removeSlide(idx)}
@@ -3750,7 +3750,7 @@ function DisasterTypeRow({ typeKey, label, isAdmin }: { typeKey: string; label: 
               ))}
               <button
                 onClick={addSlide}
-                style={{ padding: "8px 16px", background: "#fff", border: "1.5px dashed #cbd5e0", borderRadius: 8, fontSize: 13, color: "#4a5568", cursor: "pointer", width: "100%", marginBottom: 12 }}
+                style={{ padding: "8px 16px", background: "var(--c-surface-lowest)", border: "1.5px dashed #cbd5e0", borderRadius: 8, fontSize: 13, color: "#4a5568", cursor: "pointer", width: "100%", marginBottom: 12 }}
               >
                 + Add Slide
               </button>
@@ -3763,7 +3763,7 @@ function DisasterTypeRow({ typeKey, label, isAdmin }: { typeKey: string; label: 
               ) : (
                 (data?.slides ?? []).map((slide, idx) => (
                   <div key={idx} style={{ marginBottom: 14, paddingBottom: 14, borderBottom: idx < (data?.slides.length ?? 1) - 1 ? "1px solid #f0f4f8" : "none" }}>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: "#1A2B4A", marginBottom: 8 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: "var(--c-text-primary)", marginBottom: 8 }}>
                       {slide.title || `Slide ${idx + 1}`}
                     </div>
                     {(() => {
@@ -3875,16 +3875,16 @@ function SlideshowSection({
   }
 
   if (isLoading) {
-    return <div style={{ padding: "20px 24px", color: "#718096", fontSize: 13 }}>Loading…</div>;
+    return <div style={{ padding: "20px 24px", color: "var(--c-text-muted)", fontSize: 13 }}>Loading…</div>;
   }
 
   return (
     <div style={{ padding: "20px 24px" }}>
-      <div style={{ display: "flex", gap: 16, fontSize: 12, color: "#718096", marginBottom: 16 }}>
-        <span>Version <strong style={{ color: "#1A2B4A" }}>{data?.version ?? 1}</strong></span>
+      <div style={{ display: "flex", gap: 16, fontSize: 12, color: "var(--c-text-muted)", marginBottom: 16 }}>
+        <span>Version <strong style={{ color: "var(--c-text-primary)" }}>{data?.version ?? 1}</strong></span>
         <span>
           Last updated:{" "}
-          <strong style={{ color: "#1A2B4A" }}>
+          <strong style={{ color: "var(--c-text-primary)" }}>
             {data?.updated_at ? new Date(data.updated_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "Never"}
           </strong>
         </span>
@@ -3895,7 +3895,7 @@ function SlideshowSection({
           {draftSlides.map((slide, idx) => (
             <div key={idx} style={{ background: "#f7fafc", border: "1px solid #e2e8f0", borderRadius: 10, padding: "16px", marginBottom: 12 }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-                <span style={{ fontSize: 12, fontWeight: 700, color: "#718096", textTransform: "uppercase" }}>Slide {idx + 1}</span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: "var(--c-text-muted)", textTransform: "uppercase" }}>Slide {idx + 1}</span>
                 {draftSlides.length > 1 && (
                   <button
                     onClick={() => removeSlide(idx)}
@@ -3929,7 +3929,7 @@ function SlideshowSection({
           ))}
           <button
             onClick={addSlide}
-            style={{ padding: "8px 16px", background: "#fff", border: "1.5px dashed #cbd5e0", borderRadius: 8, fontSize: 13, color: "#4a5568", cursor: "pointer", width: "100%", marginBottom: 12 }}
+            style={{ padding: "8px 16px", background: "var(--c-surface-lowest)", border: "1.5px dashed #cbd5e0", borderRadius: 8, fontSize: 13, color: "#4a5568", cursor: "pointer", width: "100%", marginBottom: 12 }}
           >
             + Add Slide
           </button>
@@ -3943,7 +3943,7 @@ function SlideshowSection({
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               {(data?.slides ?? []).map((slide, idx) => (
                 <div key={idx} style={{ background: "#f7fafc", border: "1px solid #e2e8f0", borderRadius: 10, padding: "14px 18px" }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: "#1A2B4A", marginBottom: 8 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "var(--c-text-primary)", marginBottom: 8 }}>
                     <span style={{ ...s.questionNum, marginRight: 10 }}>{idx + 1}</span>
                     {slide.title || `Slide ${idx + 1}`}
                   </div>
@@ -4019,18 +4019,18 @@ function MessageListSection({
   }
 
   if (isLoading) {
-    return <div style={{ padding: "20px 24px", color: "#718096", fontSize: 13 }}>Loading…</div>;
+    return <div style={{ padding: "20px 24px", color: "var(--c-text-muted)", fontSize: 13 }}>Loading…</div>;
   }
 
   const items = data?.items ?? [];
 
   return (
     <div style={{ padding: "20px 24px" }}>
-      <div style={{ display: "flex", gap: 16, fontSize: 12, color: "#718096", marginBottom: 14 }}>
-        <span>Version <strong style={{ color: "#1A2B4A" }}>{data?.version ?? 1}</strong></span>
+      <div style={{ display: "flex", gap: 16, fontSize: 12, color: "var(--c-text-muted)", marginBottom: 14 }}>
+        <span>Version <strong style={{ color: "var(--c-text-primary)" }}>{data?.version ?? 1}</strong></span>
         <span>
           Last updated:{" "}
-          <strong style={{ color: "#1A2B4A" }}>
+          <strong style={{ color: "var(--c-text-primary)" }}>
             {data?.updated_at ? new Date(data.updated_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "Never"}
           </strong>
         </span>
@@ -4224,7 +4224,7 @@ export default function SystemSettingsPage() {
             style={{
               ...s.tabBtn,
               borderBottom: activeTab === tab.key ? `3px solid ${BLUE}` : "3px solid transparent",
-              color: activeTab === tab.key ? BLUE : "#718096",
+              color: activeTab === tab.key ? BLUE : "var(--c-text-muted)",
               fontWeight: activeTab === tab.key ? 700 : 500,
             }}
             onClick={() => setActiveTab(tab.key)}
@@ -4258,11 +4258,11 @@ const s: Record<string, React.CSSProperties> = {
     display: "flex",
     flexDirection: "column",
     height: "100vh",
-    background: "#f4f6f9",
+    background: "var(--c-surface-low)",
   },
   // Tabs
   tabBar: {
-    background: "#fff",
+    background: "var(--c-surface-lowest)",
     borderBottom: "1px solid #e0e0e0",
     display: "flex",
     padding: "0 32px",
@@ -4299,15 +4299,15 @@ const s: Record<string, React.CSSProperties> = {
     borderRadius: 8,
     border: "1.5px solid #e2e8f0",
     fontSize: 14,
-    color: "#1A2B4A",
-    background: "#fff",
+    color: "var(--c-text-primary)",
+    background: "var(--c-surface-lowest)",
     outline: "none",
     maxWidth: 360,
   },
   addBtn: {
     padding: "10px 20px",
     background: BLUE,
-    color: "#fff",
+    color: "var(--c-surface-lowest)",
     border: "none",
     borderRadius: 8,
     fontSize: 14,
@@ -4327,10 +4327,10 @@ const s: Record<string, React.CSSProperties> = {
   },
   // Table
   tableWrap: {
-    background: "#fff",
+    background: "var(--c-surface-lowest)",
     borderRadius: 12,
     overflow: "hidden",
-    boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+    boxShadow: "var(--shadow-card)",
   },
   table: { width: "100%", borderCollapse: "collapse" },
   thead: { background: "#f7fafc" },
@@ -4339,13 +4339,13 @@ const s: Record<string, React.CSSProperties> = {
     textAlign: "left",
     fontSize: 11,
     fontWeight: 700,
-    color: "#718096",
+    color: "var(--c-text-muted)",
     textTransform: "uppercase",
     letterSpacing: 0.5,
     borderBottom: "1px solid #e2e8f0",
   },
   tr: { borderBottom: "1px solid #f0f4f8" },
-  td: { padding: "14px 16px", fontSize: 13, color: "#2d3748", verticalAlign: "middle" },
+  td: { padding: "14px 16px", fontSize: 13, color: "var(--c-text-primary)", verticalAlign: "middle" },
   codeBadge: {
     display: "inline-block",
     padding: "3px 10px",
@@ -4373,31 +4373,31 @@ const s: Record<string, React.CSSProperties> = {
     gap: 10,
   },
   // Loading / empty
-  loadingText: { padding: 40, textAlign: "center", color: "#718096", fontSize: 14 },
+  loadingText: { padding: 40, textAlign: "center", color: "var(--c-text-muted)", fontSize: 14 },
   emptyState: {
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
     gap: 12,
     padding: 60,
-    background: "#fff",
+    background: "var(--c-surface-lowest)",
     borderRadius: 12,
-    boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+    boxShadow: "var(--shadow-card)",
   },
   // Questions tab
   versionHeader: {
-    background: "#fff",
+    background: "var(--c-surface-lowest)",
     borderRadius: 12,
     padding: "18px 24px",
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
-    boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+    boxShadow: "var(--shadow-card)",
   },
   versionLabel: {
     fontSize: 12,
     fontWeight: 700,
-    color: "#718096",
+    color: "var(--c-text-muted)",
     textTransform: "uppercase",
     letterSpacing: 0.5,
     marginRight: 8,
@@ -4405,16 +4405,16 @@ const s: Record<string, React.CSSProperties> = {
   versionValue: {
     fontSize: 16,
     fontWeight: 700,
-    color: "#1A2B4A",
+    color: "var(--c-text-primary)",
   },
   versionDate: {
     fontSize: 13,
-    color: "#718096",
+    color: "var(--c-text-muted)",
     marginLeft: 4,
   },
   editQuestionsBtn: {
     padding: "10px 20px",
-    background: "#fff",
+    background: "var(--c-surface-lowest)",
     color: BLUE,
     border: `1.5px solid ${BLUE}`,
     borderRadius: 8,
@@ -4428,10 +4428,10 @@ const s: Record<string, React.CSSProperties> = {
     gap: 14,
   },
   questionCard: {
-    background: "#fff",
+    background: "var(--c-surface-lowest)",
     borderRadius: 12,
     padding: "20px 24px",
-    boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+    boxShadow: "var(--shadow-card)",
   },
   questionCardHeader: {
     display: "flex",
@@ -4451,7 +4451,7 @@ const s: Record<string, React.CSSProperties> = {
   typeBadge: {
     fontSize: 11,
     fontWeight: 600,
-    color: "#718096",
+    color: "var(--c-text-muted)",
     background: "#f0f4f8",
     padding: "3px 10px",
     borderRadius: 5,
@@ -4460,7 +4460,7 @@ const s: Record<string, React.CSSProperties> = {
   questionText: {
     fontSize: 14,
     fontWeight: 600,
-    color: "#1A2B4A",
+    color: "var(--c-text-primary)",
     margin: "0 0 12px",
     lineHeight: 1.5,
   },
@@ -4470,7 +4470,7 @@ const s: Record<string, React.CSSProperties> = {
     borderRadius: 7,
     border: "1.5px solid #e2e8f0",
     fontSize: 14,
-    color: "#1A2B4A",
+    color: "var(--c-text-primary)",
     resize: "vertical" as const,
     marginBottom: 12,
     outline: "none",
@@ -4510,9 +4510,9 @@ const s: Record<string, React.CSSProperties> = {
     maxWidth: 700,
   },
   settingsCard: {
-    background: "#fff",
+    background: "var(--c-surface-lowest)",
     borderRadius: 12,
-    boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+    boxShadow: "var(--shadow-card)",
     overflow: "hidden",
   },
   settingsCardHeader: {
@@ -4522,12 +4522,12 @@ const s: Record<string, React.CSSProperties> = {
   settingsCardTitle: {
     fontSize: 15,
     fontWeight: 700,
-    color: "#1A2B4A",
+    color: "var(--c-text-primary)",
     marginBottom: 4,
   },
   settingsCardDesc: {
     fontSize: 13,
-    color: "#718096",
+    color: "var(--c-text-muted)",
   },
   settingsCardBody: {
     padding: "18px 24px",
@@ -4554,7 +4554,7 @@ const s: Record<string, React.CSSProperties> = {
     zIndex: 200,
   },
   modal: {
-    background: "#fff",
+    background: "var(--c-surface-lowest)",
     borderRadius: 14,
     width: "100%",
     maxWidth: 480,
@@ -4570,15 +4570,15 @@ const s: Record<string, React.CSSProperties> = {
     borderBottom: "1px solid #e2e8f0",
     position: "sticky",
     top: 0,
-    background: "#fff",
+    background: "var(--c-surface-lowest)",
     zIndex: 1,
   },
-  modalTitle: { fontSize: 18, fontWeight: 700, color: "#1A2B4A", margin: 0 },
+  modalTitle: { fontSize: 18, fontWeight: 700, color: "var(--c-text-primary)", margin: 0 },
   closeBtn: {
     background: "transparent",
     border: "none",
     fontSize: 18,
-    color: "#718096",
+    color: "var(--c-text-muted)",
     cursor: "pointer",
     lineHeight: 1,
     padding: 4,
@@ -4597,17 +4597,17 @@ const s: Record<string, React.CSSProperties> = {
     borderRadius: 7,
     border: "1.5px solid #e2e8f0",
     fontSize: 14,
-    color: "#1A2B4A",
+    color: "var(--c-text-primary)",
     outline: "none",
-    background: "#fff",
+    background: "var(--c-surface-lowest)",
   },
   select: {
     padding: "10px 12px",
     borderRadius: 7,
     border: "1.5px solid #e2e8f0",
     fontSize: 14,
-    color: "#1A2B4A",
-    background: "#fff",
+    color: "var(--c-text-primary)",
+    background: "var(--c-surface-lowest)",
   },
   fieldErr: { fontSize: 12, color: "#e53e3e", fontWeight: 500 },
   submitError: {
@@ -4627,7 +4627,7 @@ const s: Record<string, React.CSSProperties> = {
   },
   cancelBtn: {
     padding: "10px 20px",
-    background: "#fff",
+    background: "var(--c-surface-lowest)",
     color: "#4a5568",
     border: "1px solid #cbd5e0",
     borderRadius: 7,
@@ -4638,7 +4638,7 @@ const s: Record<string, React.CSSProperties> = {
   submitBtn: {
     padding: "10px 24px",
     background: BLUE,
-    color: "#fff",
+    color: "var(--c-surface-lowest)",
     border: "none",
     borderRadius: 7,
     fontSize: 14,
@@ -4670,7 +4670,7 @@ const s: Record<string, React.CSSProperties> = {
   },
   fileBrowseBtn: {
     padding: "6px 14px",
-    background: "#fff",
+    background: "var(--c-surface-lowest)",
     border: "1px solid #cbd5e0",
     borderRadius: 6,
     fontSize: 13,
@@ -4684,9 +4684,9 @@ const s: Record<string, React.CSSProperties> = {
 
 const sL: Record<string, React.CSSProperties> = {
   sectionCard: {
-    background: "#fff",
+    background: "var(--c-surface-lowest)",
     borderRadius: 12,
-    boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+    boxShadow: "var(--shadow-card)",
     overflow: "hidden",
   },
   sectionHeader: {
@@ -4701,16 +4701,16 @@ const sL: Record<string, React.CSSProperties> = {
   sectionTitle: {
     fontSize: 15,
     fontWeight: 700,
-    color: "#1A2B4A",
+    color: "var(--c-text-primary)",
   },
   sectionMeta: {
     fontSize: 13,
-    color: "#718096",
+    color: "var(--c-text-muted)",
   },
   progressBar: {
     width: 80,
     height: 6,
-    background: "#e2e8f0",
+    background: "var(--c-surface-high)",
     borderRadius: 3,
     overflow: "hidden",
     flexShrink: 0,

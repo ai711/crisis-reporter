@@ -5,7 +5,7 @@ import api from "../services/api";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
-const BLUE = "#0468B1";
+const BLUE = "var(--c-primary-container)";
 
 const CRISIS_TYPES = [
   "Earthquake",
@@ -63,8 +63,8 @@ function fmtDate(iso: string): string {
 function StatusBadge({ status }: { status: CrisisStatus }) {
   const cfg: Record<CrisisStatus, { label: string; bg: string; color: string }> = {
     active: { label: "Active", bg: "#d4edda", color: "#155724" },
-    inactive: { label: "Inactive", bg: "#e2e8f0", color: "#4a5568" },
-    archived: { label: "Archived", bg: "#cbd5e0", color: "#2d3748" },
+    inactive: { label: "Inactive", bg: "var(--c-surface-high)", color: "#4a5568" },
+    archived: { label: "Archived", bg: "#cbd5e0", color: "var(--c-text-primary)" },
   };
   const { label, bg, color } = cfg[status] ?? cfg.inactive;
   return (
@@ -150,7 +150,7 @@ function CreateCrisisModal({ countries, onClose, onSuccess }: ModalProps) {
                 if (errors.name) setErrors((p) => ({ ...p, name: "" }));
               }}
               placeholder="e.g. Turkey–Syria Earthquake 2023"
-              style={{ ...s.input, borderColor: errors.name ? "#e53e3e" : "#e2e8f0" }}
+              style={{ ...s.input, borderColor: errors.name ? "#e53e3e" : "var(--c-surface-high)" }}
             />
             {errors.name && <span style={s.fieldErr}>{errors.name}</span>}
             <span style={s.charCount}>{name.length}/200</span>
@@ -167,7 +167,7 @@ function CreateCrisisModal({ countries, onClose, onSuccess }: ModalProps) {
                 setCountryId(e.target.value);
                 if (errors.countryId) setErrors((p) => ({ ...p, countryId: "" }));
               }}
-              style={{ ...s.select, borderColor: errors.countryId ? "#e53e3e" : "#e2e8f0" }}
+              style={{ ...s.select, borderColor: errors.countryId ? "#e53e3e" : "var(--c-surface-high)" }}
             >
               <option value="">Select a country…</option>
               {countries.map((c) => (
@@ -190,7 +190,7 @@ function CreateCrisisModal({ countries, onClose, onSuccess }: ModalProps) {
                 setCrisisType(e.target.value);
                 if (errors.crisisType) setErrors((p) => ({ ...p, crisisType: "" }));
               }}
-              style={{ ...s.select, borderColor: errors.crisisType ? "#e53e3e" : "#e2e8f0" }}
+              style={{ ...s.select, borderColor: errors.crisisType ? "#e53e3e" : "var(--c-surface-high)" }}
             >
               <option value="">Select crisis type…</option>
               {CRISIS_TYPES.map((t) => (
@@ -214,7 +214,7 @@ function CreateCrisisModal({ countries, onClose, onSuccess }: ModalProps) {
                 setStartDate(e.target.value);
                 if (errors.startDate) setErrors((p) => ({ ...p, startDate: "" }));
               }}
-              style={{ ...s.input, borderColor: errors.startDate ? "#e53e3e" : "#e2e8f0" }}
+              style={{ ...s.input, borderColor: errors.startDate ? "#e53e3e" : "var(--c-surface-high)" }}
             />
             {errors.startDate && <span style={s.fieldErr}>{errors.startDate}</span>}
           </div>
@@ -456,10 +456,10 @@ const s: Record<string, React.CSSProperties> = {
     display: "flex",
     flexDirection: "column",
     height: "100vh",
-    background: "#f4f6f9",
+    background: "var(--c-surface-low)",
   },
   headerRow: {
-    background: "#fff",
+    background: "var(--c-surface-lowest)",
     borderBottom: "1px solid #e0e0e0",
     padding: "16px 32px",
     display: "flex",
@@ -472,19 +472,19 @@ const s: Record<string, React.CSSProperties> = {
   pageTitle: {
     fontSize: 20,
     fontWeight: 700,
-    color: "#1A2B4A",
+    color: "var(--c-text-primary)",
     margin: 0,
   },
   pageSubtitle: {
     fontSize: 13,
-    color: "#666",
+    color: "var(--c-text-muted)",
     marginTop: 4,
     marginBottom: 0,
   },
   createBtn: {
     padding: "10px 20px",
     background: BLUE,
-    color: "#fff",
+    color: "var(--c-surface-lowest)",
     border: "none",
     borderRadius: 8,
     fontSize: 14,
@@ -508,7 +508,7 @@ const s: Record<string, React.CSSProperties> = {
   loading: {
     padding: 60,
     textAlign: "center",
-    color: "#718096",
+    color: "var(--c-text-muted)",
     fontSize: 15,
   },
   empty: {
@@ -520,8 +520,8 @@ const s: Record<string, React.CSSProperties> = {
     gap: 12,
   },
   emptyIcon: { fontSize: 48 },
-  emptyText: { fontSize: 18, fontWeight: 700, color: "#2d3748" },
-  emptyHint: { fontSize: 14, color: "#718096" },
+  emptyText: { fontSize: 18, fontWeight: 700, color: "var(--c-text-primary)" },
+  emptyHint: { fontSize: 14, color: "var(--c-text-muted)" },
   crisisList: {
     display: "flex",
     flexDirection: "column",
@@ -530,7 +530,7 @@ const s: Record<string, React.CSSProperties> = {
   },
   // Crisis card
   crisisCard: {
-    background: "#fff",
+    background: "var(--c-surface-lowest)",
     borderRadius: 12,
     border: "1px solid #e2e8f0",
     boxShadow: "0 2px 6px rgba(0,0,0,0.05)",
@@ -557,7 +557,7 @@ const s: Record<string, React.CSSProperties> = {
   crisisName: {
     fontSize: 18,
     fontWeight: 700,
-    color: "#1A2B4A",
+    color: "var(--c-text-primary)",
     lineHeight: 1.3,
   },
   crisisMeta: {
@@ -576,7 +576,7 @@ const s: Record<string, React.CSSProperties> = {
   },
   reportCount: {
     fontSize: 13,
-    color: "#718096",
+    color: "var(--c-text-muted)",
     fontWeight: 500,
   },
   badge: {
@@ -595,7 +595,7 @@ const s: Record<string, React.CSSProperties> = {
   setActiveBtn: {
     padding: "8px 18px",
     background: BLUE,
-    color: "#fff",
+    color: "var(--c-surface-lowest)",
     border: "none",
     borderRadius: 7,
     fontSize: 13,
@@ -604,7 +604,7 @@ const s: Record<string, React.CSSProperties> = {
   },
   archiveBtn: {
     padding: "8px 18px",
-    background: "#fff",
+    background: "var(--c-surface-lowest)",
     color: "#4a5568",
     border: "1px solid #cbd5e0",
     borderRadius: 7,
@@ -623,7 +623,7 @@ const s: Record<string, React.CSSProperties> = {
     zIndex: 200,
   },
   modal: {
-    background: "#fff",
+    background: "var(--c-surface-lowest)",
     borderRadius: 14,
     width: "100%",
     maxWidth: 540,
@@ -639,20 +639,20 @@ const s: Record<string, React.CSSProperties> = {
     borderBottom: "1px solid #e2e8f0",
     position: "sticky",
     top: 0,
-    background: "#fff",
+    background: "var(--c-surface-lowest)",
     zIndex: 1,
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: 700,
-    color: "#1A2B4A",
+    color: "var(--c-text-primary)",
     margin: 0,
   },
   closeBtn: {
     background: "transparent",
     border: "none",
     fontSize: 18,
-    color: "#718096",
+    color: "var(--c-text-muted)",
     cursor: "pointer",
     lineHeight: 1,
     padding: 4,
@@ -681,26 +681,26 @@ const s: Record<string, React.CSSProperties> = {
     borderRadius: 7,
     border: "1.5px solid",
     fontSize: 14,
-    color: "#1A2B4A",
+    color: "var(--c-text-primary)",
     outline: "none",
-    background: "#fff",
+    background: "var(--c-surface-lowest)",
   },
   select: {
     padding: "10px 12px",
     borderRadius: 7,
     border: "1.5px solid",
     fontSize: 14,
-    color: "#1A2B4A",
-    background: "#fff",
+    color: "var(--c-text-primary)",
+    background: "var(--c-surface-lowest)",
   },
   textarea: {
     padding: "10px 12px",
     borderRadius: 7,
     border: "1.5px solid #e2e8f0",
     fontSize: 14,
-    color: "#1A2B4A",
+    color: "var(--c-text-primary)",
     outline: "none",
-    background: "#fff",
+    background: "var(--c-surface-lowest)",
     resize: "vertical" as const,
     fontFamily: "inherit",
   },
@@ -714,7 +714,7 @@ const s: Record<string, React.CSSProperties> = {
     display: "flex",
     alignItems: "center",
     fontSize: 14,
-    color: "#2d3748",
+    color: "var(--c-text-primary)",
     cursor: "pointer",
     fontWeight: 500,
   },
@@ -735,7 +735,7 @@ const s: Record<string, React.CSSProperties> = {
   },
   cancelBtn: {
     padding: "10px 20px",
-    background: "#fff",
+    background: "var(--c-surface-lowest)",
     color: "#4a5568",
     border: "1px solid #cbd5e0",
     borderRadius: 7,
@@ -746,7 +746,7 @@ const s: Record<string, React.CSSProperties> = {
   submitBtn: {
     padding: "10px 24px",
     background: BLUE,
-    color: "#fff",
+    color: "var(--c-surface-lowest)",
     border: "none",
     borderRadius: 7,
     fontSize: 14,

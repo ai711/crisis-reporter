@@ -11,7 +11,7 @@ import {
 import type { DashboardUser, DashboardUsersListResponse } from "../types";
 import { formatDateTime } from "../utils/formatters";
 
-const BLUE = "#0468B1";
+const BLUE = "var(--c-primary-container)";
 const PAGE_SIZE = 50;
 
 // ── Role display ───────────────────────────────────────────────────────────────
@@ -140,7 +140,7 @@ function CreateUserModal({ onClose, onSuccess, currentUserRole }: CreateUserModa
                 value={firstName}
                 onChange={(e) => { setFirstName(e.target.value); clearErr("firstName"); }}
                 placeholder="Jane"
-                style={{ ...ms.input, borderColor: errors.firstName ? "#e53e3e" : "#e2e8f0" }}
+                style={{ ...ms.input, borderColor: errors.firstName ? "#e53e3e" : "var(--c-surface-high)" }}
               />
             </MField>
             <MField label="Last Name" required error={errors.lastName} style={{ flex: 1 }}>
@@ -149,7 +149,7 @@ function CreateUserModal({ onClose, onSuccess, currentUserRole }: CreateUserModa
                 value={lastName}
                 onChange={(e) => { setLastName(e.target.value); clearErr("lastName"); }}
                 placeholder="Smith"
-                style={{ ...ms.input, borderColor: errors.lastName ? "#e53e3e" : "#e2e8f0" }}
+                style={{ ...ms.input, borderColor: errors.lastName ? "#e53e3e" : "var(--c-surface-high)" }}
               />
             </MField>
           </div>
@@ -160,7 +160,7 @@ function CreateUserModal({ onClose, onSuccess, currentUserRole }: CreateUserModa
               value={email}
               onChange={(e) => { setEmail(e.target.value); clearErr("email"); }}
               placeholder="jane@undp.org"
-              style={{ ...ms.input, borderColor: errors.email ? "#e53e3e" : "#e2e8f0" }}
+              style={{ ...ms.input, borderColor: errors.email ? "#e53e3e" : "var(--c-surface-high)" }}
             />
           </MField>
 
@@ -171,7 +171,7 @@ function CreateUserModal({ onClose, onSuccess, currentUserRole }: CreateUserModa
                 value={password}
                 onChange={(e) => { setPassword(e.target.value); clearErr("password"); }}
                 placeholder="Min. 8 characters"
-                style={{ ...ms.input, borderColor: errors.password ? "#e53e3e" : "#e2e8f0", paddingRight: 40, width: "100%", boxSizing: "border-box" }}
+                style={{ ...ms.input, borderColor: errors.password ? "#e53e3e" : "var(--c-surface-high)", paddingRight: 40, width: "100%", boxSizing: "border-box" }}
               />
               <button
                 type="button"
@@ -179,10 +179,10 @@ function CreateUserModal({ onClose, onSuccess, currentUserRole }: CreateUserModa
                 style={ms.eyeBtn}
                 tabIndex={-1}
               >
-                {showPassword ? <EyeOff size={16} color="#718096" /> : <Eye size={16} color="#718096" />}
+                {showPassword ? <EyeOff size={16} color="var(--c-text-muted)" /> : <Eye size={16} color="var(--c-text-muted)" />}
               </button>
             </div>
-            <span style={{ fontSize: 11, color: password.length >= 8 ? "#2E7D32" : "#718096", marginTop: 2 }}>
+            <span style={{ fontSize: 11, color: password.length >= 8 ? "#2E7D32" : "var(--c-text-muted)", marginTop: 2 }}>
               {password.length} / 8 characters minimum
             </span>
           </MField>
@@ -191,7 +191,7 @@ function CreateUserModal({ onClose, onSuccess, currentUserRole }: CreateUserModa
             <select
               value={role}
               onChange={(e) => { setRole(e.target.value); clearErr("role"); }}
-              style={{ ...ms.select, borderColor: errors.role ? "#e53e3e" : "#e2e8f0" }}
+              style={{ ...ms.select, borderColor: errors.role ? "#e53e3e" : "var(--c-surface-high)" }}
             >
               <option value="">Select role…</option>
               {availableRoles.map((r) => (
@@ -205,14 +205,14 @@ function CreateUserModal({ onClose, onSuccess, currentUserRole }: CreateUserModa
               <button
                 type="button"
                 onClick={() => setIsActive(true)}
-                style={{ ...ms.toggleBtn, background: isActive ? "#E8F5E9" : "#f0f4f8", color: isActive ? "#2E7D32" : "#718096", border: `1.5px solid ${isActive ? "#A5D6A7" : "#e2e8f0"}`, fontWeight: isActive ? 700 : 500 }}
+                style={{ ...ms.toggleBtn, background: isActive ? "#E8F5E9" : "#f0f4f8", color: isActive ? "#2E7D32" : "var(--c-text-muted)", border: `1.5px solid ${isActive ? "#A5D6A7" : "var(--c-surface-high)"}`, fontWeight: isActive ? 700 : 500 }}
               >
                 Active
               </button>
               <button
                 type="button"
                 onClick={() => setIsActive(false)}
-                style={{ ...ms.toggleBtn, background: !isActive ? "#FDECEA" : "#f0f4f8", color: !isActive ? "#C62828" : "#718096", border: `1.5px solid ${!isActive ? "#EF9A9A" : "#e2e8f0"}`, fontWeight: !isActive ? 700 : 500 }}
+                style={{ ...ms.toggleBtn, background: !isActive ? "#FDECEA" : "#f0f4f8", color: !isActive ? "#C62828" : "var(--c-text-muted)", border: `1.5px solid ${!isActive ? "#EF9A9A" : "var(--c-surface-high)"}`, fontWeight: !isActive ? 700 : 500 }}
               >
                 Inactive
               </button>
@@ -360,7 +360,7 @@ export default function UserManagementPage() {
                 onClick={() => setSearchInput("")}
                 aria-label="Clear search"
               >
-                <X size={14} color="#718096" />
+                <X size={14} color="var(--c-text-muted)" />
               </button>
             )}
           </div>
@@ -469,11 +469,11 @@ const s: Record<string, React.CSSProperties> = {
     display: "flex",
     flexDirection: "column",
     height: "100vh",
-    background: "#f4f6f9",
+    background: "var(--c-surface-low)",
     overflow: "hidden",
   },
   headerRow: {
-    background: "#fff",
+    background: "var(--c-surface-lowest)",
     borderBottom: "1px solid #e0e0e0",
     padding: "16px 32px",
     position: "sticky",
@@ -486,7 +486,7 @@ const s: Record<string, React.CSSProperties> = {
   pageTitle: {
     fontSize: 20,
     fontWeight: 700,
-    color: "#1A2B4A",
+    color: "var(--c-text-primary)",
     margin: 0,
   },
   topBar: {
@@ -506,8 +506,8 @@ const s: Record<string, React.CSSProperties> = {
     border: "1.5px solid #e2e8f0",
     borderRadius: 8,
     fontSize: 14,
-    color: "#1A2B4A",
-    background: "#fff",
+    color: "var(--c-text-primary)",
+    background: "var(--c-surface-lowest)",
     outline: "none",
     boxSizing: "border-box",
   },
@@ -524,7 +524,7 @@ const s: Record<string, React.CSSProperties> = {
   createBtn: {
     padding: "9px 20px",
     background: BLUE,
-    color: "#fff",
+    color: "var(--c-surface-lowest)",
     border: "none",
     borderRadius: 8,
     fontSize: 14,
@@ -543,7 +543,7 @@ const s: Record<string, React.CSSProperties> = {
   loading: {
     padding: 60,
     textAlign: "center",
-    color: "#718096",
+    color: "var(--c-text-muted)",
     fontSize: 15,
   },
   empty: {
@@ -554,12 +554,12 @@ const s: Record<string, React.CSSProperties> = {
     gap: 14,
     padding: 80,
   },
-  emptyText: { fontSize: 15, color: "#718096" },
+  emptyText: { fontSize: 15, color: "var(--c-text-muted)" },
   tableWrap: {
-    background: "#fff",
+    background: "var(--c-surface-lowest)",
     borderRadius: 12,
     overflow: "hidden",
-    boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+    boxShadow: "var(--shadow-card)",
   },
   table: { width: "100%", borderCollapse: "collapse" },
   thead: { background: "#f7fafc" },
@@ -568,13 +568,13 @@ const s: Record<string, React.CSSProperties> = {
     textAlign: "left",
     fontSize: 11,
     fontWeight: 700,
-    color: "#718096",
+    color: "var(--c-text-muted)",
     textTransform: "uppercase",
     letterSpacing: 0.5,
     borderBottom: "1px solid #e2e8f0",
   },
   tr: { borderBottom: "1px solid #f0f4f8" },
-  td: { padding: "14px 16px", fontSize: 13, color: "#2d3748", verticalAlign: "middle" },
+  td: { padding: "14px 16px", fontSize: 13, color: "var(--c-text-primary)", verticalAlign: "middle" },
   nameLink: {
     background: "transparent",
     border: "none",
@@ -589,7 +589,7 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: 10,
     fontWeight: 700,
     background: "#f0f4f8",
-    color: "#718096",
+    color: "var(--c-text-muted)",
     padding: "2px 7px",
     borderRadius: 10,
     border: "1px solid #e2e8f0",
@@ -600,11 +600,11 @@ const s: Record<string, React.CSSProperties> = {
     alignItems: "center",
     padding: "8px 0",
   },
-  totalCount: { fontSize: 13, color: "#718096" },
+  totalCount: { fontSize: 13, color: "var(--c-text-muted)" },
   pageLabel: { fontSize: 13, color: "#4a5568", fontWeight: 500 },
   pageBtn: {
     padding: "7px 16px",
-    background: "#fff",
+    background: "var(--c-surface-lowest)",
     border: "1px solid #e2e8f0",
     borderRadius: 7,
     fontSize: 13,
@@ -626,7 +626,7 @@ const ms: Record<string, React.CSSProperties> = {
     zIndex: 200,
   },
   modal: {
-    background: "#fff",
+    background: "var(--c-surface-lowest)",
     borderRadius: 14,
     width: "100%",
     maxWidth: 520,
@@ -642,15 +642,15 @@ const ms: Record<string, React.CSSProperties> = {
     borderBottom: "1px solid #e2e8f0",
     position: "sticky",
     top: 0,
-    background: "#fff",
+    background: "var(--c-surface-lowest)",
     zIndex: 1,
   },
-  title: { fontSize: 18, fontWeight: 700, color: "#1A2B4A", margin: 0 },
+  title: { fontSize: 18, fontWeight: 700, color: "var(--c-text-primary)", margin: 0 },
   closeBtn: {
     background: "transparent",
     border: "none",
     fontSize: 18,
-    color: "#718096",
+    color: "var(--c-text-muted)",
     cursor: "pointer",
     lineHeight: 1,
     padding: 4,
@@ -666,9 +666,9 @@ const ms: Record<string, React.CSSProperties> = {
     borderRadius: 7,
     border: "1.5px solid #e2e8f0",
     fontSize: 14,
-    color: "#1A2B4A",
+    color: "var(--c-text-primary)",
     outline: "none",
-    background: "#fff",
+    background: "var(--c-surface-lowest)",
     width: "100%",
     boxSizing: "border-box",
   },
@@ -677,8 +677,8 @@ const ms: Record<string, React.CSSProperties> = {
     borderRadius: 7,
     border: "1.5px solid #e2e8f0",
     fontSize: 14,
-    color: "#1A2B4A",
-    background: "#fff",
+    color: "var(--c-text-primary)",
+    background: "var(--c-surface-lowest)",
     width: "100%",
   },
   eyeBtn: {
@@ -702,7 +702,7 @@ const ms: Record<string, React.CSSProperties> = {
     textAlign: "center",
     border: "1.5px solid #e2e8f0",
     background: "#f0f4f8",
-    color: "#718096",
+    color: "var(--c-text-muted)",
   },
   submitError: {
     background: "#fff5f5",
@@ -721,7 +721,7 @@ const ms: Record<string, React.CSSProperties> = {
   },
   cancelBtn: {
     padding: "10px 20px",
-    background: "#fff",
+    background: "var(--c-surface-lowest)",
     color: "#4a5568",
     border: "1px solid #cbd5e0",
     borderRadius: 7,
@@ -732,7 +732,7 @@ const ms: Record<string, React.CSSProperties> = {
   submitBtn: {
     padding: "10px 24px",
     background: BLUE,
-    color: "#fff",
+    color: "var(--c-surface-lowest)",
     border: "none",
     borderRadius: 7,
     fontSize: 14,
