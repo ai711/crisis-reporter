@@ -486,27 +486,27 @@ export default function MainMapPage() {
             <span style={styles.statNumber}>{stats.total_reports}</span>
             <span style={styles.statLabel}>Total</span>
           </div>
-          <div style={{ ...styles.statItem, borderLeft: "3px solid #4caf50" }}>
-            <span style={{ ...styles.statNumber, color: "#4caf50" }}>
+          <div style={{ ...styles.statItem, borderLeft: "3px solid var(--c-flag-green)" }}>
+            <span style={{ ...styles.statNumber, color: "var(--c-flag-green)" }}>
               {stats.green_count}
             </span>
             <span style={styles.statLabel}>Verified</span>
           </div>
           {/* Fix 11: label changed from "Flagged" to "Needs Attention" */}
-          <div style={{ ...styles.statItem, borderLeft: "3px solid #ff9800" }}>
-            <span style={{ ...styles.statNumber, color: "#ff9800" }}>
+          <div style={{ ...styles.statItem, borderLeft: "3px solid var(--c-flag-orange)" }}>
+            <span style={{ ...styles.statNumber, color: "var(--c-flag-orange)" }}>
               {stats.orange_count}
             </span>
             <span style={styles.statLabel}>Needs Attention</span>
           </div>
-          <div style={{ ...styles.statItem, borderLeft: "3px solid #f44336" }}>
-            <span style={{ ...styles.statNumber, color: "#f44336" }}>
+          <div style={{ ...styles.statItem, borderLeft: "3px solid var(--c-flag-red)" }}>
+            <span style={{ ...styles.statNumber, color: "var(--c-flag-red)" }}>
               {stats.red_count}
             </span>
             <span style={styles.statLabel}>Review</span>
           </div>
-          <div style={{ ...styles.statItem, borderLeft: "3px solid #9e9e9e" }}>
-            <span style={{ ...styles.statNumber, color: "#9e9e9e" }}>
+          <div style={{ ...styles.statItem, borderLeft: "3px solid var(--c-flag-grey)" }}>
+            <span style={{ ...styles.statNumber, color: "var(--c-flag-grey)" }}>
               {stats.grey_count}
             </span>
             <span style={styles.statLabel}>Processing</span>
@@ -524,7 +524,7 @@ export default function MainMapPage() {
             ...styles.liveIndicator,
             background:
               liveStatus === "connected"
-                ? "rgba(255,255,255,0.97)"
+                ? "var(--c-surface-lowest)"
                 : "rgba(255,248,240,0.97)",
           }}
         >
@@ -532,11 +532,11 @@ export default function MainMapPage() {
             style={{
               ...styles.liveDot,
               background:
-                liveStatus === "connected" ? "#4caf50" : "#ff9800",
+                liveStatus === "connected" ? "var(--c-flag-green)" : "var(--c-flag-orange)",
               boxShadow:
                 liveStatus === "connected"
-                  ? "0 0 0 3px rgba(76,175,80,0.25)"
-                  : "0 0 0 3px rgba(255,152,0,0.25)",
+                  ? "0 0 0 3px rgba(56,161,105,0.25)"
+                  : "0 0 0 3px rgba(242,153,74,0.25)",
             }}
           />
           <span style={styles.liveText}>
@@ -709,7 +709,7 @@ export default function MainMapPage() {
                   <div
                     style={{
                       ...styles.filterToggle,
-                      background: showRecovered ? "#0468B1" : "#ccc",
+                      background: showRecovered ? "var(--c-primary-container)" : "var(--c-surface-high)",
                       marginTop: 2,
                       flexShrink: 0,
                     }}
@@ -732,10 +732,10 @@ export default function MainMapPage() {
                     />
                   </div>
                   <div>
-                    <div style={{ fontSize: 13, color: "#1A2B4A" }}>
+                    <div style={{ fontSize: 13, color: "var(--c-text-primary)" }}>
                       Show recovered properties
                     </div>
-                    <div style={{ fontSize: 11, color: "#9aa5b4", marginTop: 2 }}>
+                    <div style={{ fontSize: 11, color: "var(--c-text-muted)", marginTop: 2 }}>
                       Recovered properties are hidden by default.
                     </div>
                   </div>
@@ -791,8 +791,8 @@ const styles: Record<string, React.CSSProperties> = {
     height: "100vh",
   },
   statsBar: {
-    background: "#fff",
-    borderBottom: "1px solid #e0e0e0",
+    background: "var(--c-surface-lowest)",
+    borderBottom: "1px solid var(--c-border)",
     padding: "12px 32px",
     display: "flex",
     alignItems: "center",
@@ -807,12 +807,12 @@ const styles: Record<string, React.CSSProperties> = {
   statNumber: {
     fontSize: 22,
     fontWeight: 700,
-    color: "#1A2B4A",
+    color: "var(--c-text-primary)",
     lineHeight: 1,
   },
   statLabel: {
     fontSize: 11,
-    color: "#666",
+    color: "var(--c-text-muted)",
     textTransform: "uppercase",
     letterSpacing: 0.5,
     marginTop: 2,
@@ -837,8 +837,8 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 7,
     padding: "6px 13px",
     borderRadius: 20,
-    boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
-    border: "1px solid rgba(0,0,0,0.07)",
+    boxShadow: "var(--shadow-sm)",
+    border: "1px solid var(--c-border)",
     pointerEvents: "none",
   },
   liveDot: {
@@ -851,7 +851,7 @@ const styles: Record<string, React.CSSProperties> = {
   liveText: {
     fontSize: 11,
     fontWeight: 600,
-    color: "#444",
+    color: "var(--c-text-secondary)",
     letterSpacing: 0.2,
     whiteSpace: "nowrap",
   },
@@ -867,18 +867,18 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: "center",
     gap: 7,
     padding: "8px 14px",
-    background: "#fff",
-    border: "1.5px solid #e0e0e0",
+    background: "var(--c-surface-lowest)",
+    border: "1.5px solid var(--c-surface-high)",
     borderRadius: 8,
     fontSize: 13,
     fontWeight: 600,
-    color: "#1A2B4A",
+    color: "var(--c-text-primary)",
     cursor: "pointer",
-    boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+    boxShadow: "var(--shadow-sm)",
     whiteSpace: "nowrap",
   },
   filterBadge: {
-    background: "#0468B1",
+    background: "var(--c-primary-container)",
     color: "#fff",
     fontSize: 11,
     fontWeight: 700,
@@ -888,10 +888,10 @@ const styles: Record<string, React.CSSProperties> = {
   },
   filterPanel: {
     marginTop: 6,
-    background: "#fff",
-    border: "1px solid #e0e0e0",
+    background: "var(--c-surface-lowest)",
+    border: "1px solid var(--c-surface-high)",
     borderRadius: 10,
-    boxShadow: "0 4px 20px rgba(0,0,0,0.13)",
+    boxShadow: "var(--shadow-float)",
     padding: "14px 16px",
     width: 300,
     maxHeight: "calc(100vh - 180px)",
@@ -900,7 +900,7 @@ const styles: Record<string, React.CSSProperties> = {
   filterPanelTitle: {
     fontSize: 12,
     fontWeight: 700,
-    color: "#9aa5b4",
+    color: "var(--c-text-subtle)",
     textTransform: "uppercase",
     letterSpacing: 0.6,
     marginBottom: 12,
@@ -911,7 +911,7 @@ const styles: Record<string, React.CSSProperties> = {
   filterGroupLabel: {
     fontSize: 12,
     fontWeight: 600,
-    color: "#1A2B4A",
+    color: "var(--c-text-primary)",
     marginBottom: 6,
   },
   filterCheckLabel: {
@@ -919,13 +919,13 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: "center",
     gap: 7,
     fontSize: 13,
-    color: "#1A2B4A",
+    color: "var(--c-text-primary)",
     cursor: "pointer",
     marginBottom: 5,
     userSelect: "none",
   },
   filterCheck: {
-    accentColor: "#0468B1",
+    accentColor: "var(--c-primary-container)",
     width: 14,
     height: 14,
     flexShrink: 0,
@@ -938,23 +938,23 @@ const styles: Record<string, React.CSSProperties> = {
   },
   filterDisabled: {
     fontSize: 12,
-    color: "#b0bec5",
+    color: "var(--c-text-subtle)",
     fontStyle: "italic",
     padding: "4px 8px",
-    background: "#f8fafc",
+    background: "var(--c-surface-lowest)",
     borderRadius: 6,
-    border: "1px dashed #e0e0e0",
+    border: "1px dashed var(--c-surface-high)",
     cursor: "not-allowed",
   },
   filterInput: {
     width: "100%",
     padding: "6px 8px",
-    border: "1.5px solid #d0dce8",
+    border: "1.5px solid var(--c-surface-high)",
     borderRadius: 6,
     fontSize: 12,
-    color: "#1A2B4A",
+    color: "var(--c-text-primary)",
     outline: "none",
-    background: "#fff",
+    background: "var(--c-surface-lowest)",
     boxSizing: "border-box" as const,
   },
   filterDateRow: {
@@ -963,7 +963,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   filterDateLabel: {
     fontSize: 10,
-    color: "#9aa5b4",
+    color: "var(--c-text-subtle)",
     fontWeight: 600,
     textTransform: "uppercase" as const,
     letterSpacing: 0.4,
@@ -992,21 +992,21 @@ const styles: Record<string, React.CSSProperties> = {
     position: "absolute",
     bottom: 32,
     left: 14,
-    background: "rgba(255,255,255,0.97)",
+    background: "var(--c-surface-lowest)",
     borderRadius: 10,
     padding: "12px 16px",
-    boxShadow: "0 2px 12px rgba(0,0,0,0.14)",
+    boxShadow: "var(--shadow-card)",
     display: "flex",
     flexDirection: "column",
     gap: 7,
     zIndex: 10,
-    border: "1px solid rgba(0,0,0,0.07)",
+    border: "1px solid var(--c-border)",
     pointerEvents: "none",
   },
   legendTitle: {
     fontSize: 11,
     fontWeight: 700,
-    color: "#9aa5b4",
+    color: "var(--c-text-subtle)",
     textTransform: "uppercase",
     letterSpacing: 0.6,
     marginBottom: 2,
@@ -1021,17 +1021,17 @@ const styles: Record<string, React.CSSProperties> = {
     height: 13,
     borderRadius: "50%",
     flexShrink: 0,
-    border: "2px solid #fff",
+    border: "2px solid var(--c-surface-lowest)",
     boxShadow: "0 0 0 1px rgba(0,0,0,0.12)",
   },
   legendLabel: {
     fontSize: 12,
-    color: "#1A2B4A",
+    color: "var(--c-text-primary)",
     fontWeight: 500,
   },
   legendNote: {
     fontSize: 11,
-    color: "#9aa5b4",
+    color: "var(--c-text-subtle)",
     fontStyle: "italic",
     marginTop: 5,
     lineHeight: 1.4,

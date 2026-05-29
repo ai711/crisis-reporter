@@ -107,7 +107,7 @@ function DetailRow({ label, value }: { label: string; value: React.ReactNode }) 
   return (
     <div style={styles.detailRow}>
       <span style={styles.detailLabel}>{label}</span>
-      <span style={styles.detailValue}>{value ?? <em style={{ color: "#bbb" }}>Not recorded</em>}</span>
+      <span style={styles.detailValue}>{value ?? <em style={{ color: "var(--c-text-subtle)" }}>Not recorded</em>}</span>
     </div>
   );
 }
@@ -857,7 +857,7 @@ export default function ReportDetailPage() {
                       </div>
                       <div style={styles.reviewComment}>
                         {e.reason ?? (
-                          <em style={{ color: "#bbb" }}>No comment recorded</em>
+                          <em style={{ color: "var(--c-text-subtle)" }}>No comment recorded</em>
                         )}
                       </div>
                     </div>
@@ -898,7 +898,21 @@ export default function ReportDetailPage() {
             {/* Report details */}
             <Card title="Report Details">
               <div style={styles.detailRows}>
-                <DetailRow label="Damage Level" value={formatDamageLevel(report.damage_level)} />
+                <DetailRow
+                  label="Damage Level"
+                  value={
+                    <span style={{
+                      color: report.damage_level === "complete"
+                        ? "var(--c-flag-red)"
+                        : report.damage_level === "partial"
+                        ? "var(--c-flag-orange)"
+                        : "var(--c-flag-green)",
+                      fontWeight: 600,
+                    }}>
+                      {formatDamageLevel(report.damage_level)}
+                    </span>
+                  }
+                />
                 <DetailRow label="Infrastructure Type" value={report.infrastructure_type} />
                 <DetailRow label="Crisis Type" value={report.disaster_type} />
                 <DetailRow label="Language" value={report.language_code} />
@@ -1004,18 +1018,18 @@ export default function ReportDetailPage() {
 const styles: Record<string, React.CSSProperties> = {
   container: { display: "flex", flexDirection: "column", height: "100vh" },
   content: { flex: 1, padding: "20px 28px", overflow: "auto" },
-  loading: { padding: 40, textAlign: "center", color: "#666" },
+  loading: { padding: 40, textAlign: "center", color: "var(--c-text-muted)" },
 
   backBtn: {
     display: "inline-flex",
     alignItems: "center",
     padding: "7px 14px",
-    background: "#fff",
-    border: "1.5px solid #e0e8f0",
+    background: "var(--c-surface-lowest)",
+    border: "1.5px solid var(--c-surface-high)",
     borderRadius: 7,
     cursor: "pointer",
     fontSize: 13,
-    color: "#1A2B4A",
+    color: "var(--c-text-primary)",
     fontWeight: 500,
     marginBottom: 20,
   },
@@ -1025,11 +1039,11 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     alignItems: "flex-start",
     justifyContent: "space-between",
-    background: "#fff",
+    background: "var(--c-surface-lowest)",
     borderRadius: 12,
     padding: "20px 24px",
-    boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
-    border: "1px solid #e8eef4",
+    boxShadow: "var(--shadow-card)",
+    border: "1px solid var(--c-border)",
     marginBottom: 12,
   },
   reportHeaderLeft: { display: "flex", flexDirection: "column", gap: 4 },
@@ -1037,10 +1051,10 @@ const styles: Record<string, React.CSSProperties> = {
   reportId: {
     fontSize: 22,
     fontWeight: 700,
-    color: "#1A2B4A",
+    color: "var(--c-text-primary)",
     fontFamily: "monospace",
   },
-  reportSubmitted: { fontSize: 13, color: "#666" },
+  reportSubmitted: { fontSize: 13, color: "var(--c-text-muted)" },
 
   flagPill: {
     display: "inline-block",
@@ -1056,24 +1070,24 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     alignItems: "center",
     gap: 12,
-    background: "#fff",
+    background: "var(--c-surface-lowest)",
     borderRadius: 10,
     padding: "12px 20px",
-    boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
-    border: "1px solid #e8eef4",
+    boxShadow: "var(--shadow-sm)",
+    border: "1px solid var(--c-border)",
     marginBottom: 20,
     flexWrap: "wrap",
     minHeight: 52,
   },
-  flagControlLabel: { fontSize: 13, color: "#666", fontWeight: 500 },
+  flagControlLabel: { fontSize: 13, color: "var(--c-text-muted)", fontWeight: 500 },
   actionBtnRow: { display: "flex", gap: 8, flexWrap: "wrap" },
-  noActionLabel: { fontSize: 13, color: "#999", fontStyle: "italic" },
+  noActionLabel: { fontSize: 13, color: "var(--c-text-subtle)", fontStyle: "italic" },
 
   approveBtn: {
     padding: "7px 18px",
-    background: "#fff",
-    color: "#4caf50",
-    border: "1.5px solid #4caf50",
+    background: "var(--c-surface-lowest)",
+    color: "var(--c-flag-green)",
+    border: "1.5px solid var(--c-flag-green)",
     borderRadius: 7,
     cursor: "pointer",
     fontSize: 13,
@@ -1082,9 +1096,9 @@ const styles: Record<string, React.CSSProperties> = {
   },
   discardBtn: {
     padding: "7px 18px",
-    background: "#fff",
-    color: "#f44336",
-    border: "1.5px solid #f44336",
+    background: "var(--c-surface-lowest)",
+    color: "var(--c-flag-red)",
+    border: "1.5px solid var(--c-flag-red)",
     borderRadius: 7,
     cursor: "pointer",
     fontSize: 13,
@@ -1093,9 +1107,9 @@ const styles: Record<string, React.CSSProperties> = {
   },
   reinstateBtn: {
     padding: "7px 18px",
-    background: "#fff",
-    color: "#ff9800",
-    border: "1.5px solid #ff9800",
+    background: "var(--c-surface-lowest)",
+    color: "var(--c-flag-orange)",
+    border: "1.5px solid var(--c-flag-orange)",
     borderRadius: 7,
     cursor: "pointer",
     fontSize: 13,
@@ -1106,9 +1120,9 @@ const styles: Record<string, React.CSSProperties> = {
     display: "inline-flex",
     alignItems: "center",
     padding: "7px 18px",
-    background: "#fff3e0",
-    color: "#FF9800",
-    border: "1.5px solid #FF9800",
+    background: "rgba(242,153,74,0.08)",
+    color: "var(--c-flag-orange)",
+    border: "1.5px solid var(--c-flag-orange)",
     borderRadius: 7,
     cursor: "pointer",
     fontSize: 13,
@@ -1128,19 +1142,19 @@ const styles: Record<string, React.CSSProperties> = {
 
   // Card
   card: {
-    background: "#fff",
+    background: "var(--c-surface-lowest)",
     borderRadius: 12,
     padding: "18px 22px",
-    boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
-    border: "1px solid #e8eef4",
+    boxShadow: "var(--shadow-card)",
+    border: "1px solid var(--c-border)",
   },
   cardTitle: {
     fontSize: 14,
     fontWeight: 700,
-    color: "#1A2B4A",
+    color: "var(--c-text-primary)",
     marginBottom: 14,
     paddingBottom: 10,
-    borderBottom: "1px solid #f0f4f8",
+    borderBottom: "1px solid var(--c-border-ghost)",
   },
   cardTitleRow: {
     display: "flex",
@@ -1149,25 +1163,25 @@ const styles: Record<string, React.CSSProperties> = {
   },
 
   // Photos
-  photoGrid: { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 },
+  photoGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 10 },
   photo: {
     width: "100%",
-    aspectRatio: "1",
+    aspectRatio: "4/3",
     objectFit: "cover",
-    borderRadius: 8,
+    borderRadius: "var(--radius-md)",
     cursor: "pointer",
-    border: "1px solid #e8eef4",
+    border: "1px solid var(--c-border)",
   },
   photoPlaceholder: {
     width: "100%",
-    aspectRatio: "1",
-    background: "#f4f6f9",
-    borderRadius: 8,
+    aspectRatio: "4/3",
+    background: "var(--c-surface-low)",
+    borderRadius: "var(--radius-md)",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
     fontSize: 11,
-    color: "#aaa",
+    color: "var(--c-text-subtle)",
   },
 
   // Detail rows
@@ -1177,13 +1191,13 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: "space-between",
     alignItems: "flex-start",
     padding: "9px 0",
-    borderBottom: "1px solid #f4f6f9",
+    borderBottom: "1px solid var(--c-border-ghost)",
     gap: 12,
   },
-  detailLabel: { fontSize: 12, color: "#888", flexShrink: 0, paddingTop: 1 },
+  detailLabel: { fontSize: 12, color: "var(--c-text-muted)", flexShrink: 0, paddingTop: 1 },
   detailValue: {
     fontSize: 13,
-    color: "#1A2B4A",
+    color: "var(--c-text-primary)",
     fontWeight: 500,
     textAlign: "right",
     wordBreak: "break-word",
@@ -1191,7 +1205,7 @@ const styles: Record<string, React.CSSProperties> = {
 
   // Links
   linkCell: {
-    color: "#0468B1",
+    color: "var(--c-primary-container)",
     textDecoration: "underline",
     textUnderlineOffset: 2,
     cursor: "pointer",
@@ -1202,22 +1216,22 @@ const styles: Record<string, React.CSSProperties> = {
   mapsLink: {
     display: "inline-flex",
     alignItems: "center",
-    color: "#0468B1",
+    color: "var(--c-primary-container)",
     fontSize: 13,
     textDecoration: "none",
     fontWeight: 500,
   },
 
   // Description
-  description: { fontSize: 13, color: "#444", lineHeight: 1.6 },
-  translatedBox: { marginTop: 12, padding: 12, background: "#f4f6f9", borderRadius: 8 },
-  translatedLabel: { fontSize: 11, color: "#666", marginBottom: 6, fontWeight: 600 },
+  description: { fontSize: 13, color: "var(--c-text-secondary)", lineHeight: 1.6 },
+  translatedBox: { marginTop: 12, padding: 12, background: "var(--c-surface-low)", borderRadius: 8 },
+  translatedLabel: { fontSize: 11, color: "var(--c-text-muted)", marginBottom: 6, fontWeight: 600 },
   translateBtn: {
     display: "inline-flex",
     alignItems: "center",
     padding: "5px 12px",
-    background: "#E8F4FD",
-    color: "#0468B1",
+    background: "rgba(4,104,177,0.08)",
+    color: "var(--c-primary-container)",
     border: "none",
     borderRadius: 6,
     fontSize: 12,
@@ -1227,7 +1241,7 @@ const styles: Record<string, React.CSSProperties> = {
 
   // Version history
   versionList: { display: "flex", flexDirection: "column", gap: 0 },
-  versionRow: { borderBottom: "1px solid #f4f6f9" },
+  versionRow: { borderBottom: "1px solid var(--c-border-ghost)" },
   versionRowHeader: {
     display: "flex",
     alignItems: "center",
@@ -1236,12 +1250,12 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: "pointer",
     flexWrap: "wrap",
   },
-  versionDate: { fontSize: 12, color: "#666", flexShrink: 0 },
-  versionDamage: { fontSize: 12, color: "#444", flex: 1 },
+  versionDate: { fontSize: 12, color: "var(--c-text-muted)", flexShrink: 0 },
+  versionDamage: { fontSize: 12, color: "var(--c-text-secondary)", flex: 1 },
   viewReportBtn: {
     background: "none",
     border: "none",
-    color: "#0468B1",
+    color: "var(--c-primary-container)",
     fontSize: 12,
     cursor: "pointer",
     fontWeight: 500,
@@ -1252,14 +1266,14 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 12,
     padding: "8px 0 12px",
     fontSize: 12,
-    color: "#555",
+    color: "var(--c-text-secondary)",
   },
 
   // Review log
   reviewLog: { display: "flex", flexDirection: "column", gap: 0 },
   reviewEntry: {
     padding: "12px 0",
-    borderBottom: "1px solid #f4f6f9",
+    borderBottom: "1px solid var(--c-border-ghost)",
   },
   reviewEntryHeader: {
     display: "flex",
@@ -1271,7 +1285,7 @@ const styles: Record<string, React.CSSProperties> = {
   reviewAction: {
     fontSize: 13,
     fontWeight: 600,
-    color: "#1A2B4A",
+    color: "var(--c-text-primary)",
     display: "flex",
     flexDirection: "column",
     gap: 3,
@@ -1279,16 +1293,16 @@ const styles: Record<string, React.CSSProperties> = {
   emergencyOverrideBadge: {
     fontSize: 11,
     fontWeight: 700,
-    color: "#b71c1c",
-    background: "#ffebee",
+    color: "var(--c-flag-red)",
+    background: "rgba(229,62,62,0.08)",
     borderRadius: 4,
     padding: "2px 6px",
     display: "inline-block",
     marginBottom: 2,
   },
-  reviewTime: { fontSize: 12, color: "#999", flexShrink: 0 },
-  reviewUser: { fontSize: 12, color: "#666", marginBottom: 4 },
-  reviewComment: { fontSize: 13, color: "#444", lineHeight: 1.5 },
+  reviewTime: { fontSize: 12, color: "var(--c-text-subtle)", flexShrink: 0 },
+  reviewUser: { fontSize: 12, color: "var(--c-text-muted)", marginBottom: 4 },
+  reviewComment: { fontSize: 13, color: "var(--c-text-secondary)", lineHeight: 1.5 },
 
   // Flag reason
   flagReasonBanner: {
@@ -1299,15 +1313,15 @@ const styles: Record<string, React.CSSProperties> = {
   flagReasonCode: {
     fontSize: 12,
     fontWeight: 700,
-    color: "#666",
+    color: "var(--c-text-muted)",
     textTransform: "uppercase",
     letterSpacing: 0.5,
     marginBottom: 10,
   },
   flagReasonMeta: {
     fontSize: 11,
-    color: "#555",
-    background: "#f4f6f9",
+    color: "var(--c-text-secondary)",
+    background: "var(--c-surface-low)",
     borderRadius: 6,
     padding: "8px 10px",
     overflowX: "auto",
@@ -1317,21 +1331,21 @@ const styles: Record<string, React.CSSProperties> = {
   // Flag reason contextual cards
   flagContextCard: {
     fontSize: 13,
-    color: "#333",
+    color: "var(--c-text-secondary)",
   },
   flagContextRow: {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
     padding: "6px 0",
-    borderBottom: "1px solid #f0f0f0",
+    borderBottom: "1px solid var(--c-border-ghost)",
     gap: 8,
   },
-  flagContextLabel: { fontSize: 12, color: "#888", flexShrink: 0 },
-  flagContextValue: { fontSize: 13, color: "#1A2B4A", fontWeight: 500, fontFamily: "monospace" },
+  flagContextLabel: { fontSize: 12, color: "var(--c-text-muted)", flexShrink: 0 },
+  flagContextValue: { fontSize: 13, color: "var(--c-text-primary)", fontWeight: 500, fontFamily: "monospace" },
   flagContextNote: {
     fontSize: 11,
-    color: "#888",
+    color: "var(--c-text-muted)",
     fontStyle: "italic",
     marginTop: 8,
     marginBottom: 0,
@@ -1339,7 +1353,7 @@ const styles: Record<string, React.CSSProperties> = {
   flagContextHeader: {
     fontSize: 13,
     fontWeight: 600,
-    color: "#1A2B4A",
+    color: "var(--c-text-primary)",
     margin: "0 0 8px",
   },
   flagContextTable: {
@@ -1351,21 +1365,21 @@ const styles: Record<string, React.CSSProperties> = {
   flagContextTh: {
     textAlign: "left",
     padding: "5px 8px",
-    background: "#f4f6f9",
+    background: "var(--c-surface-low)",
     fontWeight: 700,
-    color: "#666",
+    color: "var(--c-text-muted)",
     fontSize: 11,
     textTransform: "uppercase",
   },
   flagContextTd: {
     padding: "6px 8px",
-    borderBottom: "1px solid #f0f0f0",
-    color: "#333",
+    borderBottom: "1px solid var(--c-border-ghost)",
+    color: "var(--c-text-secondary)",
   },
   flagContextLink: {
     background: "none",
     border: "none",
-    color: "#0468B1",
+    color: "var(--c-primary-container)",
     cursor: "pointer",
     fontFamily: "monospace",
     fontSize: 12,
@@ -1382,13 +1396,13 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: "space-between",
     alignItems: "center",
     padding: "8px 0",
-    borderBottom: "1px solid #f4f6f9",
+    borderBottom: "1px solid var(--c-border-ghost)",
     gap: 8,
     flexWrap: "wrap",
   },
   flagHistoryLeft: { display: "flex", alignItems: "center", gap: 8 },
-  flagHistoryMeta: { fontSize: 12, color: "#666" },
-  flagHistoryTime: { fontSize: 11, color: "#aaa", flexShrink: 0 },
+  flagHistoryMeta: { fontSize: 12, color: "var(--c-text-muted)" },
+  flagHistoryTime: { fontSize: 11, color: "var(--c-text-subtle)", flexShrink: 0 },
 
   // Toast
   toast: {
@@ -1396,16 +1410,16 @@ const styles: Record<string, React.CSSProperties> = {
     bottom: 28,
     left: "50%",
     transform: "translateX(-50%)",
-    background: "#1A2B4A",
+    background: "var(--c-primary)",
     color: "#fff",
     padding: "10px 22px",
     borderRadius: 8,
     fontSize: 13,
     fontWeight: 500,
     zIndex: 999,
-    boxShadow: "0 4px 16px rgba(0,0,0,0.2)",
+    boxShadow: "var(--shadow-float)",
   },
 
   // Misc
-  emptyText: { fontSize: 13, color: "#999", fontStyle: "italic" },
+  emptyText: { fontSize: 13, color: "var(--c-text-subtle)", fontStyle: "italic" },
 };
