@@ -242,7 +242,7 @@ function CheckboxGroup({
   }
   return (
     <div style={s.filterGroup}>
-      <div style={s.label}>{label}</div>
+      <div className="input-label">{label}</div>
       <div style={s.checkboxRow}>
         {options.map((opt) => (
           <label key={opt.value} style={s.checkboxLabel}>
@@ -291,7 +291,7 @@ function CountryMultiSelect({
 
   return (
     <div style={s.filterGroup}>
-      <div style={s.label}>Country</div>
+      <div className="input-label">Country</div>
       <div style={{ position: "relative" }}>
         <button
           type="button"
@@ -304,7 +304,7 @@ function CountryMultiSelect({
         {open && (
           <div style={s.multiSelectDropdown}>
             {countries.length === 0 ? (
-              <div style={{ padding: "8px 12px", color: "#718096", fontSize: 13 }}>
+              <div style={{ padding: "8px 12px", color: "var(--c-text-muted)", fontSize: 13 }}>
                 No countries available
               </div>
             ) : (
@@ -597,191 +597,206 @@ export default function ExportPage() {
       <Header title="Export" subtitle="Generate and download crisis reports" />
 
       <div style={s.content}>
-        {/* ── Report type cards ── */}
-        <section style={s.section}>
-          <h2 style={s.sectionTitle}>Select Report Type</h2>
-          <div style={s.cardGrid}>
-            {REPORT_TYPES.map((rt) => {
-              const active = selectedId === rt.id;
-              return (
-                <button
-                  key={rt.id}
-                  onClick={() => selectType(rt.id)}
+
+        {/* ── LEFT COLUMN ── */}
+        <div style={s.leftCol}>
+
+          {/* STEP 1 — Select Report Template */}
+          <section style={s.section}>
+            <div style={s.stepHeader}>
+              <div style={s.stepCircle}>1</div>
+              <span className="section-label">Select Report Template</span>
+            </div>
+            <div style={s.cardGrid}>
+              {REPORT_TYPES.map((rt) => {
+                const active = selectedId === rt.id;
+                return (
+                  <button
+                    key={rt.id}
+                    onClick={() => selectType(rt.id)}
+                    style={{
+                      ...s.card,
+                      border: active
+                        ? "2px solid var(--c-primary-container)"
+                        : "2px solid transparent",
+                      background: active
+                        ? "rgba(4,104,177,0.04)"
+                        : "var(--c-surface-lowest)",
+                      boxShadow: active ? "none" : "var(--shadow-sm)",
+                    }}
+                  >
+                    <div style={s.cardName}>{rt.name}</div>
+                    <div style={s.cardFormats}>
+                      {rt.formats.map((f) => (
+                        <span key={f} style={s.formatPill}>
+                          {f}
+                        </span>
+                      ))}
+                    </div>
+                    <div style={s.cardDesc}>{rt.description}</div>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+
+          {/* STEP 2 — Configure Data Filters */}
+          <section style={s.section}>
+            <div style={s.stepHeader}>
+              <div style={s.stepCircle}>2</div>
+              <span className="section-label">Configure Data Filters</span>
+            </div>
+            <div style={s.panel}>
+              {/* Date range */}
+              <div style={s.panelRow}>
+                <div style={s.field}>
+                  <label className="input-label">
+                    Start Date <span style={s.req}>*</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={dateFrom}
+                    max={today}
+                    onChange={(e) => {
+                      setDateFrom(e.target.value);
+                      setErrors((p) => ({ ...p, dateFrom: undefined as unknown as string }));
+                    }}
+                    style={{
+                      ...s.input,
+                      borderColor: errors.dateFrom ? "#e53e3e" : "var(--c-surface-high)",
+                    }}
+                  />
+                  {errors.dateFrom && (
+                    <span style={s.fieldErr}>{errors.dateFrom}</span>
+                  )}
+                </div>
+
+                <div style={s.field}>
+                  <label className="input-label">
+                    End Date <span style={s.req}>*</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={dateTo}
+                    max={today}
+                    min={dateFrom || undefined}
+                    onChange={(e) => {
+                      setDateTo(e.target.value);
+                      setErrors((p) => ({ ...p, dateTo: undefined as unknown as string }));
+                    }}
+                    style={{
+                      ...s.input,
+                      borderColor: errors.dateTo ? "#e53e3e" : "var(--c-surface-high)",
+                    }}
+                  />
+                  {errors.dateTo && (
+                    <span style={s.fieldErr}>{errors.dateTo}</span>
+                  )}
+                </div>
+              </div>
+
+              <p style={s.dateHint}>
+                Large date ranges may take longer to generate. For best
+                performance, export in date ranges of 90 days or less.
+              </p>
+
+              {/* Inclusion note */}
+              <div style={s.inclusionNote}>
+                Showing confirmed reports only — Grey, Red, and Discarded reports
+                excluded by default. Use the Flag Status filter below to include
+                other statuses.
+              </div>
+
+              {/* Flag status filter */}
+              <CheckboxGroup
+                label="Flag Status"
+                options={FLAG_STATUS_OPTIONS}
+                selected={flagStatusFilter}
+                onChange={setFlagStatusFilter}
+              />
+
+              {/* Country filter */}
+              <CountryMultiSelect
+                countries={countries}
+                selected={countryFilter}
+                onChange={setCountryFilter}
+              />
+
+              {/* Damage level filter */}
+              <CheckboxGroup
+                label="Damage Level"
+                options={DAMAGE_LEVEL_OPTIONS}
+                selected={damageLevelFilter}
+                onChange={setDamageLevelFilter}
+              />
+
+              {/* Crisis type filter */}
+              <CheckboxGroup
+                label="Crisis Type"
+                options={CRISIS_TYPE_OPTIONS}
+                selected={crisisTypeFilter}
+                onChange={setCrisisTypeFilter}
+              />
+
+              {/* Platform filter */}
+              <CheckboxGroup
+                label="Platform"
+                options={PLATFORM_OPTIONS}
+                selected={platformFilter}
+                onChange={setPlatformFilter}
+              />
+
+              {/* Project filter */}
+              <div style={s.filterGroup}>
+                <label className="input-label">
+                  Project{" "}
+                  {selectedId === "project_summary" && (
+                    <span style={s.req}>* Required for Project Summary Report</span>
+                  )}
+                </label>
+                <select
+                  value={projectFilter}
+                  onChange={(e) => {
+                    setProjectFilter(e.target.value);
+                    setErrors((p) => ({ ...p, project: undefined as unknown as string }));
+                  }}
                   style={{
-                    ...s.card,
-                    borderColor: active ? BLUE : "#e2e8f0",
-                    background: active ? "#EBF5FB" : "#fff",
-                    boxShadow: active
-                      ? `0 0 0 1px ${BLUE}`
-                      : "0 1px 3px rgba(0,0,0,0.06)",
+                    ...s.select,
+                    borderColor: errors.project ? "#e53e3e" : "var(--c-surface-high)",
                   }}
                 >
-                  <div style={s.cardName}>{rt.name}</div>
-                  <div style={s.cardFormats}>
-                    {rt.formats.map((f) => (
-                      <span key={f} style={s.formatPill}>
-                        {f}
-                      </span>
-                    ))}
-                  </div>
-                  <div style={s.cardDesc}>{rt.description}</div>
-                </button>
-              );
-            })}
-          </div>
-        </section>
-
-        {/* ── Configuration panel ── */}
-        <section style={s.section}>
-          <h2 style={s.sectionTitle}>Configuration</h2>
-          <div style={s.panel}>
-            {/* Date range */}
-            <div style={s.panelRow}>
-              <div style={s.field}>
-                <label style={s.label}>
-                  Start Date <span style={s.req}>*</span>
-                </label>
-                <input
-                  type="date"
-                  value={dateFrom}
-                  max={today}
-                  onChange={(e) => {
-                    setDateFrom(e.target.value);
-                    setErrors((p) => ({ ...p, dateFrom: undefined as unknown as string }));
-                  }}
-                  style={{
-                    ...s.input,
-                    borderColor: errors.dateFrom ? "#e53e3e" : "#e2e8f0",
-                  }}
-                />
-                {errors.dateFrom && (
-                  <span style={s.fieldErr}>{errors.dateFrom}</span>
-                )}
-              </div>
-
-              <div style={s.field}>
-                <label style={s.label}>
-                  End Date <span style={s.req}>*</span>
-                </label>
-                <input
-                  type="date"
-                  value={dateTo}
-                  max={today}
-                  min={dateFrom || undefined}
-                  onChange={(e) => {
-                    setDateTo(e.target.value);
-                    setErrors((p) => ({ ...p, dateTo: undefined as unknown as string }));
-                  }}
-                  style={{
-                    ...s.input,
-                    borderColor: errors.dateTo ? "#e53e3e" : "#e2e8f0",
-                  }}
-                />
-                {errors.dateTo && (
-                  <span style={s.fieldErr}>{errors.dateTo}</span>
+                  <option value="">All projects</option>
+                  {crises.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+                {errors.project && (
+                  <span style={s.fieldErr}>{errors.project}</span>
                 )}
               </div>
             </div>
+          </section>
 
-            <p style={s.dateHint}>
-              Large date ranges may take longer to generate. For best
-              performance, export in date ranges of 90 days or less.
-            </p>
-
-            {/* Inclusion note */}
-            <div style={s.inclusionNote}>
-              Showing confirmed reports only — Grey, Red, and Discarded reports
-              excluded by default. Use the Flag Status filter below to include
-              other statuses.
+          {/* STEP 3 — Output Format */}
+          <section style={s.section}>
+            <div style={s.stepHeader}>
+              <div style={s.stepCircle}>3</div>
+              <span className="section-label">Output Format</span>
             </div>
-
-            {/* Flag status filter */}
-            <CheckboxGroup
-              label="Flag Status"
-              options={FLAG_STATUS_OPTIONS}
-              selected={flagStatusFilter}
-              onChange={setFlagStatusFilter}
-            />
-
-            {/* Country filter */}
-            <CountryMultiSelect
-              countries={countries}
-              selected={countryFilter}
-              onChange={setCountryFilter}
-            />
-
-            {/* Damage level filter */}
-            <CheckboxGroup
-              label="Damage Level"
-              options={DAMAGE_LEVEL_OPTIONS}
-              selected={damageLevelFilter}
-              onChange={setDamageLevelFilter}
-            />
-
-            {/* Crisis type filter */}
-            <CheckboxGroup
-              label="Crisis Type"
-              options={CRISIS_TYPE_OPTIONS}
-              selected={crisisTypeFilter}
-              onChange={setCrisisTypeFilter}
-            />
-
-            {/* Platform filter */}
-            <CheckboxGroup
-              label="Platform"
-              options={PLATFORM_OPTIONS}
-              selected={platformFilter}
-              onChange={setPlatformFilter}
-            />
-
-            {/* Project filter */}
-            <div style={s.filterGroup}>
-              <label style={s.label}>
-                Project{" "}
-                {selectedId === "project_summary" && (
-                  <span style={s.req}>* Required for Project Summary Report</span>
-                )}
-              </label>
-              <select
-                value={projectFilter}
-                onChange={(e) => {
-                  setProjectFilter(e.target.value);
-                  setErrors((p) => ({ ...p, project: undefined as unknown as string }));
-                }}
-                style={{
-                  ...s.select,
-                  borderColor: errors.project ? "#e53e3e" : "#e2e8f0",
-                }}
-              >
-                <option value="">All projects</option>
-                {crises.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-              {errors.project && (
-                <span style={s.fieldErr}>{errors.project}</span>
-              )}
-            </div>
-
-            {/* Format selector */}
             {selectedType ? (
               <div style={s.formatSection}>
-                <label style={s.label}>Format</label>
-                <div style={s.radioGroup}>
+                <div style={s.formatBtnRow}>
                   {selectedType.formats.map((f) => (
-                    <label key={f} style={s.radioLabel}>
-                      <input
-                        type="radio"
-                        name="export-format"
-                        value={FORMAT_VALUE[f]}
-                        checked={format === FORMAT_VALUE[f]}
-                        onChange={() => setFormat(FORMAT_VALUE[f])}
-                        style={{ accentColor: BLUE, marginRight: 6 }}
-                      />
+                    <button
+                      key={f}
+                      className={format === FORMAT_VALUE[f] ? "btn btn-primary" : "btn btn-secondary"}
+                      style={{ padding: "8px 20px", height: 40 }}
+                      onClick={() => setFormat(FORMAT_VALUE[f])}
+                    >
                       {f}
-                    </label>
+                    </button>
                   ))}
                 </div>
                 {format === "shapefile" && (
@@ -799,142 +814,177 @@ export default function ExportPage() {
               </div>
             ) : (
               <p style={s.hintText}>
-                Select a report type above to choose a format.
+                Select a report template above to choose a format.
               </p>
             )}
-          </div>
-        </section>
+          </section>
 
-        {/* ── Status message ── */}
-        {statusMsg && (
-          <div
-            style={{
-              ...s.statusBox,
-              background:
-                statusMsg.kind === "error"
-                  ? "#FFF5F5"
-                  : statusMsg.kind === "success"
-                  ? "#F0FFF4"
-                  : "#EBF8FF",
-              borderColor:
-                statusMsg.kind === "error"
-                  ? "#FC8181"
-                  : statusMsg.kind === "success"
-                  ? "#68D391"
-                  : "#90CDF4",
-              color:
-                statusMsg.kind === "error"
-                  ? "#C53030"
-                  : statusMsg.kind === "success"
-                  ? "#276749"
-                  : "#2B6CB0",
-            }}
-          >
-            {statusMsg.text}
-          </div>
-        )}
-
-        {/* ── Generate button ── */}
-        <button
-          style={{
-            ...s.generateBtn,
-            opacity: canGenerate ? 1 : 0.6,
-            cursor: canGenerate ? "pointer" : "not-allowed",
-          }}
-          onClick={handleGenerate}
-          disabled={!canGenerate}
-        >
-          {generating ? (
-            <>
-              <Spinner />
-              Generating — please wait
-            </>
-          ) : (
-            "Generate Export"
-          )}
-        </button>
-
-        {/* ── Export history ── */}
-        <section style={s.section}>
-          <h2 style={s.sectionTitle}>Export History</h2>
-          {historyLoading ? (
-            <p style={s.hintText}>Loading history…</p>
-          ) : history.length === 0 ? (
-            <p style={s.hintText}>No exports generated yet.</p>
-          ) : (
-            <div style={s.historyTable}>
-              <div style={{ ...s.historyRow, ...s.historyHeader }}>
-                <span>Report Type</span>
-                <span>Date Range</span>
-                <span>Filters</span>
-                <span>Format</span>
-                <span>Generated</span>
-                <span />
-              </div>
-              {history.map((item) => {
-                const isRedownloading = redownloadingId === item.id;
-                return (
-                  <div key={item.id} style={s.historyRow}>
-                    <span style={s.historyCell}>
-                      {TYPE_LABEL[item.report_type] ?? item.report_type}
-                    </span>
-                    <span style={s.historyCell}>
-                      {fmtDate(item.date_from)} – {fmtDate(item.date_to)}
-                    </span>
-                    <span
-                      style={{
-                        ...s.historyCell,
-                        fontSize: 12,
-                        color: "#718096",
-                      }}
-                    >
-                      {formatFilters(item)}
-                    </span>
-                    <span style={s.historyCell}>
-                      <span style={s.formatPill}>{item.format.toUpperCase()}</span>
-                    </span>
-                    <span style={s.historyCell}>
-                      {fmtDateTime(item.created_at || item.generated_at)}
-                    </span>
-                    <span style={s.historyCell}>
-                      <button
-                        style={{
-                          ...s.redownloadBtn,
-                          opacity: isRedownloading ? 0.7 : 1,
-                          cursor: isRedownloading ? "not-allowed" : "pointer",
-                          display: "flex",
-                          alignItems: "center",
-                        }}
-                        onClick={() => !isRedownloading && handleRedownload(item.id)}
-                        disabled={isRedownloading}
-                      >
-                        {isRedownloading ? (
-                          <>
-                            <span
-                              style={{
-                                display: "inline-block",
-                                width: 10,
-                                height: 10,
-                                border: `1.5px solid ${BLUE}`,
-                                borderTop: "1.5px solid transparent",
-                                borderRadius: "50%",
-                                animation: "ex-spin 0.7s linear infinite",
-                                marginRight: 6,
-                              }}
-                            />
-                            Generating…
-                          </>
-                        ) : (
-                          "Re-download"
-                        )}
-                      </button>
-                    </span>
-                  </div>
-                );
-              })}
+          {/* ── Status message ── */}
+          {statusMsg && (
+            <div
+              style={{
+                ...s.statusBox,
+                background:
+                  statusMsg.kind === "error"
+                    ? "#FFF5F5"
+                    : statusMsg.kind === "success"
+                    ? "#F0FFF4"
+                    : "#EBF8FF",
+                borderColor:
+                  statusMsg.kind === "error"
+                    ? "#FC8181"
+                    : statusMsg.kind === "success"
+                    ? "#68D391"
+                    : "#90CDF4",
+                color:
+                  statusMsg.kind === "error"
+                    ? "#C53030"
+                    : statusMsg.kind === "success"
+                    ? "#276749"
+                    : "#2B6CB0",
+              }}
+            >
+              {statusMsg.text}
             </div>
           )}
-        </section>
+        </div>
+
+        {/* ── RIGHT COLUMN ── */}
+        <div style={s.rightCol}>
+
+          {/* EXPORT SUMMARY PANEL */}
+          <div className="card card-padded" style={{ position: "sticky", top: 92, marginBottom: 16 }}>
+            <div className="section-label" style={{ marginBottom: 16 }}>Export Summary</div>
+
+            {/* Summary rows */}
+            {[
+              {
+                label: "Template",
+                value: selectedType?.name ?? null,
+                missing: !selectedType,
+              },
+              {
+                label: "Date Range",
+                value: dateFrom && dateTo ? `${dateFrom} – ${dateTo}` : null,
+                missing: !dateFrom || !dateTo,
+              },
+              {
+                label: "Format",
+                value: format ? format.toUpperCase() : null,
+                missing: !format,
+              },
+              {
+                label: "Flag Status",
+                value: flagStatusFilter.length > 0
+                  ? flagStatusFilter.join(", ")
+                  : "All",
+                missing: false,
+              },
+            ].map((row) => (
+              <div key={row.label} style={s.summaryRow}>
+                <span style={s.summaryRowLabel}>{row.label}</span>
+                {row.missing ? (
+                  <span className="chip chip-amber">Not set</span>
+                ) : (
+                  <span style={s.summaryRowValue}>{row.value}</span>
+                )}
+              </div>
+            ))}
+
+            <button
+              className="btn btn-primary btn-lg"
+              style={{
+                width: "100%",
+                marginTop: 16,
+                opacity: canGenerate ? 1 : 0.6,
+                cursor: canGenerate ? "pointer" : "not-allowed",
+              }}
+              onClick={handleGenerate}
+              disabled={!canGenerate}
+            >
+              {generating ? (
+                <>
+                  <Spinner />
+                  Generating — please wait
+                </>
+              ) : (
+                "Generate & Download"
+              )}
+            </button>
+            <p style={s.processingNote}>
+              Background job — export runs on server, download starts automatically
+            </p>
+          </div>
+
+          {/* RECENT EXPORTS PANEL */}
+          <div className="card card-padded" style={{ marginBottom: 16 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <span className="section-label">Recent Exports</span>
+              <span style={{ fontSize: "var(--text-sm)", color: "var(--c-primary-container)", fontWeight: 600, cursor: "pointer", textDecoration: "none" }}>
+                View All
+              </span>
+            </div>
+
+            {historyLoading ? (
+              <p style={s.hintText}>Loading history…</p>
+            ) : history.length === 0 ? (
+              <p style={s.hintText}>No exports generated yet.</p>
+            ) : (
+              history.slice(0, 8).map((item) => {
+                const isRedownloading = redownloadingId === item.id;
+                return (
+                  <div key={item.id} style={s.exportItem}>
+                    <div style={s.exportItemIcon}>
+                      <span style={{ fontSize: 15, lineHeight: 1 }}>⬇</span>
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={s.exportItemName}>
+                        {TYPE_LABEL[item.report_type] ?? item.report_type}
+                      </div>
+                      <div style={s.exportItemMeta}>
+                        {fmtDate(item.date_from)} – {fmtDate(item.date_to)} · {item.format.toUpperCase()}
+                      </div>
+                      <div style={{ ...s.exportItemMeta, marginTop: 1 }}>
+                        {fmtDateTime(item.created_at || item.generated_at)} · {formatFilters(item)}
+                      </div>
+                    </div>
+                    <button
+                      style={{
+                        ...s.redownloadBtn,
+                        opacity: isRedownloading ? 0.7 : 1,
+                        cursor: isRedownloading ? "not-allowed" : "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                      }}
+                      onClick={() => !isRedownloading && handleRedownload(item.id)}
+                      disabled={isRedownloading}
+                    >
+                      {isRedownloading ? (
+                        <>
+                          <span
+                            style={{
+                              display: "inline-block",
+                              width: 10,
+                              height: 10,
+                              border: `1.5px solid ${BLUE}`,
+                              borderTop: "1.5px solid transparent",
+                              borderRadius: "50%",
+                              animation: "ex-spin 0.7s linear infinite",
+                              marginRight: 6,
+                            }}
+                          />
+                          …
+                        </>
+                      ) : (
+                        "↓"
+                      )}
+                    </button>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -947,50 +997,77 @@ const s: Record<string, React.CSSProperties> = {
     display: "flex",
     flexDirection: "column",
     height: "100vh",
-    background: "#f4f6f9",
+    background: "var(--c-surface-low)",
   },
   content: {
     flex: 1,
     padding: "28px 36px",
     overflowY: "auto",
     display: "flex",
+    flexDirection: "row",
+    gap: 28,
+    alignItems: "flex-start",
+    maxWidth: 1400,
+  },
+  // Two-column layout
+  leftCol: {
+    flex: 1,
+    display: "flex",
     flexDirection: "column",
     gap: 28,
-    maxWidth: 1200,
+    minWidth: 0,
+  },
+  rightCol: {
+    width: 360,
+    flexShrink: 0,
+    display: "flex",
+    flexDirection: "column",
+  },
+  // Step structure
+  stepHeader: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 16,
+  },
+  stepCircle: {
+    width: 28,
+    height: 28,
+    background: "var(--c-primary-container)",
+    color: "white",
+    borderRadius: "50%",
+    fontSize: "var(--text-sm)",
+    fontWeight: 700,
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
   },
   section: {
     display: "flex",
     flexDirection: "column",
-    gap: 14,
-  },
-  sectionTitle: {
-    fontSize: 15,
-    fontWeight: 700,
-    color: "#1A2B4A",
-    margin: 0,
+    gap: 0,
   },
   // Cards
   cardGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(3, 1fr)",
-    gap: 16,
+    gridTemplateColumns: "1fr 1fr",
+    gap: 12,
   },
   card: {
     padding: "18px 16px",
-    borderRadius: 10,
-    border: "1.5px solid",
+    borderRadius: "var(--radius-lg)",
     cursor: "pointer",
     textAlign: "left",
-    background: "#fff",
     transition: "border-color 0.15s, background 0.15s, box-shadow 0.15s",
     display: "flex",
     flexDirection: "column",
     gap: 8,
   },
   cardName: {
-    fontSize: 14,
+    fontSize: "var(--text-base)",
     fontWeight: 700,
-    color: "#1A2B4A",
+    color: "var(--c-text-primary)",
   },
   cardFormats: {
     display: "flex",
@@ -1000,26 +1077,27 @@ const s: Record<string, React.CSSProperties> = {
   formatPill: {
     fontSize: 11,
     fontWeight: 600,
-    color: BLUE,
-    background: "#EBF5FB",
+    color: "var(--c-primary-container)",
+    background: "rgba(4,104,177,0.08)",
     padding: "2px 8px",
-    borderRadius: 4,
+    borderRadius: "var(--radius-sm)",
     display: "inline-block",
   },
   cardDesc: {
-    fontSize: 13,
-    color: "#718096",
+    fontSize: "var(--text-sm)",
+    color: "var(--c-text-muted)",
     lineHeight: 1.5,
   },
   // Configuration panel
   panel: {
-    background: "#fff",
-    border: "1px solid #e2e8f0",
-    borderRadius: 10,
+    background: "var(--c-surface-lowest)",
+    border: "1px solid var(--c-surface-high)",
+    borderRadius: "var(--radius-lg)",
     padding: "20px 24px",
     display: "flex",
     flexDirection: "column",
     gap: 20,
+    boxShadow: "var(--shadow-sm)",
   },
   panelRow: {
     display: "flex",
@@ -1032,53 +1110,47 @@ const s: Record<string, React.CSSProperties> = {
     gap: 6,
     minWidth: 180,
   },
-  label: {
-    fontSize: 13,
-    fontWeight: 600,
-    color: "#4a5568",
-    marginBottom: 6,
-  },
   req: {
-    color: "#e53e3e",
+    color: "var(--c-error)",
     fontWeight: 600,
   },
   input: {
     padding: "9px 12px",
-    borderRadius: 7,
+    borderRadius: "var(--radius-md)",
     border: "1.5px solid",
     fontSize: 14,
-    color: "#1A2B4A",
+    color: "var(--c-text-primary)",
     outline: "none",
-    background: "#fff",
+    background: "var(--c-surface-lowest)",
   },
   select: {
     padding: "9px 12px",
-    borderRadius: 7,
+    borderRadius: "var(--radius-md)",
     border: "1.5px solid",
     fontSize: 14,
-    color: "#1A2B4A",
-    background: "#fff",
+    color: "var(--c-text-primary)",
+    background: "var(--c-surface-lowest)",
     minWidth: 200,
     maxWidth: 360,
   },
   fieldErr: {
     fontSize: 12,
-    color: "#e53e3e",
+    color: "var(--c-error)",
     fontWeight: 500,
   },
   dateHint: {
     fontSize: 12,
-    color: "#718096",
+    color: "var(--c-text-muted)",
     fontStyle: "italic",
     margin: 0,
     marginTop: -8,
   },
   inclusionNote: {
-    fontSize: 13,
-    color: "#4a5568",
-    background: "#F7FAFC",
-    border: "1px solid #e2e8f0",
-    borderRadius: 7,
+    fontSize: "var(--text-sm)",
+    color: "var(--c-text-secondary)",
+    background: "rgba(4,104,177,0.06)",
+    border: "1px solid rgba(4,104,177,0.12)",
+    borderRadius: "var(--radius-md)",
     padding: "10px 14px",
     lineHeight: 1.5,
   },
@@ -1091,10 +1163,11 @@ const s: Record<string, React.CSSProperties> = {
     display: "flex",
     gap: 16,
     flexWrap: "wrap",
+    marginTop: 8,
   },
   checkboxLabel: {
-    fontSize: 13,
-    color: "#2d3748",
+    fontSize: "var(--text-sm)",
+    color: "var(--c-text-secondary)",
     cursor: "pointer",
     display: "flex",
     alignItems: "center",
@@ -1103,32 +1176,33 @@ const s: Record<string, React.CSSProperties> = {
   },
   filterNote: {
     fontSize: 12,
-    color: "#718096",
+    color: "var(--c-text-muted)",
     marginTop: 6,
     lineHeight: 1.4,
   },
   multiSelectBtn: {
     padding: "9px 12px",
-    borderRadius: 7,
-    border: "1.5px solid #e2e8f0",
+    borderRadius: "var(--radius-md)",
+    border: "1.5px solid var(--c-surface-high)",
     fontSize: 14,
-    color: "#1A2B4A",
-    background: "#fff",
+    color: "var(--c-text-primary)",
+    background: "var(--c-surface-lowest)",
     cursor: "pointer",
     textAlign: "left",
     minWidth: 220,
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
+    marginTop: 8,
   },
   multiSelectDropdown: {
     position: "absolute",
     top: "calc(100% + 4px)",
     left: 0,
     zIndex: 100,
-    background: "#fff",
-    border: "1px solid #e2e8f0",
-    borderRadius: 8,
+    background: "var(--c-surface-lowest)",
+    border: "1px solid var(--c-surface-high)",
+    borderRadius: "var(--radius-md)",
     boxShadow: "0 4px 16px rgba(0,0,0,0.10)",
     minWidth: 240,
     maxHeight: 280,
@@ -1141,101 +1215,112 @@ const s: Record<string, React.CSSProperties> = {
     padding: "8px 14px",
     fontSize: 13,
     cursor: "pointer",
-    color: "#2d3748",
+    color: "var(--c-text-primary)",
     userSelect: "none",
   },
+  // Format step
   formatSection: {
     display: "flex",
     flexDirection: "column",
-    gap: 8,
+    gap: 12,
   },
-  radioGroup: {
+  formatBtnRow: {
     display: "flex",
-    gap: 20,
+    gap: 10,
     flexWrap: "wrap",
-  },
-  radioLabel: {
-    fontSize: 14,
-    color: "#2d3748",
-    cursor: "pointer",
-    display: "flex",
-    alignItems: "center",
-    fontWeight: 500,
   },
   formatHint: {
     fontSize: 12,
-    color: "#4a5568",
-    background: "#EBF8FF",
-    border: "1px solid #BEE3F8",
-    borderRadius: 6,
+    color: "var(--c-text-secondary)",
+    background: "rgba(4,104,177,0.06)",
+    border: "1px solid rgba(4,104,177,0.12)",
+    borderRadius: "var(--radius-md)",
     padding: "8px 12px",
     margin: 0,
     lineHeight: 1.5,
   },
   hintText: {
-    fontSize: 13,
-    color: "#a0aec0",
+    fontSize: "var(--text-sm)",
+    color: "var(--c-text-subtle)",
     margin: 0,
   },
   // Status
   statusBox: {
     padding: "13px 16px",
-    borderRadius: 8,
+    borderRadius: "var(--radius-md)",
     border: "1px solid",
     fontSize: 14,
     fontWeight: 500,
   },
-  // Generate button
-  generateBtn: {
-    padding: "13px 0",
-    width: "100%",
-    maxWidth: 480,
-    background: BLUE,
-    color: "#fff",
-    border: "none",
-    borderRadius: 9,
-    fontSize: 15,
-    fontWeight: 700,
+  // Summary panel rows
+  summaryRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: "8px 0",
+    borderBottom: "1px solid var(--c-border-ghost)",
+  },
+  summaryRowLabel: {
+    fontSize: "var(--text-sm)",
+    color: "var(--c-text-muted)",
+  },
+  summaryRowValue: {
+    fontSize: "var(--text-sm)",
+    fontWeight: 600,
+    color: "var(--c-text-primary)",
+    textAlign: "right",
+    maxWidth: 180,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
+  processingNote: {
+    fontSize: "var(--text-xs)",
+    color: "var(--c-text-subtle)",
+    textAlign: "center",
+    marginTop: 6,
+  },
+  // Recent exports compact list
+  exportItem: {
+    display: "flex",
+    alignItems: "center",
+    gap: 12,
+    padding: "10px 0",
+    borderBottom: "1px solid var(--c-border-ghost)",
+  },
+  exportItemIcon: {
+    width: 36,
+    height: 36,
+    background: "var(--c-surface-low)",
+    borderRadius: "var(--radius-md)",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
+    color: "var(--c-text-muted)",
+    flexShrink: 0,
   },
-  // History
-  historyTable: {
-    background: "#fff",
-    border: "1px solid #e2e8f0",
-    borderRadius: 10,
+  exportItemName: {
+    fontSize: "var(--text-sm)",
+    fontWeight: 600,
+    color: "var(--c-text-primary)",
     overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
   },
-  historyRow: {
-    display: "grid",
-    gridTemplateColumns: "2fr 1.6fr 2fr 90px 1.4fr 110px",
-    alignItems: "center",
-    padding: "12px 18px",
-    borderBottom: "1px solid #f0f4f8",
-    gap: 12,
-  },
-  historyHeader: {
-    background: "#f7fafc",
-    fontSize: 12,
-    fontWeight: 700,
-    color: "#718096",
-    textTransform: "uppercase",
-    letterSpacing: 0.4,
-    borderBottom: "1px solid #e2e8f0",
-  },
-  historyCell: {
-    fontSize: 13,
-    color: "#2d3748",
+  exportItemMeta: {
+    fontSize: "var(--text-xs)",
+    color: "var(--c-text-muted)",
+    marginTop: 2,
   },
   redownloadBtn: {
-    padding: "6px 12px",
-    background: "#EBF5FB",
-    color: BLUE,
-    border: `1px solid #bee3f8`,
-    borderRadius: 6,
-    fontSize: 12,
+    padding: "6px 10px",
+    background: "var(--c-surface-high)",
+    color: "var(--c-text-primary)",
+    border: "none",
+    borderRadius: "var(--radius-md)",
+    fontSize: 14,
     fontWeight: 600,
     whiteSpace: "nowrap" as const,
+    flexShrink: 0,
   },
 };

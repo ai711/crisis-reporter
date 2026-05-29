@@ -207,7 +207,7 @@ function MultiSelectDropdown({ label, options, selected, onChange, placeholder }
 
   return (
     <div ref={ref} style={s.filterField}>
-      <label style={s.filterLabel}>{label}</label>
+      <label className="section-label" style={{ marginRight: 4 }}>{label}</label>
       <button
         type="button"
         style={{ ...s.filterSelect, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 }}
@@ -216,7 +216,7 @@ function MultiSelectDropdown({ label, options, selected, onChange, placeholder }
         <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const, flex: 1, textAlign: "left" as const }}>
           {buttonText}
         </span>
-        <span style={{ fontSize: 9, color: "#718096", flexShrink: 0 }}>{open ? "▲" : "▼"}</span>
+        <span style={{ fontSize: 9, color: "var(--c-text-muted)", flexShrink: 0 }}>{open ? "▲" : "▼"}</span>
       </button>
       {open && (
         <div style={s.dropdownPanel}>
@@ -232,7 +232,7 @@ function MultiSelectDropdown({ label, options, selected, onChange, placeholder }
             </label>
           ))}
           {options.length === 0 && (
-            <div style={{ padding: "8px 12px", color: "#a0aec0", fontSize: 13 }}>Loading…</div>
+            <div style={{ padding: "8px 12px", color: "var(--c-text-subtle)", fontSize: 13 }}>Loading…</div>
           )}
         </div>
       )}
@@ -249,7 +249,7 @@ function Spinner() {
         style={{
           width: 32,
           height: 32,
-          border: "3px solid #e2e8f0",
+          border: "3px solid var(--c-surface-high)",
           borderTop: `3px solid ${BLUE}`,
           borderRadius: "50%",
           animation: "an-spin 0.8s linear infinite",
@@ -261,7 +261,7 @@ function Spinner() {
 
 function EmptyState() {
   return (
-    <div style={{ textAlign: "center", padding: "40px 0", color: "#a0aec0", fontSize: 14 }}>
+    <div style={{ textAlign: "center", padding: "40px 0", color: "var(--c-text-subtle)", fontSize: 14 }}>
       No data available for the selected filters.
     </div>
   );
@@ -503,7 +503,7 @@ export default function AnalyticsPage() {
             />
 
             <div style={s.filterField}>
-              <label style={s.filterLabel}>Start Date</label>
+              <label className="section-label" style={{ marginRight: 4 }}>Start Date</label>
               <input
                 type="date"
                 style={s.filterInput}
@@ -513,7 +513,7 @@ export default function AnalyticsPage() {
             </div>
 
             <div style={s.filterField}>
-              <label style={s.filterLabel}>End Date</label>
+              <label className="section-label" style={{ marginRight: 4 }}>End Date</label>
               <input
                 type="date"
                 style={s.filterInput}
@@ -545,7 +545,7 @@ export default function AnalyticsPage() {
           {tags.length > 0 && (
             <div style={s.tagRow}>
               {tags.map((tag) => (
-                <span key={tag.key} style={s.tag}>
+                <span key={tag.key} className="chip chip-blue" style={{ marginRight: 6 }}>
                   {tag.label}
                   <button
                     style={s.tagRemove}
@@ -717,7 +717,8 @@ export default function AnalyticsPage() {
         {/* ── Export button ── */}
         <div style={{ display: "flex", justifyContent: "flex-end" }}>
           <button
-            style={s.exportBtn}
+            className="btn btn-secondary"
+            style={{ marginTop: 16 }}
             onClick={() =>
               navigate("/export", {
                 state: {
@@ -764,23 +765,23 @@ export default function AnalyticsPage() {
           ) : (
             <ResponsiveContainer width="100%" height={260}>
               <BarChart data={timeData} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f4f8" vertical={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#e6e8eb" vertical={false} />
                 <XAxis
                   dataKey="date"
                   tickFormatter={granularity === "weekly" ? fmtWeekLabel : fmtDayLabel}
-                  tick={{ fontSize: 11, fill: "#718096" }}
+                  tick={{ fontSize: 11, fill: "#717782" }}
                   tickLine={false}
                   interval="preserveStartEnd"
                 />
                 <YAxis
-                  tick={{ fontSize: 11, fill: "#718096" }}
+                  tick={{ fontSize: 11, fill: "#717782" }}
                   tickLine={false}
                   axisLine={false}
                   allowDecimals={false}
                 />
                 <Tooltip
                   labelFormatter={granularity === "weekly" ? fmtWeekLabel : fmtDayLabel}
-                  contentStyle={{ fontSize: 13, borderRadius: 8, border: "1px solid #e2e8f0" }}
+                  contentStyle={{ fontSize: 13, borderRadius: 8, border: "1px solid #e6e8eb", background: "#ffffff" }}
                 />
                 <Bar dataKey="count" fill={BLUE} radius={[3, 3, 0, 0]} name="Reports" />
               </BarChart>
@@ -816,7 +817,7 @@ export default function AnalyticsPage() {
                   ))}
                 </Pie>
                 <Tooltip
-                  contentStyle={{ fontSize: 13, borderRadius: 8, border: "1px solid #e2e8f0" }}
+                  contentStyle={{ fontSize: 13, borderRadius: 8, border: "1px solid #e6e8eb", background: "#ffffff" }}
                 />
                 <Legend iconSize={10} wrapperStyle={{ fontSize: 12 }} />
               </PieChart>
@@ -835,10 +836,10 @@ export default function AnalyticsPage() {
                 layout="vertical"
                 margin={{ top: 4, right: 24, left: 0, bottom: 0 }}
               >
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f4f8" horizontal={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#e6e8eb" horizontal={false} />
                 <XAxis
                   type="number"
-                  tick={{ fontSize: 11, fill: "#718096" }}
+                  tick={{ fontSize: 11, fill: "#717782" }}
                   tickLine={false}
                   axisLine={false}
                   allowDecimals={false}
@@ -846,12 +847,12 @@ export default function AnalyticsPage() {
                 <YAxis
                   type="category"
                   dataKey="country"
-                  tick={{ fontSize: 12, fill: "#4a5568" }}
+                  tick={{ fontSize: 12, fill: "#414751" }}
                   tickLine={false}
                   width={110}
                 />
                 <Tooltip
-                  contentStyle={{ fontSize: 13, borderRadius: 8, border: "1px solid #e2e8f0" }}
+                  contentStyle={{ fontSize: 13, borderRadius: 8, border: "1px solid #e6e8eb", background: "#ffffff" }}
                 />
                 <Bar dataKey="count" fill={BLUE} radius={[0, 3, 3, 0]} name="Reports" />
               </BarChart>
@@ -874,10 +875,10 @@ export default function AnalyticsPage() {
                 layout="vertical"
                 margin={{ top: 4, right: 24, left: 0, bottom: 0 }}
               >
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f4f8" horizontal={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#e6e8eb" horizontal={false} />
                 <XAxis
                   type="number"
-                  tick={{ fontSize: 11, fill: "#718096" }}
+                  tick={{ fontSize: 11, fill: "#717782" }}
                   tickLine={false}
                   axisLine={false}
                   allowDecimals={false}
@@ -885,12 +886,12 @@ export default function AnalyticsPage() {
                 <YAxis
                   type="category"
                   dataKey="infrastructure_type"
-                  tick={{ fontSize: 11, fill: "#4a5568" }}
+                  tick={{ fontSize: 11, fill: "#414751" }}
                   tickLine={false}
                   width={200}
                 />
                 <Tooltip
-                  contentStyle={{ fontSize: 13, borderRadius: 8, border: "1px solid #e2e8f0" }}
+                  contentStyle={{ fontSize: 13, borderRadius: 8, border: "1px solid #e6e8eb", background: "#ffffff" }}
                 />
                 <Bar dataKey="count" fill={BLUE} radius={[0, 3, 3, 0]} name="Reports" />
               </BarChart>
@@ -909,10 +910,10 @@ export default function AnalyticsPage() {
                 layout="vertical"
                 margin={{ top: 4, right: 24, left: 0, bottom: 0 }}
               >
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f4f8" horizontal={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#e6e8eb" horizontal={false} />
                 <XAxis
                   type="number"
-                  tick={{ fontSize: 11, fill: "#718096" }}
+                  tick={{ fontSize: 11, fill: "#717782" }}
                   tickLine={false}
                   axisLine={false}
                   allowDecimals={false}
@@ -920,12 +921,12 @@ export default function AnalyticsPage() {
                 <YAxis
                   type="category"
                   dataKey="crisis_type"
-                  tick={{ fontSize: 12, fill: "#4a5568" }}
+                  tick={{ fontSize: 12, fill: "#414751" }}
                   tickLine={false}
                   width={150}
                 />
                 <Tooltip
-                  contentStyle={{ fontSize: 13, borderRadius: 8, border: "1px solid #e2e8f0" }}
+                  contentStyle={{ fontSize: 13, borderRadius: 8, border: "1px solid #e6e8eb", background: "#ffffff" }}
                 />
                 <Bar dataKey="count" fill={BLUE} radius={[0, 3, 3, 0]} name="Reports" />
               </BarChart>
@@ -934,25 +935,31 @@ export default function AnalyticsPage() {
         </div>
 
         {/* ── Flag Quality section ── */}
-        <div style={s.flagQualitySection}>
-          <div style={s.flagQualityHeader}>Flag Quality — Automatic Check Performance</div>
+        <div className="card" style={{ overflow: "hidden" }}>
+          <div className="card-header">
+            <span style={{ fontSize: "var(--text-base)", fontWeight: 700, color: "var(--c-text-primary)" }}>
+              Flag Quality — Automatic Check Performance
+            </span>
+          </div>
 
           {flagQualityLoading ? (
-            <Spinner />
+            <div style={{ padding: "0 24px 20px" }}><Spinner /></div>
           ) : flagQualityTotal < FLAG_QUALITY_THRESHOLD ? (
-            <div style={s.flagQualityNote}>
-              Insufficient data — flag quality statistics require at least {FLAG_QUALITY_THRESHOLD} reviewed
-              reports. Currently: {flagQualityTotal} reviewed.
+            <div style={{ padding: "0 24px 20px" }}>
+              <div style={s.flagQualityNote}>
+                Insufficient data — flag quality statistics require at least {FLAG_QUALITY_THRESHOLD} reviewed
+                reports. Currently: {flagQualityTotal} reviewed.
+              </div>
             </div>
           ) : (
             <>
               <div style={{ overflowX: "auto" as const }}>
-                <table style={s.fqTable}>
+                <table className="data-table">
                   <thead>
                     <tr>
                       {["Flag Type", "Total Raised", "Cleared by Reviewer", "Recorded as Discard Reason", "Inconclusive"].map(
                         (col) => (
-                          <th key={col} style={s.fqTh}>
+                          <th key={col}>
                             {col}
                           </th>
                         )
@@ -962,17 +969,17 @@ export default function AnalyticsPage() {
                   <tbody>
                     {flagQualityItems.map((row) => (
                       <tr key={row.flag_type}>
-                        <td style={s.fqTd}>{row.flag_type}</td>
-                        <td style={{ ...s.fqTd, textAlign: "right" as const, fontWeight: 600 }}>
+                        <td>{row.flag_type}</td>
+                        <td style={{ textAlign: "right" as const, fontWeight: 600 }}>
                           {row.total_raised}
                         </td>
-                        <td style={{ ...s.fqTd, textAlign: "right" as const }}>
+                        <td style={{ textAlign: "right" as const }}>
                           {countPct(row.cleared_count, row.cleared_percentage)}
                         </td>
-                        <td style={{ ...s.fqTd, textAlign: "right" as const }}>
+                        <td style={{ textAlign: "right" as const }}>
                           {countPct(row.discard_reason_count, row.discard_reason_percentage)}
                         </td>
-                        <td style={{ ...s.fqTd, textAlign: "right" as const }}>
+                        <td style={{ textAlign: "right" as const }}>
                           {countPct(row.inconclusive_count, row.inconclusive_percentage)}
                         </td>
                       </tr>
@@ -1000,7 +1007,7 @@ const s: Record<string, React.CSSProperties> = {
     display: "flex",
     flexDirection: "column",
     height: "100vh",
-    background: "#f4f6f9",
+    background: "var(--c-surface-low)",
   },
   content: {
     flex: 1,
@@ -1012,10 +1019,11 @@ const s: Record<string, React.CSSProperties> = {
   },
   // Filter card
   filterCard: {
-    background: "#fff",
-    border: "1px solid #e2e8f0",
-    borderRadius: 12,
-    padding: "18px 20px",
+    background: "var(--c-surface-lowest)",
+    border: "1px solid var(--c-surface-high)",
+    borderRadius: "var(--radius-lg)",
+    padding: "12px 20px",
+    boxShadow: "var(--shadow-sm)",
     display: "flex",
     flexDirection: "column",
     gap: 12,
@@ -1033,38 +1041,31 @@ const s: Record<string, React.CSSProperties> = {
     minWidth: 150,
     position: "relative",
   },
-  filterLabel: {
-    fontSize: 12,
-    fontWeight: 600,
-    color: "#718096",
-    textTransform: "uppercase",
-    letterSpacing: 0.4,
-  },
   filterSelect: {
     padding: "8px 10px",
-    borderRadius: 7,
-    border: "1.5px solid #e2e8f0",
+    borderRadius: "var(--radius-md)",
+    border: "1.5px solid var(--c-surface-high)",
     fontSize: 13,
-    color: "#1A2B4A",
-    background: "#fff",
+    color: "var(--c-text-primary)",
+    background: "var(--c-surface-lowest)",
     minWidth: 150,
     height: 36,
   },
   filterInput: {
     padding: "8px 10px",
-    borderRadius: 7,
-    border: "1.5px solid #e2e8f0",
+    borderRadius: "var(--radius-md)",
+    border: "1.5px solid var(--c-surface-high)",
     fontSize: 13,
-    color: "#1A2B4A",
-    background: "#fff",
+    color: "var(--c-text-primary)",
+    background: "var(--c-surface-lowest)",
     height: 36,
   },
   applyBtn: {
     padding: "9px 20px",
-    background: BLUE,
-    color: "#fff",
+    background: "var(--c-primary-container)",
+    color: "var(--c-on-primary)",
     border: "none",
-    borderRadius: 8,
+    borderRadius: "var(--radius-md)",
     fontSize: 13,
     fontWeight: 700,
     cursor: "pointer",
@@ -1074,9 +1075,9 @@ const s: Record<string, React.CSSProperties> = {
   clearBtn: {
     padding: "9px 16px",
     background: "transparent",
-    color: "#718096",
-    border: "1.5px solid #e2e8f0",
-    borderRadius: 8,
+    color: "var(--c-text-muted)",
+    border: "1.5px solid var(--c-surface-high)",
+    borderRadius: "var(--radius-md)",
     fontSize: 13,
     fontWeight: 600,
     cursor: "pointer",
@@ -1089,9 +1090,9 @@ const s: Record<string, React.CSSProperties> = {
     left: 0,
     minWidth: 200,
     maxWidth: 280,
-    background: "#fff",
-    border: "1.5px solid #e2e8f0",
-    borderRadius: 8,
+    background: "var(--c-surface-lowest)",
+    border: "1.5px solid var(--c-surface-high)",
+    borderRadius: "var(--radius-md)",
     boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
     zIndex: 200,
     maxHeight: 260,
@@ -1103,32 +1104,20 @@ const s: Record<string, React.CSSProperties> = {
     alignItems: "center",
     padding: "8px 12px",
     fontSize: 13,
-    color: "#1A2B4A",
+    color: "var(--c-text-primary)",
     cursor: "pointer",
-    borderBottom: "1px solid #f7fafc",
+    borderBottom: "1px solid var(--c-surface-low)",
   },
   tagRow: {
     display: "flex",
     gap: 8,
     flexWrap: "wrap",
   },
-  tag: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 6,
-    background: "#EBF5FB",
-    color: BLUE,
-    border: `1px solid #bee3f8`,
-    borderRadius: 20,
-    padding: "3px 10px",
-    fontSize: 12,
-    fontWeight: 600,
-  },
   tagRemove: {
     background: "none",
     border: "none",
     cursor: "pointer",
-    color: BLUE,
+    color: "var(--c-primary-container)",
     fontSize: 15,
     lineHeight: 1,
     padding: 0,
@@ -1136,23 +1125,23 @@ const s: Record<string, React.CSSProperties> = {
     alignItems: "center",
   },
   filterNote: {
-    fontSize: 12,
-    color: "#718096",
-    background: "#f7fafc",
-    borderRadius: 6,
-    padding: "8px 12px",
-    borderLeft: `3px solid ${BLUE}`,
+    fontSize: "var(--text-xs)",
+    color: "var(--c-text-muted)",
+    background: "rgba(4,104,177,0.06)",
+    borderRadius: "var(--radius-md)",
+    padding: "8px 14px",
   },
   // Summary cards
   summaryGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(5, 1fr)",
-    gap: 14,
+    gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+    gap: 16,
+    marginBottom: 0,
   },
   summaryCard: {
-    background: "#fff",
-    borderRadius: 12,
-    boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
+    background: "var(--c-surface-lowest)",
+    borderRadius: "var(--radius-lg)",
+    boxShadow: "var(--shadow-sm)",
     display: "flex",
     overflow: "hidden",
   },
@@ -1169,12 +1158,12 @@ const s: Record<string, React.CSSProperties> = {
   summaryNumber: {
     fontSize: 30,
     fontWeight: 800,
-    color: "#1A2B4A",
+    color: "var(--c-text-primary)",
     lineHeight: 1,
   },
   summaryLabel: {
-    fontSize: 12,
-    color: "#718096",
+    fontSize: "var(--text-xs)",
+    color: "var(--c-text-muted)",
     fontWeight: 500,
   },
   // Compact breakdowns
@@ -1184,18 +1173,18 @@ const s: Record<string, React.CSSProperties> = {
     gap: 20,
   },
   compactCard: {
-    background: "#fff",
-    borderRadius: 12,
-    boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
+    background: "var(--c-surface-lowest)",
+    borderRadius: "var(--radius-lg)",
+    boxShadow: "var(--shadow-sm)",
     padding: "18px 20px",
     display: "flex",
     flexDirection: "column",
     gap: 10,
   },
   compactTitle: {
-    fontSize: 14,
+    fontSize: "var(--text-sm)",
     fontWeight: 700,
-    color: "#1A2B4A",
+    color: "var(--c-text-primary)",
   },
   compactList: {
     display: "flex",
@@ -1207,20 +1196,20 @@ const s: Record<string, React.CSSProperties> = {
     justifyContent: "space-between",
     alignItems: "center",
     padding: "4px 0",
-    borderBottom: "1px solid #f7fafc",
+    borderBottom: "1px solid var(--c-border-ghost)",
     fontSize: 13,
   },
   compactLabel: {
-    color: "#4a5568",
+    color: "var(--c-text-secondary)",
   },
   compactCount: {
     fontWeight: 700,
-    color: "#1A2B4A",
+    color: "var(--c-text-primary)",
   },
   showAllBtn: {
     background: "none",
     border: "none",
-    color: BLUE,
+    color: "var(--c-primary-container)",
     fontSize: 12,
     fontWeight: 600,
     cursor: "pointer",
@@ -1232,7 +1221,7 @@ const s: Record<string, React.CSSProperties> = {
     display: "flex",
     alignItems: "center",
     gap: 14,
-    borderRadius: 12,
+    borderRadius: "var(--radius-lg)",
     padding: "16px 20px",
     cursor: "pointer",
     border: "none",
@@ -1260,11 +1249,11 @@ const s: Record<string, React.CSSProperties> = {
   actionLabel: {
     fontSize: 13,
     fontWeight: 600,
-    color: "#1A2B4A",
+    color: "var(--c-text-primary)",
   },
   actionSub: {
     fontSize: 12,
-    color: "#718096",
+    color: "var(--c-text-muted)",
   },
   // Project analytics strip
   projectStripWrap: {
@@ -1275,7 +1264,7 @@ const s: Record<string, React.CSSProperties> = {
   projectStripLabel: {
     fontSize: 11,
     fontWeight: 700,
-    color: "#9E9E9E",
+    color: "var(--c-text-subtle)",
     textTransform: "uppercase",
     letterSpacing: 0.8,
   },
@@ -1286,69 +1275,58 @@ const s: Record<string, React.CSSProperties> = {
   },
   projectCard: {
     padding: "8px 16px",
-    background: "white",
-    border: "1px solid #E0E0E0",
-    borderRadius: 6,
+    background: "var(--c-surface-lowest)",
+    border: "1px solid var(--c-surface-high)",
+    borderRadius: "var(--radius-md)",
     cursor: "pointer",
     fontSize: 13,
     display: "flex",
     alignItems: "center",
     gap: 8,
-    boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+    boxShadow: "var(--shadow-sm)",
   },
   projectSerial: {
-    color: "#0468B1",
+    color: "var(--c-primary-container)",
     fontWeight: 600,
     fontFamily: "monospace",
   },
   projectName: {
-    color: "#424242",
+    color: "var(--c-text-secondary)",
   },
   projectArrow: {
-    color: "#9E9E9E",
+    color: "var(--c-text-subtle)",
     fontSize: 11,
   },
   projectStripNote: {
     fontSize: 12,
-    color: "#a0aec0",
+    color: "var(--c-text-subtle)",
     fontStyle: "italic",
-  },
-  // Export
-  exportBtn: {
-    padding: "9px 18px",
-    background: "#EBF5FB",
-    color: BLUE,
-    border: `1px solid #bee3f8`,
-    borderRadius: 8,
-    fontSize: 13,
-    fontWeight: 700,
-    cursor: "pointer",
   },
   // Toggle group
   toggleGroup: {
     display: "flex",
-    borderRadius: 7,
-    border: "1.5px solid #e2e8f0",
+    borderRadius: "var(--radius-md)",
+    border: "1.5px solid var(--c-surface-high)",
     overflow: "hidden",
   },
   toggleBtn: {
     padding: "6px 14px",
     fontSize: 12,
     fontWeight: 600,
-    background: "#fff",
+    background: "var(--c-surface-low)",
     border: "none",
     cursor: "pointer",
-    color: "#718096",
+    color: "var(--c-text-muted)",
   },
   toggleActive: {
-    background: BLUE,
-    color: "#fff",
+    background: "var(--c-primary-container)",
+    color: "var(--c-on-primary)",
   },
   // Charts
   chartCard: {
-    background: "#fff",
-    borderRadius: 12,
-    boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
+    background: "var(--c-surface-lowest)",
+    borderRadius: "var(--radius-lg)",
+    boxShadow: "var(--shadow-sm)",
     padding: "20px",
     display: "flex",
     flexDirection: "column",
@@ -1360,68 +1338,33 @@ const s: Record<string, React.CSSProperties> = {
     gap: 3,
   },
   chartTitle: {
-    fontSize: 14,
+    fontSize: "var(--text-base)",
     fontWeight: 700,
-    color: "#1A2B4A",
+    color: "var(--c-text-primary)",
   },
   chartSubtitle: {
-    fontSize: 12,
-    color: "#a0aec0",
+    fontSize: "var(--text-xs)",
+    color: "var(--c-text-muted)",
   },
   footnote: {
-    fontSize: 11,
-    color: "#a0aec0",
+    fontSize: "var(--text-xs)",
+    color: "var(--c-text-muted)",
     fontStyle: "italic",
     paddingTop: 4,
   },
   // Flag quality
-  flagQualitySection: {
-    background: "#fff",
-    borderRadius: 12,
-    boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
-    padding: "24px",
-    display: "flex",
-    flexDirection: "column",
-    gap: 16,
-  },
-  flagQualityHeader: {
-    fontSize: 16,
-    fontWeight: 700,
-    color: "#1A2B4A",
-  },
   flagQualityNote: {
-    fontSize: 13,
-    color: "#718096",
-    background: "#f7fafc",
-    borderRadius: 8,
+    fontSize: "var(--text-sm)",
+    color: "var(--c-text-muted)",
+    background: "var(--c-surface-low)",
+    borderRadius: "var(--radius-md)",
     padding: "14px 16px",
-    border: "1px solid #e2e8f0",
-  },
-  fqTable: {
-    width: "100%",
-    borderCollapse: "collapse",
-    fontSize: 13,
-  },
-  fqTh: {
-    textAlign: "left",
-    padding: "10px 14px",
-    background: "#f7fafc",
-    fontWeight: 700,
-    color: "#4a5568",
-    fontSize: 12,
-    borderBottom: "2px solid #e2e8f0",
-    whiteSpace: "nowrap",
-  },
-  fqTd: {
-    padding: "10px 14px",
-    borderBottom: "1px solid #f0f4f8",
-    color: "#1A2B4A",
-    verticalAlign: "middle",
+    border: "1px solid var(--c-surface-high)",
   },
   flagQualityFootnote: {
     fontSize: 12,
-    color: "#a0aec0",
-    paddingTop: 4,
+    color: "var(--c-text-muted)",
+    padding: "12px 24px 20px",
     lineHeight: 1.6,
   },
 };
