@@ -8,13 +8,12 @@ import type { SSEEvent } from "../types";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
-const BLUE = "#0468B1";
 const PAGE_SIZE = 20;
 
 const DAMAGE_STYLE: Record<string, { bg: string; color: string; label: string }> = {
-  complete: { bg: "#FFF5F5", color: "#C53030", label: "Completely Damaged" },
-  partial:  { bg: "#FFF8F0", color: "#C05621", label: "Partially Damaged" },
-  minimal:  { bg: "#F0FFF4", color: "#276749", label: "Minimal / No Damage" },
+  complete: { bg: "#FFF5F5", color: "var(--c-flag-red)",    label: "Completely Damaged" },
+  partial:  { bg: "#FFF8F0", color: "var(--c-flag-orange)", label: "Partially Damaged" },
+  minimal:  { bg: "#F0FFF4", color: "var(--c-flag-green)",  label: "Minimal / No Damage" },
 };
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -68,8 +67,8 @@ function Spinner({ size = 28 }: { size?: number }) {
       style={{
         width: size,
         height: size,
-        border: "3px solid #e2e8f0",
-        borderTop: `3px solid ${BLUE}`,
+        border: "3px solid var(--c-surface-high)",
+        borderTop: "3px solid var(--c-primary-container)",
         borderRadius: "50%",
         animation: "rq-spin 0.8s linear infinite",
       }}
@@ -212,35 +211,35 @@ export default function ReportQueuePage() {
         ) : items.length === 0 ? (
           <div style={s.emptyState}>
             <div style={s.emptyIcon}>✅</div>
-            <p style={s.emptyText}>No reports pending review</p>
+            <p style={s.emptyTitle}>No reports pending review</p>
           </div>
         ) : (
           <>
-            <div style={s.tableWrap}>
-              <table style={s.table}>
+            <div className="card" style={{ overflow: "hidden" }}>
+              <table className="data-table">
                 <thead>
-                  <tr style={s.thead}>
-                    <th style={s.th}>Photo</th>
-                    <th style={s.th}>Location</th>
-                    <th style={s.th}>Infrastructure</th>
-                    <th style={s.th}>Damage Level</th>
-                    <th style={s.th}>Submitted</th>
-                    <th style={s.th}>Reporter</th>
-                    <th style={s.th}>Actions</th>
+                  <tr>
+                    <th>Photo</th>
+                    <th>Location</th>
+                    <th>Infrastructure</th>
+                    <th>Damage Level</th>
+                    <th>Submitted</th>
+                    <th>Reporter</th>
+                    <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {items.map((report) => {
                     const dmg = DAMAGE_STYLE[report.damage_level] ?? {
-                      bg: "#f7fafc",
-                      color: "#4a5568",
+                      bg: "var(--c-surface-low)",
+                      color: "var(--c-text-secondary)",
                       label: report.damage_level,
                     };
                     const busy = actioningIds.has(report.id);
                     return (
-                      <tr key={report.id} style={s.tr}>
+                      <tr key={report.id}>
                         {/* Thumbnail */}
-                        <td style={s.td}>
+                        <td>
                           {report.first_photo_url ? (
                             <img
                               src={report.first_photo_url}
@@ -257,15 +256,15 @@ export default function ReportQueuePage() {
                           )}
                         </td>
                         {/* Location */}
-                        <td style={{ ...s.td, maxWidth: 200 }}>
+                        <td style={{ maxWidth: 200 }}>
                           <span style={s.locationText}>{locationLabel(report)}</span>
                         </td>
                         {/* Infrastructure */}
-                        <td style={s.td}>
+                        <td>
                           <span style={s.infraText}>{report.infrastructure_type || "—"}</span>
                         </td>
                         {/* Damage */}
-                        <td style={s.td}>
+                        <td>
                           <span
                             style={{
                               ...s.damageBadge,
@@ -277,11 +276,11 @@ export default function ReportQueuePage() {
                           </span>
                         </td>
                         {/* Submitted */}
-                        <td style={s.td}>
+                        <td>
                           <span style={s.timeText}>{timeAgo(report.submitted_at)}</span>
                         </td>
                         {/* Reporter */}
-                        <td style={s.td}>
+                        <td>
                           <span style={s.reporterText}>
                             {report.reporter_id
                               ? report.reporter_id.slice(0, 8) + "…"
@@ -289,11 +288,11 @@ export default function ReportQueuePage() {
                           </span>
                         </td>
                         {/* Actions */}
-                        <td style={s.td}>
+                        <td>
                           <div style={s.actionRow}>
                             <button
+                              className="btn btn-success"
                               style={{
-                                ...s.approveBtn,
                                 opacity: busy ? 0.5 : 1,
                                 cursor: busy ? "not-allowed" : "pointer",
                               }}
@@ -303,10 +302,11 @@ export default function ReportQueuePage() {
                               Approve
                             </button>
                             <button
+                              className="btn btn-danger"
                               style={{
-                                ...s.flagBtn,
                                 opacity: busy ? 0.5 : 1,
                                 cursor: busy ? "not-allowed" : "pointer",
+                                whiteSpace: "nowrap",
                               }}
                               disabled={busy}
                               onClick={() => act(report.id, "red")}
@@ -325,8 +325,10 @@ export default function ReportQueuePage() {
             {hasMore && (
               <div style={s.loadMoreRow}>
                 <button
+                  className="btn btn-secondary"
                   style={{
-                    ...s.loadMoreBtn,
+                    padding: "10px 28px",
+                    height: "auto",
                     opacity: loadingMore ? 0.6 : 1,
                     cursor: loadingMore ? "default" : "pointer",
                   }}
@@ -347,61 +349,100 @@ export default function ReportQueuePage() {
 // ── Styles ─────────────────────────────────────────────────────────────────────
 
 const s: Record<string, React.CSSProperties> = {
-  page: { display: "flex", flexDirection: "column", height: "100vh", background: "#f4f6f9" },
-  content: { flex: 1, padding: "20px 28px", overflowY: "auto", display: "flex", flexDirection: "column", gap: 16 },
+  page: {
+    display: "flex",
+    flexDirection: "column",
+    height: "100vh",
+    background: "var(--c-surface-low)",
+  },
+  content: {
+    flex: 1,
+    padding: "24px 32px",
+    overflowY: "auto",
+    display: "flex",
+    flexDirection: "column",
+    gap: 16,
+  },
   topRow: { display: "flex", alignItems: "center", gap: 16 },
   countBadge: {
-    display: "inline-flex", alignItems: "center", gap: 6,
-    background: "#EBF5FB", color: BLUE, border: `1px solid #bee3f8`,
-    borderRadius: 20, padding: "5px 14px", fontSize: 13, fontWeight: 700, flexShrink: 0,
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    background: "rgba(4,104,177,0.08)",
+    color: "var(--c-primary-container)",
+    border: "1px solid rgba(4,104,177,0.2)",
+    borderRadius: 20,
+    padding: "5px 14px",
+    fontSize: 13,
+    fontWeight: 700,
+    flexShrink: 0,
   },
   countDot: {
-    width: 8, height: 8, borderRadius: "50%", background: BLUE,
-    animation: "rq-spin 2s linear infinite", display: "inline-block",
+    width: 8,
+    height: 8,
+    borderRadius: "50%",
+    background: "var(--c-primary-container)",
+    animation: "rq-spin 2s linear infinite",
+    display: "inline-block",
   },
   note: {
-    fontSize: 13, color: "#718096", margin: 0,
-    background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8,
-    padding: "8px 14px", flex: 1,
+    fontSize: 13,
+    color: "var(--c-text-muted)",
+    margin: 0,
+    background: "var(--c-surface-lowest)",
+    border: "1px solid var(--c-border)",
+    borderRadius: 8,
+    padding: "8px 14px",
+    flex: 1,
   },
   centred: { display: "flex", justifyContent: "center", paddingTop: 80 },
-  emptyState: { display: "flex", flexDirection: "column", alignItems: "center", paddingTop: 80, gap: 12 },
-  emptyIcon: { fontSize: 56 },
-  emptyText: { fontSize: 16, color: "#718096", margin: 0 },
-  tableWrap: { background: "#fff", borderRadius: 12, overflow: "hidden", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" },
-  table: { width: "100%", borderCollapse: "collapse" },
-  thead: { background: "#f7fafc" },
-  th: {
-    padding: "11px 14px", textAlign: "left", fontSize: 11, fontWeight: 700,
-    color: "#718096", textTransform: "uppercase", letterSpacing: 0.5,
-    borderBottom: "1px solid #e2e8f0",
+  emptyState: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    padding: "60px 0",
+    gap: 12,
   },
-  tr: { borderBottom: "1px solid #f0f4f8" },
-  td: { padding: "12px 14px", fontSize: 13, color: "#2d3748", verticalAlign: "middle" },
+  emptyIcon: { fontSize: 48, color: "var(--c-text-subtle)" },
+  emptyTitle: {
+    fontSize: "var(--text-xl)" as string,
+    fontWeight: 700,
+    color: "var(--c-text-primary)",
+    margin: 0,
+  },
   thumb: { width: 60, height: 60, objectFit: "cover", borderRadius: 6, display: "block" },
   thumbPlaceholder: {
-    width: 60, height: 60, borderRadius: 6, background: "#f7fafc",
-    border: "1px solid #e2e8f0", display: "flex", flexDirection: "column",
-    alignItems: "center", justifyContent: "center", gap: 2,
+    width: 60,
+    height: 60,
+    borderRadius: 6,
+    background: "var(--c-surface-low)",
+    border: "1px solid var(--c-border)",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 2,
   },
-  photoCount: { fontSize: 10, color: "#a0aec0", fontWeight: 600 },
-  locationText: { fontSize: 12, color: "#4a5568", display: "block", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
-  infraText: { fontSize: 13, color: "#2d3748" },
-  damageBadge: { padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700, whiteSpace: "nowrap" },
-  timeText: { fontSize: 12, color: "#718096" },
-  reporterText: { fontSize: 12, color: "#718096", fontFamily: "monospace" },
+  photoCount: { fontSize: 10, color: "var(--c-text-subtle)", fontWeight: 600 },
+  locationText: {
+    fontSize: 12,
+    color: "var(--c-text-secondary)",
+    display: "block",
+    maxWidth: 180,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
+  infraText: { fontSize: "var(--text-sm)" as string, color: "var(--c-text-primary)" },
+  damageBadge: {
+    padding: "3px 10px",
+    borderRadius: 20,
+    fontSize: 11,
+    fontWeight: 700,
+    whiteSpace: "nowrap",
+  },
+  timeText: { fontSize: 12, color: "var(--c-text-muted)" },
+  reporterText: { fontSize: 12, color: "var(--c-text-muted)", fontFamily: "monospace" },
   actionRow: { display: "flex", gap: 6, flexWrap: "wrap" },
-  approveBtn: {
-    padding: "6px 12px", fontSize: 12, fontWeight: 700, border: "none",
-    borderRadius: 6, background: "#38A169", color: "#fff",
-  },
-  flagBtn: {
-    padding: "6px 12px", fontSize: 12, fontWeight: 700, border: "none",
-    borderRadius: 6, background: "#F57C00", color: "#fff", whiteSpace: "nowrap" as const,
-  },
   loadMoreRow: { display: "flex", justifyContent: "center", paddingTop: 8 },
-  loadMoreBtn: {
-    padding: "10px 28px", background: "#fff", border: `1.5px solid ${BLUE}`,
-    color: BLUE, borderRadius: 8, fontSize: 14, fontWeight: 600,
-  },
 };

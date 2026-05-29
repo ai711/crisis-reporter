@@ -31,23 +31,23 @@ import type {
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
-const BLUE = "#0468B1";
-const AMBER = "#DD6B20";
-const RED = "#E53E3E";
-const GREEN = "#38A169";
+const BLUE  = "var(--c-primary-container)";
+const AMBER = "var(--c-flag-amber)";
+const RED   = "var(--c-flag-red)";
+const GREEN = "var(--c-flag-green)";
 const PAGE_SIZE = 25;
 
 const FLAG_REASON_LABELS: Record<string, string> = {
-  ip_country_mismatch: "IP Country Mismatch",
-  same_ip_multiple_devices: "Same IP Multiple Devices",
-  duplicate_image: "Duplicate Image",
-  coordinated_gps_duplicate: "Coordinated GPS Duplicate",
-  high_submission_rate: "High Submission Rate",
-  no_photos: "No Photos",
-  no_location: "No Location",
-  blocked_device: "Blocked Device",
-  blocked_ip: "Blocked IP",
-  duplicate_submission: "Duplicate Submission",
+  ip_country_mismatch:        "IP Country Mismatch",
+  same_ip_multiple_devices:   "Same IP Multiple Devices",
+  duplicate_image:            "Duplicate Image",
+  coordinated_gps_duplicate:  "Coordinated GPS Duplicate",
+  high_submission_rate:       "High Submission Rate",
+  no_photos:                  "No Photos",
+  no_location:                "No Location",
+  blocked_device:             "Blocked Device",
+  blocked_ip:                 "Blocked IP",
+  duplicate_submission:       "Duplicate Submission",
 };
 
 const KNOWN_FLAG_REASONS = [
@@ -63,15 +63,15 @@ const KNOWN_FLAG_REASONS = [
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 function timeQueueColor(seconds: number): string {
-  if (seconds > 86400) return RED;
-  if (seconds > 3600) return AMBER;
-  return "#4a5568";
+  if (seconds > 86400) return "var(--c-flag-red)";
+  if (seconds > 3600)  return "var(--c-flag-amber)";
+  return "var(--c-text-secondary)";
 }
 
 function timeRemainingColor(seconds: number): string {
-  if (seconds < 3600) return RED;
-  if (seconds < 86400) return AMBER;
-  return GREEN;
+  if (seconds < 3600)  return "var(--c-flag-red)";
+  if (seconds < 86400) return "var(--c-flag-amber)";
+  return "var(--c-flag-green)";
 }
 
 function flagReasonLabel(r: string): string {
@@ -83,14 +83,14 @@ function flagReasonLabel(r: string): string {
 
 function damagePillColors(level: string | null): { bg: string; color: string } {
   const map: Record<string, { bg: string; color: string }> = {
-    complete:              { bg: "#FFF5F5", color: "#C53030" },
-    completely_destroyed:  { bg: "#FFF5F5", color: "#C53030" },
-    partial:               { bg: "#FFF8F0", color: "#C05621" },
-    partially_damaged:     { bg: "#FFF8F0", color: "#C05621" },
-    minimal:               { bg: "#F0FFF4", color: "#276749" },
-    minimal_or_no_damage:  { bg: "#F0FFF4", color: "#276749" },
+    complete:              { bg: "#FFF5F5", color: "var(--c-flag-red)" },
+    completely_destroyed:  { bg: "#FFF5F5", color: "var(--c-flag-red)" },
+    partial:               { bg: "#FFF8F0", color: "var(--c-flag-orange)" },
+    partially_damaged:     { bg: "#FFF8F0", color: "var(--c-flag-orange)" },
+    minimal:               { bg: "#F0FFF4", color: "var(--c-flag-green)" },
+    minimal_or_no_damage:  { bg: "#F0FFF4", color: "var(--c-flag-green)" },
   };
-  return map[level ?? ""] ?? { bg: "#f7fafc", color: "#4a5568" };
+  return map[level ?? ""] ?? { bg: "var(--c-surface-low)", color: "var(--c-text-secondary)" };
 }
 
 // ── Spinner ────────────────────────────────────────────────────────────────────
@@ -101,8 +101,8 @@ function Spinner({ size = 28 }: { size?: number }) {
       style={{
         width: size,
         height: size,
-        border: "3px solid #e2e8f0",
-        borderTop: `3px solid ${BLUE}`,
+        border: "3px solid var(--c-surface-high)",
+        borderTop: `3px solid var(--c-primary-container)`,
         borderRadius: "50%",
         animation: "rq-spin 0.8s linear infinite",
       }}
@@ -179,7 +179,7 @@ function ConfirmActionModal({
         <div style={ms.field}>
           <label style={ms.label}>
             Comment{" "}
-            <span style={{ color: "#718096", fontWeight: 400 }}>
+            <span style={{ color: "var(--c-text-muted)", fontWeight: 400 }}>
               (required, min 10 chars)
             </span>
           </label>
@@ -271,7 +271,7 @@ function ForceResolutionModal({
         <div style={ms.field}>
           <label style={ms.label}>
             Reason{" "}
-            <span style={{ color: "#718096", fontWeight: 400 }}>
+            <span style={{ color: "var(--c-text-muted)", fontWeight: 400 }}>
               (required, min 10 chars)
             </span>
           </label>
@@ -383,7 +383,7 @@ function Tab1({ currentUserName }: { currentUserName: string }) {
     if (!row.soft_lock) {
       return (
         <button
-          style={s.reviewBtn}
+          className="btn btn-primary"
           onClick={() =>
             window.open("/reports/" + row.report_id + "?from=queue", "_blank")
           }
@@ -395,7 +395,7 @@ function Tab1({ currentUserName }: { currentUserName: string }) {
     if (row.soft_lock.reviewer_name === currentUserName) {
       return (
         <button
-          style={s.reviewBtn}
+          className="btn btn-primary"
           onClick={() =>
             window.open("/reports/" + row.report_id + "?from=queue", "_blank")
           }
@@ -405,7 +405,11 @@ function Tab1({ currentUserName }: { currentUserName: string }) {
       );
     }
     return (
-      <button style={s.lockedBtn} disabled>
+      <button
+        className="btn btn-secondary"
+        style={{ cursor: "not-allowed", opacity: 0.6 }}
+        disabled
+      >
         Locked
       </button>
     );
@@ -415,6 +419,7 @@ function Tab1({ currentUserName }: { currentUserName: string }) {
     <div>
       <div style={s.filterBar}>
         <input
+          className="input"
           style={s.filterInput}
           placeholder="Search by Report ID or Reporter ID"
           value={search}
@@ -422,6 +427,7 @@ function Tab1({ currentUserName }: { currentUserName: string }) {
         />
         <div style={{ position: "relative" }}>
           <button
+            className="input"
             style={s.filterSelectBtn}
             onClick={() => setShowReasonDropdown((v) => !v)}
           >
@@ -446,6 +452,7 @@ function Tab1({ currentUserName }: { currentUserName: string }) {
           )}
         </div>
         <input
+          className="input"
           style={s.filterInputSm}
           placeholder="Country"
           value={country}
@@ -454,13 +461,15 @@ function Tab1({ currentUserName }: { currentUserName: string }) {
         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
           <input
             type="date"
+            className="input"
             style={s.filterInputSm}
             value={dateFrom}
             onChange={(e) => setDateFrom(e.target.value)}
           />
-          <span style={{ color: "#718096", fontSize: 12 }}>–</span>
+          <span style={{ color: "var(--c-text-subtle)", fontSize: 12 }}>–</span>
           <input
             type="date"
+            className="input"
             style={s.filterInputSm}
             value={dateTo}
             onChange={(e) => setDateTo(e.target.value)}
@@ -468,7 +477,7 @@ function Tab1({ currentUserName }: { currentUserName: string }) {
         </div>
         {filtersActive > 0 && (
           <>
-            <span style={s.filtersBadge}>Filters active: {filtersActive}</span>
+            <span className="chip chip-blue">Filters active: {filtersActive}</span>
             <button style={s.clearFiltersBtn} onClick={clearFilters}>
               Clear all
             </button>
@@ -482,7 +491,7 @@ function Tab1({ currentUserName }: { currentUserName: string }) {
         </div>
       ) : allItems.length === 0 ? (
         <div style={s.emptyState}>
-          <CheckCircle size={56} color={GREEN} />
+          <CheckCircle size={48} color={GREEN} />
           <p style={s.emptyText}>
             No reports pending review. All Red-flagged reports have been
             actioned.
@@ -490,27 +499,27 @@ function Tab1({ currentUserName }: { currentUserName: string }) {
         </div>
       ) : (
         <>
-          <div style={s.tableWrap}>
-            <table style={s.table}>
+          <div className="card" style={{ overflow: "hidden" }}>
+            <table className="data-table">
               <thead>
-                <tr style={s.thead}>
-                  <th style={s.th}>Report ID</th>
-                  <th style={s.th}>Flagged At</th>
-                  <th style={s.th}>Country</th>
-                  <th style={s.th}>Damage Level</th>
-                  <th style={s.th}>Infrastructure</th>
-                  <th style={s.th}>Crisis Type</th>
-                  <th style={s.th}>Flag Reasons</th>
-                  <th style={s.th}>Reporter</th>
-                  <th style={s.th}>Time in Queue</th>
-                  <th style={s.th}>Status</th>
-                  <th style={s.th}>Review</th>
+                <tr>
+                  <th>Report ID</th>
+                  <th>Flagged At</th>
+                  <th>Country</th>
+                  <th>Damage Level</th>
+                  <th>Infrastructure</th>
+                  <th>Crisis Type</th>
+                  <th>Flag Reasons</th>
+                  <th>Reporter</th>
+                  <th>Time in Queue</th>
+                  <th>Status</th>
+                  <th>Review</th>
                 </tr>
               </thead>
               <tbody>
                 {allItems.map((row) => (
-                  <tr key={row.report_id} style={s.tr}>
-                    <td style={s.td}>
+                  <tr key={row.report_id}>
+                    <td>
                       <button
                         style={s.linkBtn}
                         onClick={() =>
@@ -520,23 +529,23 @@ function Tab1({ currentUserName }: { currentUserName: string }) {
                         {row.report_id.slice(0, 8)}…
                       </button>
                     </td>
-                    <td style={s.td}>{formatDateTime(row.flagged_at)}</td>
-                    <td style={s.td}>{row.country ?? "—"}</td>
-                    <td style={s.td}>{formatDamageLevel(row.damage_level)}</td>
-                    <td style={s.td}>
+                    <td>{formatDateTime(row.flagged_at)}</td>
+                    <td>{row.country ?? "—"}</td>
+                    <td>{formatDamageLevel(row.damage_level)}</td>
+                    <td>
                       {row.infrastructure_types.join(", ") || "—"}
                     </td>
-                    <td style={s.td}>{row.crisis_type ?? "—"}</td>
-                    <td style={s.td}>
+                    <td>{row.crisis_type ?? "—"}</td>
+                    <td>
                       <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
                         {row.flag_reasons.map((r) => (
-                          <span key={r} style={s.amberPill}>
+                          <span key={r} className="chip chip-amber">
                             {flagReasonLabel(r)}
                           </span>
                         ))}
                       </div>
                     </td>
-                    <td style={s.td}>
+                    <td>
                       <button
                         style={s.linkBtn}
                         onClick={() =>
@@ -548,17 +557,16 @@ function Tab1({ currentUserName }: { currentUserName: string }) {
                     </td>
                     <td
                       style={{
-                        ...s.td,
                         color: timeQueueColor(row.time_in_queue),
                         fontWeight: row.time_in_queue > 3600 ? 700 : 400,
                       }}
                     >
                       {formatTimeInQueue(row.time_in_queue)}
                     </td>
-                    <td style={s.td}>
+                    <td>
                       <SoftLockBadge softLock={row.soft_lock} />
                     </td>
-                    <td style={s.td}>{getReviewBtn(row)}</td>
+                    <td>{getReviewBtn(row)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -567,8 +575,10 @@ function Tab1({ currentUserName }: { currentUserName: string }) {
           {hasMore && (
             <div style={s.loadMoreRow}>
               <button
+                className="btn btn-secondary"
                 style={{
-                  ...s.loadMoreBtn,
+                  padding: "10px 28px",
+                  height: "auto",
                   opacity: loadingMore ? 0.6 : 1,
                   cursor: loadingMore ? "default" : "pointer",
                 }}
@@ -677,12 +687,14 @@ function Tab2({ currentUserName }: { currentUserName: string }) {
     <div>
       <div style={s.filterBar}>
         <input
+          className="input"
           style={s.filterInput}
           placeholder="Search by Property ID or name"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
         <select
+          className="input"
           style={s.filterSelect}
           value={reviewReason}
           onChange={(e) => setReviewReason(e.target.value)}
@@ -692,12 +704,14 @@ function Tab2({ currentUserName }: { currentUserName: string }) {
           <option value="manually_flagged">Manually Flagged only</option>
         </select>
         <input
+          className="input"
           style={s.filterInputSm}
           placeholder="Country"
           value={country}
           onChange={(e) => setCountry(e.target.value)}
         />
         <select
+          className="input"
           style={s.filterSelect}
           value={damageLevel}
           onChange={(e) => setDamageLevel(e.target.value)}
@@ -710,13 +724,15 @@ function Tab2({ currentUserName }: { currentUserName: string }) {
         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
           <input
             type="date"
+            className="input"
             style={s.filterInputSm}
             value={dateFrom}
             onChange={(e) => setDateFrom(e.target.value)}
           />
-          <span style={{ color: "#718096", fontSize: 12 }}>–</span>
+          <span style={{ color: "var(--c-text-subtle)", fontSize: 12 }}>–</span>
           <input
             type="date"
+            className="input"
             style={s.filterInputSm}
             value={dateTo}
             onChange={(e) => setDateTo(e.target.value)}
@@ -724,7 +740,7 @@ function Tab2({ currentUserName }: { currentUserName: string }) {
         </div>
         {filtersActive > 0 && (
           <>
-            <span style={s.filtersBadge}>Filters active: {filtersActive}</span>
+            <span className="chip chip-blue">Filters active: {filtersActive}</span>
             <button style={s.clearFiltersBtn} onClick={clearFilters}>
               Clear all
             </button>
@@ -738,32 +754,32 @@ function Tab2({ currentUserName }: { currentUserName: string }) {
         </div>
       ) : allItems.length === 0 ? (
         <div style={s.emptyState}>
-          <CheckCircle size={56} color={GREEN} />
+          <CheckCircle size={48} color={GREEN} />
           <p style={s.emptyText}>No properties pending review.</p>
         </div>
       ) : (
         <>
-          <div style={s.tableWrap}>
-            <table style={s.table}>
+          <div className="card" style={{ overflow: "hidden" }}>
+            <table className="data-table">
               <thead>
-                <tr style={s.thead}>
-                  <th style={s.th}>Property ID</th>
-                  <th style={s.th}>Property Name</th>
-                  <th style={s.th}>Country</th>
-                  <th style={s.th}>Damage Level</th>
-                  <th style={s.th}>Review Reason</th>
-                  <th style={s.th}>Conflict Details</th>
-                  <th style={s.th}>Time in Queue</th>
-                  <th style={s.th}>Status</th>
-                  <th style={s.th}>Actions</th>
+                <tr>
+                  <th>Property ID</th>
+                  <th>Property Name</th>
+                  <th>Country</th>
+                  <th>Damage Level</th>
+                  <th>Review Reason</th>
+                  <th>Conflict Details</th>
+                  <th>Time in Queue</th>
+                  <th>Status</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {allItems.map((row) => {
                   const dmg = damagePillColors(row.current_damage_level);
                   return (
-                    <tr key={row.property_id} style={s.tr}>
-                      <td style={s.td}>
+                    <tr key={row.property_id}>
+                      <td>
                         <button
                           style={s.linkBtn}
                           onClick={() =>
@@ -776,9 +792,9 @@ function Tab2({ currentUserName }: { currentUserName: string }) {
                           {row.property_id.slice(0, 8)}…
                         </button>
                       </td>
-                      <td style={s.td}>{row.display_name}</td>
-                      <td style={s.td}>{row.country ?? "—"}</td>
-                      <td style={s.td}>
+                      <td>{row.display_name}</td>
+                      <td>{row.country ?? "—"}</td>
+                      <td>
                         <span
                           style={{
                             ...s.damagePill,
@@ -789,12 +805,12 @@ function Tab2({ currentUserName }: { currentUserName: string }) {
                           {formatDamageLevel(row.current_damage_level)}
                         </span>
                       </td>
-                      <td style={s.td}>
+                      <td>
                         <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
                           {row.has_conflict_warning && (
                             <span
+                              className="chip chip-amber"
                               style={{
-                                ...s.amberPill,
                                 display: "inline-flex",
                                 alignItems: "center",
                                 gap: 4,
@@ -805,11 +821,11 @@ function Tab2({ currentUserName }: { currentUserName: string }) {
                             </span>
                           )}
                           {row.is_flagged_for_review && (
-                            <span style={s.bluePill}>Manually Flagged</span>
+                            <span className="chip chip-blue">Manually Flagged</span>
                           )}
                           {!row.has_conflict_warning &&
                             !row.is_flagged_for_review && (
-                              <span style={{ fontSize: 12, color: "#718096" }}>
+                              <span style={{ fontSize: 12, color: "var(--c-text-muted)" }}>
                                 {row.review_reason}
                               </span>
                             )}
@@ -817,9 +833,8 @@ function Tab2({ currentUserName }: { currentUserName: string }) {
                       </td>
                       <td
                         style={{
-                          ...s.td,
                           fontSize: 12,
-                          color: "#4a5568",
+                          color: "var(--c-text-secondary)",
                           maxWidth: 200,
                         }}
                       >
@@ -830,22 +845,21 @@ function Tab2({ currentUserName }: { currentUserName: string }) {
                       </td>
                       <td
                         style={{
-                          ...s.td,
                           color: timeQueueColor(row.time_in_queue),
                           fontWeight: row.time_in_queue > 3600 ? 700 : 400,
                         }}
                       >
                         {formatTimeInQueue(row.time_in_queue)}
                       </td>
-                      <td style={s.td}>
+                      <td>
                         <SoftLockBadge softLock={row.soft_lock} />
                       </td>
-                      <td style={s.td}>
+                      <td>
                         <div style={{ display: "flex", gap: 6 }}>
                           {!row.soft_lock ||
                           row.soft_lock.reviewer_name === currentUserName ? (
                             <button
-                              style={s.reviewBtn}
+                              className="btn btn-primary"
                               onClick={() =>
                                 window.open(
                                   "/locations/" + row.property_id,
@@ -856,12 +870,17 @@ function Tab2({ currentUserName }: { currentUserName: string }) {
                               Review →
                             </button>
                           ) : (
-                            <button style={s.lockedBtn} disabled>
+                            <button
+                              className="btn btn-secondary"
+                              style={{ cursor: "not-allowed", opacity: 0.6 }}
+                              disabled
+                            >
                               Locked
                             </button>
                           )}
                           <button
-                            style={s.dismissBtn}
+                            className="btn btn-secondary"
+                            style={{ border: "1.5px solid var(--c-flag-amber)", color: "var(--c-flag-amber)", background: "transparent" }}
                             onClick={() => setModal({ type: "dismiss", row })}
                           >
                             Dismiss
@@ -877,8 +896,10 @@ function Tab2({ currentUserName }: { currentUserName: string }) {
           {hasMore && (
             <div style={s.loadMoreRow}>
               <button
+                className="btn btn-secondary"
                 style={{
-                  ...s.loadMoreBtn,
+                  padding: "10px 28px",
+                  height: "auto",
                   opacity: loadingMore ? 0.6 : 1,
                   cursor: loadingMore ? "default" : "pointer",
                 }}
@@ -978,18 +999,21 @@ function Tab3({ currentUserName }: { currentUserName: string }) {
     <div>
       <div style={s.filterBar}>
         <input
+          className="input"
           style={s.filterInput}
           placeholder="Search by Report ID or Reporter ID"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
         <input
+          className="input"
           style={s.filterInputSm}
           placeholder="Country"
           value={country}
           onChange={(e) => setCountry(e.target.value)}
         />
         <select
+          className="input"
           style={s.filterSelect}
           value={platform}
           onChange={(e) => setPlatform(e.target.value)}
@@ -1000,6 +1024,7 @@ function Tab3({ currentUserName }: { currentUserName: string }) {
           <option value="web">Web</option>
         </select>
         <select
+          className="input"
           style={s.filterSelect}
           value={minStuck}
           onChange={(e) => setMinStuck(e.target.value)}
@@ -1011,7 +1036,7 @@ function Tab3({ currentUserName }: { currentUserName: string }) {
         </select>
         {filtersActive > 0 && (
           <>
-            <span style={s.filtersBadge}>Filters active: {filtersActive}</span>
+            <span className="chip chip-blue">Filters active: {filtersActive}</span>
             <button style={s.clearFiltersBtn} onClick={clearFilters}>
               Clear all
             </button>
@@ -1025,32 +1050,32 @@ function Tab3({ currentUserName }: { currentUserName: string }) {
         </div>
       ) : allItems.length === 0 ? (
         <div style={s.emptyState}>
-          <CheckCircle size={56} color={GREEN} />
+          <CheckCircle size={48} color={GREEN} />
           <p style={s.emptyText}>
             No stuck reports. Background processing is running normally.
           </p>
         </div>
       ) : (
         <>
-          <div style={s.tableWrap}>
-            <table style={s.table}>
+          <div className="card" style={{ overflow: "hidden" }}>
+            <table className="data-table">
               <thead>
-                <tr style={s.thead}>
-                  <th style={s.th}>Report ID</th>
-                  <th style={s.th}>Received At</th>
-                  <th style={s.th}>Country</th>
-                  <th style={s.th}>Damage Level</th>
-                  <th style={s.th}>Platform</th>
-                  <th style={s.th}>Reporter</th>
-                  <th style={s.th}>Time Stuck</th>
-                  <th style={s.th}>Status</th>
-                  <th style={s.th}>Action</th>
+                <tr>
+                  <th>Report ID</th>
+                  <th>Received At</th>
+                  <th>Country</th>
+                  <th>Damage Level</th>
+                  <th>Platform</th>
+                  <th>Reporter</th>
+                  <th>Time Stuck</th>
+                  <th>Status</th>
+                  <th>Action</th>
                 </tr>
               </thead>
               <tbody>
                 {allItems.map((row) => (
-                  <tr key={row.report_id} style={s.tr}>
-                    <td style={s.td}>
+                  <tr key={row.report_id}>
+                    <td>
                       <button
                         style={s.linkBtn}
                         onClick={() =>
@@ -1060,11 +1085,11 @@ function Tab3({ currentUserName }: { currentUserName: string }) {
                         {row.report_id.slice(0, 8)}…
                       </button>
                     </td>
-                    <td style={s.td}>{formatDateTime(row.received_at)}</td>
-                    <td style={s.td}>{row.country ?? "—"}</td>
-                    <td style={s.td}>{formatDamageLevel(row.damage_level)}</td>
-                    <td style={s.td}>{row.platform ?? "—"}</td>
-                    <td style={s.td}>
+                    <td>{formatDateTime(row.received_at)}</td>
+                    <td>{row.country ?? "—"}</td>
+                    <td>{formatDamageLevel(row.damage_level)}</td>
+                    <td>{row.platform ?? "—"}</td>
+                    <td>
                       <button
                         style={s.linkBtn}
                         onClick={() =>
@@ -1074,23 +1099,28 @@ function Tab3({ currentUserName }: { currentUserName: string }) {
                         {row.reporter_display_id}
                       </button>
                     </td>
-                    <td style={{ ...s.td, color: RED, fontWeight: 700 }}>
+                    <td style={{ color: "var(--c-flag-red)", fontWeight: 700 }}>
                       {formatTimeInQueue(row.time_stuck_seconds)}
                     </td>
-                    <td style={s.td}>
+                    <td>
                       <SoftLockBadge softLock={row.soft_lock} />
                     </td>
-                    <td style={s.td}>
+                    <td>
                       {!row.soft_lock ||
                       row.soft_lock.reviewer_name === currentUserName ? (
                         <button
-                          style={s.forceBtn}
+                          className="btn btn-danger"
+                          style={{ border: "1.5px solid var(--c-flag-red)", background: "transparent" }}
                           onClick={() => setForceModal(row)}
                         >
                           Force Resolution
                         </button>
                       ) : (
-                        <button style={s.lockedBtn} disabled>
+                        <button
+                          className="btn btn-secondary"
+                          style={{ cursor: "not-allowed", opacity: 0.6 }}
+                          disabled
+                        >
                           Locked
                         </button>
                       )}
@@ -1103,8 +1133,10 @@ function Tab3({ currentUserName }: { currentUserName: string }) {
           {hasMore && (
             <div style={s.loadMoreRow}>
               <button
+                className="btn btn-secondary"
                 style={{
-                  ...s.loadMoreBtn,
+                  padding: "10px 28px",
+                  height: "auto",
                   opacity: loadingMore ? 0.6 : 1,
                   cursor: loadingMore ? "default" : "pointer",
                 }}
@@ -1216,18 +1248,21 @@ function Tab4({ currentUserName: _currentUserName }: { currentUserName: string }
     <div>
       <div style={s.filterBar}>
         <input
+          className="input"
           style={s.filterInput}
           placeholder="Search by Reporter ID or device ID"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
         <input
+          className="input"
           style={s.filterInputSm}
           placeholder="Country"
           value={country}
           onChange={(e) => setCountry(e.target.value)}
         />
         <select
+          className="input"
           style={s.filterSelect}
           value={timeRemaining}
           onChange={(e) => setTimeRemaining(e.target.value)}
@@ -1239,7 +1274,7 @@ function Tab4({ currentUserName: _currentUserName }: { currentUserName: string }
         </select>
         {filtersActive > 0 && (
           <>
-            <span style={s.filtersBadge}>Filters active: {filtersActive}</span>
+            <span className="chip chip-blue">Filters active: {filtersActive}</span>
             <button style={s.clearFiltersBtn} onClick={clearFilters}>
               Clear all
             </button>
@@ -1253,28 +1288,28 @@ function Tab4({ currentUserName: _currentUserName }: { currentUserName: string }
         </div>
       ) : allItems.length === 0 ? (
         <div style={s.emptyState}>
-          <CheckCircle size={56} color={GREEN} />
+          <CheckCircle size={48} color={GREEN} />
           <p style={s.emptyText}>No auto-blocked profiles pending review.</p>
         </div>
       ) : (
         <>
-          <div style={s.tableWrap}>
-            <table style={s.table}>
+          <div className="card" style={{ overflow: "hidden" }}>
+            <table className="data-table">
               <thead>
-                <tr style={s.thead}>
-                  <th style={s.th}>Reporter ID</th>
-                  <th style={s.th}>Auto-blocked At</th>
-                  <th style={s.th}>Device ID</th>
-                  <th style={s.th}>Matched Profile</th>
-                  <th style={s.th}>Time Remaining</th>
-                  <th style={s.th}>Status</th>
-                  <th style={s.th}>Actions</th>
+                <tr>
+                  <th>Reporter ID</th>
+                  <th>Auto-blocked At</th>
+                  <th>Device ID</th>
+                  <th>Matched Profile</th>
+                  <th>Time Remaining</th>
+                  <th>Status</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {allItems.map((row) => (
-                  <tr key={row.reporter_id} style={s.tr}>
-                    <td style={s.td}>
+                  <tr key={row.reporter_id}>
+                    <td>
                       <button
                         style={s.linkBtn}
                         onClick={() =>
@@ -1284,10 +1319,9 @@ function Tab4({ currentUserName: _currentUserName }: { currentUserName: string }
                         {row.reporter_id.slice(0, 8)}…
                       </button>
                     </td>
-                    <td style={s.td}>{formatDateTime(row.auto_blocked_at)}</td>
+                    <td>{formatDateTime(row.auto_blocked_at)}</td>
                     <td
                       style={{
-                        ...s.td,
                         fontFamily: "monospace",
                         fontSize: 12,
                       }}
@@ -1297,7 +1331,7 @@ function Tab4({ currentUserName: _currentUserName }: { currentUserName: string }
                           (row.device_id.length > 16 ? "…" : "")
                         : "—"}
                     </td>
-                    <td style={s.td}>
+                    <td>
                       {row.matched_blocked_reporter_id ? (
                         <button
                           style={s.linkBtn}
@@ -1316,26 +1350,27 @@ function Tab4({ currentUserName: _currentUserName }: { currentUserName: string }
                     </td>
                     <td
                       style={{
-                        ...s.td,
                         color: timeRemainingColor(row.time_remaining_seconds),
                         fontWeight: 700,
+                        fontSize: "var(--text-xs)" as string,
                       }}
                     >
                       {formatCountdown(row.time_remaining_seconds)}
                     </td>
-                    <td style={s.td}>
+                    <td>
                       <SoftLockBadge softLock={row.soft_lock} />
                     </td>
-                    <td style={s.td}>
+                    <td>
                       <div style={{ display: "flex", gap: 6 }}>
                         <button
-                          style={s.confirmBlockBtn}
+                          className="btn btn-success"
                           onClick={() => setModal({ type: "confirm", row })}
                         >
                           Confirm Block
                         </button>
                         <button
-                          style={s.reverseBlockBtn}
+                          className="btn btn-danger"
+                          style={{ border: "1.5px solid var(--c-flag-red)", background: "transparent" }}
                           onClick={() => setModal({ type: "reverse", row })}
                         >
                           Reverse Block
@@ -1350,8 +1385,10 @@ function Tab4({ currentUserName: _currentUserName }: { currentUserName: string }
           {hasMore && (
             <div style={s.loadMoreRow}>
               <button
+                className="btn btn-secondary"
                 style={{
-                  ...s.loadMoreBtn,
+                  padding: "10px 28px",
+                  height: "auto",
                   opacity: loadingMore ? 0.6 : 1,
                   cursor: loadingMore ? "default" : "pointer",
                 }}
@@ -1436,21 +1473,33 @@ export default function ReviewQueuePage() {
             <button
               key={tab.id}
               style={{
-                ...s.tabBtn,
-                borderBottom: isActive
-                  ? `3px solid ${BLUE}`
-                  : "3px solid transparent",
-                color: isActive ? BLUE : "#718096",
-                fontWeight: isActive ? 700 : 500,
+                background: isActive ? "var(--c-primary-container)" : "transparent",
+                color: isActive ? "white" : "var(--c-text-muted)",
+                fontSize: "var(--text-sm)" as string,
+                fontWeight: isActive ? 600 : 500,
+                padding: "8px 16px",
+                borderRadius: "var(--radius-md)" as string,
+                border: "none",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                whiteSpace: "nowrap" as const,
+                transition: "background 0.15s, color 0.15s",
               }}
               onClick={() => setActiveTab(tab.id)}
             >
               {tab.label}
               <span
                 style={{
-                  ...s.tabCount,
-                  background: isActive ? BLUE : "#e2e8f0",
-                  color: isActive ? "#fff" : "#4a5568",
+                  display: "inline-block",
+                  background: "rgba(229,62,62,0.15)",
+                  color: "var(--c-flag-red)",
+                  fontSize: 10,
+                  fontWeight: 700,
+                  padding: "1px 6px",
+                  borderRadius: "var(--radius-pill)" as string,
+                  marginLeft: 2,
                 }}
               >
                 {tab.count}
@@ -1478,97 +1527,87 @@ const s: Record<string, React.CSSProperties> = {
     display: "flex",
     flexDirection: "column",
     height: "100vh",
-    background: "#f4f6f9",
+    background: "var(--c-surface-low)",
   },
   tabBar: {
     display: "flex",
-    background: "#fff",
-    borderBottom: "1px solid #e0e0e0",
-    paddingLeft: 28,
-    gap: 0,
-  },
-  tabBtn: {
-    display: "flex",
-    alignItems: "center",
-    gap: 8,
-    padding: "14px 20px",
-    border: "none",
-    background: "transparent",
-    cursor: "pointer",
-    fontSize: 14,
-    transition: "color 0.12s",
-    whiteSpace: "nowrap",
-  },
-  tabCount: {
-    fontSize: 11,
-    fontWeight: 700,
-    borderRadius: 10,
-    padding: "2px 7px",
-    minWidth: 20,
-    textAlign: "center",
-    lineHeight: 1.4,
+    background: "var(--c-surface-lowest)",
+    borderRadius: "var(--radius-lg)" as string,
+    padding: 4,
+    gap: 4,
+    margin: "16px 32px 0",
+    boxShadow: "var(--shadow-sm)" as string,
+    alignSelf: "flex-start",
   },
   content: {
     flex: 1,
-    padding: "20px 28px",
+    padding: "20px 32px",
     overflowY: "auto",
   },
   filterBar: {
     display: "flex",
     alignItems: "center",
     gap: 10,
-    marginBottom: 16,
+    marginBottom: 20,
     flexWrap: "wrap",
+    background: "var(--c-surface-lowest)",
+    borderRadius: "var(--radius-lg)" as string,
+    padding: "12px 20px",
+    boxShadow: "var(--shadow-sm)" as string,
   },
   filterInput: {
-    border: "1.5px solid #d0dce8",
+    border: "1.5px solid var(--c-border)",
     borderRadius: 7,
     padding: "7px 12px",
     fontSize: 13,
-    color: "#1A2B4A",
-    background: "#fff",
+    color: "var(--c-text-primary)",
+    background: "var(--c-surface-low)",
     outline: "none",
     width: 260,
+    borderBottom: "1.5px solid var(--c-border)",
   },
   filterInputSm: {
-    border: "1.5px solid #d0dce8",
+    border: "1.5px solid var(--c-border)",
     borderRadius: 7,
     padding: "7px 10px",
     fontSize: 13,
-    color: "#1A2B4A",
-    background: "#fff",
+    color: "var(--c-text-primary)",
+    background: "var(--c-surface-low)",
     outline: "none",
     width: 130,
+    borderBottom: "1.5px solid var(--c-border)",
   },
   filterSelect: {
-    border: "1.5px solid #d0dce8",
+    border: "1.5px solid var(--c-border)",
     borderRadius: 7,
     padding: "7px 10px",
     fontSize: 13,
-    color: "#1A2B4A",
-    background: "#fff",
+    color: "var(--c-text-primary)",
+    background: "var(--c-surface-low)",
     outline: "none",
     cursor: "pointer",
+    borderBottom: "1.5px solid var(--c-border)",
   },
   filterSelectBtn: {
-    border: "1.5px solid #d0dce8",
+    border: "1.5px solid var(--c-border)",
     borderRadius: 7,
     padding: "7px 12px",
     fontSize: 13,
-    color: "#1A2B4A",
-    background: "#fff",
+    color: "var(--c-text-primary)",
+    background: "var(--c-surface-low)",
     cursor: "pointer",
     whiteSpace: "nowrap",
+    borderBottom: "1.5px solid var(--c-border)",
   },
   dropdownMenu: {
     position: "absolute",
     top: "calc(100% + 4px)",
     left: 0,
     zIndex: 200,
-    background: "#fff",
-    border: "1.5px solid #d0dce8",
+    background: "var(--c-surface-lowest)",
+    border: "1.5px solid var(--c-border)",
     borderRadius: 8,
-    boxShadow: "0 4px 16px rgba(0,0,0,0.10)",
+    boxShadow: "var(--shadow-float)" as string,
     padding: "6px 0",
     minWidth: 220,
   },
@@ -1577,23 +1616,13 @@ const s: Record<string, React.CSSProperties> = {
     alignItems: "center",
     padding: "7px 14px",
     fontSize: 13,
-    color: "#2d3748",
+    color: "var(--c-text-primary)",
     cursor: "pointer",
-  },
-  filtersBadge: {
-    background: "#EBF5FB",
-    color: "#0468B1",
-    border: "1px solid #bee3f8",
-    borderRadius: 20,
-    padding: "4px 12px",
-    fontSize: 12,
-    fontWeight: 600,
-    whiteSpace: "nowrap",
   },
   clearFiltersBtn: {
     background: "none",
     border: "none",
-    color: "#718096",
+    color: "var(--c-text-muted)",
     fontSize: 12,
     cursor: "pointer",
     textDecoration: "underline",
@@ -1608,138 +1637,15 @@ const s: Record<string, React.CSSProperties> = {
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
-    paddingTop: 80,
+    padding: "60px 0",
     gap: 16,
   },
   emptyText: {
-    fontSize: 15,
-    color: "#718096",
+    fontSize: "var(--text-sm)" as string,
+    color: "var(--c-text-muted)",
     margin: 0,
     textAlign: "center",
     maxWidth: 480,
-  },
-  tableWrap: {
-    background: "#fff",
-    borderRadius: 12,
-    overflow: "hidden",
-    boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
-    marginBottom: 16,
-  },
-  table: { width: "100%", borderCollapse: "collapse" },
-  thead: { background: "#f7fafc" },
-  th: {
-    padding: "11px 14px",
-    textAlign: "left",
-    fontSize: 11,
-    fontWeight: 700,
-    color: "#718096",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    borderBottom: "1px solid #e2e8f0",
-    whiteSpace: "nowrap",
-  },
-  tr: { borderBottom: "1px solid #f0f4f8" },
-  td: {
-    padding: "11px 14px",
-    fontSize: 13,
-    color: "#2d3748",
-    verticalAlign: "middle",
-  },
-  linkBtn: {
-    background: "none",
-    border: "none",
-    color: "#0468B1",
-    fontSize: 13,
-    cursor: "pointer",
-    padding: 0,
-    fontFamily: "monospace",
-    textDecoration: "underline",
-  },
-  reviewBtn: {
-    padding: "6px 12px",
-    fontSize: 12,
-    fontWeight: 700,
-    border: "none",
-    borderRadius: 6,
-    background: "#0468B1",
-    color: "#fff",
-    cursor: "pointer",
-    whiteSpace: "nowrap",
-  },
-  lockedBtn: {
-    padding: "6px 12px",
-    fontSize: 12,
-    fontWeight: 600,
-    border: "none",
-    borderRadius: 6,
-    background: "#e2e8f0",
-    color: "#a0aec0",
-    cursor: "not-allowed",
-    whiteSpace: "nowrap",
-  },
-  dismissBtn: {
-    padding: "6px 12px",
-    fontSize: 12,
-    fontWeight: 600,
-    border: "1.5px solid #DD6B20",
-    borderRadius: 6,
-    background: "#fff",
-    color: "#DD6B20",
-    cursor: "pointer",
-    whiteSpace: "nowrap",
-  },
-  forceBtn: {
-    padding: "6px 12px",
-    fontSize: 12,
-    fontWeight: 700,
-    border: "1.5px solid #E53E3E",
-    borderRadius: 6,
-    background: "#fff",
-    color: "#E53E3E",
-    cursor: "pointer",
-    whiteSpace: "nowrap",
-  },
-  confirmBlockBtn: {
-    padding: "6px 12px",
-    fontSize: 12,
-    fontWeight: 700,
-    border: "none",
-    borderRadius: 6,
-    background: "#38A169",
-    color: "#fff",
-    cursor: "pointer",
-    whiteSpace: "nowrap",
-  },
-  reverseBlockBtn: {
-    padding: "6px 12px",
-    fontSize: 12,
-    fontWeight: 700,
-    border: "1.5px solid #E53E3E",
-    borderRadius: 6,
-    background: "#fff",
-    color: "#E53E3E",
-    cursor: "pointer",
-    whiteSpace: "nowrap",
-  },
-  amberPill: {
-    background: "#FEFCBF",
-    color: "#B7791F",
-    border: "1px solid #F6E05E",
-    borderRadius: 12,
-    padding: "2px 8px",
-    fontSize: 11,
-    fontWeight: 600,
-    whiteSpace: "nowrap",
-  },
-  bluePill: {
-    background: "#EBF5FB",
-    color: "#0468B1",
-    border: "1px solid #bee3f8",
-    borderRadius: 12,
-    padding: "2px 8px",
-    fontSize: 11,
-    fontWeight: 600,
-    whiteSpace: "nowrap",
   },
   damagePill: {
     borderRadius: 12,
@@ -1748,19 +1654,21 @@ const s: Record<string, React.CSSProperties> = {
     fontWeight: 700,
     whiteSpace: "nowrap",
   },
+  linkBtn: {
+    background: "none",
+    border: "none",
+    color: "var(--c-primary-container)",
+    fontSize: 13,
+    cursor: "pointer",
+    padding: 0,
+    fontFamily: "monospace",
+    textDecoration: "underline",
+  },
   loadMoreRow: {
     display: "flex",
     justifyContent: "center",
     paddingTop: 8,
-  },
-  loadMoreBtn: {
-    padding: "10px 28px",
-    background: "#fff",
-    border: `1.5px solid ${BLUE}`,
-    color: BLUE,
-    borderRadius: 8,
-    fontSize: 14,
-    fontWeight: 600,
+    marginBottom: 16,
   },
 };
 
@@ -1777,25 +1685,25 @@ const ms: Record<string, React.CSSProperties> = {
     justifyContent: "center",
   },
   dialog: {
-    background: "#fff",
+    background: "var(--c-surface-lowest)",
     borderRadius: 12,
     padding: "28px 32px",
     width: 460,
     maxWidth: "90vw",
-    boxShadow: "0 8px 40px rgba(0,0,0,0.18)",
+    boxShadow: "var(--shadow-float)" as string,
     display: "flex",
     flexDirection: "column",
     gap: 16,
   },
   title: {
-    fontSize: 17,
+    fontSize: "var(--text-lg)" as string,
     fontWeight: 700,
-    color: "#1A2B4A",
+    color: "var(--c-text-primary)",
     margin: 0,
   },
   desc: {
-    fontSize: 13,
-    color: "#4a5568",
+    fontSize: "var(--text-sm)" as string,
+    color: "var(--c-text-secondary)",
     margin: 0,
     lineHeight: 1.5,
   },
@@ -1805,42 +1713,43 @@ const ms: Record<string, React.CSSProperties> = {
     gap: 6,
   },
   label: {
-    fontSize: 13,
+    fontSize: "var(--text-sm)" as string,
     fontWeight: 600,
-    color: "#2d3748",
+    color: "var(--c-text-primary)",
   },
   textarea: {
-    border: "1.5px solid #d0dce8",
+    border: "1.5px solid var(--c-border)",
     borderRadius: 7,
     padding: "8px 12px",
     fontSize: 13,
-    color: "#2d3748",
+    color: "var(--c-text-primary)",
     resize: "vertical",
     outline: "none",
     fontFamily: "inherit",
+    background: "var(--c-surface-low)",
   },
   select: {
-    border: "1.5px solid #d0dce8",
+    border: "1.5px solid var(--c-border)",
     borderRadius: 7,
     padding: "8px 12px",
     fontSize: 13,
-    color: "#2d3748",
-    background: "#fff",
+    color: "var(--c-text-primary)",
+    background: "var(--c-surface-lowest)",
     outline: "none",
     cursor: "pointer",
   },
   charCount: {
     fontSize: 11,
-    color: "#a0aec0",
+    color: "var(--c-text-subtle)",
     textAlign: "right",
   },
   error: {
     background: "#FFF5F5",
-    border: "1px solid #FC8181",
+    border: "1px solid var(--c-flag-red)",
     borderRadius: 7,
     padding: "8px 12px",
     fontSize: 13,
-    color: "#C53030",
+    color: "var(--c-flag-red)",
   },
   actions: {
     display: "flex",
@@ -1850,10 +1759,10 @@ const ms: Record<string, React.CSSProperties> = {
   },
   cancelBtn: {
     padding: "8px 18px",
-    border: "1.5px solid #d0dce8",
+    border: "1.5px solid var(--c-border)",
     borderRadius: 7,
-    background: "#fff",
-    color: "#4a5568",
+    background: "var(--c-surface-lowest)",
+    color: "var(--c-text-secondary)",
     fontSize: 13,
     fontWeight: 600,
     cursor: "pointer",
