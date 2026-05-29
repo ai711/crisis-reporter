@@ -723,6 +723,10 @@ export default function ReporterDetailPage() {
               <DetailRow label="IP Address" value={reporter.ip_address ? <span style={{ fontFamily: "monospace" }}>{reporter.ip_address}</span> : "—"} />
               <DetailRow label="Country" value={reporter.country || "—"} />
               <DetailRow label="MCC (cell tower country)" value={reporter.mcc || "—"} />
+              <DetailRow label="Device Model" value={reporter.device_model || "—"} />
+              <DetailRow label="Device Brand" value={reporter.device_brand || "—"} />
+              <DetailRow label="OS Device ID" value={reporter.os_device_id || "—"} />
+              <DetailRow label="Network Type" value={reporter.network_type || "—"} />
             </div>
             <div>
               <DetailRow label="Platform" value={platformDisplay(reporter)} />
@@ -751,6 +755,37 @@ export default function ReporterDetailPage() {
             <DetailRow label="Most recent report" value={formatDateTime(reporter.last_report_at)} />
           </div>
         </Card>
+
+        {/* Safety Tips Progress */}
+        <div className="card card-padded">
+          <h2 className="section-label" style={{ marginBottom: 12, paddingBottom: 10, borderBottom: "1px solid var(--c-border-ghost)", display: "block" }}>SAFETY TIPS PROGRESS</h2>
+          {(reporter as any).safety_progress ? (
+            <div style={{display: 'flex', gap: 12}}>
+              {['A', 'B', 'C'].map(part => {
+                const done = (reporter as any).safety_progress?.[`part_${part.toLowerCase()}_complete`];
+                return (
+                  <div key={part} style={{flex: 1, textAlign: 'center', padding: '10px 0',
+                    background: done ? 'rgba(56,161,105,0.1)' : 'var(--c-surface-low)',
+                    borderRadius: 'var(--radius-md)'}}>
+                    <div style={{fontSize: 'var(--text-sm)', fontWeight: 700,
+                      color: done ? 'var(--c-flag-green)' : 'var(--c-text-muted)'}}>
+                      Part {part}
+                    </div>
+                    <div style={{fontSize: 'var(--text-xs)', color: done
+                      ? 'var(--c-flag-green)' : 'var(--c-text-subtle)', marginTop: 2}}>
+                      {done ? '✓ Complete' : 'Not started'}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div style={{fontSize: 'var(--text-sm)', color: 'var(--c-text-muted)'}}>
+              {/* TODO: backend needs to return safety_progress on reporter profile endpoint */}
+              Progress data not available
+            </div>
+          )}
+        </div>
 
         {/* Section 4: Profile Status Control */}
         <StatusControlSection

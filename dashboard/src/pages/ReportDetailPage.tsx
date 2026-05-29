@@ -733,6 +733,27 @@ export default function ReportDetailPage() {
               )}
             </Card>
 
+            {/* Photo metadata */}
+            {report.photo_metadata && (() => {
+              try {
+                const meta = JSON.parse(report.photo_metadata) as Array<{ original_size_kb?: number; final_size_kb?: number; compression_ratio?: string; mime_type?: string }>;
+                if (!Array.isArray(meta) || meta.length === 0) return null;
+                return (
+                  <div style={{marginTop: -8}}>
+                    <div style={{fontSize: 11, fontWeight: 700, color: 'var(--c-text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8}}>PHOTO METADATA</div>
+                    {meta.map((p, i) => (
+                      <div key={i} style={{fontSize: 'var(--text-xs)', color: 'var(--c-text-muted)',
+                        marginBottom: 4}}>
+                        Photo {i + 1}: {p.original_size_kb ? `${p.original_size_kb}KB → ${p.final_size_kb}KB` : ''}
+                        {p.compression_ratio ? ` (ratio: ${p.compression_ratio})` : ''}
+                        {p.mime_type ? ` · ${p.mime_type}` : ''}
+                      </div>
+                    ))}
+                  </div>
+                );
+              } catch { return null; }
+            })()}
+
             {/* Section 3: Location */}
             <Card title="Location">
               <div style={styles.detailRows}>
@@ -757,6 +778,11 @@ export default function ReportDetailPage() {
                 ) : (
                   <p style={styles.emptyText}>No GPS coordinates recorded.</p>
                 )}
+                <DetailRow label="Building Centroid" value={
+                  report.building_centroid_lat && report.building_centroid_lng
+                    ? `${report.building_centroid_lat.toFixed(6)}° N, ${report.building_centroid_lng.toFixed(6)}° E`
+                    : '—'
+                } />
                 {report.location_address && (
                   <DetailRow label="Address" value={report.location_address} />
                 )}
@@ -787,9 +813,61 @@ export default function ReportDetailPage() {
               )}
             </Card>
 
+            {/* Community Impact */}
+            <div style={{marginBottom: 0}}>
+              <div className="section-label" style={{marginBottom: 12, fontSize: 11, fontWeight: 700, color: 'var(--c-text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em'}}>COMMUNITY IMPACT</div>
+              <div style={{background: 'var(--c-surface-lowest)', borderRadius: 12, padding: '18px 22px', boxShadow: 'var(--shadow-card)', border: '1px solid var(--c-border)'}}>
+                <div style={{display: 'flex', alignItems: 'flex-start', gap: 12, paddingBottom: 12,
+                  borderBottom: '1px solid var(--c-border-ghost)', marginBottom: 12}}>
+                  <span style={{fontSize: 20}}>⚡</span>
+                  <div>
+                    <div style={{fontSize: 'var(--text-sm)', fontWeight: 600,
+                      color: 'var(--c-text-primary)'}}>Electricity</div>
+                    <div style={{fontSize: 'var(--text-sm)', color: 'var(--c-text-secondary)', marginTop: 2}}>
+                      {report.electricity_condition || '—'}
+                    </div>
+                  </div>
+                </div>
+                <div style={{display: 'flex', alignItems: 'flex-start', gap: 12, paddingBottom: 12,
+                  borderBottom: '1px solid var(--c-border-ghost)', marginBottom: 12}}>
+                  <span style={{fontSize: 20}}>🏥</span>
+                  <div>
+                    <div style={{fontSize: 'var(--text-sm)', fontWeight: 600,
+                      color: 'var(--c-text-primary)'}}>Health Services</div>
+                    <div style={{fontSize: 'var(--text-sm)', color: 'var(--c-text-secondary)', marginTop: 2}}>
+                      {report.health_services_condition || '—'}
+                    </div>
+                  </div>
+                </div>
+                <div style={{display: 'flex', alignItems: 'flex-start', gap: 12}}>
+                  <span style={{fontSize: 20}}>🆘</span>
+                  <div>
+                    <div style={{fontSize: 'var(--text-sm)', fontWeight: 600,
+                      color: 'var(--c-text-primary)'}}>Pressing Needs</div>
+                    <div style={{fontSize: 'var(--text-sm)', color: 'var(--c-text-secondary)', marginTop: 2}}>
+                      {Array.isArray(report.pressing_needs) && report.pressing_needs.length > 0
+                        ? report.pressing_needs.join(', ')
+                        : report.pressing_needs || '—'}
+                    </div>
+                    {report.pressing_needs_other && (
+                      <div style={{fontSize: 'var(--text-sm)', color: 'var(--c-text-muted)',
+                        fontStyle: 'italic', marginTop: 4}}>
+                        Other: {report.pressing_needs_other}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {/* Section 5: Timestamps */}
             <Card title="Timestamps">
               <div style={styles.detailRows}>
+                <DetailRow
+                  label="Flow Started"
+                  value={report.flow_started_at
+                    ? new Date(report.flow_started_at).toLocaleString() : '—'}
+                />
                 <DetailRow
                   label="Photo first uploaded"
                   value={
@@ -945,6 +1023,8 @@ export default function ReportDetailPage() {
                     }
                   />
                   <DetailRow label="Platform" value={report.reporter_platform} />
+                  <DetailRow label="Device Model" value={report.device_model || '—'} />
+                  <DetailRow label="App Version" value={report.app_version || '—'} />
                   <DetailRow label="Country" value={report.reporter_country_code} />
                   <DetailRow
                     label="Status"
@@ -982,9 +1062,17 @@ export default function ReportDetailPage() {
                   {report.carrier_name && (
                     <DetailRow label="Carrier" value={report.carrier_name} />
                   )}
+                  <DetailRow label="Network Type" value={report.network_type || '—'} />
                 </div>
               </Card>
             )}
+
+            {/* Technical Metadata */}
+            <Card title="Technical Metadata">
+              <div style={styles.detailRows}>
+                <DetailRow label="Question Package" value={report.question_package_version || '—'} />
+              </div>
+            </Card>
 
             {/* Flag history (all events including auto) */}
             <Card title="Flag History">

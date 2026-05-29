@@ -157,6 +157,18 @@ export interface ReportDetail extends ReportListItem {
   photos: PhotoSummary[];
   flag_events: FlagEvent[];
   versions: VersionHistoryItem[];
+  network_type?: string | null;
+  device_model?: string | null;
+  app_version?: string | null;
+  flow_started_at?: string | null;
+  building_centroid_lat?: number | null;
+  building_centroid_lng?: number | null;
+  question_package_version?: string | null;
+  electricity_condition?: string | null;
+  health_services_condition?: string | null;
+  pressing_needs?: string[] | string | null;
+  pressing_needs_other?: string | null;
+  photo_metadata?: string | null;
 }
 
 export interface ReportListResponse {
@@ -198,6 +210,10 @@ export interface ReporterDetail extends ReporterListRow {
   is_paused: boolean;
   pause_expires_at: string | null;
   pause_reason: string | null;
+  device_model?: string | null;
+  device_brand?: string | null;
+  os_device_id?: string | null;
+  network_type?: string | null;
 }
 
 export interface ReporterActivityEntry {

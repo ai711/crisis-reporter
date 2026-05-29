@@ -321,7 +321,7 @@ function ReporterVersionRow({
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
                 <thead>
                   <tr>
-                    {["Report ID", "Submitted At", "Damage Level", "Flag Status", "Change Note"].map((h) => (
+                    {["Ver.", "Report ID", "Submitted At", "Damage Level", "Flag Status", "Change Note"].map((h) => (
                       <th key={h} style={{ padding: "6px 12px", textAlign: "left", color: "var(--c-text-muted)", fontWeight: 600, borderBottom: "1px solid var(--c-border-ghost)", fontSize: "var(--text-xs)", textTransform: "uppercase" as const, letterSpacing: "0.06em" }}>
                         {h}
                       </th>
@@ -329,8 +329,20 @@ function ReporterVersionRow({
                   </tr>
                 </thead>
                 <tbody>
-                  {versions.map((v) => (
+                  {versions.map((v, index) => (
                     <tr key={v.report_id}>
+                      <td style={{ padding: "6px 12px" }}>
+                        <span style={{
+                          background: 'var(--c-surface-low)',
+                          borderRadius: 'var(--radius-sm)',
+                          padding: '2px 8px',
+                          fontSize: 'var(--text-xs)',
+                          fontFamily: 'monospace',
+                          color: 'var(--c-text-muted)',
+                        }}>
+                          v{versions.length - index}
+                        </span>
+                      </td>
                       <td style={{ padding: "6px 12px" }}>
                         <span
                           style={s.link}

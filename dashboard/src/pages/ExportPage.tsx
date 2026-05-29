@@ -15,6 +15,7 @@ interface ReportTypeConfig {
   name: string;
   description: string;
   formats: string[];
+  icon?: string;
 }
 
 interface Country {
@@ -89,6 +90,14 @@ const REPORT_TYPES: ReportTypeConfig[] = [
     description:
       "Reports flagged for review, discarded, or marked red/orange. For audit and quality assurance.",
     formats: ["CSV", "JSON"],
+  },
+  {
+    id: "rapida",
+    name: "RAPIDA-Compatible Export",
+    description:
+      "Structured damage data mapped to RAPIDA field names for direct integration with UNDP assessment workflows.",
+    formats: ["CSV", "GeoJSON", "Shapefile"],
+    icon: "📋",
   },
   {
     id: "project_summary",
