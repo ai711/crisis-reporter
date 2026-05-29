@@ -11,6 +11,7 @@ from app.models.reporter import Reporter
 from app.models.report import Report
 from app.models.reporter_activity_log import ReporterActivityLog
 from app.models.dashboard_user import DashboardUser
+from app.models.safety_progress import SafetyProgress
 from app.services.dependencies import get_current_dashboard_user
 from app.services.reporter_activity_service import write_activity_log
 
@@ -261,6 +262,13 @@ async def get_reporter_detail(
     )
     first_report_at, last_report_at = date_result.one()
 
+    # Safety Tips progress — separate table, one row per completed part ("A", "B", "C")
+    sp_result = await db.execute(
+        select(SafetyProgress).where(SafetyProgress.reporter_id == reporter.id)
+    )
+    sp_records = list(sp_result.scalars().all())
+    parts_done = {r.part_completed for r in sp_records}
+
     profile_type = _compute_profile_type(reporter)
 
     return {
@@ -294,6 +302,12 @@ async def get_reporter_detail(
         "total_unique_properties": total_unique_properties,
         "first_report_at": first_report_at.isoformat() if first_report_at else None,
         "last_report_at": last_report_at.isoformat() if last_report_at else None,
+        "safety_progress": {
+            "part_a_complete": "A" in parts_done,
+            "part_b_complete": "B" in parts_done,
+            "part_c_complete": "C" in parts_done,
+            "part_a_count": sum(1 for r in sp_records if r.part_completed == "A"),
+        },
     }
 
 
