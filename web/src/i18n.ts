@@ -32,6 +32,18 @@ export async function loadLanguagePackage(langCode: string): Promise<LangPackage
     return { success: true, fromCache: false };
   }
 
+  // Step 1: Load UI translations from bundled locale file
+  try {
+    const localeRes = await fetch(`/locales/${langCode}.json`);
+    if (localeRes.ok) {
+      const localeData = await localeRes.json();
+      i18n.addResourceBundle(langCode, "translation", localeData, true, true);
+    }
+  } catch {
+    console.warn("[i18n] Could not load locale file for", langCode);
+  }
+
+  // Step 2: Load question/content strings from backend and merge
   const cacheKey = `cr_language_package_${langCode}`;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
@@ -46,6 +58,7 @@ export async function loadLanguagePackage(langCode: string): Promise<LangPackage
     const data: Record<string, unknown> = await res.json();
 
     i18n.addResourceBundle(langCode, "translation", data, true, true);
+    // Step 3: Apply the language
     await i18n.changeLanguage(langCode);
 
     try {
@@ -66,6 +79,11 @@ export async function loadLanguagePackage(langCode: string): Promise<LangPackage
     clearTimeout(timer);
     const loaded = await loadLanguagePackageFromCache(langCode);
     if (loaded) return { success: true, fromCache: true };
+    // Locale file loaded successfully even though backend failed
+    if (i18n.hasResourceBundle(langCode, "translation")) {
+      await i18n.changeLanguage(langCode);
+      return { success: true, fromCache: false };
+    }
     return { success: false, fromCache: false };
   }
 }
