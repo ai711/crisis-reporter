@@ -12,7 +12,9 @@ from app.models.report import Report
 from app.models.reporter import Reporter
 from app.models.crisis import Crisis
 from app.models.flag_event import FlagEvent
-from app.services.dependencies import get_optional_reporter, get_current_reporter
+from app.services.dependencies import get_optional_reporter, get_current_reporter, require_admin
+from app.models.dashboard_user import DashboardUser
+from app.models.report_edit import ReportEdit
 from app.services.encryption import encrypt_field, hash_field
 from app.services.auto_flagging import auto_flag_report
 
@@ -631,6 +633,98 @@ async def check_duplicate_report(
             return {"is_duplicate": True}
 
     return {"is_duplicate": False}
+
+
+class EditReportRequest(BaseModel):
+    damage_level: Optional[str] = None
+    infrastructure_types: Optional[List[str]] = None
+    infrastructure_name: Optional[str] = None
+    disaster_type: Optional[str] = None
+    debris_blocking: Optional[str] = None
+    electricity_condition: Optional[str] = None
+    health_services_condition: Optional[str] = None
+    pressing_needs: Optional[List[str]] = None
+    edit_reason: Optional[str] = None
+
+
+@router.patch("/{report_id}")
+async def edit_report(
+    report_id: str,
+    request: EditReportRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: DashboardUser = Depends(require_admin),
+):
+    """Edit report fields from the dashboard. Creates an audit trail entry."""
+    result = await db.execute(select(Report).where(Report.id == report_id))
+    report = result.scalar_one_or_none()
+    if not report:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report not found")
+
+    editable_fields = [
+        "damage_level",
+        "infrastructure_types",
+        "infrastructure_name",
+        "disaster_type",
+        "debris_blocking",
+        "electricity_condition",
+        "health_services_condition",
+        "pressing_needs",
+    ]
+
+    fields_changed: dict = {}
+    for field in editable_fields:
+        new_val = getattr(request, field)
+        if new_val is None:
+            continue
+        current_val = getattr(report, field)
+        if new_val != current_val:
+            fields_changed[field] = {"from": current_val, "to": new_val}
+            setattr(report, field, new_val)
+
+    if not fields_changed:
+        return {"edited": False, "reason": "no_changes"}
+
+    count_result = await db.execute(
+        select(func.count(ReportEdit.id)).where(ReportEdit.report_id == report.id)
+    )
+    version_number = (count_result.scalar() or 0) + 1
+
+    db.add(ReportEdit(
+        report_id=report.id,
+        edited_by=current_user.email,
+        fields_changed=fields_changed,
+        edit_reason=request.edit_reason,
+        version_number=version_number,
+    ))
+
+    await db.commit()
+    return {"edited": True, "version": version_number, "fields_changed": fields_changed}
+
+
+@router.get("/{report_id}/edits")
+async def get_report_edits(
+    report_id: str,
+    db: AsyncSession = Depends(get_db),
+    _: DashboardUser = Depends(require_admin),
+):
+    """Return all edit audit entries for a report, newest first."""
+    result = await db.execute(
+        select(ReportEdit)
+        .where(ReportEdit.report_id == report_id)
+        .order_by(ReportEdit.edited_at.desc())
+    )
+    edits = result.scalars().all()
+    return [
+        {
+            "id": str(e.id),
+            "edited_by": e.edited_by,
+            "edited_at": e.edited_at.isoformat(),
+            "fields_changed": e.fields_changed,
+            "edit_reason": e.edit_reason,
+            "version_number": e.version_number,
+        }
+        for e in edits
+    ]
 
 
 @router.get("/{report_id}", response_model=ReportResponse)

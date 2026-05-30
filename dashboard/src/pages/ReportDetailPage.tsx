@@ -480,6 +480,11 @@ export default function ReportDetailPage() {
   const [modal, setModal] = useState<ModalState>(CLOSED_MODAL);
   const [modalError, setModalError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editForm, setEditForm] = useState<any>({});
+  const [editReason, setEditReason] = useState('');
+  const [editSaving, setEditSaving] = useState(false);
+  const [reportEdits, setReportEdits] = useState<any[]>([]);
 
   const { data: report, isLoading } = useQuery<ReportDetail>({
     queryKey: ["report", reportId],
@@ -489,6 +494,14 @@ export default function ReportDetailPage() {
     },
     enabled: !!reportId,
   });
+
+  useEffect(() => {
+    if (report?.id) {
+      api.get(`/api/reports/${report.id}/edits`)
+        .then(r => setReportEdits(r.data))
+        .catch(() => {});
+    }
+  }, [report?.id]);
 
   function invalidateAll() {
     queryClient.invalidateQueries({ queryKey: ["report", reportId] });
@@ -707,6 +720,13 @@ export default function ReportDetailPage() {
               onEmergencyOverride={openEmergencyModal}
               isPending={isActionPending}
             />
+            <button
+              className="btn btn-secondary"
+              onClick={() => setShowEditModal(true)}
+              style={{marginRight: 8}}
+            >
+              ✏ Edit Report
+            </button>
           </div>
         )}
 
@@ -905,6 +925,32 @@ export default function ReportDetailPage() {
                   ))}
                 </div>
               )}
+              {reportEdits.map((edit) => (
+                <div key={edit.id} style={{padding: '10px 0',
+                  borderBottom: '1px solid var(--c-border-ghost)'}}>
+                  <div style={{display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4}}>
+                    <span className="chip chip-blue">EDIT v{edit.version_number}</span>
+                    <span style={{fontSize: 'var(--text-xs)', color: 'var(--c-text-subtle)'}}>
+                      {new Date(edit.edited_at).toLocaleString()}
+                    </span>
+                    <span style={{fontSize: 'var(--text-xs)', color: 'var(--c-text-muted)'}}>
+                      by {edit.edited_by}
+                    </span>
+                  </div>
+                  {edit.edit_reason && (
+                    <div style={{fontSize: 'var(--text-xs)', color: 'var(--c-text-secondary)',
+                      fontStyle: 'italic', marginBottom: 4}}>
+                      "{edit.edit_reason}"
+                    </div>
+                  )}
+                  {Object.entries(edit.fields_changed).map(([field, change]: any) => (
+                    <div key={field} style={{fontSize: 'var(--text-xs)', color: 'var(--c-text-muted)'}}>
+                      {field}: <span style={{textDecoration: 'line-through'}}>{change.from}</span>
+                      {' → '}<span style={{color: 'var(--c-text-primary)', fontWeight: 600}}>{change.to}</span>
+                    </div>
+                  ))}
+                </div>
+              ))}
             </Card>
 
             {/* Section 10: Review Log */}
@@ -1097,6 +1143,111 @@ export default function ReportDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* Edit Report modal */}
+      {showEditModal && (
+        <div style={{position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)',
+          zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+          <div className="card card-padded" style={{width: 520, maxHeight: '80vh',
+            overflowY: 'auto', borderRadius: 'var(--radius-xl)'}}>
+            <div style={{display: 'flex', justifyContent: 'space-between',
+              alignItems: 'center', marginBottom: 20}}>
+              <div style={{fontSize: 'var(--text-xl)', fontWeight: 700}}>Edit Report</div>
+              <button className="btn btn-ghost" onClick={() => setShowEditModal(false)}>✕</button>
+            </div>
+
+            {/* Damage Level */}
+            <div style={{marginBottom: 16}}>
+              <label className="input-label">Damage Level</label>
+              <select className="input"
+                value={editForm.damage_level ?? report.damage_level ?? ''}
+                onChange={e => setEditForm({...editForm, damage_level: e.target.value})}>
+                <option value="minimal">Minimal / No Damage</option>
+                <option value="partial">Partially Damaged</option>
+                <option value="complete">Completely Damaged</option>
+              </select>
+            </div>
+
+            {/* Disaster Type */}
+            <div style={{marginBottom: 16}}>
+              <label className="input-label">Disaster Type</label>
+              <select className="input"
+                value={editForm.disaster_type ?? report.disaster_type ?? ''}
+                onChange={e => setEditForm({...editForm, disaster_type: e.target.value})}>
+                <option value="earthquake">Earthquake</option>
+                <option value="flood">Flood</option>
+                <option value="tsunami">Tsunami</option>
+                <option value="hurricane_cyclone">Hurricane or Cyclone</option>
+                <option value="wildfire">Wildfire</option>
+                <option value="explosion">Explosion</option>
+                <option value="chemical_incident">Chemical Incident</option>
+                <option value="conflict">Conflict</option>
+                <option value="civil_unrest">Civil Unrest</option>
+              </select>
+            </div>
+
+            {/* Infrastructure Name */}
+            <div style={{marginBottom: 16}}>
+              <label className="input-label">Infrastructure Name</label>
+              <input className="input" type="text"
+                value={editForm.infrastructure_name ?? report.infrastructure_name ?? ''}
+                onChange={e => setEditForm({...editForm, infrastructure_name: e.target.value})} />
+            </div>
+
+            {/* Debris */}
+            <div style={{marginBottom: 16}}>
+              <label className="input-label">Debris Present</label>
+              <select className="input"
+                value={editForm.debris_blocking ?? report.debris_blocking ?? ''}
+                onChange={e => setEditForm({...editForm, debris_blocking: e.target.value})}>
+                <option value="yes">Yes</option>
+                <option value="no">No</option>
+              </select>
+            </div>
+
+            {/* Edit Reason */}
+            <div style={{marginBottom: 20}}>
+              <label className="input-label">Edit Reason (required)</label>
+              <textarea className="input" rows={3}
+                style={{resize: 'vertical', minHeight: 80}}
+                placeholder="Describe why this report is being edited..."
+                value={editReason}
+                onChange={e => setEditReason(e.target.value)} />
+            </div>
+
+            <div style={{display: 'flex', gap: 10}}>
+              <button className="btn btn-secondary btn-lg" style={{flex: 1}}
+                onClick={() => setShowEditModal(false)}>
+                Cancel
+              </button>
+              <button
+                className="btn btn-primary btn-lg"
+                style={{flex: 1}}
+                disabled={!editReason.trim() || editSaving}
+                onClick={async () => {
+                  if (!editReason.trim()) return;
+                  setEditSaving(true);
+                  try {
+                    await api.patch(`/api/reports/${report.id}`, {
+                      ...editForm,
+                      edit_reason: editReason,
+                    });
+                    setShowEditModal(false);
+                    setEditForm({});
+                    setEditReason('');
+                    window.location.reload();
+                  } catch (err: any) {
+                    alert(err?.response?.data?.detail || 'Edit failed');
+                  } finally {
+                    setEditSaving(false);
+                  }
+                }}>
+                {editSaving ? 'Saving...' : 'Save Changes'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

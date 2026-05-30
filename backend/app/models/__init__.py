@@ -18,6 +18,7 @@ from app.models.property_comment import PropertyComment
 from app.models.reporter_activity_log import ReporterActivityLog
 from app.models.report_project import ReportProject
 from app.models.project_user import ProjectUser
+from app.models.report_edit import ReportEdit
 
 __all__ = [
     "Crisis",
@@ -45,4 +46,5 @@ __all__ = [
     "ReporterActivityLog",
     "ReportProject",
     "ProjectUser",
+    "ReportEdit",
 ]
