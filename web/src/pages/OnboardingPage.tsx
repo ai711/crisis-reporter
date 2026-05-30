@@ -12,6 +12,7 @@ import api from "../services/api";
 interface Language {
   code: string;
   name: string;
+  native_name?: string;
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -322,7 +323,7 @@ export default function OnboardingPage() {
       )
       .then((res) => {
         const { official_language, official_language_name } = res.data;
-        if (official_language && !UN_LANGUAGE_CODES.has(official_language)) {
+        if (official_language) {
           setOfficialLang({
             code: official_language,
             name: official_language_name ?? official_language.toUpperCase(),
@@ -425,7 +426,9 @@ export default function OnboardingPage() {
 
   const pillLanguages: Language[] = [
     ...UN_LANGUAGES,
-    ...(officialLang ? [officialLang] : []),
+    // Only add officialLang as a 7th pill when it is NOT already one of the 6 UN languages.
+    // officialLang is now always set (even for UN-language countries) so we must deduplicate here.
+    ...(officialLang && !UN_LANGUAGE_CODES.has(officialLang.code) ? [officialLang] : []),
   ];
 
   const sortedLanguages = [...pillLanguages].sort((a, b) => {
@@ -436,6 +439,18 @@ export default function OnboardingPage() {
     }
     return 0;
   });
+
+  // When expanded, apply the same official-language-first sort to the fetched list.
+  const displayLanguages = showAllLanguages
+    ? [...allLanguages].sort((a, b) => {
+        const officialCode = officialLang?.code || null;
+        if (officialCode) {
+          if (a.code === officialCode) return -1;
+          if (b.code === officialCode) return 1;
+        }
+        return 0;
+      })
+    : sortedLanguages;
 
   return (
     <div className="app-container">
@@ -520,7 +535,7 @@ export default function OnboardingPage() {
             <p style={s.sectionLabel}>SELECT YOUR LANGUAGE</p>
 
             <div style={s.pillGrid}>
-              {(showAllLanguages ? allLanguages : sortedLanguages).map((lang) => {
+              {displayLanguages.map((lang) => {
                 const isSel = selectedLanguage === lang.code;
                 return (
                   <button
@@ -540,14 +555,14 @@ export default function OnboardingPage() {
                     }}
                     disabled={langPackageLoading}
                   >
-                    <span>{lang.name}</span>
+                    <span>{lang.native_name || lang.name}</span>
                     {isSel && <CheckCircleIcon />}
                   </button>
                 );
               })}
 
-              {/* + More pill — only shown when not already expanded */}
-              {!showAllLanguages && (
+              {/* More / Show less pill — toggles between compact and expanded lists */}
+              {!showAllLanguages ? (
                 <button
                   style={{
                     ...s.pill,
@@ -562,6 +577,22 @@ export default function OnboardingPage() {
                   disabled={langPackageLoading}
                 >
                   <span>+ More</span>
+                </button>
+              ) : (
+                <button
+                  style={{
+                    ...s.pill,
+                    background: "#F7FAFC",
+                    color: "#718096",
+                    border: "2px solid #E2E8F0",
+                    fontStyle: "italic",
+                    fontWeight: 400,
+                    justifyContent: "center",
+                  }}
+                  onClick={() => setShowAllLanguages(false)}
+                  disabled={langPackageLoading}
+                >
+                  <span>Show less</span>
                 </button>
               )}
             </div>
