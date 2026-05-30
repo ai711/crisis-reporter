@@ -212,22 +212,22 @@ function TermsScreen({
   onDecline: () => void;
   showDeclineMsg: boolean;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="app-container">
       <div style={s.scrollArea}>
         <OnboardingHeader />
         <div style={s.section}>
-          <p style={s.sectionTitle}>Terms and Conditions</p>
+          <p style={s.sectionTitle}>{t('terms.title', 'Terms and Conditions')}</p>
           <p style={{ fontSize: 14, color: "#718096" }}>
-            Please read and accept the terms below to continue.
+            {t('terms.subtitle', 'Please read and accept the terms below to continue.')}
           </p>
           <div style={s.tcCard}>
             <p style={s.tcText}>{tcText}</p>
           </div>
           {showDeclineMsg && (
             <div style={s.errorBox}>
-              You must accept the Terms and Conditions to use Crisis Reporter.
-              Refreshing this page will require restarting setup.
+              {t('terms.error', 'You must accept the Terms and Conditions to continue.')}
             </div>
           )}
         </div>
@@ -245,14 +245,14 @@ function TermsScreen({
           }}
           onClick={onAgree}
         >
-          I Agree
+          {t('terms.agree', 'I Agree')}
         </button>
         <button style={s.declineBtn} onClick={onDecline}>
-          Decline
+          {t('terms.decline', 'Decline')}
         </button>
         <div style={s.footerNote}>
           <LockIcon />
-          <span>Your data is secured by UNDP Privacy Protocols</span>
+          <span>{t('terms.privacy', 'Your data is secured by UNDP Privacy Protocols')}</span>
         </div>
       </div>
     </div>

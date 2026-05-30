@@ -4,6 +4,14 @@
   "app": {
     "name": "Crisis Reporter"
   },
+  "terms": {
+    "title": "Terms and Conditions",
+    "subtitle": "Please read and accept the terms below to continue.",
+    "error": "You must accept the Terms and Conditions to continue.",
+    "agree": "I Agree",
+    "decline": "Decline",
+    "privacy": "Your data is secured by UNDP Privacy Protocols"
+  },
   "onboarding": {
     "selectCountry": "Select Your Country",
     "selectLanguage": "Select Language",

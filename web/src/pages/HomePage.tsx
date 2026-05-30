@@ -125,7 +125,7 @@ export default function HomePage() {
       const res = await api.post<{ reporter_id: string }>(
         "/api/reporters/register",
         {
-          web_session_id: WEB_SESSION_ID,
+          device_id: WEB_SESSION_ID,
           platform: detectPlatform(),
           country_code: (() => { try { return localStorage.getItem("cr_country"); } catch { return null; } })(),
           language_code: (() => { try { return localStorage.getItem("cr_language") || "en"; } catch { return "en"; } })(),
@@ -160,6 +160,8 @@ export default function HomePage() {
     },
     enabled: true,
     staleTime: 60000,
+    retry: false,
+    throwOnError: false,
   });
 
   return (
