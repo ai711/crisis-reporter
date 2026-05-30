@@ -1,7 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
-import React, { Suspense, lazy } from "react";
+import React, { Suspense, lazy, useEffect } from "react";
 import AppLayout from "./components/AppLayout";
-import i18n from "./i18n";
+import i18n, { loadLanguagePackageFromCache } from "./i18n";
 
 const OnboardingPage = lazy(() => import("./pages/OnboardingPage"));
 const LoginPage = lazy(() => import("./pages/LoginPage"));
@@ -130,6 +130,20 @@ function OnboardingRoute() {
 }
 
 export default function App() {
+  // Apply the user's saved language once, after React mounts.
+  // Covers returning users in case main.tsx startup races, and acts as the
+  // single authoritative catch-all so no page has to do this individually.
+  useEffect(() => {
+    (async () => {
+      try {
+        const savedLang = localStorage.getItem("cr_language");
+        if (savedLang && savedLang !== i18n.language) {
+          await loadLanguagePackageFromCache(savedLang);
+        }
+      } catch { /* ignore */ }
+    })();
+  }, []);
+
   return (
     <ErrorBoundary>
       <BrowserRouter>
