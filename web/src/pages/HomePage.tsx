@@ -9,16 +9,6 @@ import CrisisTypeModal from "../components/CrisisTypeModal";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
-// ── Anti-spam signal helpers ───────────────────────────────────────────────────
-
-function captureAntiSpamSignals() {
-  return {
-    browser_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-    screen_resolution: `${window.screen.width}x${window.screen.height}`,
-    viewport_dimensions: `${window.innerWidth}x${window.innerHeight}`,
-  };
-}
-
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function HomePage() {
