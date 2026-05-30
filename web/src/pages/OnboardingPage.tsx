@@ -433,21 +433,54 @@ export default function OnboardingPage() {
 
   const sortedLanguages = [...pillLanguages].sort((a, b) => {
     const officialCode = officialLang?.code || null;
-    if (officialCode) {
-      if (a.code === officialCode) return -1;
-      if (b.code === officialCode) return 1;
-    }
-    return 0;
+    const aIsOfficial = officialCode && a.code === officialCode ? -1 : 0;
+    const bIsOfficial = officialCode && b.code === officialCode ? 1 : 0;
+    if (aIsOfficial !== 0 || bIsOfficial !== 0) return aIsOfficial + bIsOfficial;
+    // Preserve original UN_LANGUAGES order for non-official languages
+    const aIdx = UN_LANGUAGES.findIndex(l => l.code === a.code);
+    const bIdx = UN_LANGUAGES.findIndex(l => l.code === b.code);
+    if (aIdx === -1 && bIdx === -1) return 0;
+    if (aIdx === -1) return 1;
+    if (bIdx === -1) return -1;
+    return aIdx - bIdx;
   });
 
-  // When expanded, apply the same official-language-first sort to the fetched list.
+  const UN_NATIVE_NAMES: Record<string, string> = {
+    ar: 'العربية',
+    zh: '中文',
+    en: 'English',
+    fr: 'Français',
+    ru: 'Русский',
+    es: 'Español',
+  };
+
+  const mergedLanguages = allLanguages.length > 0
+    ? allLanguages.map(lang => ({
+        ...lang,
+        native_name: lang.native_name
+          || UN_NATIVE_NAMES[lang.code]
+          || lang.name,
+      }))
+    : [];
+
+  // Ensure English is always in the expanded list
+  const hasEnglish = mergedLanguages.some(l => l.code === 'en');
+  if (!hasEnglish && allLanguages.length > 0) {
+    mergedLanguages.push({
+      code: 'en',
+      name: 'English',
+      native_name: 'English',
+      is_active: true,
+    });
+  }
+
+  // When expanded, apply the same official-language-first sort to the merged list.
   const displayLanguages = showAllLanguages
-    ? [...allLanguages].sort((a, b) => {
+    ? [...mergedLanguages].sort((a, b) => {
         const officialCode = officialLang?.code || null;
-        if (officialCode) {
-          if (a.code === officialCode) return -1;
-          if (b.code === officialCode) return 1;
-        }
+        const aIsOfficial = officialCode && a.code === officialCode ? -1 : 0;
+        const bIsOfficial = officialCode && b.code === officialCode ? 1 : 0;
+        if (aIsOfficial !== 0 || bIsOfficial !== 0) return aIsOfficial + bIsOfficial;
         return 0;
       })
     : sortedLanguages;
