@@ -24,8 +24,6 @@ function captureAntiSpamSignals() {
 export default function HomePage() {
   const navigate = useNavigate();
   const { setReporter } = useAuthStore();
-  const reporterId = localStorage.getItem('cr_reporter_id') ||
-                     sessionStorage.getItem('cr_reporter_id');
 
   const [crisisModalOpen, setCrisisModalOpen] = useState(false);
   const [loginPromptOpen, setLoginPromptOpen] = useState(false);
@@ -154,22 +152,13 @@ export default function HomePage() {
   };
 
   const { data: reportsData, isLoading: reportsLoading, isError: reportsError } = useQuery({
-    queryKey: ['my-reports-home', reporterId],
+    queryKey: ['my-reports-home'],
     queryFn: async () => {
-      if (!reporterId) return { reports: [], total: 0 };
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-      const token = localStorage.getItem('cr_access_token') ||
-                    sessionStorage.getItem('cr_access_token');
-      const res = await fetch(
-        `${API_URL}/api/reports?reporter_id=${reporterId}&limit=3`,
-        {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-        }
-      );
-      if (!res.ok) return { reports: [], total: 0 };
-      return res.json();
+      const res = await api.get('/api/reports/my', { params: { limit: 3 } });
+      if (!res.data) return { reports: [], total: 0 };
+      return { reports: res.data.reports || res.data.items || res.data || [], total: 0 };
     },
-    enabled: !!reporterId,
+    enabled: true,
     staleTime: 60000,
   });
 
@@ -210,7 +199,7 @@ export default function HomePage() {
             fontSize: 14, color: '#717782'}}>
             Loading your reports...
           </div>
-        ) : reportsError || !reporterId ? (
+        ) : reportsError ? (
           <div style={{padding: '20px 16px'}}>
             <div style={{background: 'white', borderRadius: 16, padding: '20px',
               textAlign: 'center'}}>
