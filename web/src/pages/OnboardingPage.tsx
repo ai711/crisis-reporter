@@ -337,7 +337,7 @@ export default function OnboardingPage() {
   const fetchMoreLanguages = async () => {
     try {
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-      const res = await fetch(`${API_URL}/api/languages?status=active`);
+      const res = await fetch(`${API_URL}/api/languages/public`);
       if (!res.ok) return;
       const data = await res.json();
       // data is an array of language objects with code and name

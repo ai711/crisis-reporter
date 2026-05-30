@@ -156,6 +156,72 @@ async def list_languages(
     ]
 
 
+# ── /api/languages/public — no auth, reporter-facing ─────────────────────────
+
+# Native-script names for the 6 UN languages (hardcoded — not stored in DB)
+_NATIVE_NAMES: dict[str, str] = {
+    "ar": "العربية",
+    "zh": "中文",
+    "en": "English",
+    "fr": "Français",
+    "ru": "Русский",
+    "es": "Español",
+}
+
+
+class PublicLanguageOut(BaseModel):
+    code: str
+    name: str
+    native_name: Optional[str] = None
+    is_active: bool
+
+
+@languages_router.get("/public", response_model=list[PublicLanguageOut])
+async def list_public_languages(
+    db: AsyncSession = Depends(get_db),
+) -> list[PublicLanguageOut]:
+    """Public endpoint — no auth required.
+
+    Returns active languages that have at least one published package.
+    Ordered: English first, then alphabetical by name.
+    Used by the reporter onboarding page More button.
+    """
+    # Codes that have at least one published package
+    pkg_result = await db.execute(
+        select(LanguagePackage.language_code).where(
+            LanguagePackage.status == "published"
+        )
+    )
+    published_codes = {row[0] for row in pkg_result.all()}
+
+    if not published_codes:
+        return []
+
+    # Active languages that have a published package
+    result = await db.execute(
+        select(Language).where(
+            Language.status == "active",
+            Language.code.in_(published_codes),
+        )
+    )
+    langs = result.scalars().all()
+
+    # English first, then alphabetical by name
+    sorted_langs = sorted(langs, key=lambda l: (0 if l.code == "en" else 1, l.name))
+
+    return [
+        PublicLanguageOut(
+            code=l.code,
+            name=l.name,
+            native_name=_NATIVE_NAMES.get(l.code),
+            is_active=True,
+        )
+        for l in sorted_langs
+    ]
+
+
+# ── /api/languages mutations (auth required) ──────────────────────────────────
+
 class LanguageCreate(BaseModel):
     name: str
     code: str
