@@ -129,127 +129,131 @@ function OnboardingRoute() {
   return <OnboardingPage />;
 }
 
-export default function App() {
-  // Apply the user's saved language once, after React mounts.
-  // Covers returning users in case main.tsx startup races, and acts as the
-  // single authoritative catch-all so no page has to do this individually.
-  useEffect(() => {
-    (async () => {
-      try {
-        const savedLang = localStorage.getItem("cr_language");
-        if (savedLang && savedLang !== i18n.language) {
-          await loadLanguagePackageFromCache(savedLang);
-        }
-      } catch { /* ignore */ }
-    })();
-  }, []);
+// Rendered inside <BrowserRouter> so useLocation is available.
+// Re-applies the saved language on every route change, preventing the i18n
+// singleton from drifting back to English after React Router navigates.
+function AppContent() {
+  const location = useLocation();
 
+  useEffect(() => {
+    const savedLang = localStorage.getItem("cr_language");
+    if (savedLang && savedLang !== "en") {
+      loadLanguagePackageFromCache(savedLang);
+    }
+  }, [location.pathname]);
+
+  return (
+    <Suspense fallback={<LoadingSpinner />}>
+      <Routes>
+        <Route path="/onboarding" element={<OnboardingRoute />} />
+        {/* E1: /login is a protected route — onboarding must be complete first. */}
+        <Route
+          path="/login"
+          element={
+            <ProtectedRoute>
+              <AppLayout><LoginPage /></AppLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/"
+          element={
+            <ProtectedRoute>
+              <AppLayout><HomePage /></AppLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/report"
+          element={
+            <ProtectedRoute>
+              <AppLayout><ReportPage /></AppLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/map"
+          element={
+            <ProtectedRoute>
+              <AppLayout><MapPage /></AppLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/settings"
+          element={
+            <ProtectedRoute>
+              <AppLayout><SettingsPage /></AppLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/my-reports"
+          element={
+            <ProtectedRoute>
+              <AppLayout><MyReportsPage /></AppLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/profile"
+          element={
+            <ProtectedRoute>
+              <AppLayout><ProfilePage /></AppLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/safety-tips"
+          element={
+            <ProtectedRoute>
+              <AppLayout><SafetyTipsPage /></AppLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/badges"
+          element={
+            <ProtectedRoute>
+              <AppLayout><BadgesPage /></AppLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/faq"
+          element={
+            <ProtectedRoute>
+              <AppLayout><FAQPage /></AppLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/about"
+          element={
+            <ProtectedRoute>
+              <AppLayout><AboutPage /></AppLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="*"
+          element={
+            <Navigate
+              to={getFirstMissingStep() ? "/onboarding" : "/"}
+              replace
+            />
+          }
+        />
+      </Routes>
+    </Suspense>
+  );
+}
+
+export default function App() {
   return (
     <ErrorBoundary>
       <BrowserRouter>
-        <Suspense fallback={<LoadingSpinner />}>
-        <Routes>
-          <Route path="/onboarding" element={<OnboardingRoute />} />
-          {/* E1: /login is a protected route — onboarding must be complete first. */}
-          <Route
-            path="/login"
-            element={
-              <ProtectedRoute>
-                <AppLayout><LoginPage /></AppLayout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/"
-            element={
-              <ProtectedRoute>
-                <AppLayout><HomePage /></AppLayout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/report"
-            element={
-              <ProtectedRoute>
-                <AppLayout><ReportPage /></AppLayout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/map"
-            element={
-              <ProtectedRoute>
-                <AppLayout><MapPage /></AppLayout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/settings"
-            element={
-              <ProtectedRoute>
-                <AppLayout><SettingsPage /></AppLayout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/my-reports"
-            element={
-              <ProtectedRoute>
-                <AppLayout><MyReportsPage /></AppLayout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/profile"
-            element={
-              <ProtectedRoute>
-                <AppLayout><ProfilePage /></AppLayout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/safety-tips"
-            element={
-              <ProtectedRoute>
-                <AppLayout><SafetyTipsPage /></AppLayout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/badges"
-            element={
-              <ProtectedRoute>
-                <AppLayout><BadgesPage /></AppLayout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/faq"
-            element={
-              <ProtectedRoute>
-                <AppLayout><FAQPage /></AppLayout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/about"
-            element={
-              <ProtectedRoute>
-                <AppLayout><AboutPage /></AppLayout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="*"
-            element={
-              <Navigate
-                to={getFirstMissingStep() ? "/onboarding" : "/"}
-                replace
-              />
-            }
-          />
-        </Routes>
-        </Suspense>
+        <AppContent />
       </BrowserRouter>
     </ErrorBoundary>
   );
