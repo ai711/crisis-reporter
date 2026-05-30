@@ -291,6 +291,8 @@ export default function OnboardingPage() {
   const [langPackageError, setLangPackageError] = useState(false);
   const [langFromCache, setLangFromCache] = useState(false);
   const [moreLangsModalOpen, setMoreLangsModalOpen] = useState(false);
+  const [allLanguages, setAllLanguages] = useState<any[]>([]);
+  const [showAllLanguages, setShowAllLanguages] = useState(false);
 
   // Terms
   const [showDeclineMsg, setShowDeclineMsg] = useState(false);
@@ -332,6 +334,20 @@ export default function OnboardingPage() {
       .catch(() => setOfficialLang(null));
   }, [selectedCountry]);
 
+  const fetchMoreLanguages = async () => {
+    try {
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+      const res = await fetch(`${API_URL}/api/languages?status=active`);
+      if (!res.ok) return;
+      const data = await res.json();
+      // data is an array of language objects with code and name
+      setAllLanguages(data);
+      setShowAllLanguages(true);
+    } catch (e) {
+      console.warn('Failed to fetch languages:', e);
+    }
+  };
+
   const handleCountrySelect = (country: CachedCountry) => {
     setSelectedCountry(country);
     setSelectedLanguage("");
@@ -340,6 +356,8 @@ export default function OnboardingPage() {
     setLangFromCache(false);
     setCountryModalOpen(false);
     setCountrySearch("");
+    setShowAllLanguages(false);
+    setAllLanguages([]);
   };
 
   const handleContinue = async () => {
@@ -409,6 +427,15 @@ export default function OnboardingPage() {
     ...UN_LANGUAGES,
     ...(officialLang ? [officialLang] : []),
   ];
+
+  const sortedLanguages = [...pillLanguages].sort((a, b) => {
+    const officialCode = officialLang?.code || null;
+    if (officialCode) {
+      if (a.code === officialCode) return -1;
+      if (b.code === officialCode) return 1;
+    }
+    return 0;
+  });
 
   return (
     <div className="app-container">
@@ -493,7 +520,7 @@ export default function OnboardingPage() {
             <p style={s.sectionLabel}>SELECT YOUR LANGUAGE</p>
 
             <div style={s.pillGrid}>
-              {pillLanguages.map((lang) => {
+              {(showAllLanguages ? allLanguages : sortedLanguages).map((lang) => {
                 const isSel = selectedLanguage === lang.code;
                 return (
                   <button
@@ -519,22 +546,24 @@ export default function OnboardingPage() {
                 );
               })}
 
-              {/* + More pill */}
-              <button
-                style={{
-                  ...s.pill,
-                  background: "#F7FAFC",
-                  color: "#718096",
-                  border: "2px solid #E2E8F0",
-                  fontStyle: "italic",
-                  fontWeight: 400,
-                  justifyContent: "center",
-                }}
-                onClick={() => setMoreLangsModalOpen(true)}
-                disabled={langPackageLoading}
-              >
-                <span>+ More</span>
-              </button>
+              {/* + More pill — only shown when not already expanded */}
+              {!showAllLanguages && (
+                <button
+                  style={{
+                    ...s.pill,
+                    background: "#F7FAFC",
+                    color: "#718096",
+                    border: "2px solid #E2E8F0",
+                    fontStyle: "italic",
+                    fontWeight: 400,
+                    justifyContent: "center",
+                  }}
+                  onClick={fetchMoreLanguages}
+                  disabled={langPackageLoading}
+                >
+                  <span>+ More</span>
+                </button>
+              )}
             </div>
 
             {langFromCache && (

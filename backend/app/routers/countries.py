@@ -366,7 +366,7 @@ async def seed_countries() -> None:
 async def list_countries(db: AsyncSession = Depends(get_db)):
     """List all countries — active countries first, then alphabetical by name."""
     result = await db.execute(
-        select(Country).order_by(Country.is_active.desc(), Country.name)
+        select(Country).where(Country.is_active == True).order_by(Country.name)
     )
     countries = result.scalars().all()
     response = []
