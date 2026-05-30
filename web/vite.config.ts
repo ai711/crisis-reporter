@@ -54,10 +54,10 @@ export default defineConfig({
           },
           {
             // Cache API responses
-            urlPattern: /^http:\/\/127\.0\.0\.1:8000\/api\/.*/i,
+            urlPattern: /\/api\/.*/i,
             handler: "NetworkFirst",
             options: {
-              cacheName: "api-cache",
+              cacheName: "crisis-reporter-api-cache",
               expiration: {
                 maxEntries: 100,
                 maxAgeSeconds: 60 * 5, // 5 minutes
