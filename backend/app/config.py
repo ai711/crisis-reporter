@@ -91,9 +91,11 @@ class Settings(BaseSettings):
         "http://localhost:5173",
         "http://localhost:5174",
         "http://localhost:3000",
+        "http://127.0.0.1:5173",
         "http://192.168.1.69:5173",
         "http://192.168.1.69:5174",
         "https://crisis-reporter-production.up.railway.app",
+        "https://crisis-reporter-git-production.up.railway.app",
     ]
 
     class Config:
