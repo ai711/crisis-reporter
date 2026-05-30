@@ -66,6 +66,8 @@ const ACTION_LABELS: Record<string, string> = {
   auto_block_confirmed: "Auto-block confirmed by reviewer",
   auto_block_reversed: "Auto-block reversed by reviewer",
   auto_block_expired: "Auto-block confirmed automatically after 72-hour window",
+  anonymous_merge_received: "Anonymous merge received",
+  anonymous_merge_completed: "Anonymous session merged",
 };
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -564,6 +566,12 @@ function ActivityLogSection({ reporterId }: { reporterId: string }) {
                         <span style={{ fontSize: "var(--text-sm)", color: "var(--c-text-secondary)" }}>
                           {ACTION_LABELS[entry.action] ?? entry.action.replace(/_/g, " ")}
                         </span>
+                        {entry.action === "anonymous_merge_received" && (
+                          <span className="chip chip-blue">MERGE RECEIVED</span>
+                        )}
+                        {entry.action === "anonymous_merge_completed" && (
+                          <span className="chip chip-grey">MERGED</span>
+                        )}
                         {entry.previous_value && entry.new_value && (
                           <span
                             style={{

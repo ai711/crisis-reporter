@@ -2,12 +2,14 @@ import uuid
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, text
+from sqlalchemy import select, text, update, func
 from pydantic import BaseModel
 from typing import Optional
 
 from app.database import get_db
 from app.models.reporter import Reporter
+from app.models.reporter_activity_log import ReporterActivityLog
+from app.models.report import Report
 from app.models.safety_progress import SafetyProgress
 from app.services.auth import verify_password, create_token_pair
 from app.services.encryption import encrypt_field, hash_field
@@ -44,6 +46,10 @@ class LoginResponse(BaseModel):
     expires_in: int
     reporter_id: int
     is_verified: bool
+
+
+class MergeAnonymousRequest(BaseModel):
+    anonymous_device_id: str
 
 
 class SafetyProgressRequest(BaseModel):
@@ -166,6 +172,61 @@ async def login(
         reporter_id=reporter.display_id,
         is_verified=True,
     )
+
+
+@router.post("/merge-anonymous")
+async def merge_anonymous(
+    request: MergeAnonymousRequest,
+    db: AsyncSession = Depends(get_db),
+    current_reporter: Reporter = Depends(get_current_reporter),
+):
+    """Re-attribute all reports from an anonymous session to the verified reporter."""
+
+    device_hash = hash_field(request.anonymous_device_id)
+    anon_result = await db.execute(
+        select(Reporter).where(
+            Reporter.device_id_hash == device_hash,
+            Reporter.is_verified == False,
+        )
+    )
+    anon_reporter = anon_result.scalar_one_or_none()
+
+    if not anon_reporter:
+        return {"merged": False, "reason": "anonymous_session_not_found"}
+    if anon_reporter.id == current_reporter.id:
+        return {"merged": False, "reason": "same_account"}
+
+    count_result = await db.execute(
+        select(func.count()).select_from(Report).where(Report.reporter_id == anon_reporter.id)
+    )
+    reports_transferred = count_result.scalar() or 0
+
+    await db.execute(
+        update(Report)
+        .where(Report.reporter_id == anon_reporter.id)
+        .values(reporter_id=current_reporter.id)
+    )
+
+    current_reporter.report_count = (current_reporter.report_count or 0) + (anon_reporter.report_count or 0)
+
+    anon_reporter.profile_type = "merged_into_verified"
+    anon_reporter.report_count = 0
+
+    db.add(ReporterActivityLog(
+        reporter_id=current_reporter.id,
+        action="anonymous_merge_received",
+        source="System",
+        comment=f"Merged from anonymous reporter {str(anon_reporter.id)}",
+    ))
+    db.add(ReporterActivityLog(
+        reporter_id=anon_reporter.id,
+        action="anonymous_merge_completed",
+        source="System",
+        comment=f"Reports transferred to verified reporter {str(current_reporter.id)}",
+    ))
+
+    await db.commit()
+    return {"merged": True, "reports_transferred": reports_transferred}
 
 
 # ── Safety progress ───────────────────────────────────────────────────────────
