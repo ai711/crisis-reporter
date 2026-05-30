@@ -485,6 +485,9 @@ export default function ReportDetailPage() {
   const [editReason, setEditReason] = useState('');
   const [editSaving, setEditSaving] = useState(false);
   const [reportEdits, setReportEdits] = useState<any[]>([]);
+  const [showMergeModal, setShowMergeModal] = useState(false);
+  const [mergeReason, setMergeReason] = useState('');
+  const [mergeSaving, setMergeSaving] = useState(false);
 
   const { data: report, isLoading } = useQuery<ReportDetail>({
     queryKey: ["report", reportId],
@@ -651,6 +654,14 @@ export default function ReportDetailPage() {
       flagMetadata[e.reason] = e.metadata as Record<string, unknown> | null;
     }
   });
+
+  const matchedReportId: string | null = (() => {
+    for (const reason of ['duplicate_image', 'coordinated_gps_duplicate']) {
+      const meta = flagMetadata[reason];
+      if (meta?.matching_report_id) return String(meta.matching_report_id);
+    }
+    return null;
+  })();
 
   return (
     <div style={styles.container}>
@@ -1092,6 +1103,18 @@ export default function ReportDetailPage() {
             {(report.flag_status === "red" || report.flag_status === "discarded") && (
               <Card title="Flag Reason">
                 <FlagReasonDetail flagEvents={report.flag_events} flagColor={flagColor} />
+                {(flagReasons.includes('duplicate_image') || flagReasons.includes('coordinated_gps_duplicate')) &&
+                  matchedReportId && canEditReports && (
+                  <div style={{marginTop: 12}}>
+                    <button
+                      className="btn btn-danger"
+                      style={{width: '100%'}}
+                      onClick={() => setShowMergeModal(true)}
+                    >
+                      🔗 Merge Duplicate Reports
+                    </button>
+                  </div>
+                )}
               </Card>
             )}
 
@@ -1143,6 +1166,65 @@ export default function ReportDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* Merge Duplicate Reports modal */}
+      {showMergeModal && (
+        <div style={{position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)',
+          zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+          <div className="card card-padded" style={{width: 480,
+            borderRadius: 'var(--radius-xl)'}}>
+            <div style={{fontSize: 'var(--text-xl)', fontWeight: 700, marginBottom: 8,
+              color: 'var(--c-flag-red)'}}>
+              ⚠ Merge Duplicate Reports
+            </div>
+            <div style={{fontSize: 'var(--text-sm)', color: 'var(--c-text-secondary)',
+              marginBottom: 16}}>
+              This will mark the current report as discarded and transfer its photos
+              to the canonical report. This action cannot be undone.
+            </div>
+            <div style={{background: 'var(--c-surface-low)', borderRadius: 'var(--radius-md)',
+              padding: '10px 14px', marginBottom: 16, fontSize: 'var(--text-sm)'}}>
+              <div><strong>Duplicate (will be discarded):</strong> {report.id}</div>
+              <div><strong>Canonical (will be kept):</strong> {matchedReportId}</div>
+            </div>
+            <div style={{marginBottom: 16}}>
+              <label className="input-label">Merge Reason (optional)</label>
+              <textarea className="input" rows={2}
+                style={{resize: 'vertical'}}
+                placeholder="Why are these reports being merged?"
+                value={mergeReason}
+                onChange={e => setMergeReason(e.target.value)} />
+            </div>
+            <div style={{display: 'flex', gap: 10}}>
+              <button className="btn btn-secondary btn-lg" style={{flex: 1}}
+                onClick={() => setShowMergeModal(false)}>
+                Cancel
+              </button>
+              <button
+                className="btn btn-danger btn-lg"
+                style={{flex: 1}}
+                disabled={mergeSaving}
+                onClick={async () => {
+                  setMergeSaving(true);
+                  try {
+                    await api.post(`/api/reports/${report.id}/merge`, {
+                      target_report_id: matchedReportId,
+                      merge_reason: mergeReason,
+                    });
+                    setShowMergeModal(false);
+                    window.location.reload();
+                  } catch (err: any) {
+                    alert(err?.response?.data?.detail || 'Merge failed');
+                  } finally {
+                    setMergeSaving(false);
+                  }
+                }}>
+                {mergeSaving ? 'Merging...' : 'Confirm Merge'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Edit Report modal */}
       {showEditModal && (

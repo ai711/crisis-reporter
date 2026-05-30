@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime, timezone
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status, Request, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, update
 from pydantic import BaseModel, ConfigDict
 from typing import Optional, List
 
@@ -15,6 +15,7 @@ from app.models.flag_event import FlagEvent
 from app.services.dependencies import get_optional_reporter, get_current_reporter, require_admin
 from app.models.dashboard_user import DashboardUser
 from app.models.report_edit import ReportEdit
+from app.models.photo import Photo
 from app.services.encryption import encrypt_field, hash_field
 from app.services.auto_flagging import auto_flag_report
 
@@ -635,6 +636,11 @@ async def check_duplicate_report(
     return {"is_duplicate": False}
 
 
+class MergeReportRequest(BaseModel):
+    target_report_id: str  # The canonical report to keep
+    merge_reason: Optional[str] = None
+
+
 class EditReportRequest(BaseModel):
     damage_level: Optional[str] = None
     infrastructure_types: Optional[List[str]] = None
@@ -725,6 +731,83 @@ async def get_report_edits(
         }
         for e in edits
     ]
+
+
+@router.post("/{report_id}/merge")
+async def merge_reports(
+    report_id: str,
+    request: MergeReportRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: DashboardUser = Depends(require_admin),
+):
+    """Mark report_id as a duplicate and transfer its photos to target_report_id."""
+    # Fetch duplicate
+    dup_result = await db.execute(select(Report).where(Report.id == report_id))
+    duplicate_report = dup_result.scalar_one_or_none()
+    if not duplicate_report:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Duplicate report not found")
+
+    # Fetch canonical
+    can_result = await db.execute(select(Report).where(Report.id == request.target_report_id))
+    canonical_report = can_result.scalar_one_or_none()
+    if not canonical_report:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Canonical report not found")
+
+    if duplicate_report.id == canonical_report.id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot merge a report into itself")
+
+    if duplicate_report.building_id != canonical_report.building_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Reports belong to different properties and cannot be merged",
+        )
+
+    # Count photos being transferred
+    photo_count_result = await db.execute(
+        select(func.count(Photo.id)).where(Photo.report_id == duplicate_report.id)
+    )
+    photo_count = photo_count_result.scalar() or 0
+
+    # Transfer photos from duplicate to canonical
+    await db.execute(
+        update(Photo)
+        .where(Photo.report_id == duplicate_report.id)
+        .values(report_id=canonical_report.id)
+    )
+
+    # Mark duplicate as discarded
+    duplicate_report.flag_status = "discarded"
+
+    merge_note = (request.merge_reason or "").strip()
+
+    # Flag event on the duplicate
+    db.add(FlagEvent(
+        report_id=duplicate_report.id,
+        flag_from=duplicate_report.flag_status,
+        flag_to="discarded",
+        changed_by="manual",
+        reason=f"duplicate_merged — Merged into {str(canonical_report.id)[:8].upper()}. {merge_note}".strip().rstrip("—").strip(),
+        dashboard_user_id=current_user.id,
+    ))
+
+    # Note event on the canonical report
+    db.add(FlagEvent(
+        report_id=canonical_report.id,
+        flag_from=canonical_report.flag_status,
+        flag_to=canonical_report.flag_status,
+        changed_by="manual",
+        reason=f"duplicate_absorbed — Absorbed {str(duplicate_report.id)[:8].upper()}. {merge_note}".strip().rstrip("—").strip(),
+        dashboard_user_id=current_user.id,
+    ))
+
+    await db.commit()
+
+    return {
+        "merged": True,
+        "canonical_report_id": str(canonical_report.id),
+        "duplicate_report_id": str(duplicate_report.id),
+        "photos_transferred": photo_count,
+    }
 
 
 @router.get("/{report_id}", response_model=ReportResponse)
