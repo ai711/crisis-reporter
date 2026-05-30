@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useAuthStore } from "../stores/authStore";
-import { loadLanguagePackage } from "../i18n";
+import { loadLanguagePackage, loadLanguagePackageFromCache } from "../i18n";
 import { getPreFetchedCountries } from "../utils/countryListCache";
 import type { CachedCountry } from "../utils/countryListCache";
 import api from "../services/api";
@@ -297,6 +297,17 @@ export default function OnboardingPage() {
 
   // Terms
   const [showDeclineMsg, setShowDeclineMsg] = useState(false);
+
+  // Apply cached language on mount so returning users see correct language immediately
+  useEffect(() => {
+    const applyLanguage = async () => {
+      const savedLang = localStorage.getItem("cr_language");
+      if (savedLang && savedLang !== "en") {
+        await loadLanguagePackageFromCache(savedLang);
+      }
+    };
+    applyLanguage();
+  }, []);
 
   useEffect(() => {
     getPreFetchedCountries().then((result) => {

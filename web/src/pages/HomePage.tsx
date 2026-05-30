@@ -6,6 +6,7 @@ import { WEB_SESSION_ID } from "../utils/sessionId";
 import { detectPlatform } from "../services/auth";
 import api from "../services/api";
 import CrisisTypeModal from "../components/CrisisTypeModal";
+import { loadLanguagePackageFromCache } from "../i18n";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
@@ -29,6 +30,17 @@ export default function HomePage() {
     setWelcomeVisible(false);
     try { localStorage.setItem("cr_welcome_dismissed", "true"); } catch { /* ignore */ }
   };
+
+  // Apply cached language on mount so returning users see the correct language immediately
+  useEffect(() => {
+    const applyLanguage = async () => {
+      const savedLang = localStorage.getItem("cr_language");
+      if (savedLang && savedLang !== "en") {
+        await loadLanguagePackageFromCache(savedLang);
+      }
+    };
+    applyLanguage();
+  }, []);
 
   // C: Question package version check — once per browser session, completely silent
   useEffect(() => {
