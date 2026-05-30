@@ -1014,7 +1014,7 @@ export default function PropertyDetailPage() {
               </thead>
               <tbody>
                 {reporter_rows
-                  .filter((r) => {
+                  .filter((_r) => {
                     if (!showUnreviewed) return true;
                     return true;
                   })

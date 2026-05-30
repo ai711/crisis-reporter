@@ -252,8 +252,10 @@ function DamagePill({ level }: { level: string | null }) {
   );
 }
 
-const renderPieLabel = ({ value, percent }: { value: number; percent: number }) =>
-  `${value} (${(percent * 100).toFixed(0)}%)`;
+const renderPieLabel = ({ value, percent }: { value: number; percent: number | undefined }) => {
+  const pct = percent ?? 0;
+  return `${value} (${(pct * 100).toFixed(0)}%)`;
+};
 
 // ── Main component ────────────────────────────────────────────────────────────
 

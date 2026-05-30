@@ -169,6 +169,8 @@ export interface ReportDetail extends ReportListItem {
   pressing_needs?: string[] | string | null;
   pressing_needs_other?: string | null;
   photo_metadata?: string | null;
+  infrastructure_name?: string | null;
+  debris_blocking?: string | null;
 }
 
 export interface ReportListResponse {

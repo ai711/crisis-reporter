@@ -273,7 +273,7 @@ function FlagReasonDetail({
           <p style={styles.flagContextHeader}>
             Another reporter submitted from the same location recently.
           </p>
-          {meta?.matching_reporter_id && (
+          {!!meta?.matching_reporter_id && (
             <p style={{ fontSize: 13, margin: "6px 0 0" }}>
               Reporter:{" "}
               <button

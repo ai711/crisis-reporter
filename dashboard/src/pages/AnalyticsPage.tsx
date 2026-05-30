@@ -145,12 +145,14 @@ function getDefaultDateRange(granularity: "daily" | "weekly"): { date_from: stri
   return { date_from: from.toISOString().split("T")[0], date_to: todayStr };
 }
 
-function fmtDayLabel(isoDate: string): string {
+function fmtDayLabel(value: unknown): string {
+  const isoDate = value as string;
   const [y, m, d] = isoDate.split("-").map(Number);
   return new Date(y, m - 1, d).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
-function fmtWeekLabel(isoDate: string): string {
+function fmtWeekLabel(value: unknown): string {
+  const isoDate = value as string;
   const [y, m, d] = isoDate.split("-").map(Number);
   const start = new Date(y, m - 1, d);
   const end = new Date(y, m - 1, d + 6);
@@ -298,8 +300,10 @@ function ChartCard({ title, subtitle, loading, empty, children, headerRight, foo
 
 // ── Pie label renderer ─────────────────────────────────────────────────────────
 
-const renderPieLabel = ({ value, percent }: { value: number; percent: number }) =>
-  `${value} (${(percent * 100).toFixed(0)}%)`;
+const renderPieLabel = ({ value, percent }: { value: number; percent: number | undefined }) => {
+  const pct = percent ?? 0;
+  return `${value} (${(pct * 100).toFixed(0)}%)`;
+};
 
 // ── Main component ─────────────────────────────────────────────────────────────
 
