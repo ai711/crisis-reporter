@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
-import { Suspense, lazy } from "react";
+import React, { Suspense, lazy } from "react";
 import AppLayout from "./components/AppLayout";
 import i18n from "./i18n";
 
@@ -30,6 +30,44 @@ const AboutPage = lazy(() => import("./pages/AboutPage"));
     }
   } catch { /* localStorage unavailable */ }
 })();
+
+class ErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean; error: string }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false, error: '' };
+  }
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error: error.message };
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{
+          display: 'flex', flexDirection: 'column', alignItems: 'center',
+          justifyContent: 'center', minHeight: '100vh', padding: 24,
+          background: '#F6F3F2', fontFamily: 'Public Sans, sans-serif'
+        }}>
+          <div style={{fontSize: 48, marginBottom: 16}}>⚠️</div>
+          <div style={{fontSize: 18, fontWeight: 700, color: '#1B1C1C',
+            marginBottom: 8}}>Something went wrong</div>
+          <div style={{fontSize: 14, color: '#717782', textAlign: 'center',
+            marginBottom: 24}}>{this.state.error}</div>
+          <button
+            onClick={() => window.location.reload()}
+            style={{background: '#0468B1', color: 'white', border: 'none',
+              borderRadius: 9999, padding: '12px 24px', fontSize: 14,
+              fontWeight: 700, cursor: 'pointer'}}>
+            Reload
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 function LoadingSpinner() {
   return (
@@ -93,8 +131,9 @@ function OnboardingRoute() {
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <Suspense fallback={<LoadingSpinner />}>
+    <ErrorBoundary>
+      <BrowserRouter>
+        <Suspense fallback={<LoadingSpinner />}>
         <Routes>
           <Route path="/onboarding" element={<OnboardingRoute />} />
           {/* E1: /login is a protected route — onboarding must be complete first. */}
@@ -196,7 +235,8 @@ export default function App() {
             }
           />
         </Routes>
-      </Suspense>
-    </BrowserRouter>
+        </Suspense>
+      </BrowserRouter>
+    </ErrorBoundary>
   );
 }

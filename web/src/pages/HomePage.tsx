@@ -9,14 +9,6 @@ import CrisisTypeModal from "../components/CrisisTypeModal";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
-// ── Types ─────────────────────────────────────────────────────────────────────
-
-interface ReportsListResponse {
-  items: unknown[];
-  total: number;
-  next_cursor: string | null;
-}
-
 // ── Anti-spam signal helpers ───────────────────────────────────────────────────
 
 function captureAntiSpamSignals() {
@@ -31,7 +23,9 @@ function captureAntiSpamSignals() {
 
 export default function HomePage() {
   const navigate = useNavigate();
-  const { reporterId, setReporter } = useAuthStore();
+  const { setReporter } = useAuthStore();
+  const reporterId = localStorage.getItem('cr_reporter_id') ||
+                     sessionStorage.getItem('cr_reporter_id');
 
   const [crisisModalOpen, setCrisisModalOpen] = useState(false);
   const [loginPromptOpen, setLoginPromptOpen] = useState(false);
@@ -160,24 +154,24 @@ export default function HomePage() {
   };
 
   const { data: reportsData, isLoading: reportsLoading, isError: reportsError } = useQuery({
-    queryKey: ["homeReportCount", reporterId],
+    queryKey: ['my-reports-home', reporterId],
     queryFn: async () => {
-      const res = await api.get<ReportsListResponse>("/api/reports/my", {
-        params: { limit: 1 },
-      });
-      return res.data;
+      if (!reporterId) return { reports: [], total: 0 };
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+      const token = localStorage.getItem('cr_access_token') ||
+                    sessionStorage.getItem('cr_access_token');
+      const res = await fetch(
+        `${API_URL}/api/reports?reporter_id=${reporterId}&limit=3`,
+        {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        }
+      );
+      if (!res.ok) return { reports: [], total: 0 };
+      return res.json();
     },
     enabled: !!reporterId,
+    staleTime: 60000,
   });
-
-  const [reportsTimedOut, setReportsTimedOut] = useState(false);
-  useEffect(() => {
-    if (!reporterId || !reportsLoading) { setReportsTimedOut(false); return; }
-    const timer = setTimeout(() => setReportsTimedOut(true), 8000);
-    return () => clearTimeout(timer);
-  }, [reporterId, reportsLoading]);
-
-  const reportCount = reportsData?.total ?? null;
 
   return (
     <div style={s.page}>
@@ -211,26 +205,64 @@ export default function HomePage() {
           What can I report?
         </button>
 
-        <div style={s.reportsCard}>
-          {!reporterId ? (
-            <p style={s.reportsText}>Submit your first report to get started.</p>
-          ) : reportsTimedOut || reportsError ? (
-            <p style={s.reportsText}>Unable to load reports</p>
-          ) : reportCount === null ? (
-            <p style={s.reportsText}>Loading your reports…</p>
-          ) : (
-            <div style={s.reportsRow}>
-              <p style={s.reportsText}>
-                You have submitted{" "}
-                <strong style={s.reportsCount}>{reportCount}</strong>{" "}
-                report{reportCount !== 1 ? "s" : ""}.
-              </p>
-              <button style={s.viewAllBtn} onClick={() => navigate("/my-reports")}>
-                View all →
-              </button>
+        {reportsLoading ? (
+          <div style={{padding: '16px 20px', textAlign: 'center',
+            fontSize: 14, color: '#717782'}}>
+            Loading your reports...
+          </div>
+        ) : reportsError || !reporterId ? (
+          <div style={{padding: '20px 16px'}}>
+            <div style={{background: 'white', borderRadius: 16, padding: '20px',
+              textAlign: 'center'}}>
+              <div style={{fontSize: 32, marginBottom: 8}}>📋</div>
+              <div style={{fontSize: 15, fontWeight: 600, color: '#1B1C1C',
+                marginBottom: 4}}>No reports yet</div>
+              <div style={{fontSize: 13, color: '#717782'}}>
+                Your submitted reports will appear here
+              </div>
             </div>
-          )}
-        </div>
+          </div>
+        ) : reportsData?.reports?.length === 0 ? (
+          <div style={{padding: '20px 16px'}}>
+            <div style={{background: 'white', borderRadius: 16, padding: '20px',
+              textAlign: 'center'}}>
+              <div style={{fontSize: 32, marginBottom: 8}}>📋</div>
+              <div style={{fontSize: 15, fontWeight: 600, color: '#1B1C1C',
+                marginBottom: 4}}>No reports yet</div>
+              <div style={{fontSize: 13, color: '#717782'}}>
+                Tap "Report an Incident" to submit your first report
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div style={{padding: '0 16px'}}>
+            <div style={{fontSize: 11, fontWeight: 700, color: '#717782',
+              textTransform: 'uppercase', letterSpacing: '1.2px',
+              marginBottom: 8, marginTop: 16}}>
+              YOUR RECENT REPORTS
+            </div>
+            {reportsData?.reports?.slice(0, 3).map((report: any) => (
+              <div key={report.id} style={{background: 'white', borderRadius: 16,
+                padding: '14px 16px', marginBottom: 10,
+                display: 'flex', alignItems: 'center', gap: 12}}>
+                <div style={{width: 8, height: 8, borderRadius: 4, flexShrink: 0,
+                  background: report.flag_status === 'green' ? '#38A169'
+                    : report.flag_status === 'red' ? '#E53E3E'
+                    : report.flag_status === 'orange' ? '#F2994A'
+                    : '#9CA3AF'}} />
+                <div style={{flex: 1, minWidth: 0}}>
+                  <div style={{fontSize: 13, fontWeight: 600, color: '#1B1C1C',
+                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}}>
+                    {report.building_name || report.infrastructure_name || 'Unnamed location'}
+                  </div>
+                  <div style={{fontSize: 11, color: '#717782', marginTop: 2}}>
+                    {report.damage_level} · {new Date(report.submitted_at).toLocaleDateString()}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </main>
 
       {/* ── Login prompt bottom sheet ── */}

@@ -16,6 +16,14 @@ interface SubmissionStepperProps {
   currentStep: StepperStep;
 }
 
+const STEP_ICONS: Record<StepperStep, string> = {
+  photo: '📷',
+  location: '📍',
+  questions: '📝',
+  review: '👁',
+  submit: '✅',
+};
+
 export default function SubmissionStepper({ currentStep }: SubmissionStepperProps) {
   const { t } = useTranslation();
   const currentIndex = STEPS.indexOf(currentStep);
@@ -25,6 +33,7 @@ export default function SubmissionStepper({ currentStep }: SubmissionStepperProp
       {STEPS.map((step, idx) => {
         const isCompleted = idx < currentIndex;
         const isActive = idx === currentIndex;
+        const circleSize = isActive ? 36 : 28;
 
         return (
           <div key={step} style={styles.stepRow}>
@@ -34,6 +43,7 @@ export default function SubmissionStepper({ currentStep }: SubmissionStepperProp
                 style={{
                   ...styles.line,
                   background: isCompleted || isActive ? "#38A169" : "#E2E8F0",
+                  marginBottom: 20,
                 }}
               />
             )}
@@ -42,32 +52,32 @@ export default function SubmissionStepper({ currentStep }: SubmissionStepperProp
             <div style={styles.stepCol}>
               <div
                 style={{
-                  ...styles.circle,
-                  background: isCompleted
-                    ? "#38A169"
-                    : isActive
-                    ? "#0468B1"
-                    : "#E2E8F0",
+                  width: circleSize,
+                  height: circleSize,
+                  borderRadius: circleSize / 2,
+                  background: isCompleted ? '#38A169' : isActive ? '#0468B1' : '#E2E8F0',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                  transition: 'all 0.2s ease',
+                  boxShadow: isActive ? '0 2px 8px rgba(4,104,177,0.35)' : 'none',
                 }}
               >
                 {isCompleted ? (
-                  <span style={styles.checkmark}>✓</span>
+                  <span style={{fontSize: 14, color: 'white'}}>✓</span>
+                ) : isActive ? (
+                  <span style={{fontSize: 16}}>{STEP_ICONS[step]}</span>
                 ) : (
-                  <span
-                    style={{
-                      ...styles.number,
-                      color: isActive ? "#fff" : "#717782",
-                    }}
-                  >
-                    {idx + 1}
-                  </span>
+                  <span style={{fontSize: 12, color: '#717782'}}>{idx + 1}</span>
                 )}
               </div>
               <span
                 style={{
                   ...styles.label,
-                  color: isCompleted ? "#38A169" : isActive ? "#0468B1" : "#717782",
-                  fontWeight: isActive ? 700 : 400,
+                  fontSize: 11,
+                  color: isCompleted ? '#38A169' : isActive ? '#0468B1' : '#717782',
+                  fontWeight: isActive ? 700 : isCompleted ? 600 : 400,
                 }}
               >
                 {t(I18N_KEYS[step])}
