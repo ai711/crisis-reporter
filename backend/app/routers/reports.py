@@ -281,6 +281,11 @@ async def submit_report(
             reporter = matched
             reporter_id = matched.id
 
+    # Check if reporter is blocked — route directly to red flag
+    submission_flag_status = "grey"
+    if reporter and getattr(reporter, 'is_blocked', False):
+        submission_flag_status = "red"
+
 # Encrypt IP address
     import base64
     client_ip = http_request.client.host if http_request.client else None
@@ -344,7 +349,7 @@ async def submit_report(
         pressing_needs=request.pressing_needs,
         pressing_needs_other=request.pressing_needs_other,
         description_language=request.language_code,
-        flag_status="grey",
+        flag_status=submission_flag_status,
         platform=request.platform,
         app_version=request.app_version,
         language_code=request.language_code,

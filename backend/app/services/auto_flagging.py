@@ -143,7 +143,11 @@ async def auto_flag_report(report_id: str) -> None:
                     select(Reporter).where(Reporter.id == report.reporter_id)
                 )
                 current_reporter = rep_result.scalar_one_or_none()
-                if current_reporter and current_reporter.device_id_hash and not current_reporter.is_blocked:
+                if current_reporter and current_reporter.device_id_hash:
+                    # Also flag if the submitting reporter is themselves blocked
+                    if current_reporter.is_blocked and new_flag != "red":
+                        new_flag = "red"
+                        flag_reason = "reporter_blocked"
                     blocked_match_result = await db.execute(
                         select(Reporter).where(
                             and_(
@@ -193,69 +197,9 @@ async def auto_flag_report(report_id: str) -> None:
                         )
 
             # ── Rule 2: IP blocked reporter match ────────────────────────────
-            # If this report's ip_address_hash matches the ip_address_hash of any
-            # currently blocked reporter, flag Red and apply a soft block pending
-            # superadmin confirmation.
-            if new_flag == "green" and report.ip_address_hash and report.reporter_id:
-                ip_blocked_result = await db.execute(
-                    select(Reporter).where(
-                        and_(
-                            Reporter.ip_address_hash == report.ip_address_hash,
-                            Reporter.is_blocked == True,
-                            Reporter.id != report.reporter_id,
-                        )
-                    ).limit(1)
-                )
-                ip_blocked_match = ip_blocked_result.scalar_one_or_none()
-
-                if ip_blocked_match:
-                    new_flag = "red"
-                    flag_reason = "rule_2_ip_blocked_reporter_match"
-                    matched_display = (
-                        str(ip_blocked_match.display_id)
-                        if ip_blocked_match.display_id
-                        else str(ip_blocked_match.id)
-                    )
-                    flag_metadata = {
-                        "matched_blocked_reporter_id": matched_display,
-                        "submission_ip_hash": report.ip_address_hash,
-                    }
-                    reporter_r2 = await db.get(Reporter, report.reporter_id)
-                    if reporter_r2 and not reporter_r2.is_blocked:
-                        reporter_r2.profile_status = "flagged"
-                        reporter_r2.auto_blocked_at = datetime.now(timezone.utc)
-                        reporter_r2.auto_block_expires_at = (
-                            datetime.now(timezone.utc)
-                            + timedelta(hours=settings.AUTO_BLOCK_CONFIRMATION_HOURS)
-                        )
-                        reporter_r2.pending_auto_block_confirmation = True
-                        reporter_r2.matched_blocked_reporter_id = matched_display
-                        reporter_r2.auto_block_confirmed = False
-                        db.add(reporter_r2)
-                    try:
-                        from app.services.reporter_activity_service import write_activity_log
-                        await write_activity_log(
-                            db,
-                            reporter_id=report.reporter_id,
-                            action="auto_flagged",
-                            source="System",
-                            previous_value="active",
-                            new_value="flagged",
-                            matched_reporter_id=matched_display,
-                            comment=(
-                                f"IP address matches blocked reporter {matched_display}. "
-                                "Report flagged for review."
-                            ),
-                        )
-                    except Exception:
-                        log.exception(
-                            "auto_flag_report: activity log write failed for ip_blocked_match %s",
-                            report.reporter_id,
-                        )
-                    log.info(
-                        "auto_flag_report: reporter %s flagged — ip_address_hash matches blocked reporter %s",
-                        report.reporter_id, ip_blocked_match.id,
-                    )
+            # TODO: Rule 2 (IP match) disabled — Reporter.ip_address_hash field does not exist.
+            # Re-enable when Reporter model has ip_address_hash column added.
+            # Track at: https://github.com/ai711/crisis-reporter (add issue)
 
             # ── Rule 3: Photo validation ──────────────────────────────────────
             async def _photo_count() -> int:
