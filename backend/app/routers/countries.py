@@ -135,6 +135,15 @@ class CountryResponse(BaseModel):
         from_attributes = True
 
 
+class CountryDetailResponse(BaseModel):
+    code: str
+    name: str
+    official_language: Optional[str] = None
+    official_language_name: Optional[str] = None
+    is_active: bool
+    dialling_code: Optional[str] = None
+
+
 # ── Seed data — all 193 UN member states ─────────────────────────────────────
 # Tuple: (ISO 3166-1 alpha-2 code, English name, primary official language, is_active)
 # is_active=True for the 20 original crisis-affected countries.
@@ -384,6 +393,39 @@ async def list_countries(db: AsyncSession = Depends(get_db)):
             dialling_code=country.dialling_code,
         ))
     return response
+
+
+@router.get("/{code}", response_model=CountryDetailResponse)
+async def get_country(code: str, db: AsyncSession = Depends(get_db)):
+    """Return a single active country with resolved official language name. Public endpoint."""
+    result = await db.execute(
+        select(Country).where(
+            Country.code == code.upper(),
+            Country.is_active == True
+        )
+    )
+    country = result.scalar_one_or_none()
+    if not country:
+        raise HTTPException(status_code=404, detail="Country not found")
+
+    # OFFICIAL_LANG_NAME_TO_CODE maps name→code; reverse it to get code→name.
+    code_to_name = {v: k for k, v in OFFICIAL_LANG_NAME_TO_CODE.items()}
+    official_language_code = country.official_language
+    # Normalize: if stored value is a full language name (len > 3) convert to ISO code.
+    if official_language_code and len(official_language_code) > 3:
+        official_language_code = OFFICIAL_LANG_NAME_TO_CODE.get(
+            official_language_code.lower().strip(), official_language_code
+        )
+    official_language_name = code_to_name.get(official_language_code, None)
+
+    return CountryDetailResponse(
+        code=country.code,
+        name=country.name,
+        official_language=official_language_code,
+        official_language_name=official_language_name,
+        is_active=country.is_active,
+        dialling_code=country.dialling_code,
+    )
 
 
 @router.post("", response_model=CountryResponse, status_code=status.HTTP_201_CREATED)
