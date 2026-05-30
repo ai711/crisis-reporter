@@ -51,6 +51,7 @@ const queryClient = new QueryClient({
   // This is synchronous-equivalent (reads localStorage, no network).
   try {
     const savedLang = localStorage.getItem("cr_language");
+    console.log('[i18n] Loading language from cache:', savedLang);
     if (savedLang && savedLang !== "en") {
       await loadLanguagePackageFromCache(savedLang);
       // If no cache exists for this language the app stays on EN — acceptable.

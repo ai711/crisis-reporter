@@ -129,8 +129,7 @@ export default function HomePage() {
           platform: detectPlatform(),
           country_code: (() => { try { return localStorage.getItem("cr_country"); } catch { return null; } })(),
           language_code: (() => { try { return localStorage.getItem("cr_language") || "en"; } catch { return "en"; } })(),
-          tc_accepted_at: (() => { try { return localStorage.getItem("cr_tc_accepted"); } catch { return null; } })(),
-          ...captureAntiSpamSignals(),
+          tc_accepted_at: new Date().toISOString(),
         }
       );
       assignedId = res.data.reporter_id;
