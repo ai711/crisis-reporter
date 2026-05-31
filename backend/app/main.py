@@ -473,6 +473,24 @@ ON CONFLICT DO NOTHING""",
     "ALTER TABLE photos ADD COLUMN IF NOT EXISTS display_order INTEGER DEFAULT 0 NOT NULL",
     # flag_events.metadata — JSON blob for structured auto-flag context (IP, device lists, etc.)
     "ALTER TABLE flag_events ADD COLUMN IF NOT EXISTS metadata JSONB",
+    # ── Comprehensive schema-gap patch ──────────────────────────────────────────
+    # reporters — columns added in later chapters with no prior migration
+    "ALTER TABLE reporters ADD COLUMN IF NOT EXISTS display_id INTEGER",
+    "CREATE UNIQUE INDEX IF NOT EXISTS ix_reporters_display_id ON reporters(display_id) WHERE display_id IS NOT NULL",
+    "CREATE SEQUENCE IF NOT EXISTS reporter_display_id_seq START WITH 1 INCREMENT BY 1",
+    "ALTER TABLE reporters ADD COLUMN IF NOT EXISTS os_device_id VARCHAR(64)",
+    "ALTER TABLE reporters ADD COLUMN IF NOT EXISTS t_and_c_accepted_at TIMESTAMPTZ",
+    "ALTER TABLE reporters ADD COLUMN IF NOT EXISTS photo_url VARCHAR(500)",
+    "ALTER TABLE reporters ADD COLUMN IF NOT EXISTS last_active_at TIMESTAMPTZ",
+    # reports — offline-queue tracking and IP encryption columns
+    "ALTER TABLE reports ADD COLUMN IF NOT EXISTS local_id VARCHAR(100)",
+    "CREATE INDEX IF NOT EXISTS ix_reports_local_id ON reports(local_id) WHERE local_id IS NOT NULL",
+    "ALTER TABLE reports ADD COLUMN IF NOT EXISTS ip_address_encrypted VARCHAR(500)",
+    "ALTER TABLE reports ADD COLUMN IF NOT EXISTS was_queued BOOLEAN DEFAULT FALSE",
+    "ALTER TABLE reports ADD COLUMN IF NOT EXISTS queued_at TIMESTAMPTZ",
+    "ALTER TABLE reports ADD COLUMN IF NOT EXISTS synced_at TIMESTAMPTZ",
+    # crises — map radius default (NOT NULL in model, missing column would break crisis creation)
+    "ALTER TABLE crises ADD COLUMN IF NOT EXISTS map_default_radius_miles INTEGER DEFAULT 50",
 ]
 
 
