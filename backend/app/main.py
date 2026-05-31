@@ -471,6 +471,8 @@ ON CONFLICT DO NOTHING""",
     "ALTER TABLE photos ADD COLUMN IF NOT EXISTS photo_hash VARCHAR(64)",
     "CREATE INDEX IF NOT EXISTS ix_photos_photo_hash ON photos(photo_hash)",
     "ALTER TABLE photos ADD COLUMN IF NOT EXISTS display_order INTEGER DEFAULT 0 NOT NULL",
+    # flag_events.metadata — JSON blob for structured auto-flag context (IP, device lists, etc.)
+    "ALTER TABLE flag_events ADD COLUMN IF NOT EXISTS metadata JSONB",
 ]
 
 
