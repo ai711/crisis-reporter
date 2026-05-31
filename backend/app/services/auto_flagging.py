@@ -113,9 +113,11 @@ async def _link_report_to_projects(db, report) -> None:
 
 # ── Background task entry point ───────────────────────────────────────────────
 
-async def auto_flag_report(report_id: str) -> None:
-    """Evaluate flagging rules for *report_id* and persist the result."""
-    await asyncio.sleep(10)
+async def auto_flag_report(report_id: str, delay: int = 10) -> None:
+    """Evaluate flagging rules for *report_id* and persist the result.
+    delay=0 when called from the stuck-report monitor (report already committed)."""
+    if delay > 0:
+        await asyncio.sleep(delay)
 
     from app.models.report import Report
     from app.models.flag_event import FlagEvent
@@ -485,9 +487,11 @@ async def monitor_stuck_grey_reports() -> None:
                     (datetime.now(timezone.utc) - report.created_at).total_seconds() / 60
                 )
                 log.warning(
-                    "STUCK_GREY_REPORT report_id=%s crisis_id=%s minutes_stuck=%d",
+                    "STUCK_GREY_REPORT report_id=%s crisis_id=%s minutes_stuck=%d — re-running auto-flag",
                     report.id, report.crisis_id, minutes_stuck,
                 )
+                # Re-run auto-flagging without delay — report is already committed
+                asyncio.create_task(auto_flag_report(str(report.id), delay=0))
                 try:
                     from app.routers.dashboard_sse import publish_event
                     await publish_event(

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "../stores/authStore";
-import api from "../services/api";
+import api, { tokenStorage } from "../services/api";
 
 interface ReporterReport {
   id: string;
@@ -116,7 +116,7 @@ export default function MyReportsPage() {
   const [selectedReport, setSelectedReport] = useState<ReporterReport | null>(null);
 
   const fetchReports = useCallback(async (cursor?: string) => {
-    if (!reporterId) {
+    if (!reporterId || !tokenStorage.getAccessToken()) {
       const raw = sessionStorage.getItem("cr_session_reports");
       if (raw) {
         try {

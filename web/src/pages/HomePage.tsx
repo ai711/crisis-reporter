@@ -168,7 +168,7 @@ export default function HomePage() {
       if (!res.data) return { reports: [], total: 0 };
       return { reports: res.data.reports || res.data.items || res.data || [], total: 0 };
     },
-    enabled: true,
+    enabled: !!tokenStorage.getAccessToken(),
     staleTime: 60000,
     retry: false,
     throwOnError: false,
