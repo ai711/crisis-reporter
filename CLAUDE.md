@@ -1,6 +1,6 @@
-# Crisis Reporter — CLAUDE.md
-# Claude Code Project Memory File
-# Read this file completely before writing any code in this project.
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project Identity
 - Project: Crisis Reporter — UNDP Crisis Mapping Challenge
@@ -11,12 +11,10 @@
 - Repository: https://github.com/ai711/crisis-reporter
 
 ## What This System Is
-Crisis Reporter is an end-to-end crisis damage reporting system. Community 
-reporters submit damage reports (photos, location, damage classification) 
-from any device with any connectivity level. UNDP staff review all reports 
-through a secure web dashboard.
+Crisis Reporter is an end-to-end crisis damage reporting system. Community reporters submit damage reports (photos, location, damage classification) from any device with any connectivity level. UNDP staff review all reports through a secure web dashboard.
 
 ## Folder Structure
+```
 crisis-reporter/
 ├── backend/       FastAPI, PostgreSQL models, Redis, ARQ worker
 ├── web/           React + Vite — reporter web app and PWA (Tier B + C)
@@ -25,174 +23,235 @@ crisis-reporter/
 ├── shared/        Shared TypeScript types and API contracts
 ├── data/          Building footprint processing scripts
 ├── docs/          Technical Architecture Document and specs
-├── CLAUDE.md      This file — read before every session
+├── CLAUDE.md      This file
 ├── .env.example   All environment variables with placeholders
 └── .gitignore     Never commit .env files
+```
 
-## Development Order — Follow This Sequence
-1. Backend: FastAPI, PostgreSQL schema, PostGIS, Redis, auth, core report API
-2. Backend: ARQ worker, photo processing, auto-flagging, StorageService
-3. Web/PWA: Reporter app — full submission flow, 6 languages, MapLibre, offline queue
-4. Dashboard: Main map, report review, flag management, SSE updates
-5. Dashboard: Complete — reporter profiles, analytics, export, settings
-6. Android app: React Native, Expo managed workflow, MapLibre, EAS Build APK
-7. Integration testing, Cloudflare R2 switch, Railway deployment
+## Development Commands
+
+### Backend
+```bash
+cd backend
+
+# Activate venv (Windows)
+.\venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run dev server (port 8000)
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+
+# Run ARQ worker (separate terminal)
+arq app.worker.WorkerSettings
+
+# Generate a Fernet key (run once, store in .env)
+python -c "from app.services.encryption import generate_fernet_key; print(generate_fernet_key())"
+```
+
+Schema migrations are **not Alembic-managed** — they run as raw SQL in `_MIGRATIONS` list in `backend/app/main.py` at every startup (all statements use `IF NOT EXISTS` / `IF NOT EXISTS` guards, so they are idempotent). To add a migration, append to the `_MIGRATIONS` list. Do not create separate Alembic revision files for new columns.
+
+API docs available at `http://localhost:8000/api/docs` when the dev server is running.
+
+### Web/PWA (reporter app)
+```bash
+cd web
+npm install
+npm run dev        # Vite dev server — http://localhost:5173
+npm run build      # TypeScript check + Vite build
+npm run lint       # ESLint
+npm run preview    # Preview production build
+```
+
+### Dashboard (UNDP staff app)
+```bash
+cd dashboard
+npm install
+npm run dev        # Vite dev server — http://localhost:5174
+npm run build      # TypeScript check + Vite build
+npm run lint       # ESLint
+```
+
+### Mobile (Android)
+```bash
+cd mobile
+npm install
+npx expo start         # Start Expo dev server
+npx expo run:android   # Run on connected Android device/emulator
+```
+
+## Architecture — Backend
+
+### Request Flow
+1. Reporter submits report → `POST /api/reports` (`backend/app/routers/reports.py`)
+2. Report saved with `flag_status="grey"`
+3. `auto_flag_report()` runs as a **FastAPI BackgroundTask** (not ARQ) — `backend/app/services/auto_flagging.py`
+4. Auto-flagging transitions flag to green/orange/red, writes a `FlagEvent`, then publishes to Redis pub/sub channel `dashboard:{crisis_id}`
+5. Dashboard SSE endpoint (`backend/app/routers/dashboard_sse.py`) streams the event to connected clients
+
+### Key Entry Points
+- `backend/app/main.py` — FastAPI app, lifespan hooks, migration runner, background loops, all router registration
+- `backend/app/config.py` — All settings via `pydantic-settings`; reads from `.env` automatically
+- `backend/app/database.py` — Async engine (`asyncpg`), `AsyncSessionLocal`, `Base`, `get_db` dependency
+
+### Models (backend/app/models/)
+| File | Table | Notes |
+|------|-------|-------|
+| `report.py` | `reports` | Core report; `flag_status` drives all export/review logic |
+| `reporter.py` | `reporters` | Both anonymous (device-only) and verified (email+pw); PII fields are Fernet-encrypted with a separate SHA-256 hash column for indexed lookups |
+| `crisis.py` | `crises` | Named project/event; serial ID format `PR-XXXX`; `status` ∈ active/closed/archived |
+| `dashboard_user.py` | `dashboard_users` | UNDP staff; `role` ∈ superadmin/admin/custom-role-name |
+| `role.py` | `roles` | Custom permission roles; `permissions` JSONB maps section keys → `{view, edit}` |
+| `flag_event.py` | `flag_events` | Immutable audit trail every time a flag changes |
+| `photo.py` | `photos` | One report → many photos; `storage_path` is the key passed to StorageService |
+| `language_package.py` | `languages`, `string_keys`, `translations` | Full translation governance system |
+| `report_project.py` | `report_projects` | Many-to-many join: reports ↔ crises |
+| `project_user.py` | `project_users` | Dashboard user access per crisis/project |
+
+### Services (backend/app/services/)
+- `encryption.py` — `encrypt_field(str)→bytes`, `decrypt_field(bytes)→str`, `hash_field(str)→str` (SHA-256). All PII stored as `*_encrypted` + `*_hash` column pairs.
+- `storage.py` — `StorageService` ABC with `LocalFileSystemStorage` and `CloudflareR2Storage`. Factory `get_storage_service()` reads `STORAGE_BACKEND` env var. A singleton `storage_service` is created at import time.
+- `auto_flagging.py` — Runs as a BackgroundTask. Thresholds are a module-level dict updated via `PATCH /api/flag-rules`. Flagging order: blocked device → blocked IP → same-IP device farm → rapid submission → duplicate → green.
+- `dependencies.py` — FastAPI dependency injectors: `get_current_dashboard_user`, `get_current_reporter`, `get_optional_reporter`, `require_admin`, `require_superadmin`, `require_section_access(section_key, require_edit)`.
+- `auth.py` — JWT encode/decode. Tokens carry a `ctx` claim (`"dashboard"` or `"reporter"`) to prevent cross-context token reuse.
+
+### Routers (backend/app/routers/)
+All routers are prefixed with `/api`. Key ones:
+- `reports.py` — `POST /api/reports` (submit), `GET /api/reports/{id}`
+- `reporter_auth.py` — Anonymous register, verified register/login, token refresh
+- `dashboard_auth.py` — Staff login/logout, token refresh, password change
+- `dashboard_sse.py` — `GET /api/dashboard/stream` SSE endpoint; uses Redis pub/sub per `crisis_id`
+- `exports.py` — Export jobs (CSV, GeoJSON, Shapefile, GeoPackage, RAPIDA); signed download URLs
+- `flag_rules.py` — `PATCH /api/flag-rules` to update auto-flagging thresholds at runtime
+- `language_packages.py` — Translation management (4 sub-routers: languages, packages, keys, translations)
+- `review_queue.py` — Redis-backed soft-lock system (15-min claim window per reviewer)
+
+### Background Loops (started in lifespan)
+Four `asyncio.create_task` loops run perpetually:
+- `_stuck_report_loop` — promotes stuck grey reports
+- `_auto_block_confirmation_loop` — auto-confirms unreviewed reporter blocks after configurable window
+- `_pause_expiry_loop` — clears expired submission pauses every 15 min
+- `_remove_expired_deprecated_languages_loop` — daily hard-delete of deprecated languages
+
+### Startup Seeding
+Every startup (idempotent): `seed_initial_package()`, `seed_string_keys()`, `seed_countries()`, `seed_first_admin()`, `_seed_default_roles()`, `_seed_notification_types()`. Default admin: `admin@crisisreporter.org` / `Admin2026` (reset on every startup).
+
+## Architecture — Web/PWA (reporter app)
+
+### Key Files
+- `web/src/services/api.ts` — Axios instance with silent JWT refresh interceptor. Token stored in `localStorage` under keys `cr_access_token`, `cr_refresh_token`, `cr_reporter_id`. **Token refresh is at the HTTP layer, never the UI layer.**
+- `web/src/utils/offlineQueue.ts` — IndexedDB store `crisis_reporter/report_queue`. Reports written here when offline; synced when online. Each entry has a `local_id` that is echoed to the backend to prevent duplicates on retry.
+- `web/src/App.tsx` — Route guard checks `cr_country`, `cr_language` (onboarding), `cr_tc_accepted` (T&C). Incomplete onboarding redirects to `/onboarding` with `?next=` for post-completion redirect.
+- `web/src/i18n.ts` — i18next config. Language packs are fetched from the API and cached. `loadLanguagePackageFromCache()` is called on every route change to prevent drift back to English.
+
+### localStorage Keys
+`cr_access_token`, `cr_refresh_token`, `cr_reporter_id`, `cr_country`, `cr_language`, `cr_tc_accepted`, `cr_tc_version`
+
+### VITE_API_URL
+Set this env var to point to the backend. Defaults to `http://127.0.0.1:8000`.
+
+## Architecture — Dashboard (UNDP staff app)
+
+### Key Files
+- `dashboard/src/services/api.ts` — Axios instance; same silent-refresh pattern as web.
+- `dashboard/src/hooks/useSSE.ts` — Connects to `GET /api/dashboard/stream?crisis_id=…&token=…`. Auto-reconnects after 5s on error. Token passed as query param because `EventSource` doesn't support custom headers.
+- `dashboard/src/stores/authStore.ts` — Zustand store; persists user profile including `role_permissions` (JSONB from `roles` table).
+- `dashboard/src/App.tsx` — `ProtectedRoute` checks `isAuthenticated()` + optional `requiredRole` or `requiredSection`. Section keys: `main_map_view`, `reports_page`, `location_page`, `review_queue`, `analytics_and_statistics`, `reporter_profiles`, `export`, `projects`, `manage_users`, `manage_roles`, `app_configuration`.
+
+### Dashboard Route Map
+`/map` → MainMapPage, `/reports` → ReportsPage, `/locations` → LocationsPage (properties), `/review-queue` → ReviewQueuePage, `/analytics` → AnalyticsPage, `/reporters` → ReportersPage, `/export` → ExportPage, `/projects` → ProjectsPage, `/users` → UserManagementPage, `/roles` → ManageRolesPage, `/settings` → SystemSettingsPage
+
+## Architecture — Mobile (Android)
+
+Built with Expo SDK 56 / React Native 0.81. Managed workflow — no `android/` edits. Map via `@maplibre/maplibre-react-native`. Offline queue uses `expo-file-system`. Push notifications via `expo-notifications` (FCM). Build APK with `eas build --platform android`.
 
 ## Locked Technical Decisions — Never Re-Open These
 
-### Backend
-- Language: Python 3.14
-- Framework: FastAPI (async-native)
-- ASGI server: Uvicorn with Gunicorn in production
-- ORM: SQLAlchemy 2.0 async
-- Database driver: asyncpg
-
 ### Database
-- Primary: PostgreSQL 16 + PostGIS 3
-- Job queue + pub/sub: Redis 7
 - NEVER use offset pagination — cursor-based pagination ONLY throughout
 - All list endpoints anchor on record ID or timestamp cursor
 
 ### Authentication
-- Method: JWT throughout (PyJWT + passlib bcrypt)
-- Dashboard staff: email + password, JWT, Admin and Analyst roles
-- Reporter verified: email + password, JWT, Reporter role
+- JWT throughout (PyJWT + passlib bcrypt)
+- Dashboard staff: email + password, JWT; `ctx="dashboard"` claim
+- Reporter verified: email + password, JWT; `ctx="reporter"` claim
 - Reporter anonymous: device UUID only, no JWT
-- Access token TTL: 15 minutes
-- Refresh token TTL: 7 days
+- Access token TTL: 15 minutes | Refresh token TTL: 7 days
 
 ### CRITICAL — Silent JWT Refresh
-Token refresh MUST happen silently in the background at the HTTP client 
-layer. It must NEVER interrupt an active form flow or report submission. 
-This applies to both the PWA and the Android app. Implement as an HTTP 
-interceptor — not at the UI layer. This is a must-not-miss requirement.
+Token refresh MUST happen silently at the HTTP client layer (axios interceptor). It must NEVER interrupt an active form flow or report submission. This applies to both the PWA and the Android app.
 
 ### Photo Storage
-- Development: Local filesystem at backend/uploads/photos/
-- Pre-submission production: Cloudflare R2 (S3-compatible via boto3)
-- Switch is controlled by environment variable: STORAGE_BACKEND=local or r2
-- StorageService abstraction class MUST be implemented from day one
-- Three methods only: save(file, path), get_url(path), delete(path)
-- Switching from local to R2 must require zero code changes
+- `STORAGE_BACKEND=local` → `LocalFileSystemStorage` (dev)
+- `STORAGE_BACKEND=r2` → `CloudflareR2Storage` (prod)
+- Switching requires zero code changes — only the env var
+- `storage_service` singleton in `backend/app/services/storage.py`
 
-### Photo Compression Thresholds
-- Under 1.5 MB: no compression, send as-is
-- 1.5 MB to 8 MB: compress to ~1 MB
+### Photo Compression Thresholds (enforced in web/src/utils/photoCompression.ts)
+- Under 1.5 MB: send as-is
+- 1.5 MB–8 MB: compress to ~1 MB
 - Above 8 MB: compress to ~1.5 MB
-- Record compression metadata with every report
 
-### Frontend — Web and PWA
-- Framework: React 18 + Vite 5
-- Language: TypeScript 5 throughout
-- Data fetching: TanStack Query 5
-- Internationalisation: react-i18next
-- Map: MapLibre GL JS
-- PWA layer: vite-plugin-pwa
-- Offline queue: IndexedDB (report queue + photo Blobs)
-- localStorage: session ID, reporter ID, T&C acceptance, language, PWA flag
-- Web and PWA are ONE shared codebase — not two separate apps
-
-### Frontend — Dashboard
-- Framework: React 18 + Vite 5 (SEPARATE app from web/PWA)
-- Data fetching: TanStack Query 5
-- Real-time: SSE (Server-Sent Events) primary connection
-- Fallback: TanStack Query refetch interval at 20 seconds when SSE drops
-- Map: MapLibre GL JS
-- Desktop only — 1440px minimum viewport
-
-### Frontend — Android App
-- Framework: React Native 0.74 + Expo SDK 51
-- Workflow: Expo managed workflow with config plugins (NOT bare workflow)
-- Build: Expo EAS Build — generates downloadable APK file
-- Map: @maplibre/maplibre-react-native via config plugin
-- Push: Expo Push Notifications (FCM wrapper)
-- MUST produce a downloadable APK via EAS Build before submission
-
-### Real-Time Dashboard Updates
-- Primary: Server-Sent Events (SSE) — FastAPI streaming endpoint
-- Engine: Redis pub/sub — events published on report confirm or flag change
-- Fallback: TanStack Query refetch at 20-second interval when SSE drops
-- LIVE indicator: green dot when connected, amber when connection lost
-- Events: report_confirmed, flag_changed, reporter_status_changed, review_queue_updated
-
-### Background Jobs
-- Durable jobs (ARQ): photo processing, auto-flagging, export generation, push notifications
-- Lightweight jobs (FastAPI BackgroundTasks): SSE event broadcasting
-- ARQ worker runs as separate process — same codebase, different start command
+### Real-Time Updates
+- SSE primary: `GET /api/dashboard/stream` (Redis pub/sub per `crisis_id`)
+- Fallback: TanStack Query 20-second refetch when SSE drops
+- Events: `report_confirmed`, `flag_changed`, `reporter_status_changed`, `review_queue_updated`, `heartbeat`
 
 ### Flag System
-- Grey: received, auto-checks in progress — excluded from exports by default
-- Green: verified, passed all checks — included in exports
-- Orange: passed with notes, minor anomaly — included in exports
-- Red: requires human review — excluded from exports by default
-- Auto-flagging runs as ARQ job on every incoming report
+- `grey` → received, auto-checks in progress (excluded from exports by default)
+- `green` → passed all checks (included)
+- `orange` → passed with notes (included)
+- `red` → requires human review (excluded by default)
 
-### Auto-Flagging Rules (in order)
-1. Blocked device ID match → Red flag
-2. Blocked IP address match → Red flag
-3. Duplicate: same device + same building + within 24 hours → Orange flag
-4. All checks pass → Green flag
-5. Default on receipt (before ARQ processes) → Grey flag
+### Auto-Flagging Order
+1. Blocked device ID → Red
+2. Blocked IP → Red
+3. Same IP, multiple devices in 24 h → Red
+4. Rapid submission (5+ in 1 h) → Orange
+5. Duplicate (same device + building within 24 h) → Orange
+6. All pass → Green
 
 ### Multilingual
-- UI: react-i18next, JSON translation files bundled at build time
-- 6 UN languages: Arabic (ar), Chinese (zh), English (en), French (fr), Russian (ru), Spanish (es)
-- Content translation: LibreTranslate on Hugging Face Spaces — on-demand only
-- Trigger: Translate button on dashboard — NOT automatic
+- 6 UN languages: ar, zh, en, fr, ru, es (all `is_protected=TRUE`, cannot be deleted)
+- Content translation: on-demand only via Translate button; LibreTranslate (primary) or Google Translate
 
-### Export
-- 5 report types: Field Operations, Full Data, GIS (Shapefile), GeoPackage, RAPIDA Summary
-- Generation: ARQ background job — never blocks dashboard UI
-- RAPIDA mandatory fields: geocoordinates (decimal degrees), timestamp, 
-  damage_classification (minimal/partial/complete), infrastructure_type
-- Default inclusion: Green and Orange flags only
-- Grey and Red excluded by default — dashboard user can override
-
-### Map Infrastructure
-- Engine: MapLibre GL (web) + @maplibre/maplibre-react-native (Android)
-- Tiles: Maptiler (free tier for prototype)
-- Building footprints: OSM (priority) + Microsoft Building Footprints (gap fill)
-- Footprint database: PostGIS
-- Tile generation: Tippecanoe (zoom levels 10-18)
-- Tile server: TileServer GL
+### Export (backend/app/routers/exports.py)
+- 5 formats: Field Operations (CSV), Full Data (CSV), GIS (Shapefile), GeoPackage, RAPIDA Summary (CSV)
+- RAPIDA field mapping: `damage_level→damage_classification`, `gps_latitude/longitude→latitude/longitude`, `created_at→timestamp`, `infrastructure_types→infrastructure_type`
+- Download URLs are HMAC-signed and expire in `EXPORT_DOWNLOAD_EXPIRY_MINUTES` minutes
 
 ### Security
-- TLS: Railway provisioned automatically — zero configuration
-- Sensitive field encryption: Python cryptography library — Fernet symmetric
+- Sensitive PII: Fernet-encrypted at application level. Always stored as `*_encrypted` (bytes) + `*_hash` (SHA-256 hex) column pair — query on hash, decrypt to read.
 - Encrypted fields: reporter email, reporter name, device ID, IP address
-- Encryption key: FERNET_KEY environment variable — never in codebase
-- Rate limiting: slowapi on report submission endpoint
-- Input validation: Pydantic on all request models
 
-### Hosting
-- Development: local (FastAPI + PostgreSQL + Redis via Docker)
-- Pre-submission live: Railway (managed PostgreSQL + Redis)
-- Photo storage pre-submission: Cloudflare R2
+## Environment Variables
+```
+DATABASE_URL        postgresql+asyncpg://...
+REDIS_URL           redis://...
+JWT_SECRET_KEY
+FERNET_KEY          Generate: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+STORAGE_BACKEND     local | r2
+LOCAL_UPLOAD_PATH   uploads/photos
+R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME, R2_PUBLIC_URL
+MAPTILER_API_KEY
+VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY
+EXPO_PUSH_TOKEN
+LIBRETRANSLATE_URL
+GOOGLE_TRANSLATE_API_KEY
+TRANSLATION_PRIMARY google | libretranslate
+FIRST_ADMIN_EMAIL, FIRST_ADMIN_PASSWORD
+EXPORT_URL_SIGN_SECRET
+ALLOWED_ORIGINS     JSON array of allowed CORS origins
+```
+
+## Hosting
+- Dev: local FastAPI + PostgreSQL + Redis (Docker or native)
+- Production: Railway (managed PostgreSQL + Redis + TLS auto-provisioned)
+- Photos: Cloudflare R2 in production
 
 ## Documented Prototype Exceptions
-These are acknowledged in the submission — do not try to build them:
-
-1. iOS native app: NOT built — Xcode requires macOS, dev machine is Windows
+1. iOS native app: NOT built — Xcode requires macOS
 2. iOS PWA push notifications: DEFERRED — requires Apple Developer account
-3. SMS Tier 3 fallback: REMOVED from scope — future consideration only
-4. Full scale stress testing: NOT feasible on free tier infrastructure
-
-## Environment Variables (never commit values — use .env.example for keys)
-DATABASE_URL, REDIS_URL, JWT_SECRET_KEY, FERNET_KEY, STORAGE_BACKEND,
-R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME,
-MAPTILER_API_KEY, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, EXPO_PUSH_TOKEN,
-LIBRETRANSLATE_URL
-
-## Database Rules
-- Cursor-based pagination ONLY — never offset pagination
-- All spatial queries via PostGIS
-- Mandatory indexes: see Technical Architecture Document Chapter 2
-
-## Key Libraries — Backend
-fastapi, uvicorn, sqlalchemy[asyncio], asyncpg, redis, arq, pyjwt,
-passlib[bcrypt], cryptography, slowapi, geopandas, fiona, Pillow,
-pywebpush, boto3, httpx
-
-## Key Libraries — Frontend
-react, vite, typescript, @tanstack/react-query, react-i18next,
-maplibre-gl, vite-plugin-pwa, react-router-dom
+3. SMS Tier 3 fallback: REMOVED from scope
+4. Full-scale stress testing: NOT feasible on free tier
