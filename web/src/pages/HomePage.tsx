@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 import { useAuthStore } from "../stores/authStore";
 import { WEB_SESSION_ID } from "../utils/sessionId";
 import { detectPlatform } from "../services/auth";
-import api from "../services/api";
+import api, { tokenStorage } from "../services/api";
 import CrisisTypeModal from "../components/CrisisTypeModal";
 import { loadLanguagePackageFromCache } from "../i18n";
 
@@ -126,7 +126,7 @@ export default function HomePage() {
     let assignedId: string | null = null;
 
     try {
-      const res = await api.post<{ reporter_id: string }>(
+      const res = await api.post<{ reporter_id: string; access_token?: string; refresh_token?: string }>(
         "/api/reporters/register",
         {
           device_id: WEB_SESSION_ID,
@@ -137,6 +137,13 @@ export default function HomePage() {
         }
       );
       assignedId = res.data.reporter_id;
+      if (res.data.access_token) {
+        tokenStorage.setTokens(res.data.access_token, res.data.refresh_token ?? "", res.data.reporter_id);
+      }
+      if (res.data.reporter_id) {
+        setReporter(res.data.reporter_id, false);
+        localStorage.setItem("cr_reporter_id", res.data.reporter_id);
+      }
     } catch {
       assignedId = `local_${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}`;
     }
