@@ -242,6 +242,21 @@ async def submit_report(
         )
     resolved_crisis_id = crisis.id
 
+    # Deduplicate offline-queue retries — return the existing report instead of
+    # inserting a duplicate. The client then proceeds to upload photos against
+    # the original report_id, which is the correct behaviour on retry.
+    if request.resolved_local_id:
+        dup_result = await db.execute(
+            select(Report).where(Report.local_id == request.resolved_local_id)
+        )
+        existing = dup_result.scalar_one_or_none()
+        if existing:
+            return ReportSubmitResponse(
+                report_id=str(existing.id),
+                flag_status=existing.flag_status,
+                message="Report already submitted",
+            )
+
     # Validate damage level
     if request.damage_level not in ["minimal", "partial", "complete"]:
         raise HTTPException(

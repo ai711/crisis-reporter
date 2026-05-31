@@ -1,15 +1,17 @@
+import asyncio
 import uuid
 import hashlib
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, desc
 from pydantic import BaseModel
 from typing import Optional
 
 from app.database import get_db
 from app.models.photo import Photo
 from app.models.report import Report
+from app.models.flag_event import FlagEvent
 from app.services.storage import storage_service
 from app.services.photo_processor import extract_exif, compress_image
 from app.services.dependencies import get_optional_reporter
@@ -134,6 +136,22 @@ async def upload_photo(
     db.add(photo)
     await db.commit()
     await db.refresh(photo)
+
+    # If this report was auto-flagged red solely because it had no photos,
+    # reset it to grey so auto_flag_report re-evaluates now that a photo exists.
+    if report.flag_status == "red":
+        latest_result = await db.execute(
+            select(FlagEvent)
+            .where(FlagEvent.report_id == report.id)
+            .order_by(desc(FlagEvent.created_at))
+            .limit(1)
+        )
+        latest_flag = latest_result.scalar_one_or_none()
+        if latest_flag and latest_flag.changed_by == "auto" and latest_flag.reason == "No photos attached":
+            report.flag_status = "grey"
+            await db.commit()
+            from app.services.auto_flagging import auto_flag_report
+            asyncio.create_task(auto_flag_report(str(report.id), delay=3))
 
     return PhotoResponse(
         id=str(photo.id),
