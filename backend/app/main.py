@@ -465,6 +465,10 @@ ON CONFLICT DO NOTHING""",
     # Chapter 18 — Password expiry enforcement
     "ALTER TABLE dashboard_users ADD COLUMN IF NOT EXISTS password_changed_at TIMESTAMPTZ",
     "UPDATE dashboard_users SET password_changed_at = created_at WHERE password_changed_at IS NULL",
+    # Photos — columns added after initial table creation
+    "ALTER TABLE photos ADD COLUMN IF NOT EXISTS photo_hash VARCHAR(64)",
+    "CREATE INDEX IF NOT EXISTS ix_photos_photo_hash ON photos(photo_hash)",
+    "ALTER TABLE photos ADD COLUMN IF NOT EXISTS display_order INTEGER DEFAULT 0 NOT NULL",
 ]
 
 
@@ -558,6 +562,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.ALLOWED_ORIGINS,
+    allow_origin_regex=r"https://.*\.railway\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
