@@ -1257,6 +1257,7 @@ export default function ReportPage() {
       platform: "web" as const,
       submission_started_at: submissionStartTime,
       submission_submitted_at: submitTapTime,
+      submitted_at: new Date().toISOString(),
       photo_metadata: JSON.stringify(photoMetadata),
       photo_exif_data: JSON.stringify(exifResults),
       location: {
@@ -1287,7 +1288,7 @@ export default function ReportPage() {
         location_entry_method: locationEntryMethod,
         location_internet_available: locationInternetAvailable,
       },
-      reporter_id: reporterId || undefined,
+      reporter_id: reporterId && !reporterId.startsWith('local_') ? reporterId : null,
       language_code: languageCode,
       question_package_version: questionPackage?.version ?? null,
       question_package_content_version: questionPackage?.content_version ?? questionPackage?.version ?? null,
@@ -1319,9 +1320,6 @@ export default function ReportPage() {
         return rows.filter((a) => a.option_value || (Array.isArray(a.option_values) && (a.option_values as string[]).length > 0) || a.free_text);
       })(),
       was_queued: false,
-      browser_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-      screen_resolution: `${window.screen.width}x${window.screen.height}`,
-      viewport_dimensions: `${window.innerWidth}x${window.innerHeight}`,
     };
 
     // E34 — 30-second hard timeout on the report creation request
