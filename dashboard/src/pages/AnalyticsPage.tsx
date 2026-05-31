@@ -300,7 +300,7 @@ function ChartCard({ title, subtitle, loading, empty, children, headerRight, foo
 
 // ── Pie label renderer ─────────────────────────────────────────────────────────
 
-const renderPieLabel = ({ value, percent }: { value: number; percent: number | undefined }) => {
+const renderPieLabel = ({ value, percent }: { value: number; percent?: number }) => {
   const pct = percent ?? 0;
   return `${value} (${(pct * 100).toFixed(0)}%)`;
 };
