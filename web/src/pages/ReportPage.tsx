@@ -1203,21 +1203,24 @@ export default function ReportPage() {
 
     // Phase 1 — compress photos and extract EXIF (both run before the network call)
     setPreparingPhotos(true);
-    let compressedPhotos: File[];
-    let photoMetadata: Array<{ compressed: boolean; original_size_kb: number; compressed_size_kb: number }>;
-    let exifResults: Array<Record<string, unknown>>;
+    let compressionResults;
     try {
-      const compressionResults = await Promise.all(photos.map(compressPhoto));
-      compressedPhotos = compressionResults.map((r) => r.file);
-      photoMetadata = compressionResults.map((r) => ({
-        compressed: r.compressed,
-        original_size_kb: r.original_size_kb,
-        compressed_size_kb: r.compressed_size_kb,
-      }));
-      exifResults = await Promise.all(photos.map(extractExif)) as Array<Record<string, unknown>>;
-    } finally {
+      compressionResults = await Promise.all(photos.map(compressPhoto));
+    } catch (compressionError) {
+      console.error('Photo compression failed:', compressionError);
+      setSubmitError('server_error');
+      setSubmitting(false);
       setPreparingPhotos(false);
+      return;
     }
+    const compressedPhotos = compressionResults.map((r) => r.file);
+    const photoMetadata = compressionResults.map((r) => ({
+      compressed: r.compressed,
+      original_size_kb: r.original_size_kb,
+      compressed_size_kb: r.compressed_size_kb,
+    }));
+    const exifResults = await Promise.all(photos.map(extractExif)) as Array<Record<string, unknown>>;
+    setPreparingPhotos(false);
 
     // E32 — Active probe before transmission: navigator.onLine is unreliable (true behind captive portals).
     const isCurrentlyOnline = await (async () => {
@@ -1266,12 +1269,11 @@ export default function ReportPage() {
         gps_longitude: gpsLongitude,
         gps_accuracy_meters: gpsAccuracy,
         // C5 — explicit flags
-        gps_available: gpsAvailable,
+        gps_available: gpsAvailable ?? true,
         gps_denied: gpsDenied,
         // G5 — Building footprint centroid (separate from device GPS)
         building_centroid_lat: buildingCentroidLat,
         building_centroid_lng: buildingCentroidLng,
-        building_id: selectedBuildingId,
         building_name_osm: buildingNameOsm || null,
         building_name_reporter: selectedBuildingName || null,
         building_type: selectedBuildingType || null,
@@ -1288,7 +1290,11 @@ export default function ReportPage() {
         location_entry_method: locationEntryMethod,
         location_internet_available: locationInternetAvailable,
       },
-      reporter_id: reporterId && !reporterId.startsWith('local_') ? reporterId : null,
+      building_id: selectedBuildingId || null,
+      reporter_id: (typeof reporterId === 'string' &&
+                    !reporterId.startsWith('local_'))
+        ? reporterId
+        : null,
       language_code: languageCode,
       question_package_version: questionPackage?.version ?? null,
       question_package_content_version: questionPackage?.content_version ?? questionPackage?.version ?? null,

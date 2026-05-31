@@ -28,7 +28,7 @@ class LocationData(BaseModel):
     gps_latitude: Optional[float] = None
     gps_longitude: Optional[float] = None
     gps_accuracy_meters: Optional[float] = None
-    gps_available: bool = True
+    gps_available: Optional[bool] = True
     gps_denied: Optional[bool] = None
     location_address: Optional[str] = None
     location_landmark: Optional[str] = None
@@ -41,6 +41,9 @@ class LocationData(BaseModel):
     location_note: Optional[str] = None
     location_entry_method: Optional[str] = None
     location_internet_available: Optional[bool] = None
+    building_type: Optional[str] = None
+    pin_drop_lat: Optional[float] = None
+    pin_drop_lng: Optional[float] = None
 
 
 class ReportSubmitRequest(BaseModel):
@@ -339,6 +342,7 @@ async def submit_report(
         location_note=request.location.location_note,
         location_entry_method=request.location.location_entry_method,
         location_internet_available=request.location.location_internet_available,
+        # TODO: map building_type, pin_drop_lat, pin_drop_lng when Report model columns exist
         # Damage
         damage_level=request.damage_level,
         infrastructure_type=request.infrastructure_types[0] if request.infrastructure_types else "",
