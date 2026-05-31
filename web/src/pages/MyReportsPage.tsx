@@ -151,8 +151,21 @@ export default function MyReportsPage() {
         setReports(data.items);
       }
       setNextCursor(data.next_cursor);
-    } catch {
-      setError(t('my_reports.load_error'));
+    } catch (err: unknown) {
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      if (status === 401) {
+        // Token expired and refresh failed — fall back to session reports
+        const raw = sessionStorage.getItem("cr_session_reports");
+        if (raw) {
+          try {
+            const parsed: SessionReport[] = JSON.parse(raw);
+            setReports([...parsed].reverse().map(convertSessionReport));
+            setIsSessionMode(true);
+          } catch { /* ignore */ }
+        }
+      } else {
+        setError(t('my_reports.load_error'));
+      }
     } finally {
       setLoading(false);
       setLoadingMore(false);
