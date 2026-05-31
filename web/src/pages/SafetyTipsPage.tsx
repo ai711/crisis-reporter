@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import api from "../services/api";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
@@ -230,6 +231,7 @@ interface SlideViewerProps {
 }
 
 function SlideViewer({ slides, totalLabel: _totalLabel, completionKey, onComplete, onBack, title }: SlideViewerProps) {
+  const { t } = useTranslation();
   const [current, setCurrent] = useState(0);
   const [done, setDone] = useState(() => isComplete(completionKey.part, completionKey.id));
   const total = slides.length;
@@ -267,12 +269,12 @@ function SlideViewer({ slides, totalLabel: _totalLabel, completionKey, onComplet
           </svg>
         </button>
         <span style={{ fontWeight: 600, fontSize: 15, color: "#2d3748", flex: 1 }}>{title}</span>
-        {done && <span style={{ fontSize: 12, color: GREEN, fontWeight: 600 }}>✓ Complete</span>}
+        {done && <span style={{ fontSize: 12, color: GREEN, fontWeight: 600 }}>{t('safety.complete')}</span>}
       </div>
 
       {/* Slide counter */}
       <div style={{ padding: "8px 20px", background: "#f7fafc", borderBottom: "1px solid #e2e8f0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <span style={{ fontSize: 12, color: "#718096", fontWeight: 500 }}>Slide {current + 1} of {total}</span>
+        <span style={{ fontSize: 12, color: "#718096", fontWeight: 500 }}>{t('safety.slide_progress', { n: current + 1, total })}</span>
         <div style={{ display: "flex", gap: 4 }}>
           {slides.map((_, i) => (
             <div key={i} style={{ width: 8, height: 8, borderRadius: "50%", background: i === current ? BLUE : i < current ? GREEN : "#cbd5e0", transition: "background 0.2s" }} />
@@ -301,7 +303,7 @@ function SlideViewer({ slides, totalLabel: _totalLabel, completionKey, onComplet
             letterSpacing: 0.5,
             textTransform: "uppercase",
           }}>
-            {isDo ? "DO" : "DON'T"}
+            {isDo ? t('safety.do') : t('safety.dont')}
           </div>
           <h3 style={{ margin: "0 0 16px", fontSize: 17, fontWeight: 700, color: "#2d3748", lineHeight: 1.4 }}>
             {slide.title.replace(/^Do: |^Don't: /, "")}
@@ -331,7 +333,7 @@ function SlideViewer({ slides, totalLabel: _totalLabel, completionKey, onComplet
             cursor: current === 0 ? "not-allowed" : "pointer",
           }}
         >
-          ← Previous
+          {t('common.previous')}
         </button>
         {isLast ? (
           <button
@@ -348,7 +350,7 @@ function SlideViewer({ slides, totalLabel: _totalLabel, completionKey, onComplet
               cursor: "pointer",
             }}
           >
-            {done ? "✓ Completed" : "Mark as Complete"}
+            {done ? t('safety.completed') : t('safety.mark_complete')}
           </button>
         ) : (
           <button
@@ -365,7 +367,7 @@ function SlideViewer({ slides, totalLabel: _totalLabel, completionKey, onComplet
               cursor: "pointer",
             }}
           >
-            Next →
+            {t('common.next')}
           </button>
         )}
       </div>
@@ -377,6 +379,7 @@ function SlideViewer({ slides, totalLabel: _totalLabel, completionKey, onComplet
 
 export default function SafetyTipsPage() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [activePart, setActivePart] = useState<Part>("A");
   const [selectedDisaster, setSelectedDisaster] = useState<string | null>(null);
   const [completionRevision, setCompletionRevision] = useState(0);
@@ -386,9 +389,9 @@ export default function SafetyTipsPage() {
   const allDone = isAllComplete();
 
   const tabs: { id: Part; label: string }[] = [
-    { id: "A", label: "Part A: Disaster Tips" },
-    { id: "B", label: "Part B: Reporting" },
-    { id: "C", label: "Part C: First Aid" },
+    { id: "A", label: t('safety.tab_a') },
+    { id: "B", label: t('safety.tab_b') },
+    { id: "C", label: t('safety.tab_c') },
   ];
 
   function handlePartChange(part: Part) {
@@ -405,7 +408,7 @@ export default function SafetyTipsPage() {
           <button className="page-header-back" onClick={() => navigate("/")}>
             <IconBack />
           </button>
-          <span className="page-header-title">Safety Tips</span>
+          <span className="page-header-title">{t('safety.title')}</span>
           <div className="page-header-spacer" />
         </header>
         <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
@@ -430,7 +433,7 @@ export default function SafetyTipsPage() {
           <button className="page-header-back" onClick={() => navigate("/")}>
             <IconBack />
           </button>
-          <span className="page-header-title">Safety Tips</span>
+          <span className="page-header-title">{t('safety.title')}</span>
           <div className="page-header-spacer" />
         </header>
         <div style={{ display: "flex", background: "#fff", borderBottom: "1px solid #e2e8f0", flexShrink: 0 }}>
@@ -462,7 +465,7 @@ export default function SafetyTipsPage() {
             completionKey={{ part: "B" }}
             onComplete={refresh}
             onBack={() => {}}
-            title="Reporting Guidelines"
+            title={t('safety.part_b_title')}
           />
         </div>
       </div>
@@ -477,7 +480,7 @@ export default function SafetyTipsPage() {
           <button className="page-header-back" onClick={() => navigate("/")}>
             <IconBack />
           </button>
-          <span className="page-header-title">Safety Tips</span>
+          <span className="page-header-title">{t('safety.title')}</span>
           <div className="page-header-spacer" />
         </header>
         <div style={{ display: "flex", background: "#fff", borderBottom: "1px solid #e2e8f0", flexShrink: 0 }}>
@@ -509,7 +512,7 @@ export default function SafetyTipsPage() {
             completionKey={{ part: "C" }}
             onComplete={refresh}
             onBack={() => {}}
-            title="First Aid Essentials"
+            title={t('safety.part_c_title')}
           />
         </div>
       </div>
@@ -572,7 +575,7 @@ export default function SafetyTipsPage() {
         }}>
           <span style={{ fontSize: 22 }}>🏅</span>
           <span style={{ fontSize: 13, color: "#276749", fontWeight: 600, lineHeight: 1.4 }}>
-            Safety Training Complete — you are now eligible for the Safety Training Badge
+            {t('safety.all_complete_banner')}
           </span>
         </div>
       )}
@@ -580,7 +583,7 @@ export default function SafetyTipsPage() {
       {/* Progress */}
       <div style={{ padding: "12px 16px 4px", flexShrink: 0 }}>
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-          <span style={{ fontSize: 12, color: "#718096", fontWeight: 500 }}>Disaster types completed</span>
+          <span style={{ fontSize: 12, color: "#718096", fontWeight: 500 }}>{t('safety.progress_label')}</span>
           <span style={{ fontSize: 12, color: BLUE, fontWeight: 700 }}>{partADone} / {DISASTERS.length}</span>
         </div>
         <div style={{ height: 6, background: "#e2e8f0", borderRadius: 3, overflow: "hidden" }}>

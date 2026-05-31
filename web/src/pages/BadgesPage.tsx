@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { useAuthStore } from "../stores/authStore";
 import api from "../services/api";
 
@@ -87,16 +88,17 @@ function BadgeCard({
   completedModules,
   earnedDate,
 }: BadgeCardProps) {
+  const { t } = useTranslation();
   const earned = status === "earned";
   const locked = status === "locked" || status === "coming-soon";
 
   const borderColor = earned ? GOLD : GREY_BORDER;
 
   const labelMap: Record<BadgeStatus, { text: string; color: string; bg: string }> = {
-    earned: { text: `Earned ✓`, color: "#276749", bg: "#f0fff4" },
-    claim: { text: "Add email or phone to claim", color: "#92400e", bg: "#fffbeb" },
-    locked: { text: "Locked", color: "var(--color-text-muted)", bg: "#f7fafc" },
-    "coming-soon": { text: "Coming Soon", color: "var(--color-text-muted)", bg: "#f7fafc" },
+    earned: { text: t('badges.status_earned'), color: "#276749", bg: "#f0fff4" },
+    claim: { text: t('badges.status_claim'), color: "#92400e", bg: "#fffbeb" },
+    locked: { text: t('badges.status_locked'), color: "var(--color-text-muted)", bg: "#f7fafc" },
+    "coming-soon": { text: t('badges.status_coming_soon'), color: "var(--color-text-muted)", bg: "#f7fafc" },
   };
 
   const label = labelMap[status];
@@ -181,7 +183,7 @@ function BadgeCard({
 
       {status === "locked" && completedModules !== undefined && (
         <p style={{ margin: "6px 0 0", fontSize: 12, color: "#a0aec0" }}>
-          {completedModules} of {TOTAL_MODULES} modules complete
+          {t('badges.modules_progress', { n: completedModules, total: TOTAL_MODULES })}
         </p>
       )}
     </div>
@@ -192,6 +194,7 @@ function BadgeCard({
 
 export default function BadgesPage() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const { reporterId } = useAuthStore();
   const [hasContact, setHasContact] = useState(false);
 
@@ -261,17 +264,17 @@ export default function BadgesPage() {
           <button className="page-header-back" onClick={() => navigate("/")} aria-label="Back">
             <IconBack />
           </button>
-          <span className="page-header-title">Badges &amp; Certifications</span>
+          <span className="page-header-title">{t('badges.title')}</span>
           <div className="page-header-spacer" />
         </header>
 
         {/* Login prompt */}
         <div style={{ textAlign: "center", padding: "40px 24px 24px" }}>
           <p style={{ fontSize: "1.1rem", fontWeight: 700, color: "#1A2B4A", margin: "0 0 8px" }}>
-            Badges are available to reporters with a verified account.
+            {t('badges.anon_heading')}
           </p>
           <p style={{ color: "var(--color-text-muted)", fontSize: "0.875rem", margin: "0 0 24px", lineHeight: 1.5 }}>
-            Log in or create a free account to earn and view your badges.
+            {t('badges.anon_body')}
           </p>
           <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap", marginBottom: 32 }}>
             <button
@@ -294,13 +297,13 @@ export default function BadgesPage() {
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 16 }}>
             <BadgeCard
               icon="🛡️"
-              name="Safety Training Completion"
-              description="Complete all safety training modules in Crisis Reporter."
+              name={t('badges.safety_name')}
+              description={t('badges.safety_desc_locked')}
               status="locked"
             />
             <BadgeCard
               icon="🤝"
-              name="Community Referral"
+              name={t('badges.referral_name')}
               description="Refer a friend who installs Crisis Reporter and completes safety training."
               status="coming-soon"
             />
@@ -328,7 +331,7 @@ export default function BadgesPage() {
         <button className="page-header-back" onClick={() => navigate("/")} aria-label="Back">
           <IconBack />
         </button>
-        <span className="page-header-title">Badges &amp; Certifications</span>
+        <span className="page-header-title">{t('badges.title')}</span>
         <div className="page-header-spacer" />
       </header>
 
@@ -340,8 +343,7 @@ export default function BadgesPage() {
           lineHeight: 1.5,
         }}
       >
-        Badges are awarded to reporters with a verified profile. Complete your
-        profile to unlock badges.
+        {t('badges.subtitle')}
       </p>
 
       {/* D7: Responsive multi-column grid */}
@@ -356,8 +358,8 @@ export default function BadgesPage() {
         >
           <BadgeCard
             icon="🛡️"
-            name="Safety Training Completion"
-            description="Awarded for completing all safety training modules in Crisis Reporter."
+            name={t('badges.safety_name')}
+            description={t('badges.safety_desc_locked')}
             status={safetyStatus}
             completedModules={safetyStatus === "locked" ? completedModules : undefined}
             earnedDate={safetyStatus === "earned" ? formatTodayDate() : undefined}
@@ -365,7 +367,7 @@ export default function BadgesPage() {
 
           <BadgeCard
             icon="🤝"
-            name="Community Referral"
+            name={t('badges.referral_name')}
             description="Refer a friend who installs Crisis Reporter and completes safety training."
             status="coming-soon"
           />

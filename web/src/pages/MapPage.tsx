@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
+import { useTranslation } from "react-i18next";
 import { useAuthStore } from "../stores/authStore";
 import api from "../services/api";
 
@@ -226,6 +227,7 @@ function IconClose() {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function MapPage() {
+  const { t } = useTranslation();
   const { countryCode } = useAuthStore();
 
   const mapContainer = useRef<HTMLDivElement>(null);
@@ -405,10 +407,10 @@ export default function MapPage() {
       {!isOnline ? (
         <div style={s.offlineContainer}>
           <p style={s.offlineText}>
-            The map requires an internet connection. Please check your connection and try again.
+            {t('map.offline_message')}
           </p>
           <button style={s.retryBtn} onClick={() => window.location.reload()}>
-            Retry
+            {t('common.retry')}
           </button>
         </div>
       ) : (
@@ -416,7 +418,7 @@ export default function MapPage() {
           <div ref={mapContainer} style={s.map} />
 
           {showZoomHint && (
-            <div style={s.zoomHint}>Zoom in to see buildings</div>
+            <div style={s.zoomHint}>{t('map.zoom_hint')}</div>
           )}
 
           {/* D35: GPS recentre button — bottom-right, always visible when map is loaded */}
@@ -466,7 +468,7 @@ export default function MapPage() {
 
               {/* Last report time */}
               <p style={s.panelMeta}>
-                Reported:{" "}
+                {t('map.pin_reported')}{" "}
                 {new Date(selectedPin.created_at).toLocaleDateString(undefined, {
                   year: "numeric",
                   month: "short",
@@ -477,7 +479,7 @@ export default function MapPage() {
               </p>
 
               {/* Report ID (small reference) */}
-              <p style={s.panelId}>ID: {selectedPin.report_id}</p>
+              <p style={s.panelId}>{t('map.pin_id')}{selectedPin.report_id}</p>
             </div>
           </div>
         </>

@@ -122,6 +122,7 @@ function CountryModal({
   onSelect: (c: CachedCountry) => void;
   onClose: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <div style={s.overlay} onClick={onClose}>
       <div style={s.bottomSheet} onClick={(e) => e.stopPropagation()}>
@@ -134,7 +135,7 @@ function CountryModal({
           <input
             style={s.searchInput}
             type="text"
-            placeholder="Search countries..."
+            placeholder={t('settings.search_countries')}
             value={search}
             onChange={(e) => onSearch(e.target.value)}
             autoFocus
@@ -142,7 +143,7 @@ function CountryModal({
         </div>
         <div style={s.countryList}>
           {countries.length === 0 && (
-            <p style={s.hint}>No countries match your search.</p>
+            <p style={s.hint}>{t('settings.no_countries_match')}</p>
           )}
           {countries.map((c) => (
             <button
@@ -174,6 +175,7 @@ function CountryModal({
 // ── More languages modal ──────────────────────────────────────────────────────
 
 function MoreLangsModal({ onClose }: { onClose: () => void }) {
+  const { t } = useTranslation();
   return (
     <div style={s.overlay} onClick={onClose}>
       <div
@@ -182,7 +184,7 @@ function MoreLangsModal({ onClose }: { onClose: () => void }) {
       >
         <div style={s.sheetHandle} />
         <div style={s.sheetHeader}>
-          <span style={s.sheetTitle}>More languages</span>
+          <span style={s.sheetTitle}>{t('onboarding.more_languages_title')}</span>
           <button style={s.sheetClose} onClick={onClose} aria-label="Close">✕</button>
         </div>
         <div style={{ padding: "8px 20px 28px" }}>
@@ -200,7 +202,7 @@ function MoreLangsModal({ onClose }: { onClose: () => void }) {
             }}
             onClick={onClose}
           >
-            Got it
+            {t('common.got_it')}
           </button>
         </div>
       </div>
@@ -616,7 +618,7 @@ export default function OnboardingPage() {
                   onClick={fetchMoreLanguages}
                   disabled={langPackageLoading}
                 >
-                  <span>+ More</span>
+                  <span>{t('onboarding.more_languages_btn')}</span>
                 </button>
               ) : (
                 <button
@@ -632,7 +634,7 @@ export default function OnboardingPage() {
                   onClick={() => setShowAllLanguages(false)}
                   disabled={langPackageLoading}
                 >
-                  <span>Show less</span>
+                  <span>{t('onboarding.show_less')}</span>
                 </button>
               )}
             </div>
@@ -645,7 +647,7 @@ export default function OnboardingPage() {
 
             {langPackageError && (
               <div style={s.errorBox}>
-                Could not load language. Check your connection and try again.
+                {t('onboarding.lang_load_error')}
               </div>
             )}
           </div>
@@ -672,7 +674,7 @@ export default function OnboardingPage() {
           {langPackageLoading ? (
             <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
               <span style={s.spinner} />
-              Loading…
+              {t('common.loading')}
             </span>
           ) : (
             "Continue"

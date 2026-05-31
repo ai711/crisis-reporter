@@ -247,6 +247,12 @@ export default function ReportPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { reporterId, countryCode, languageCode } = useAuthStore();
+
+  const q4CategoryLabels: Record<string, string> = {
+    "Natural Hazards": t('report.q4_category_natural'),
+    "Technological or Industrial Hazards": t('report.q4_category_tech'),
+    "Human-Made Crises": t('report.q4_category_human'),
+  };
   const isMobile = isMobileBrowser() || window.innerWidth <= 768;
 
   // Captured once at component mount — the moment the reporter tapped "Report an Incident"
@@ -1381,7 +1387,7 @@ export default function ReportPage() {
     setSubmissionSubmittedAt(submitTapTime);
 
     if (!damageLevel || infrastructureTypes.length === 0 || !infrastructureName.trim() || !disasterType || !debrisBlocking || !electricityCondition || !healthServicesCondition || pressingNeeds.length === 0 || photos.length === 0) {
-      setError("Please complete all required fields");
+      setError(t('report.validation_incomplete'));
       return;
     }
     // D26/D27 — async duplicate check (backend for logged-in, sessionStorage for anonymous)
@@ -1402,18 +1408,18 @@ export default function ReportPage() {
           <div style={styles.confirmCheckCircle}>
             <span style={{ fontSize: 44, lineHeight: 1 }}>✓</span>
           </div>
-          <h2 style={styles.successTitle}>Report Submitted</h2>
+          <h2 style={styles.successTitle}>{t('report.success_title')}</h2>
           <p style={styles.successText}>
             {t("confirmation.success_message")}
           </p>
           <button style={styles.primaryButton} onClick={resetForm}>
-            Submit Another Report
+            {t('report.submit_another')}
           </button>
           <button
             style={{ ...styles.secondaryButton, border: "none", color: "#666", fontSize: 15 }}
             onClick={() => navigate("/")}
           >
-            Go to Home
+            {t('common.go_home')}
           </button>
         </div>
       </div>
@@ -1424,7 +1430,7 @@ export default function ReportPage() {
     return (
       <div style={styles.container}>
         <div style={styles.centeredMessage}>
-          <div style={{ fontSize: 16, color: "#666" }}>Loading...</div>
+          <div style={{ fontSize: 16, color: "#666" }}>{t('common.loading')}</div>
         </div>
       </div>
     );
@@ -1434,8 +1440,8 @@ export default function ReportPage() {
     return (
       <div style={styles.container}>
         <div style={styles.centeredMessage}>
-          <p style={styles.centeredError}>No active crisis found. Please try again later.</p>
-          <button style={styles.secondaryButton} onClick={() => navigate(-1)}>Go Back</button>
+          <p style={styles.centeredError}>{t('report.no_crisis')}</p>
+          <button style={styles.secondaryButton} onClick={() => navigate(-1)}>{t('common.go_back')}</button>
         </div>
       </div>
     );
@@ -1504,18 +1510,18 @@ export default function ReportPage() {
               style={styles.addAnotherBtn}
               onClick={() => void handleTakePhoto()}
             >
-              + Take Another Photo
+              {t('report.take_another_photo')}
             </button>
           )}
           <button style={styles.addAnotherBtn} onClick={() => fileInputRef.current?.click()}>
-            + Upload Another Photo
+            {t('report.upload_another_photo')}
           </button>
         </div>
       );
     }
     return (
       <button style={styles.addAnotherBtn} onClick={() => fileInputRef.current?.click()}>
-        + Add another photo
+        {t('report.upload_another_photo')}
       </button>
     );
   };
@@ -1533,12 +1539,12 @@ export default function ReportPage() {
       onDrop={handleDrop}
     >
       {isDragging ? (
-        <span style={{ color: "#0468B1", fontWeight: 600, fontSize: 15 }}>Drop your photo here</span>
+        <span style={{ color: "#0468B1", fontWeight: 600, fontSize: 15 }}>{t('report.drop_photo_here')}</span>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
-          <span style={{ fontSize: 13, color: "#717782" }}>Drag a photo here, or</span>
+          <span style={{ fontSize: 13, color: "#717782" }}>{t('report.drag_photo_here')}</span>
           <button style={styles.uploadBtn} onClick={() => fileInputRef.current?.click()}>
-            📁 Upload a Photo
+            📁 {t('report.upload_photo_btn')}
           </button>
         </div>
       )}
@@ -1549,26 +1555,23 @@ export default function ReportPage() {
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       {!cameraDenied && (
         <p style={styles.permNote}>
-          Crisis Reporter needs camera access to take a photo of the damage.
+          {t('report.camera_permission_note')}
         </p>
       )}
       {cameraDenied && (
         <div style={styles.denialBox}>
           <p style={styles.denialMsg}>
-            Camera access is not available. You can enable it in your browser settings, or upload a photo from your device instead.
-          </p>
-          <p style={styles.denialHint}>
-            To enable camera access, open your browser settings and allow camera access for this site.
+            {t('report.camera_denied_msg')}
           </p>
         </div>
       )}
       {!cameraDenied && (
         <button style={styles.cameraBtn} onClick={() => void handleTakePhoto()}>
-          📷 Take a Photo
+          📷 {t('report.take_photo_btn')}
         </button>
       )}
       <button style={styles.uploadBtn} onClick={() => fileInputRef.current?.click()}>
-        📁 Upload a Photo
+        📁 {t('report.upload_photo_btn')}
       </button>
     </div>
   );
@@ -1613,7 +1616,7 @@ export default function ReportPage() {
             )}
             {photos.length > 0 && photos.length < 3 && renderAddAnotherButton()}
             {photos.length === 3 && (
-              <p style={{ fontSize: 13, color: "#717782", margin: 0 }}>Maximum 3 photos added.</p>
+              <p style={{ fontSize: 13, color: "#717782", margin: 0 }}>{t('report.max_photos_reached')}</p>
             )}
 
             {dropExtraMessage && (
@@ -1638,7 +1641,7 @@ export default function ReportPage() {
               disabled={photos.length === 0}
               onClick={() => setStep("location")}
             >
-              Next →
+              {t('common.next')}
             </button>
           </div>
         )}
@@ -1672,7 +1675,7 @@ export default function ReportPage() {
             <div style={{ flex: 1, position: "relative", minHeight: 260 }}>
               <div ref={mapContainerRef} style={{ position: "absolute", inset: 0 }} />
               {locationMapZoom < 14 && (
-                <div style={styles.zoomHint}>Zoom in to see and select buildings</div>
+                <div style={styles.zoomHint}>{t('report.location_zoom_hint')}</div>
               )}
 
               {/* Microsoft Building Footprints active note */}
@@ -1691,7 +1694,7 @@ export default function ReportPage() {
                   zIndex: 10,
                   pointerEvents: "none",
                 }}>
-                  Microsoft Building Footprints active — building selection uses ML-detected footprints.
+                  {t('report.msft_footprints_note')}
                 </div>
               )}
 
@@ -1699,7 +1702,7 @@ export default function ReportPage() {
               {pendingBuilding && !isMobile && (
                 <div style={styles.confirmCardDesktop}>
                   <div style={styles.confirmBuildingName}>
-                    {pendingBuilding.name || "Unnamed Building"}
+                    {pendingBuilding.name || t('report.unnamed_building')}
                   </div>
                   <div style={styles.confirmBuildingType}>
                     {pendingBuilding.type !== "yes"
@@ -1712,8 +1715,8 @@ export default function ReportPage() {
                   </div>
                   <hr style={{ margin: "12px 0", border: "none", borderTop: "1px solid #E2E8F0" }} />
                   <div style={{ display: "flex", gap: 8 }}>
-                    <button style={styles.confirmCancelBtn} onClick={handleBuildingCancel}>Cancel</button>
-                    <button style={styles.confirmConfirmBtn} onClick={handleBuildingConfirm}>Confirm</button>
+                    <button style={styles.confirmCancelBtn} onClick={handleBuildingCancel}>{t('common.cancel')}</button>
+                    <button style={styles.confirmConfirmBtn} onClick={handleBuildingConfirm}>{t('common.confirm')}</button>
                   </div>
                 </div>
               )}
@@ -1725,7 +1728,7 @@ export default function ReportPage() {
               <div style={styles.bottomSheet}>
                 <div style={styles.bottomSheetHandle} />
                 <div style={styles.confirmBuildingName}>
-                  {pendingBuilding.name || "Unnamed Building"}
+                  {pendingBuilding.name || t('report.unnamed_building')}
                 </div>
                 <div style={styles.confirmBuildingType}>
                   {pendingBuilding.type !== "yes"
@@ -1738,8 +1741,8 @@ export default function ReportPage() {
                 </div>
                 <hr style={{ margin: "12px 0", border: "none", borderTop: "1px solid #E2E8F0" }} />
                 <div style={{ display: "flex", gap: 8 }}>
-                  <button style={styles.confirmCancelBtn} onClick={handleBuildingCancel}>Cancel</button>
-                  <button style={styles.confirmConfirmBtn} onClick={handleBuildingConfirm}>Confirm</button>
+                  <button style={styles.confirmCancelBtn} onClick={handleBuildingCancel}>{t('common.cancel')}</button>
+                  <button style={styles.confirmConfirmBtn} onClick={handleBuildingConfirm}>{t('common.confirm')}</button>
                 </div>
               </div>
             )}
@@ -1779,13 +1782,13 @@ export default function ReportPage() {
               {/* Selection state card */}
               {selectedBuildingId && (
                 <div style={styles.selectionCard}>
-                  <div style={styles.selectionCardTitle}>Building Selected</div>
+                  <div style={styles.selectionCardTitle}>{t('report.building_selected')}</div>
                   <div style={styles.selectionCardName}>
-                    {selectedBuildingName || "Unnamed building"}
+                    {selectedBuildingName || t('report.unnamed_building')}
                   </div>
                   {selectedBuildingType && selectedBuildingType !== "yes" && (
                     <div style={styles.selectionCardMeta}>
-                      Type: {selectedBuildingType.replace(/_/g, " ")}
+                      {t('report.building_type_label')} {selectedBuildingType.replace(/_/g, " ")}
                     </div>
                   )}
                   {buildingCentroidLat !== null && buildingCentroidLng !== null && (
@@ -1797,7 +1800,7 @@ export default function ReportPage() {
               )}
               {!selectedBuildingId && pinDropCoords && (
                 <div style={styles.selectionCard}>
-                  <div style={styles.selectionCardTitle}>Pin Dropped</div>
+                  <div style={styles.selectionCardTitle}>{t('report.pin_dropped')}</div>
                   <div style={styles.selectionCardCoords}>
                     {pinDropCoords.lat.toFixed(6)}, {pinDropCoords.lng.toFixed(6)}
                   </div>
@@ -1805,7 +1808,7 @@ export default function ReportPage() {
               )}
               {!selectedBuildingId && !pinDropCoords && gpsLatitude !== null && gpsLongitude !== null && (
                 <div style={styles.selectionCard}>
-                  <div style={styles.selectionCardTitle}>GPS Location Captured</div>
+                  <div style={styles.selectionCardTitle}>{t('report.gps_captured')}</div>
                   <div style={styles.selectionCardCoords}>
                     {gpsLatitude.toFixed(6)}, {gpsLongitude.toFixed(6)}
                   </div>
@@ -1816,8 +1819,7 @@ export default function ReportPage() {
               {showDuplicateInlineWarning && (
                 <div style={styles.inlineDupeWarning}>
                   <span>
-                    A report for this location may already exist from this device. You can still
-                    submit if this is a different incident.
+                    {t('report.duplicate_inline_warning')}
                   </span>
                   <button
                     style={styles.inlineDupeDismiss}
@@ -1831,7 +1833,7 @@ export default function ReportPage() {
               {/* B5 — Editable building name (after building confirmed or pin dropped) */}
               {(selectedBuildingId || pinDropCoords) && (
                 <div>
-                  <label style={styles.fieldLabel}>BUILDING NAME</label>
+                  <label style={styles.fieldLabel}>{t('report.building_name_label')}</label>
                   <input
                     style={styles.input}
                     type="text"
@@ -1846,7 +1848,7 @@ export default function ReportPage() {
               {(selectedBuildingId || pinDropCoords) && (
                 <div>
                   <label style={styles.fieldLabel}>
-                    ADD A LOCATION NOTE (OPTIONAL){" "}
+                    {t('report.location_note_label')}{" "}
                     <span
                       title="Add the name you know this building by, or any detail that helps identify the exact spot."
                       style={{ cursor: "help", color: "#A0AEC0" }}
@@ -1857,7 +1859,7 @@ export default function ReportPage() {
                   <textarea
                     style={styles.noteTextarea}
                     rows={2}
-                    placeholder="e.g. Blue gate on the left, next to the pharmacy"
+                    placeholder={t('report.location_note_placeholder')}
                     value={locationNote}
                     onChange={(e) => setLocationNote(e.target.value)}
                   />
@@ -1884,7 +1886,7 @@ export default function ReportPage() {
                   onClick={() => void triggerGeolocation()}
                   disabled={gpsCapturing}
                 >
-                  📍 {gpsCapturing ? "Getting location…" : "Use My GPS Location"}
+                  📍 {gpsCapturing ? t('report.gps_getting') : t('report.gps_button')}
                 </button>
               )}
 
@@ -1892,7 +1894,7 @@ export default function ReportPage() {
                 style={styles.manualToggle}
                 onClick={() => setManualExpanded(!manualExpanded)}
               >
-                {manualExpanded ? "Hide manual entry ▲" : "Enter location manually instead ▼"}
+                {manualExpanded ? t('report.hide_manual_entry') : t('report.show_manual_entry')}
               </button>
 
               {manualExpanded && (
@@ -1910,7 +1912,7 @@ export default function ReportPage() {
                   <input
                     style={styles.input}
                     type="text"
-                    placeholder="Landmark (e.g. Near central market)"
+                    placeholder={t('report.landmark_placeholder')}
                     value={locationLandmark}
                     onChange={(e) => {
                       setLocationLandmark(e.target.value);
@@ -1944,7 +1946,7 @@ export default function ReportPage() {
                   zIndex: 5,
                 } : {}),
               }}>
-                <button style={styles.secondaryButton} onClick={() => setStep("photos")}>← Back</button>
+                <button style={styles.secondaryButton} onClick={() => setStep("photos")}>{t('common.back')}</button>
                 <button
                   style={{ ...styles.primaryButton, opacity: isLocationValid() ? 1 : 0.5 }}
                   disabled={!isLocationValid()}
@@ -1964,7 +1966,7 @@ export default function ReportPage() {
                     }
                   }}
                 >
-                  Next →
+                  {t('common.next')}
                 </button>
               </div>
             </div>
@@ -2006,7 +2008,7 @@ export default function ReportPage() {
             {damageQuestion === 2 && (
               <>
                 <h2 style={styles.stepTitle}>{qTitle(2, "What type of infrastructure is this? *")}</h2>
-                <p style={styles.photoHint}>Select all that apply.</p>
+                <p style={styles.photoHint}>{t('report.select_all_apply')}</p>
                 {qOptions(2, [
                   { value: "residential", label: "Residential Infrastructure" },
                   { value: "commercial", label: "Commercial Infrastructure" },
@@ -2034,7 +2036,7 @@ export default function ReportPage() {
                       autoFocus
                       style={{ ...styles.input, marginTop: 8, resize: "vertical" as const, minHeight: 72 }}
                       maxLength={100}
-                      placeholder="Please specify..."
+                      placeholder={t('report.please_specify')}
                       value={infrastructureOther}
                       onChange={(e) => setInfrastructureOther(e.target.value)}
                     />
@@ -2049,7 +2051,7 @@ export default function ReportPage() {
                 <h2 style={styles.stepTitle}>{qTitle(3, "What is the name of this infrastructure? *")}</h2>
                 {locationChangedFlag && (
                   <p style={{ color: "#F57C00", fontSize: "0.85rem", margin: "0 0 8px", lineHeight: 1.5 }}>
-                    Your location has changed. Please confirm or update the infrastructure name.
+                    {t('report.location_changed_warning')}
                   </p>
                 )}
                 <input
@@ -2070,7 +2072,7 @@ export default function ReportPage() {
                 <h2 style={styles.stepTitle}>{qTitle(4, "What type of disaster caused this damage? *")}</h2>
                 {Q4_OPTIONS.map(({ category, options }) => (
                   <div key={category}>
-                    <div style={styles.categoryHeading}>{category}</div>
+                    <div style={styles.categoryHeading}>{q4CategoryLabels[category] ?? category}</div>
                     {options.map(({ value, label }) => (
                       <div
                         key={value}
@@ -2181,7 +2183,7 @@ export default function ReportPage() {
             {damageQuestion === 8 && (
               <>
                 <h2 style={styles.stepTitle}>{qTitle(8, "What are the most pressing needs in your community right now? *")}</h2>
-                <p style={styles.photoHint}>Select all that apply. At least one required.</p>
+                <p style={styles.photoHint}>{t('report.select_at_least_one')}</p>
                 {qOptions(8, [
                   { value: "food_water", label: "Food assistance and safe drinking water" },
                   { value: "cash_financial", label: "Cash or financial assistance" },
@@ -2211,7 +2213,7 @@ export default function ReportPage() {
                       autoFocus
                       style={{ ...styles.input, marginTop: 8, resize: "vertical" as const, minHeight: 72 }}
                       maxLength={100}
-                      placeholder="Please specify (max 100 characters)"
+                      placeholder={t('report.please_specify')}
                       value={pressingNeedsOther}
                       onChange={(e) => setPressingNeedsOther(e.target.value)}
                     />
@@ -2232,7 +2234,7 @@ export default function ReportPage() {
               return (
                 <>
                   <h2 style={styles.stepTitle}>{aq.question_text} *</h2>
-                  {isMulti && <p style={styles.photoHint}>Select all that apply.</p>}
+                  {isMulti && <p style={styles.photoHint}>{t('report.select_all_apply')}</p>}
                   {aq.options.map((opt) => {
                     const isSelected = isMulti ? selectedValues.includes(opt.option_value) : selectedValue === opt.option_value;
                     return isMulti ? (
@@ -2284,17 +2286,17 @@ export default function ReportPage() {
 
             {showAnswerPrompt && (
               <p style={{ color: "#E53E3E", fontSize: "0.85rem", margin: "4px 0 0" }}>
-                Please select an answer to continue.
+                {t('questions.please_select')}
               </p>
             )}
 
             <div style={styles.navButtonsSticky}>
-              <button style={styles.secondaryButton} onClick={handleDamageBack}>← Back</button>
+              <button style={styles.secondaryButton} onClick={handleDamageBack}>{t('common.back')}</button>
               <button
                 style={{ ...styles.primaryButton, opacity: 1 }}
                 onClick={handleDamageNext}
               >
-                Next →
+                {t('common.next')}
               </button>
             </div>
 
@@ -2303,7 +2305,7 @@ export default function ReportPage() {
                 style={{ color: "#0468B1", fontSize: "0.85rem", textDecoration: "underline", background: "none", border: "none", cursor: "pointer", marginTop: 4, alignSelf: "flex-start" }}
                 onClick={() => { setEditingFromReview(false); setStep("review"); }}
               >
-                Back to Review without changes
+                {t('report.back_to_review')}
               </button>
             )}
           </div>
@@ -2319,13 +2321,13 @@ export default function ReportPage() {
 
           return (
             <div style={{ maxWidth: 720, margin: "0 auto", padding: "24px 16px 100px", width: "100%", boxSizing: "border-box" as const }}>
-              <h2 style={styles.stepTitle}>Review Your Report</h2>
+              <h2 style={styles.stepTitle}>{t('report.review_title')}</h2>
 
               {/* ── Photos section ── */}
               <div style={styles.reviewSection}>
                 <div style={styles.reviewSectionHeader}>
-                  <span style={styles.reviewSectionTitle}>Photos</span>
-                  <button style={styles.editLink} onClick={() => setStep("photos")}>Edit</button>
+                  <span style={styles.reviewSectionTitle}>{t('report.review_photos')}</span>
+                  <button style={styles.editLink} onClick={() => setStep("photos")}>{t('common.edit')}</button>
                 </div>
                 <div style={styles.reviewCard}>
                   <div style={{ padding: "12px 16px" }}>
@@ -2371,7 +2373,7 @@ export default function ReportPage() {
                                   style={{ ...styles.thumbAction, color: "#E53E3E" }}
                                   onClick={() => {
                                     if (photos.length <= 1) {
-                                      setReviewPhotoError("At least one photo is required. Please add a photo before submitting.");
+                                      setReviewPhotoError(t('report.review_photo_required'));
                                       setReviewPhotoIndex(null);
                                       return;
                                     }
@@ -2396,7 +2398,7 @@ export default function ReportPage() {
               {/* ── Location section ── */}
               <div style={styles.reviewSection}>
                 <div style={styles.reviewSectionHeader}>
-                  <span style={styles.reviewSectionTitle}>Location</span>
+                  <span style={styles.reviewSectionTitle}>{t('report.review_location')}</span>
                   <button
                     style={styles.editLink}
                     onClick={() => {
@@ -2404,7 +2406,7 @@ export default function ReportPage() {
                       setEditingFromReview(true);
                       setStep("location");
                     }}
-                  >Edit</button>
+                  >{t('common.edit')}</button>
                 </div>
                 <div style={styles.reviewCard}>
                   {/* A8 — static map preview for map_selection or pin_drop */}
@@ -2423,7 +2425,7 @@ export default function ReportPage() {
                     <>
                       <div style={styles.reviewRow}>
                         <span style={styles.reviewLabel}>Building</span>
-                        <span style={styles.reviewValue}>{selectedBuildingName || "Building selected"}</span>
+                        <span style={styles.reviewValue}>{selectedBuildingName || t('report.building_selected')}</span>
                       </div>
                       {selectedBuildingType && selectedBuildingType !== "yes" && (
                         <div style={styles.reviewRow}>
@@ -2432,13 +2434,13 @@ export default function ReportPage() {
                         </div>
                       )}
                       <div style={styles.reviewRow}>
-                        <span style={styles.reviewLabel}>Footprint ID</span>
+                        <span style={styles.reviewLabel}>{t('report.review_label_footprint_id')}</span>
                         <span style={styles.reviewValue}>{selectedBuildingId}</span>
                       </div>
                     </>
                   ) : pinDropCoords ? (
                     <div style={styles.reviewRow}>
-                      <span style={styles.reviewLabel}>Pin Location</span>
+                      <span style={styles.reviewLabel}>{t('report.review_label_pin_location')}</span>
                       <span style={styles.reviewValue}>
                         {pinDropCoords.lat.toFixed(5)}, {pinDropCoords.lng.toFixed(5)}
                       </span>
@@ -2465,14 +2467,14 @@ export default function ReportPage() {
                       )}
                       {!locationAddress && !locationLandmark && !locationBuildingName && (
                         <div style={styles.reviewRow}>
-                          <span style={styles.reviewValue}>No location details entered</span>
+                          <span style={styles.reviewValue}>{t('report.review_no_location')}</span>
                         </div>
                       )}
                     </>
                   ) : (
                     <div style={styles.reviewRow}>
                       <span style={styles.reviewLabel}>Location</span>
-                      <span style={styles.reviewValue}>Not specified</span>
+                      <span style={styles.reviewValue}>{t('report.review_not_specified')}</span>
                     </div>
                   )}
 
@@ -2499,16 +2501,16 @@ export default function ReportPage() {
               {/* ── Questions section ── */}
               <div style={styles.reviewSection}>
                 <div style={styles.reviewSectionHeader}>
-                  <span style={styles.reviewSectionTitle}>Questions</span>
-                  <button style={styles.editLink} onClick={() => { setEditingFromReview(true); setDamageQuestion(1); setStep("damage"); }}>Edit</button>
+                  <span style={styles.reviewSectionTitle}>{t('report.review_questions')}</span>
+                  <button style={styles.editLink} onClick={() => { setEditingFromReview(true); setDamageQuestion(1); setStep("damage"); }}>{t('common.edit')}</button>
                 </div>
                 <div style={styles.reviewCard}>
                   <div style={styles.reviewRow}>
-                    <span style={styles.reviewLabel}>Q1 — Damage Level</span>
+                    <span style={styles.reviewLabel}>{t('report.review_q1')}</span>
                     <span style={styles.reviewValue}>{DAMAGE_LABELS[damageLevel] ?? damageLevel}</span>
                   </div>
                   <div style={styles.reviewRow}>
-                    <span style={styles.reviewLabel}>Q2 — Infrastructure</span>
+                    <span style={styles.reviewLabel}>{t('report.review_q2')}</span>
                     <span style={styles.reviewValue}>{infrastructureTypes.map((v) => INFRA_LABELS[v] ?? v).join(", ")}</span>
                   </div>
                   {infrastructureOther && (
@@ -2518,27 +2520,27 @@ export default function ReportPage() {
                     </div>
                   )}
                   <div style={styles.reviewRow}>
-                    <span style={styles.reviewLabel}>Q3 — Infrastructure Name</span>
+                    <span style={styles.reviewLabel}>{t('report.review_q3')}</span>
                     <span style={styles.reviewValue}>{infrastructureName}</span>
                   </div>
                   <div style={styles.reviewRow}>
-                    <span style={styles.reviewLabel}>Q4 — Disaster Type</span>
+                    <span style={styles.reviewLabel}>{t('report.review_q4')}</span>
                     <span style={styles.reviewValue}>{DISASTER_LABELS[disasterType] ?? disasterType}</span>
                   </div>
                   <div style={styles.reviewRow}>
-                    <span style={styles.reviewLabel}>Q5 — Debris Blocking</span>
+                    <span style={styles.reviewLabel}>{t('report.review_q5')}</span>
                     <span style={styles.reviewValue}>{DEBRIS_LABELS[debrisBlocking] ?? debrisBlocking}</span>
                   </div>
                   <div style={styles.reviewRow}>
-                    <span style={styles.reviewLabel}>Q6 — Electricity</span>
+                    <span style={styles.reviewLabel}>{t('report.review_q6')}</span>
                     <span style={styles.reviewValue}>{ELECTRICITY_LABELS[electricityCondition] ?? electricityCondition}</span>
                   </div>
                   <div style={styles.reviewRow}>
-                    <span style={styles.reviewLabel}>Q7 — Health Services</span>
+                    <span style={styles.reviewLabel}>{t('report.review_q7')}</span>
                     <span style={styles.reviewValue}>{HEALTH_LABELS[healthServicesCondition] ?? healthServicesCondition}</span>
                   </div>
                   <div style={styles.reviewRow}>
-                    <span style={styles.reviewLabel}>Q8 — Pressing Needs</span>
+                    <span style={styles.reviewLabel}>{t('report.review_q8')}</span>
                     <span style={styles.reviewValue}>{pressingNeeds.map((v) => PRESSING_NEEDS_LABELS[v] ?? v).join(", ")}</span>
                   </div>
                   {pressingNeedsOther && (
@@ -2567,25 +2569,25 @@ export default function ReportPage() {
               {/* E32 — No internet error */}
               {submitError === "no_internet" && (
                 <div style={{ color: "#E53E3E", fontSize: "0.875rem", margin: "8px 0", textAlign: "center" as const }}>
-                  <p style={{ margin: "0 0 4px" }}>No internet connection. Please check your connection and try again.</p>
+                  <p style={{ margin: "0 0 4px" }}>{t('report.error_no_internet')}</p>
                   <p style={{ margin: "0 0 8px", color: "#717782", fontSize: "0.8rem" }}>
-                    Do not close this tab — your report data will be lost.
+                    {t('report.error_no_internet_warning')}
                   </p>
                   <button
                     style={{ color: "#0468B1", background: "none", border: "none", textDecoration: "underline", cursor: "pointer", fontSize: "0.875rem" }}
                     onClick={() => void handleSubmit()}
-                  >Retry</button>
+                  >{t('common.retry')}</button>
                 </div>
               )}
 
               {/* E35 — Timeout error */}
               {submitError === "timeout" && (
                 <div style={{ color: "#E53E3E", fontSize: "0.875rem", margin: "8px 0", textAlign: "center" as const }}>
-                  <p style={{ margin: "0 0 8px" }}>This is taking longer than expected. Please try again.</p>
+                  <p style={{ margin: "0 0 8px" }}>{t('report.error_timeout')}</p>
                   <button
                     style={{ color: "#0468B1", background: "none", border: "none", textDecoration: "underline", cursor: "pointer", fontSize: "0.875rem" }}
                     onClick={() => void handleSubmit()}
-                  >Retry</button>
+                  >{t('common.retry')}</button>
                 </div>
               )}
 
@@ -2614,7 +2616,7 @@ export default function ReportPage() {
           <button
             style={styles.secondaryButton}
             onClick={() => { setDamageQuestion(8); setStep("damage"); }}
-          >← Back</button>
+          >{t('common.back')}</button>
           <button
             style={{
               ...styles.primaryButton,
@@ -2624,7 +2626,7 @@ export default function ReportPage() {
             onClick={() => void handleSubmit()}
             disabled={preparingPhotos || submitting || photos.length === 0}
           >
-            {preparingPhotos ? "Preparing photos…" : submitting ? t("report.submitting") : t("report.submit")}
+            {preparingPhotos ? t('report.preparing_photos') : submitting ? t("report.submitting") : t("report.submit")}
           </button>
         </div>
       )}
@@ -2675,16 +2677,16 @@ export default function ReportPage() {
       {showDupeWarning && (
         <div style={styles.modalOverlay}>
           <div style={styles.modalBox}>
-            <h3 style={styles.modalTitle}>Possible duplicate report</h3>
+            <h3 style={styles.modalTitle}>{t('report.dupe_title')}</h3>
             <p style={styles.modalBody}>
-              It looks like you have already submitted a report for this location. Are you sure you want to submit another?
+              {t('report.dupe_body')}
             </p>
             <div style={{ display: "flex", gap: 12, marginTop: 8 }}>
               <button style={{ ...styles.secondaryButton, flex: 1 }} onClick={() => setShowDupeWarning(false)}>
-                Go back
+                {t('common.go_back')}
               </button>
               <button style={{ ...styles.primaryButton, flex: 1 }} onClick={() => void doSubmit(submissionSubmittedAt)}>
-                Submit anyway
+                {t('report.dupe_submit_anyway')}
               </button>
             </div>
           </div>

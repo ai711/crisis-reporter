@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 
 const BLUE = "#0468B1";
 
@@ -49,6 +50,7 @@ function IconChevron({ expanded }: { expanded: boolean }) {
 
 export default function FAQPage() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [openIndex, setOpenIndex] = useState<number | null>(null);
   const [supportEmail, setSupportEmail] = useState("support@crisisreporter.org");
 
@@ -115,7 +117,7 @@ export default function FAQPage() {
         <button className="page-header-back" onClick={() => navigate("/")} aria-label="Back">
           <IconBack />
         </button>
-        <span className="page-header-title">FAQ</span>
+        <span className="page-header-title">{t('faq.title')}</span>
         <div className="page-header-spacer" />
       </header>
 
@@ -184,13 +186,13 @@ export default function FAQPage() {
           padding: "16px 20px 40px",
         }}>
           <p style={{ color: "#718096", fontSize: "0.875rem", margin: "0 0 8px" }}>
-            Can't find what you're looking for?
+            {t('faq.contact_prompt')}
           </p>
           <a
             href={`mailto:${supportEmail}`}
             style={{ color: "#0468B1", fontWeight: 600, fontSize: "0.9rem", textDecoration: "underline" }}
           >
-            Contact Support
+            {t('faq.contact_link')}
           </a>
         </div>
       </div>

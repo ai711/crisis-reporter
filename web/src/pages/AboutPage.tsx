@@ -1,4 +1,5 @@
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 
 const BLUE = "#0468B1";
 
@@ -108,6 +109,7 @@ function TechRow({
 
 export default function AboutPage() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
 
   return (
     <div style={{ flex: 1, background: "#F6F3F2", display: "flex", flexDirection: "column" }}>
@@ -116,7 +118,7 @@ export default function AboutPage() {
         <button className="page-header-back" onClick={() => navigate("/")} aria-label="Back">
           <IconBack />
         </button>
-        <span className="page-header-title">About Crisis Reporter</span>
+        <span className="page-header-title">{t('about.title')}</span>
         <div className="page-header-spacer" />
       </header>
 
@@ -184,16 +186,14 @@ export default function AboutPage() {
               padding: "16px 18px",
             }}
           >
-            Crisis Reporter enables communities to map damage in real time following
-            sudden-onset crises. Built for UNDP to coordinate crisis response and
-            support affected populations.
+            {t('about.mission')}
           </p>
         </Card>
 
         {/* ── Version info card ── */}
         <Card>
-          <InfoRow label="Version" value="1.0.0" />
-          <InfoRow label="Build Date" value="May 2026" last />
+          <InfoRow label={t('about.version')} value="1.0.0" />
+          <InfoRow label={t('about.build_date')} value="May 2026" last />
         </Card>
 
         {/* ── Technology card ── */}
@@ -214,7 +214,7 @@ export default function AboutPage() {
                 margin: 0,
               }}
             >
-              Built With
+              {t('about.built_with')}
             </p>
           </div>
           <TechRow label="Backend"    value="FastAPI + PostgreSQL" />
@@ -234,9 +234,7 @@ export default function AboutPage() {
             margin: "4px 4px 0",
           }}
         >
-          Crisis Reporter is an open source prototype developed for the UNDP
-          InnoCentive Crisis Mapping Challenge. Data collected is used solely for
-          humanitarian crisis response coordination.
+          {t('about.legal')}
         </p>
       </div>
     </div>
