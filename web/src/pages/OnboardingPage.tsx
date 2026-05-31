@@ -28,6 +28,15 @@ const UN_LANGUAGES: Language[] = [
 
 const UN_LANGUAGE_CODES = new Set(UN_LANGUAGES.map((l) => l.code));
 
+const UN_NATIVE_NAMES: Record<string, string> = {
+  ar: 'العربية',
+  zh: '中文',
+  en: 'English',
+  fr: 'Français',
+  ru: 'Русский',
+  es: 'Español',
+};
+
 type Step = "onboarding" | "terms";
 
 // ── Icons ─────────────────────────────────────────────────────────────────────
@@ -418,23 +427,7 @@ export default function OnboardingPage() {
     setShowDeclineMsg(true);
   };
 
-  if (step === "terms") {
-    return (
-      <TermsScreen
-        tcText={t("tc_text")}
-        onAgree={handleAgree}
-        onDecline={handleDecline}
-        showDeclineMsg={showDeclineMsg}
-      />
-    );
-  }
-
-  const filteredCountries = countries.filter((c) =>
-    c.name.toLowerCase().includes(countrySearch.toLowerCase())
-  );
-
-  const canContinue = !!(selectedCountry?.is_active && selectedLanguage);
-
+  // ALL useMemo hooks must be declared before any conditional return (Rules of Hooks).
   const pillLanguages = useMemo<Language[]>(() => [
     ...UN_LANGUAGES,
     // Only add officialLang as a 7th pill when it is NOT already one of the 6 UN languages.
@@ -456,34 +449,18 @@ export default function OnboardingPage() {
     return aIdx - bIdx;
   }), [pillLanguages, officialLang]);
 
-  const UN_NATIVE_NAMES: Record<string, string> = {
-    ar: 'العربية',
-    zh: '中文',
-    en: 'English',
-    fr: 'Français',
-    ru: 'Русский',
-    es: 'Español',
-  };
-
-  const mergedLanguages = allLanguages.length > 0
-    ? allLanguages.map(lang => ({
-        ...lang,
-        native_name: lang.native_name
-          || UN_NATIVE_NAMES[lang.code]
-          || lang.name,
-      }))
-    : [];
-
-  // Ensure English is always in the expanded list
-  const hasEnglish = mergedLanguages.some(l => l.code === 'en');
-  if (!hasEnglish && allLanguages.length > 0) {
-    mergedLanguages.push({
-      code: 'en',
-      name: 'English',
-      native_name: 'English',
-      is_active: true,
-    });
-  }
+  const mergedLanguages = useMemo(() => {
+    const base = allLanguages.length > 0
+      ? allLanguages.map(lang => ({
+          ...lang,
+          native_name: lang.native_name || UN_NATIVE_NAMES[lang.code] || lang.name,
+        }))
+      : [];
+    if (!base.some(l => l.code === 'en') && allLanguages.length > 0) {
+      base.push({ code: 'en', name: 'English', native_name: 'English', is_active: true });
+    }
+    return base;
+  }, [allLanguages]);
 
   // When expanded, apply the same official-language-first sort to the merged list.
   const displayLanguages = useMemo(() =>
@@ -497,6 +474,23 @@ export default function OnboardingPage() {
         })
       : sortedLanguages,
   [showAllLanguages, mergedLanguages, sortedLanguages, officialLang]);
+
+  if (step === "terms") {
+    return (
+      <TermsScreen
+        tcText={t("tc_text")}
+        onAgree={handleAgree}
+        onDecline={handleDecline}
+        showDeclineMsg={showDeclineMsg}
+      />
+    );
+  }
+
+  const filteredCountries = countries.filter((c) =>
+    c.name.toLowerCase().includes(countrySearch.toLowerCase())
+  );
+
+  const canContinue = !!(selectedCountry?.is_active && selectedLanguage);
 
   return (
     <div className="app-container">
