@@ -407,3 +407,30 @@ async def patch_thresholds(
     current.update(updates)
     await _upsert_setting(db, "thresholds", current)
     return current
+
+
+@router.post("/retry-stuck-reports", dependencies=[Depends(require_superadmin)])
+async def retry_stuck_reports(db: AsyncSession = Depends(get_db)):
+    """Immediately requeue all grey reports that are past the stuck threshold.
+    Call this once after a deployment to fix reports stuck before the monitor loop was corrected."""
+    import asyncio
+    from datetime import datetime, timezone, timedelta
+    from app.models.report import Report
+    from sqlalchemy import and_
+    from app.services.auto_flagging import auto_flag_report
+
+    threshold_minutes = app_config.STUCK_REPORT_THRESHOLD_MINUTES
+    stuck_cutoff = datetime.now(timezone.utc) - timedelta(minutes=threshold_minutes)
+
+    result = await db.execute(
+        select(Report).where(and_(
+            Report.flag_status == "grey",
+            Report.created_at <= stuck_cutoff,
+        ))
+    )
+    stuck = result.scalars().all()
+
+    for report in stuck:
+        asyncio.create_task(auto_flag_report(str(report.id), delay=0))
+
+    return {"queued": len(stuck), "report_ids": [str(r.id) for r in stuck]}
