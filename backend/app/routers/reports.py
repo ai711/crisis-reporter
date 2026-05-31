@@ -600,11 +600,14 @@ async def check_duplicate_report(
     lng: Optional[float] = Query(None),
     building_id: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
-    current_reporter: Reporter = Depends(get_current_reporter),
+    current_reporter: Optional[Reporter] = Depends(get_optional_reporter),
 ):
-    """Check whether the authenticated reporter already has a report for this
-    location within the last 24 hours. Anonymous reporters are handled
-    client-side via sessionStorage."""
+    """Check whether the reporter already has a report for this location within
+    the last 24 hours. Works for anonymous reporters with a JWT and for
+    unauthenticated callers (returns no duplicate found)."""
+    if not current_reporter:
+        return {"is_duplicate": False}
+
     from datetime import timedelta
     cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
 
