@@ -50,7 +50,57 @@ arq app.worker.WorkerSettings
 python -c "from app.services.encryption import generate_fernet_key; print(generate_fernet_key())"
 ```
 
-Schema migrations are **not Alembic-managed** — they run as raw SQL in `_MIGRATIONS` list in `backend/app/main.py` at every startup (all statements use `IF NOT EXISTS` / `IF NOT EXISTS` guards, so they are idempotent). To add a migration, append to the `_MIGRATIONS` list. Do not create separate Alembic revision files for new columns.
+Schema migrations are **not Alembic-managed** — they run as raw SQL in `_MIGRATIONS` list in `backend/app/main.py` at every startup (all statements use `IF NOT EXISTS` guards, so they are idempotent). To add a migration, append to the `_MIGRATIONS` list. Do not create separate Alembic revision files for new columns.
+
+### CRITICAL — Migration Rule (read before every model edit)
+
+`Base.metadata.create_all` only creates **tables that do not yet exist**. It never adds columns to existing tables. This means:
+
+> **Every column added to an existing SQLAlchemy model MUST have a corresponding `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` statement appended to `_MIGRATIONS` in the same commit.**
+
+Existing tables (at-risk — were created at the initial Railway deployment):
+`reports`, `reporters`, `flag_events`, `photos`, `crises`, `dashboard_users`, `roles`
+
+New tables added after the initial deployment are safe — `create_all` builds them in full from the model. Examples: `properties`, `property_comments`, `report_projects`, `project_users`, `notifications`, `reporter_activity_log`, `translation_audit_log`, etc.
+
+**Checklist — run mentally before committing any change to `backend/app/models/`:**
+
+1. Is the table in the at-risk list above?
+   - No → `create_all` handles it, no migration needed.
+   - Yes → continue.
+2. Is this a new column (didn't exist in the model before this commit)?
+   - Yes → append to `_MIGRATIONS`:
+     ```python
+     "ALTER TABLE <table> ADD COLUMN IF NOT EXISTS <col> <TYPE> <DEFAULT?>",
+     ```
+3. Does the column have `nullable=False` without a `server_default`?
+   - Yes → add a `DEFAULT` to the migration SQL (or existing rows will NULL-violate on the next `NOT NULL` check).
+4. Does the column have `unique=True` or an `Index()` in `__table_args__`?
+   - Yes → also append a `CREATE UNIQUE INDEX IF NOT EXISTS` / `CREATE INDEX IF NOT EXISTS` statement.
+5. Does the column use a renamed DB column via `mapped_column("db_col_name", ...)`?
+   - Yes → the migration must use the **DB column name** (the string argument), not the Python attribute name. Example: `flag_metadata = mapped_column("metadata", JSON)` → migrate as `ADD COLUMN IF NOT EXISTS metadata JSONB`.
+
+**Migration template:**
+```python
+# <Model>.<attribute> — one-line reason why this was added
+"ALTER TABLE <table> ADD COLUMN IF NOT EXISTS <db_col> <PGTYPE>",
+# Optional index:
+"CREATE INDEX IF NOT EXISTS ix_<table>_<col> ON <table>(<db_col>)",
+```
+
+**Renaming a column** — add both `ALTER TABLE ... RENAME COLUMN ... TO ...` and a comment explaining the rename. Do not add `ADD COLUMN` + `DROP COLUMN` — data loss.
+
+**Changing a column type** — use `ALTER TABLE ... ALTER COLUMN ... TYPE ... USING ...`. Never drop-and-recreate.
+
+### Diagnosing "stuck grey reports"
+
+Grey reports that never transition are always caused by `auto_flag_report` crashing. To diagnose without reading logs:
+
+1. Call `POST /api/settings/retry-stuck-reports` (superadmin JWT required, use `/api/docs`).
+2. The response body contains per-report `status` and full `error` traceback.
+3. The error will name the missing column exactly — add the migration, push, redeploy, retry.
+
+The stuck-report monitor (`_stuck_report_loop`) also runs immediately on every startup and re-queues stuck reports automatically.
 
 API docs available at `http://localhost:8000/api/docs` when the dev server is running.
 
