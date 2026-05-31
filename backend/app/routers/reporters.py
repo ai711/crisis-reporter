@@ -31,6 +31,9 @@ class RegisterRequest(BaseModel):
 
 class RegisterResponse(BaseModel):
     reporter_id: int
+    access_token: str
+    refresh_token: str
+    token_type: str
     platform: str
 
 
@@ -99,8 +102,16 @@ async def register_anonymous(
     if existing:
         existing.last_active_at = datetime.now(timezone.utc)
         await db.commit()
+        tokens = create_token_pair(
+            subject=str(existing.id),
+            role="reporter",
+            context="reporter",
+        )
         return RegisterResponse(
             reporter_id=existing.display_id,
+            access_token=tokens["access_token"],
+            refresh_token=tokens["refresh_token"],
+            token_type=tokens["token_type"],
             platform=existing.platform,
         )
 
@@ -120,8 +131,16 @@ async def register_anonymous(
     await db.commit()
     await db.refresh(reporter)
 
+    tokens = create_token_pair(
+        subject=str(reporter.id),
+        role="reporter",
+        context="reporter",
+    )
     return RegisterResponse(
         reporter_id=reporter.display_id,
+        access_token=tokens["access_token"],
+        refresh_token=tokens["refresh_token"],
+        token_type=tokens["token_type"],
         platform=reporter.platform,
     )
 
