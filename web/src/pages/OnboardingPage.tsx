@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useAuthStore } from "../stores/authStore";
@@ -435,14 +435,14 @@ export default function OnboardingPage() {
 
   const canContinue = !!(selectedCountry?.is_active && selectedLanguage);
 
-  const pillLanguages: Language[] = [
+  const pillLanguages = useMemo<Language[]>(() => [
     ...UN_LANGUAGES,
     // Only add officialLang as a 7th pill when it is NOT already one of the 6 UN languages.
     // officialLang is now always set (even for UN-language countries) so we must deduplicate here.
     ...(officialLang && !UN_LANGUAGE_CODES.has(officialLang.code) ? [officialLang] : []),
-  ];
+  ], [officialLang]);
 
-  const sortedLanguages = [...pillLanguages].sort((a, b) => {
+  const sortedLanguages = useMemo(() => [...pillLanguages].sort((a, b) => {
     const officialCode = officialLang?.code || null;
     const aIsOfficial = officialCode && a.code === officialCode ? -1 : 0;
     const bIsOfficial = officialCode && b.code === officialCode ? 1 : 0;
@@ -454,7 +454,7 @@ export default function OnboardingPage() {
     if (aIdx === -1) return 1;
     if (bIdx === -1) return -1;
     return aIdx - bIdx;
-  });
+  }), [pillLanguages, officialLang]);
 
   const UN_NATIVE_NAMES: Record<string, string> = {
     ar: 'العربية',
@@ -486,15 +486,17 @@ export default function OnboardingPage() {
   }
 
   // When expanded, apply the same official-language-first sort to the merged list.
-  const displayLanguages = showAllLanguages
-    ? [...mergedLanguages].sort((a, b) => {
-        const officialCode = officialLang?.code || null;
-        const aIsOfficial = officialCode && a.code === officialCode ? -1 : 0;
-        const bIsOfficial = officialCode && b.code === officialCode ? 1 : 0;
-        if (aIsOfficial !== 0 || bIsOfficial !== 0) return aIsOfficial + bIsOfficial;
-        return 0;
-      })
-    : sortedLanguages;
+  const displayLanguages = useMemo(() =>
+    showAllLanguages
+      ? [...mergedLanguages].sort((a, b) => {
+          const officialCode = officialLang?.code || null;
+          const aIsOfficial = officialCode && a.code === officialCode ? -1 : 0;
+          const bIsOfficial = officialCode && b.code === officialCode ? 1 : 0;
+          if (aIsOfficial !== 0 || bIsOfficial !== 0) return aIsOfficial + bIsOfficial;
+          return 0;
+        })
+      : sortedLanguages,
+  [showAllLanguages, mergedLanguages, sortedLanguages, officialLang]);
 
   return (
     <div className="app-container">

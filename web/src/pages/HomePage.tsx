@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import { useAuthStore } from "../stores/authStore";
 import { WEB_SESSION_ID } from "../utils/sessionId";
 import { detectPlatform } from "../services/auth";
@@ -13,6 +14,7 @@ const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function HomePage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { setReporter } = useAuthStore();
 
@@ -176,31 +178,28 @@ export default function HomePage() {
         {welcomeVisible && (
           <div style={s.welcomeCard}>
             <p style={s.welcomeText}>
-              Crisis Reporter helps you document damage to buildings and
-              infrastructure after a disaster. You can report earthquakes,
-              floods, conflicts, and other crises. Your reports help UNDP get
-              help to the right places faster.
+              {t('home.welcomeText')}
             </p>
             <button style={s.welcomeGotItBtn} onClick={dismissWelcome}>
-              Got it
+              {t('home.welcomeGotIt')}
             </button>
           </div>
         )}
 
         {/* B14: Primary action — full-width, dominant */}
         <button style={s.reportBtn} onClick={handleReportClick}>
-          Report an Incident
+          {t('home.reportButton')}
         </button>
 
         {/* B15: "What can I report?" link — directly below the button */}
         <button style={s.whatLink} onClick={() => setCrisisModalOpen(true)}>
-          What can I report?
+          {t('home.whatCanReport')}
         </button>
 
         {reportsLoading ? (
           <div style={{padding: '16px 20px', textAlign: 'center',
             fontSize: 14, color: '#717782'}}>
-            Loading your reports...
+            {t('home.loadingReports')}
           </div>
         ) : reportsError ? (
           <div style={{padding: '20px 16px'}}>
@@ -208,9 +207,9 @@ export default function HomePage() {
               textAlign: 'center'}}>
               <div style={{fontSize: 32, marginBottom: 8}}>📋</div>
               <div style={{fontSize: 15, fontWeight: 600, color: '#1B1C1C',
-                marginBottom: 4}}>No reports yet</div>
+                marginBottom: 4}}>{t('home.noReportsTitle')}</div>
               <div style={{fontSize: 13, color: '#717782'}}>
-                Your submitted reports will appear here
+                {t('home.noReportsBody')}
               </div>
             </div>
           </div>
@@ -220,9 +219,9 @@ export default function HomePage() {
               textAlign: 'center'}}>
               <div style={{fontSize: 32, marginBottom: 8}}>📋</div>
               <div style={{fontSize: 15, fontWeight: 600, color: '#1B1C1C',
-                marginBottom: 4}}>No reports yet</div>
+                marginBottom: 4}}>{t('home.noReportsTitle')}</div>
               <div style={{fontSize: 13, color: '#717782'}}>
-                Tap "Report an Incident" to submit your first report
+                {t('home.firstReportHint')}
               </div>
             </div>
           </div>
@@ -231,7 +230,7 @@ export default function HomePage() {
             <div style={{fontSize: 11, fontWeight: 700, color: '#717782',
               textTransform: 'uppercase', letterSpacing: '1.2px',
               marginBottom: 8, marginTop: 16}}>
-              YOUR RECENT REPORTS
+              {t('home.recentReports')}
             </div>
             {reportsData?.reports?.slice(0, 3).map((report: any) => (
               <div key={report.id} style={{background: 'white', borderRadius: 16,
@@ -262,30 +261,27 @@ export default function HomePage() {
         <div style={s.promptOverlay} onClick={() => setLoginPromptOpen(false)}>
           <div style={s.promptSheet} onClick={(e) => e.stopPropagation()}>
             <div style={s.promptHandle} />
-            <h2 style={s.promptTitle}>Have you used Crisis Reporter before?</h2>
-            <p style={s.promptBody}>
-              If you have an existing verified account, log in to restore your
-              reports, badges, and profile.
-            </p>
+            <h2 style={s.promptTitle}>{t('loginPrompt.title')}</h2>
+            <p style={s.promptBody}>{t('loginPrompt.body')}</p>
             <div style={s.promptButtons}>
               <button
                 style={s.promptBtnPrimary}
                 onClick={() => { setLoginPromptOpen(false); navigate("/login"); }}
               >
-                Log In
+                {t('settings.login')}
               </button>
               <button
                 style={s.promptBtnOutline}
                 onClick={() => { setLoginPromptOpen(false); navigate("/profile"); }}
               >
-                Create Account
+                {t('settings.register')}
               </button>
               <button
                 style={s.promptBtnSkip}
                 disabled={loginPromptBusy}
                 onClick={registerAnonymous}
               >
-                {loginPromptBusy ? "Setting up…" : "Skip for now"}
+                {loginPromptBusy ? t('loginPrompt.settingUp') : t('loginPrompt.skip')}
               </button>
             </div>
           </div>

@@ -38,6 +38,7 @@ export async function loadLanguagePackage(langCode: string): Promise<LangPackage
     if (localeRes.ok) {
       const localeData = await localeRes.json();
       i18n.addResourceBundle(langCode, "translation", localeData, true, true);
+      try { localStorage.setItem(`cr_locale_${langCode}`, JSON.stringify(localeData)); } catch { /* ignore */ }
     }
   } catch {
     console.warn("[i18n] Could not load locale file for", langCode);
@@ -98,10 +99,25 @@ export async function loadLanguagePackageFromCache(langCode: string): Promise<bo
     return true;
   }
   try {
+    let hasData = false;
+
+    // Restore locale UI strings first (cached by loadLanguagePackage)
+    const cachedLocale = localStorage.getItem(`cr_locale_${langCode}`);
+    if (cachedLocale) {
+      const localeData: Record<string, unknown> = JSON.parse(cachedLocale);
+      i18n.addResourceBundle(langCode, "translation", localeData, true, false);
+      hasData = true;
+    }
+
+    // Restore backend question strings on top
     const cached = localStorage.getItem(`cr_language_package_${langCode}`);
     if (cached) {
       const data: Record<string, unknown> = JSON.parse(cached);
       i18n.addResourceBundle(langCode, "translation", data, true, true);
+      hasData = true;
+    }
+
+    if (hasData) {
       await i18n.changeLanguage(langCode);
       return true;
     }

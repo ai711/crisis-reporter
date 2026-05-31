@@ -22,7 +22,21 @@
   "home": {
     "reportButton": "Signaler un incident",
     "queuedReports": "{{count}} rapport(s) en attente de synchronisation",
-    "myReports": "Mes rapports"
+    "myReports": "Mes rapports",
+    "whatCanReport": "Que puis-je signaler ?",
+    "welcomeText": "Crisis Reporter vous aide à documenter les dommages causés aux bâtiments et aux infrastructures après une catastrophe. Vous pouvez signaler des tremblements de terre, des inondations, des conflits et d'autres crises. Vos rapports aident le PNUD à acheminer l'aide aux bons endroits plus rapidement.",
+    "welcomeGotIt": "Compris",
+    "loadingReports": "Chargement de vos rapports...",
+    "noReportsTitle": "Pas encore de rapports",
+    "noReportsBody": "Vos rapports soumis apparaîtront ici",
+    "firstReportHint": "Appuyez sur \"Signaler un incident\" pour soumettre votre premier rapport",
+    "recentReports": "VOS RAPPORTS RÉCENTS"
+  },
+  "loginPrompt": {
+    "title": "Avez-vous déjà utilisé Crisis Reporter ?",
+    "body": "Si vous avez un compte vérifié existant, connectez-vous pour restaurer vos rapports, badges et profil.",
+    "settingUp": "Configuration…",
+    "skip": "Ignorer pour l'instant"
   },
   "report": {
     "title": "Signaler des dommages",

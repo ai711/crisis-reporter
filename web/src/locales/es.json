@@ -20,7 +20,21 @@
   "home": {
     "reportButton": "Reportar un incidente",
     "queuedReports": "{{count}} reporte(s) esperando sincronización",
-    "myReports": "Mis reportes"
+    "myReports": "Mis reportes",
+    "whatCanReport": "¿Qué puedo reportar?",
+    "welcomeText": "Crisis Reporter te ayuda a documentar daños en edificios e infraestructura tras un desastre. Puedes reportar terremotos, inundaciones, conflictos y otras crisis. Tus reportes ayudan al PNUD a llevar ayuda a los lugares correctos más rápido.",
+    "welcomeGotIt": "Entendido",
+    "loadingReports": "Cargando tus reportes...",
+    "noReportsTitle": "Aún no hay reportes",
+    "noReportsBody": "Tus reportes enviados aparecerán aquí",
+    "firstReportHint": "Toca \"Reportar un incidente\" para enviar tu primer reporte",
+    "recentReports": "TUS REPORTES RECIENTES"
+  },
+  "loginPrompt": {
+    "title": "¿Has usado Crisis Reporter antes?",
+    "body": "Si tienes una cuenta verificada existente, inicia sesión para restaurar tus reportes, insignias y perfil.",
+    "settingUp": "Configurando…",
+    "skip": "Omitir por ahora"
   },
   "report": {
     "title": "Reportar daños",

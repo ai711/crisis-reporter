@@ -22,7 +22,21 @@
   "home": {
     "reportButton": "Report an Incident",
     "queuedReports": "{{count}} report(s) waiting to sync",
-    "myReports": "My Reports"
+    "myReports": "My Reports",
+    "whatCanReport": "What can I report?",
+    "welcomeText": "Crisis Reporter helps you document damage to buildings and infrastructure after a disaster. You can report earthquakes, floods, conflicts, and other crises. Your reports help UNDP get help to the right places faster.",
+    "welcomeGotIt": "Got it",
+    "loadingReports": "Loading your reports...",
+    "noReportsTitle": "No reports yet",
+    "noReportsBody": "Your submitted reports will appear here",
+    "firstReportHint": "Tap \"Report an Incident\" to submit your first report",
+    "recentReports": "YOUR RECENT REPORTS"
+  },
+  "loginPrompt": {
+    "title": "Have you used Crisis Reporter before?",
+    "body": "If you have an existing verified account, log in to restore your reports, badges, and profile.",
+    "settingUp": "Setting up…",
+    "skip": "Skip for now"
   },
   "report": {
     "title": "Report Damage",

@@ -20,7 +20,21 @@
   "home": {
     "reportButton": "报告事件",
     "queuedReports": "{{count}} 份报告等待同步",
-    "myReports": "我的报告"
+    "myReports": "我的报告",
+    "whatCanReport": "我可以报告什么？",
+    "welcomeText": "Crisis Reporter帮助您记录灾难后建筑物和基础设施的损坏情况。您可以报告地震、洪水、冲突和其他危机。您的报告帮助联合国开发计划署更快地将援助送达需要的地方。",
+    "welcomeGotIt": "知道了",
+    "loadingReports": "正在加载您的报告...",
+    "noReportsTitle": "暂无报告",
+    "noReportsBody": "您提交的报告将显示在此处",
+    "firstReportHint": "点击\"报告事件\"提交您的第一份报告",
+    "recentReports": "您的最近报告"
+  },
+  "loginPrompt": {
+    "title": "您以前使用过Crisis Reporter吗？",
+    "body": "如果您有现有的已验证账户，请登录以恢复您的报告、徽章和个人资料。",
+    "settingUp": "设置中…",
+    "skip": "暂时跳过"
   },
   "report": {
     "title": "报告损坏",
