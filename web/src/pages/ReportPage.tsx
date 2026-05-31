@@ -1223,7 +1223,7 @@ export default function ReportPage() {
     const isCurrentlyOnline = await (async () => {
       try {
         const r = await fetch(`${API_URL}/api/health`, {
-          method: "HEAD",
+          method: "GET",
           cache: "no-store",
           signal: AbortSignal.timeout(5000),
         });

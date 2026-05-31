@@ -73,7 +73,7 @@ async def _check_arq_worker() -> dict:
         return {"status": "outage", "message": str(e)[:120]}
 
 
-@router.get("")
+@router.api_route("", methods=["GET", "HEAD"])
 async def health_check(db: AsyncSession = Depends(get_db)):
     """Comprehensive health check — returns live status for all system components."""
     checked_at = datetime.now(timezone.utc).isoformat()
