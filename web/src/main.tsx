@@ -1,3 +1,8 @@
+interface BeforeInstallPromptEvent extends Event {
+  prompt(): Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
+}
+
 // ── Step 1: Web Session ID — must be the very first import. ──────────────────
 // Importing this module runs initWebSessionId() synchronously before anything else.
 import { WEB_SESSION_ID } from "./utils/sessionId";
@@ -60,6 +65,14 @@ const queryClient = new QueryClient({
 
   // ── Register offline sync triggers.
   registerSyncTriggers(API_URL);
+
+  // ── PWA install prompt — capture the browser's beforeinstallprompt event
+  // so we can trigger it on demand from the side menu.
+  window.addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault();
+    (window as Window & { __pwaInstallPrompt?: BeforeInstallPromptEvent }).__pwaInstallPrompt =
+      e as BeforeInstallPromptEvent;
+  });
 
   // ── Mount React.
   createRoot(document.getElementById("root")!).render(

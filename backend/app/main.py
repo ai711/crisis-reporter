@@ -180,6 +180,8 @@ async def _stuck_report_loop() -> None:
     """Run stuck-grey-report monitor on configurable interval, reading threshold from AppSetting."""
     from app.services.auto_flagging import monitor_stuck_grey_reports
     from app.models.app_setting import AppSetting
+    # Run immediately on startup so reports stuck across a redeploy are processed right away.
+    await monitor_stuck_grey_reports()
     while True:
         interval = settings.STUCK_REPORT_THRESHOLD_MINUTES
         try:

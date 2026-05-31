@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -34,6 +34,11 @@ function displayName(p: ReporterProfile | null): string {
   if (!p) return "Anonymous Reporter";
   const full = [p.first_name, p.last_name].filter(Boolean).join(" ").trim();
   return full || "Anonymous Reporter";
+}
+
+interface BeforeInstallPromptEvent extends Event {
+  prompt(): Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 }
 
 interface MenuItem {
@@ -73,6 +78,8 @@ export default function SideMenu({ open, onClose }: SideMenuProps) {
   const { t } = useTranslation();
   const { reporterId } = useAuthStore();
   const [profile, setProfile] = useState<ReporterProfile | null>(null);
+  const [canInstall, setCanInstall] = useState(false);
+  const installPromptRef = useRef<BeforeInstallPromptEvent | null>(null);
 
   const MENU_LABEL_KEYS: Record<string, string> = {
     "Report an Incident": 'home.reportButton',
@@ -85,6 +92,39 @@ export default function SideMenu({ open, onClose }: SideMenuProps) {
     "Settings": 'settings.title',
     "About Crisis Reporter": 'about.title',
   };
+
+  useEffect(() => {
+    // Check if a deferred install prompt is already available (captured at startup).
+    const existing = (window as Window & { __pwaInstallPrompt?: BeforeInstallPromptEvent }).__pwaInstallPrompt;
+    if (existing) {
+      installPromptRef.current = existing;
+      setCanInstall(true);
+    }
+
+    const handler = (e: Event) => {
+      e.preventDefault();
+      installPromptRef.current = e as BeforeInstallPromptEvent;
+      setCanInstall(true);
+    };
+    window.addEventListener("beforeinstallprompt", handler);
+
+    window.addEventListener("appinstalled", () => setCanInstall(false));
+
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handler);
+    };
+  }, []);
+
+  async function handleInstall() {
+    if (!installPromptRef.current) return;
+    await installPromptRef.current.prompt();
+    const { outcome } = await installPromptRef.current.userChoice;
+    if (outcome === "accepted") {
+      installPromptRef.current = null;
+      setCanInstall(false);
+    }
+    onClose();
+  }
 
   const fetchProfile = useCallback(() => {
     if (!reporterId || profile) return;
@@ -297,6 +337,37 @@ export default function SideMenu({ open, onClose }: SideMenuProps) {
 
         {/* Divider */}
         <div style={{ height: 1, background: "#e2e8f0", flexShrink: 0 }} />
+
+        {/* PWA Install button — only rendered when browser supports it and app isn't installed */}
+        {canInstall && (
+          <div style={{ padding: "12px 16px 4px", flexShrink: 0 }}>
+            <button
+              onClick={handleInstall}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                width: "100%",
+                padding: "11px 16px",
+                background: "#EBF4FF",
+                border: `1.5px solid ${BLUE}`,
+                borderRadius: 8,
+                cursor: "pointer",
+                textAlign: "left",
+              }}
+            >
+              <span style={{ fontSize: 18 }}>📲</span>
+              <div>
+                <p style={{ fontSize: 13, color: BLUE, fontWeight: 700, margin: 0, lineHeight: 1.3 }}>
+                  Install App
+                </p>
+                <p style={{ fontSize: 11, color: "#4a6fa5", margin: 0, lineHeight: 1.3 }}>
+                  Add to home screen
+                </p>
+              </div>
+            </button>
+          </div>
+        )}
 
         {/* Footer */}
         <div style={{ padding: "16px 20px", flexShrink: 0 }}>
