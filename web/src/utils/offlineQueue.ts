@@ -157,6 +157,7 @@ export async function syncQueue(apiBaseUrl: string): Promise<void> {
         });
 
         if (!reportResponse.ok) {
+          if (reportResponse.status === 401) throw new Error("auth_expired");
           throw new Error(`Report submission failed: ${reportResponse.status}`);
         }
 
@@ -178,22 +179,35 @@ export async function syncQueue(apiBaseUrl: string): Promise<void> {
             photoHeaders["Authorization"] = `Bearer ${accessToken}`;
           }
 
-          await fetch(`${apiBaseUrl}/api/photos`, {
+          const photoResponse = await fetch(`${apiBaseUrl}/api/photos`, {
             method: "POST",
             headers: photoHeaders,
             body: formData,
           });
+
+          if (!photoResponse.ok) {
+            // 401 means our token expired — stop retrying this session, let the
+            // next online event try again once the app has refreshed the token
+            if (photoResponse.status === 401) {
+              throw new Error("auth_expired");
+            }
+            throw new Error(`Photo upload failed: ${photoResponse.status}`);
+          }
         }
 
         // Remove from queue on success
         await removeFromQueue(item.local_id);
-      } catch {
-        // Mark as pending again with incremented retry count
+      } catch (syncErr) {
+        const isAuthExpired =
+          syncErr instanceof Error && syncErr.message === "auth_expired";
         await updateItemStatus(
           item.local_id,
           "pending",
-          item.retry_count + 1
+          // Don't burn a retry on auth expiry — the token just needs refreshing
+          isAuthExpired ? item.retry_count : item.retry_count + 1
         );
+        // Auth expired — no point trying other items this pass
+        if (isAuthExpired) break;
       }
     }
   } finally {

@@ -53,8 +53,9 @@ export default defineConfig({
             },
           },
           {
-            // Cache API responses
-            urlPattern: /\/api\/.*/i,
+            // Cache GET API responses only — never cache mutations (POST/PUT/DELETE)
+            urlPattern: ({ request }) =>
+              request.method === "GET" && /\/api\//.test(request.url),
             handler: "NetworkFirst",
             options: {
               cacheName: "crisis-reporter-api-cache",

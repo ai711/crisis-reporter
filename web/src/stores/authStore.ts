@@ -37,6 +37,9 @@ export const useAuthStore = create<AuthState>()(
         localStorage.removeItem("cr_country");
         localStorage.removeItem("cr_language");
         localStorage.removeItem("cr_tc_accepted");
+        localStorage.removeItem("cr_access_token");
+        localStorage.removeItem("cr_refresh_token");
+        localStorage.removeItem("cr_reporter_id");
         set({
           reporterId: null,
           isVerified: false,
