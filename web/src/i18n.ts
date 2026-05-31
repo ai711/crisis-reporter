@@ -46,8 +46,35 @@ export async function loadLanguagePackage(langCode: string): Promise<LangPackage
 
   // Step 2: Load question/content strings from backend and merge
   const cacheKey = `cr_language_package_${langCode}`;
+  const versionKey = `cr_lang_version_${langCode}`;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
+  // Check cached version first — skip full download if already up to date
+  try {
+    const versionRes = await fetch(
+      `${BASE_URL}/api/language-packages/${langCode}/version`,
+      { signal: controller.signal }
+    );
+    if (versionRes.ok) {
+      const versionData = await versionRes.json();
+      const latestVersion = versionData.version;
+      const cachedVersion = localStorage.getItem(versionKey);
+
+      if (latestVersion && latestVersion === cachedVersion) {
+        const cached = localStorage.getItem(cacheKey);
+        if (cached) {
+          clearTimeout(timer);
+          const cachedData = JSON.parse(cached);
+          i18n.addResourceBundle(langCode, "translation", cachedData, true, true);
+          await i18n.changeLanguage(langCode);
+          return { success: true, fromCache: true };
+        }
+      }
+    }
+  } catch {
+    // Version check failed — proceed with full download
+  }
 
   try {
     const res = await fetch(
@@ -64,6 +91,7 @@ export async function loadLanguagePackage(langCode: string): Promise<LangPackage
 
     try {
       localStorage.setItem(cacheKey, JSON.stringify(data));
+      localStorage.setItem(versionKey, (data.version as string) || '');
     } catch { /* ignore */ }
 
     try {

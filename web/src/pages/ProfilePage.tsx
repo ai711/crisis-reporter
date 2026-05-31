@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { useAuthStore } from "../stores/authStore";
 import api from "../services/api";
 
@@ -88,6 +89,7 @@ function IconPerson() {
 
 export default function ProfilePage() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const { reporterId } = useAuthStore();
 
   // Form fields
@@ -168,7 +170,7 @@ export default function ProfilePage() {
 
   const handleSave = async () => {
     if (email.trim() && !EMAIL_RE.test(email.trim())) {
-      setEmailError("Please enter a valid email address");
+      setEmailError(t('profile.email_invalid'));
       return;
     }
     setEmailError("");
@@ -217,15 +219,15 @@ export default function ProfilePage() {
           <button style={s.backBtn} onClick={() => navigate("/")} aria-label="Back">
             <IconBack />
           </button>
-          <span style={s.headerTitle}>My Profile</span>
+          <span style={s.headerTitle}>{t('profile.title')}</span>
           <div style={{ minWidth: 44, flexShrink: 0 }} />
         </header>
         <div style={s.anonGate}>
           <p style={s.anonGateHeading}>
-            Create a free account to save your profile and earn badges.
+            {t('profile.anon_gate_heading')}
           </p>
           <p style={s.anonGateSubtext}>
-            You can still submit reports anonymously without an account.
+            {t('profile.anon_gate_subtext')}
           </p>
           <div style={s.anonGateBtns}>
             <button
@@ -255,7 +257,7 @@ export default function ProfilePage() {
           <button style={s.backBtn} onClick={() => navigate("/")} aria-label="Back">
             <IconBack />
           </button>
-          <span style={s.headerTitle}>My Profile</span>
+          <span style={s.headerTitle}>{t('profile.title')}</span>
           <div style={{ minWidth: 44, flexShrink: 0 }} />
         </header>
         <div style={s.loadingWrap}>
@@ -274,14 +276,14 @@ export default function ProfilePage() {
         <button style={s.backBtn} onClick={() => navigate("/")} aria-label="Back">
           <IconBack />
         </button>
-        <span style={s.headerTitle}>My Profile</span>
+        <span style={s.headerTitle}>{t('profile.title')}</span>
         <div style={{ width: 36 }} />
       </header>
 
       <div style={s.content}>
         {/* ── Completion bar ── */}
         <div style={s.completionWrap}>
-          <p style={s.completionLabel}>Profile {completion}% complete</p>
+          <p style={s.completionLabel}>{t('profile.completion_label', { completion })}</p>
           <div style={s.barTrack}>
             <div
               style={{
@@ -309,7 +311,7 @@ export default function ProfilePage() {
             style={s.editPhotoBtn}
             onClick={() => photoInputRef.current?.click()}
           >
-            Edit photo
+            {t('profile.edit_photo')}
           </button>
           <input
             ref={photoInputRef}
@@ -325,7 +327,7 @@ export default function ProfilePage() {
         <div style={s.card}>
           {/* First Name */}
           <div style={s.fieldGroup}>
-            <label style={s.fieldLabel}>First Name</label>
+            <label style={s.fieldLabel}>{t('profile.first_name')}</label>
             <input
               style={s.fieldInput}
               type="text"
@@ -340,7 +342,7 @@ export default function ProfilePage() {
 
           {/* Last Name */}
           <div style={s.fieldGroup}>
-            <label style={s.fieldLabel}>Last Name</label>
+            <label style={s.fieldLabel}>{t('profile.last_name')}</label>
             <input
               style={s.fieldInput}
               type="text"
@@ -355,7 +357,7 @@ export default function ProfilePage() {
 
           {/* Email */}
           <div style={s.fieldGroup}>
-            <label style={s.fieldLabel}>Email Address</label>
+            <label style={s.fieldLabel}>{t('profile.email')}</label>
             <input
               style={{
                 ...s.fieldInput,
@@ -376,7 +378,7 @@ export default function ProfilePage() {
 
           {/* Phone */}
           <div style={s.fieldGroup}>
-            <label style={s.fieldLabel}>Phone Number</label>
+            <label style={s.fieldLabel}>{t('profile.phone')}</label>
             <input
               style={s.fieldInput}
               type="tel"
@@ -398,22 +400,22 @@ export default function ProfilePage() {
           onClick={handleSave}
           disabled={saving}
         >
-          {saving ? "Saving…" : "Save Profile"}
+          {saving ? t('common.saving') : t('profile.save_btn')}
         </button>
 
         {/* ── Feedback messages ── */}
         {saveStatus === "success" && (
-          <div style={s.successMsg}>Profile saved</div>
+          <div style={s.successMsg}>{t('profile.save_success')}</div>
         )}
         {saveStatus === "error" && (
           <div style={s.errorMsg}>
-            Could not save profile. Please try again.
+            {t('profile.save_error')}
           </div>
         )}
 
         {/* ── Anonymous note ── */}
         <p style={s.anonNote}>
-          All profile fields are optional. You can submit reports anonymously.
+          {t('profile.anon_note')}
         </p>
       </div>
     </div>

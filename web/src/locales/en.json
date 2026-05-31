@@ -75,7 +75,14 @@
     "loading": "Loading map...",
     "selectLocation": "Tap a building to select it",
     "gpsUnavailable": "GPS unavailable — please select location manually",
-    "searchPlaceholder": "Search for a location..."
+    "searchPlaceholder": "Search for a location...",
+    "offline_message": "The map requires an internet connection. Please check your connection and try again.",
+    "zoom_hint": "Zoom in to see buildings",
+    "damage_complete": "Completely Damaged",
+    "damage_partial": "Partially Damaged",
+    "damage_minimal": "Minimal / No Damage",
+    "pin_reported": "Reported: ",
+    "pin_id": "ID: "
   },
   "settings": {
     "title": "Settings",
@@ -84,7 +91,19 @@
     "account": "Account",
     "login": "Log In",
     "register": "Create Account",
-    "logout": "Log Out"
+    "logout": "Log Out",
+    "section_account": "ACCOUNT",
+    "section_about": "ABOUT",
+    "section_session": "SESSION",
+    "change_country": "Change Country",
+    "change_language": "Change Language",
+    "version": "Version",
+    "privacy_policy": "Privacy Policy",
+    "search_countries": "Search countries...",
+    "no_countries_match": "No countries match your search.",
+    "select_language": "Select Language",
+    "lang_load_error": "Could not load the language package. Please check your connection and try again.",
+    "lang_cache_note": "Using saved language data. Some text may not be fully updated."
   },
   "offline": {
     "banner": "You are offline. Reports will be saved and sent when you reconnect.",
@@ -142,5 +161,79 @@
     "chemical_incident": "Damage or contamination caused by hazardous substances",
     "conflict": "Damage to buildings and infrastructure in conflict-affected areas",
     "civil_unrest": "Property damage resulting from civil disturbances"
+  },
+  "nav": {
+    "home": "Home",
+    "map": "Map",
+    "reports": "Reports"
+  },
+  "common": {
+    "loading": "Loading...",
+    "loading_countries": "Loading countries…",
+    "retry": "Retry",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "back": "← Back",
+    "next": "Next →",
+    "previous": "← Previous",
+    "edit": "Edit",
+    "optional": "Optional",
+    "saving": "Saving…",
+    "go_back": "Go Back",
+    "go_home": "Go to Home",
+    "got_it": "Got it",
+    "refresh": "Refresh"
+  },
+  "profile": {
+    "title": "My Profile",
+    "anonymous": "Anonymous Reporter",
+    "first_name": "First Name",
+    "last_name": "Last Name",
+    "email": "Email Address",
+    "phone": "Phone Number",
+    "save_btn": "Save Profile",
+    "save_success": "Profile saved",
+    "save_error": "Could not save profile. Please try again.",
+    "edit_photo": "Edit photo",
+    "completion_label": "Profile {{completion}}% complete",
+    "email_invalid": "Please enter a valid email address",
+    "anon_gate_heading": "Create a free account to save your profile and earn badges.",
+    "anon_gate_subtext": "You can still submit reports anonymously without an account.",
+    "anon_note": "All profile fields are optional. You can submit reports anonymously."
+  },
+  "login": {
+    "title": "Sign In",
+    "email_label": "Email",
+    "password_label": "Password",
+    "submit_btn": "Sign In",
+    "signing_in": "Signing in…",
+    "validation": "Please enter your email and password.",
+    "invalid_credentials": "Invalid email or password.",
+    "no_account": "Don't have an account?",
+    "setup_profile": "Set up your profile →"
+  },
+  "my_reports": {
+    "location_not_recorded": "Location not recorded",
+    "load_error": "Failed to load reports. Please try again.",
+    "empty_title": "No reports submitted yet",
+    "empty_anonymous": "Submit your first report to get started.",
+    "label_location": "Location:",
+    "label_damage": "Damage Level:",
+    "label_disaster_type": "Disaster Type:",
+    "label_date": "Date:",
+    "label_status": "Status:",
+    "back": "← Back to My Reports",
+    "detail_title": "Report Details",
+    "login_prompt": "Log in to see all your reports across sessions and devices.",
+    "session_note": "Showing reports from this session. Log in to see your full history.",
+    "col_location": "Location",
+    "col_damage": "Damage Level",
+    "col_date": "Date",
+    "col_status": "Status",
+    "load_more": "Load More"
+  },
+  "menu": {
+    "safety_tips": "Safety Tips",
+    "profile": "Reporter Profile"
   }
 }

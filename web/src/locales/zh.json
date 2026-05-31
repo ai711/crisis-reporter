@@ -73,7 +73,14 @@
     "loading": "地图加载中...",
     "selectLocation": "点击建筑以选择",
     "gpsUnavailable": "GPS不可用 — 请手动选择位置",
-    "searchPlaceholder": "搜索位置..."
+    "searchPlaceholder": "搜索位置...",
+    "offline_message": "地图需要互联网连接。",
+    "zoom_hint": "放大以查看建筑物",
+    "damage_complete": "完全损坏",
+    "damage_partial": "部分损坏",
+    "damage_minimal": "轻微损坏 / 无损坏",
+    "pin_reported": "已报告：",
+    "pin_id": "ID："
   },
   "settings": {
     "title": "设置",
@@ -82,7 +89,19 @@
     "account": "账户",
     "login": "登录",
     "register": "创建账户",
-    "logout": "退出登录"
+    "logout": "退出登录",
+    "section_account": "账户",
+    "section_about": "关于",
+    "section_session": "会话",
+    "change_country": "更改国家",
+    "change_language": "更改语言",
+    "version": "版本",
+    "privacy_policy": "隐私政策",
+    "search_countries": "搜索国家...",
+    "no_countries_match": "未找到国家。",
+    "select_language": "选择语言",
+    "lang_load_error": "无法加载语言包。请检查您的连接并重试。",
+    "lang_cache_note": "使用已保存的语言数据。部分文本可能未完全更新。"
   },
   "offline": {
     "banner": "您已离线。报告将被保存，重新连接后发送。",
@@ -140,5 +159,79 @@
     "chemical_incident": "危险物质造成的损坏或污染",
     "conflict": "冲突影响地区建筑物和基础设施的损坏",
     "civil_unrest": "民事骚乱造成的财产损坏"
+  },
+  "nav": {
+    "home": "首页",
+    "map": "地图",
+    "reports": "报告"
+  },
+  "common": {
+    "loading": "加载中...",
+    "loading_countries": "正在加载国家…",
+    "retry": "重试",
+    "cancel": "取消",
+    "confirm": "确认",
+    "back": "← 返回",
+    "next": "下一步 →",
+    "previous": "← 上一步",
+    "edit": "编辑",
+    "optional": "可选",
+    "saving": "保存中…",
+    "go_back": "返回",
+    "go_home": "返回首页",
+    "got_it": "明白了",
+    "refresh": "刷新"
+  },
+  "profile": {
+    "title": "我的资料",
+    "anonymous": "匿名记者",
+    "first_name": "名字",
+    "last_name": "姓氏",
+    "email": "电子邮件地址",
+    "phone": "电话号码",
+    "save_btn": "保存资料",
+    "save_success": "资料已保存",
+    "save_error": "无法保存资料，请重试。",
+    "edit_photo": "编辑照片",
+    "completion_label": "资料完成度 {{completion}}%",
+    "email_invalid": "请输入有效的电子邮件地址",
+    "anon_gate_heading": "创建免费账户以保存您的资料并获得徽章。",
+    "anon_gate_subtext": "您也可以匿名提交报告。",
+    "anon_note": "所有资料字段均为可选。您可以匿名提交报告。"
+  },
+  "login": {
+    "title": "登录",
+    "email_label": "电子邮件",
+    "password_label": "密码",
+    "submit_btn": "登录",
+    "signing_in": "登录中…",
+    "validation": "请输入您的电子邮件和密码。",
+    "invalid_credentials": "电子邮件或密码无效。",
+    "no_account": "没有账户？",
+    "setup_profile": "创建资料 →"
+  },
+  "my_reports": {
+    "location_not_recorded": "未记录位置",
+    "load_error": "加载报告失败，请重试。",
+    "empty_title": "尚未提交报告",
+    "empty_anonymous": "提交您的第一份报告以开始。",
+    "label_location": "位置：",
+    "label_damage": "损坏程度：",
+    "label_disaster_type": "灾害类型：",
+    "label_date": "日期：",
+    "label_status": "状态：",
+    "back": "← 返回我的报告",
+    "detail_title": "报告详情",
+    "login_prompt": "登录以查看所有报告。",
+    "session_note": "显示本次会话的报告。登录以查看完整历史。",
+    "col_location": "位置",
+    "col_damage": "损坏程度",
+    "col_date": "日期",
+    "col_status": "状态",
+    "load_more": "加载更多"
+  },
+  "menu": {
+    "safety_tips": "安全提示",
+    "profile": "记者资料"
   }
 }

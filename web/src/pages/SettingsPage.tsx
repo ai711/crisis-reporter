@@ -87,7 +87,7 @@ function IconClose() {
 
 export default function SettingsPage() {
   const navigate = useNavigate();
-  useTranslation(); // keeps i18next react context active for language switching
+  const { t } = useTranslation(); // keeps i18next react context active for language switching
   const { setCountry, setLanguage, reset } = useAuthStore();
 
   const [modal, setModal] = useState<"country" | "language" | null>(null);
@@ -182,9 +182,7 @@ export default function SettingsPage() {
     setLangLoadingCode(null);
 
     if (!result.success) {
-      setLangLoadError(
-        "Could not load the language package. Please check your connection and try again."
-      );
+      setLangLoadError(t('settings.lang_load_error'));
       return; // Keep modal open for retry.
     }
 
@@ -226,16 +224,16 @@ export default function SettingsPage() {
           >
             <IconBack />
           </button>
-          <span style={s.headerTitle}>Settings</span>
+          <span style={s.headerTitle}>{t('settings.title')}</span>
           <div style={{ minWidth: 44, flexShrink: 0 }} />
         </header>
 
         <div style={s.content}>
           {/* ── ACCOUNT ── */}
-          <p style={s.sectionLabel}>ACCOUNT</p>
+          <p style={s.sectionLabel}>{t('settings.section_account')}</p>
           <div style={s.card}>
             <button style={s.row} onClick={openCountryModal}>
-              <span style={s.rowLabel}>Change Country</span>
+              <span style={s.rowLabel}>{t('settings.change_country')}</span>
               <div style={s.rowRight}>
                 <span style={s.rowValue}>{currentCountryName || "—"}</span>
                 <IconChevron />
@@ -243,7 +241,7 @@ export default function SettingsPage() {
             </button>
             <div style={s.divider} />
             <button style={s.row} onClick={() => setModal("language")}>
-              <span style={s.rowLabel}>Change Language</span>
+              <span style={s.rowLabel}>{t('settings.change_language')}</span>
               <div style={s.rowRight}>
                 <span style={s.rowValue}>{getLanguageName(currentLangCode)}</span>
                 <IconChevron />
@@ -252,10 +250,10 @@ export default function SettingsPage() {
           </div>
 
           {/* ── ABOUT ── */}
-          <p style={s.sectionLabel}>ABOUT</p>
+          <p style={s.sectionLabel}>{t('settings.section_about')}</p>
           <div style={s.card}>
             <div style={s.rowStatic}>
-              <span style={s.rowLabel}>Version</span>
+              <span style={s.rowLabel}>{t('settings.version')}</span>
               <span style={s.rowValue}>1.0.0</span>
             </div>
             <div style={s.divider} />
@@ -271,13 +269,13 @@ export default function SettingsPage() {
               style={s.row}
               onClick={() => alert("Privacy Policy coming soon")}
             >
-              <span style={s.rowLabel}>Privacy Policy</span>
+              <span style={s.rowLabel}>{t('settings.privacy_policy')}</span>
               <IconChevron />
             </button>
           </div>
 
           {/* ── SESSION ── */}
-          <p style={s.sectionLabel}>SESSION</p>
+          <p style={s.sectionLabel}>{t('settings.section_session')}</p>
           <div style={s.card}>
             <button style={s.row} onClick={handleSignOut}>
               <span style={{ ...s.rowLabel, color: "#E53E3E" }}>Sign Out</span>
@@ -305,7 +303,7 @@ export default function SettingsPage() {
               <input
                 style={s.searchInput}
                 type="text"
-                placeholder="Search countries..."
+                placeholder={t('settings.search_countries')}
                 value={countrySearch}
                 onChange={(e) => {
                   setCountrySearch(e.target.value);
@@ -315,12 +313,12 @@ export default function SettingsPage() {
               />
             </div>
             <div style={s.listScroll}>
-              {countriesLoading && <p style={s.hint}>Loading countries…</p>}
+              {countriesLoading && <p style={s.hint}>{t('common.loading_countries')}</p>}
               {!countriesLoading && countriesError && (
                 <p style={s.errorText}>{countriesError}</p>
               )}
               {!countriesLoading && !countriesError && filteredCountries.length === 0 && (
-                <p style={s.hint}>No countries match your search.</p>
+                <p style={s.hint}>{t('settings.no_countries_match')}</p>
               )}
               {filteredCountries.map((country) => (
                 <button
@@ -361,7 +359,7 @@ export default function SettingsPage() {
           <div style={s.sheet} onClick={(e) => e.stopPropagation()}>
             <div style={s.sheetHandle} />
             <div style={s.sheetHeader}>
-              <span style={s.sheetTitle}>Select Language</span>
+              <span style={s.sheetTitle}>{t('settings.select_language')}</span>
               <button
                 style={s.closeBtn}
                 onClick={langLoadingCode ? undefined : closeModal}
@@ -376,9 +374,7 @@ export default function SettingsPage() {
                 <div style={s.langErrorBox}>{langLoadError}</div>
               )}
               {langCacheNote && (
-                <p style={s.langCacheNote}>
-                  Using saved language data. Some text may not be fully updated.
-                </p>
+                <p style={s.langCacheNote}>{t('settings.lang_cache_note')}</p>
               )}
               <div style={s.langGrid}>
                 {UN_LANGUAGES.map((lang) => {
@@ -398,7 +394,7 @@ export default function SettingsPage() {
                       onClick={() => handleLanguageSelect(lang.code)}
                       disabled={!!langLoadingCode}
                     >
-                      {isLoading ? "Loading…" : lang.name}
+                      {isLoading ? t('common.loading') : lang.name}
                     </button>
                   );
                 })}

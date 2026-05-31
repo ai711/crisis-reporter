@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import SideMenu from "./SideMenu";
 
 const TAB_ROUTES = ["/", "/map", "/my-reports"];
@@ -7,6 +8,7 @@ const TAB_ROUTES = ["/", "/map", "/my-reports"];
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
   const location = useLocation();
+  const { t } = useTranslation();
   const isTabRoute = TAB_ROUTES.includes(location.pathname);
   const isMapPage = location.pathname === "/map";
   const [menuOpen, setMenuOpen] = useState(false);
@@ -30,7 +32,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               <line x1="3" y1="18" x2="21" y2="18" />
             </svg>
           </button>
-          <span className="page-header-title">Crisis Reporter</span>
+          <span className="page-header-title">{t('app.name')}</span>
           <div className="page-header-spacer" />
         </header>
       )}
@@ -50,9 +52,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       {isTabRoute && (
         <nav className="bottom-nav">
           {[
-            { label: "Home", path: "/", icon: "home" },
-            { label: "Map", path: "/map", icon: "map" },
-            { label: "Reports", path: "/my-reports", icon: "assignment" },
+            { label: t('nav.home'), path: "/", icon: "home" },
+            { label: t('nav.map'), path: "/map", icon: "map" },
+            { label: t('nav.reports'), path: "/my-reports", icon: "assignment" },
           ].map(({ label, path, icon }) => (
             <button
               key={path}

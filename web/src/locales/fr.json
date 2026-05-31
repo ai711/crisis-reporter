@@ -75,7 +75,14 @@
     "loading": "Chargement de la carte...",
     "selectLocation": "Appuyez sur un bâtiment pour le sélectionner",
     "gpsUnavailable": "GPS indisponible — veuillez sélectionner la localisation manuellement",
-    "searchPlaceholder": "Rechercher un emplacement..."
+    "searchPlaceholder": "Rechercher un emplacement...",
+    "offline_message": "La carte nécessite une connexion internet.",
+    "zoom_hint": "Zoomez pour voir les bâtiments",
+    "damage_complete": "Complètement endommagé",
+    "damage_partial": "Partiellement endommagé",
+    "damage_minimal": "Dommage minimal / Aucun dommage",
+    "pin_reported": "Signalé : ",
+    "pin_id": "ID : "
   },
   "settings": {
     "title": "Paramètres",
@@ -84,7 +91,19 @@
     "account": "Compte",
     "login": "Se connecter",
     "register": "Créer un compte",
-    "logout": "Se déconnecter"
+    "logout": "Se déconnecter",
+    "section_account": "COMPTE",
+    "section_about": "À PROPOS",
+    "section_session": "SESSION",
+    "change_country": "Changer de pays",
+    "change_language": "Changer de langue",
+    "version": "Version",
+    "privacy_policy": "Politique de confidentialité",
+    "search_countries": "Rechercher des pays...",
+    "no_countries_match": "Aucun pays trouvé.",
+    "select_language": "Sélectionner la langue",
+    "lang_load_error": "Impossible de charger le pack de langue. Veuillez vérifier votre connexion et réessayer.",
+    "lang_cache_note": "Utilisation des données de langue sauvegardées. Certains textes peuvent ne pas être complètement à jour."
   },
   "offline": {
     "banner": "Vous êtes hors ligne. Les rapports seront sauvegardés et envoyés lors de la reconnexion.",
@@ -142,5 +161,79 @@
     "chemical_incident": "Dommages ou contamination causés par des substances dangereuses",
     "conflict": "Dommages aux bâtiments et infrastructures dans les zones touchées par les conflits",
     "civil_unrest": "Dommages aux biens résultant de troubles civils"
+  },
+  "nav": {
+    "home": "Accueil",
+    "map": "Carte",
+    "reports": "Rapports"
+  },
+  "common": {
+    "loading": "Chargement...",
+    "loading_countries": "Chargement des pays…",
+    "retry": "Réessayer",
+    "cancel": "Annuler",
+    "confirm": "Confirmer",
+    "back": "← Retour",
+    "next": "Suivant →",
+    "previous": "← Précédent",
+    "edit": "Modifier",
+    "optional": "Optionnel",
+    "saving": "Enregistrement…",
+    "go_back": "Retour",
+    "go_home": "Accueil",
+    "got_it": "Compris",
+    "refresh": "Actualiser"
+  },
+  "profile": {
+    "title": "Mon profil",
+    "anonymous": "Reporter anonyme",
+    "first_name": "Prénom",
+    "last_name": "Nom",
+    "email": "Adresse e-mail",
+    "phone": "Numéro de téléphone",
+    "save_btn": "Enregistrer le profil",
+    "save_success": "Profil enregistré",
+    "save_error": "Impossible d'enregistrer le profil. Veuillez réessayer.",
+    "edit_photo": "Modifier la photo",
+    "completion_label": "Profil complété à {{completion}}%",
+    "email_invalid": "Veuillez entrer une adresse e-mail valide",
+    "anon_gate_heading": "Créez un compte gratuit pour sauvegarder votre profil et gagner des badges.",
+    "anon_gate_subtext": "Vous pouvez également soumettre des rapports de façon anonyme.",
+    "anon_note": "Tous les champs du profil sont optionnels."
+  },
+  "login": {
+    "title": "Connexion",
+    "email_label": "E-mail",
+    "password_label": "Mot de passe",
+    "submit_btn": "Se connecter",
+    "signing_in": "Connexion…",
+    "validation": "Veuillez entrer votre e-mail et mot de passe.",
+    "invalid_credentials": "E-mail ou mot de passe invalide.",
+    "no_account": "Pas de compte ?",
+    "setup_profile": "Créer un profil →"
+  },
+  "my_reports": {
+    "location_not_recorded": "Localisation non enregistrée",
+    "load_error": "Échec du chargement. Réessayez.",
+    "empty_title": "Aucun rapport soumis",
+    "empty_anonymous": "Soumettez votre premier rapport pour commencer.",
+    "label_location": "Localisation :",
+    "label_damage": "Niveau de dommage :",
+    "label_disaster_type": "Type de catastrophe :",
+    "label_date": "Date :",
+    "label_status": "Statut :",
+    "back": "← Retour aux rapports",
+    "detail_title": "Détails du rapport",
+    "login_prompt": "Connectez-vous pour voir tous vos rapports.",
+    "session_note": "Rapports de cette session uniquement. Connectez-vous pour l'historique complet.",
+    "col_location": "Localisation",
+    "col_damage": "Niveau de dommage",
+    "col_date": "Date",
+    "col_status": "Statut",
+    "load_more": "Charger plus"
+  },
+  "menu": {
+    "safety_tips": "Conseils de sécurité",
+    "profile": "Profil du reporter"
   }
 }

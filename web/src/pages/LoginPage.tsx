@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { useAuthStore } from "../stores/authStore";
 import api from "../services/api";
 import { tokenStorage } from "../services/api";
@@ -46,6 +47,7 @@ function IconEye({ open }: { open: boolean }) {
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const { setReporter } = useAuthStore();
 
   const [email, setEmail] = useState("");
@@ -57,7 +59,7 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.trim() || !password) {
-      setError("Please enter your email and password.");
+      setError(t('login.validation'));
       return;
     }
     setLoading(true);
@@ -74,7 +76,7 @@ export default function LoginPage() {
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { detail?: string } } })?.response?.data
-          ?.detail ?? "Invalid email or password.";
+          ?.detail ?? t('login.invalid_credentials');
       setError(msg);
     } finally {
       setLoading(false);
@@ -87,14 +89,14 @@ export default function LoginPage() {
         <button style={s.backBtn} onClick={() => navigate("/")} aria-label="Back">
           <IconBack />
         </button>
-        <span style={s.headerTitle}>Sign In</span>
+        <span style={s.headerTitle}>{t('login.title')}</span>
         <div style={{ minWidth: 44, flexShrink: 0 }} />
       </header>
 
       <main style={s.main}>
         <form style={s.form} onSubmit={handleSubmit} noValidate>
           <div style={s.fieldGroup}>
-            <label style={s.label} htmlFor="login-email">Email</label>
+            <label style={s.label} htmlFor="login-email">{t('login.email_label')}</label>
             <input
               id="login-email"
               style={s.input}
@@ -108,7 +110,7 @@ export default function LoginPage() {
           </div>
 
           <div style={s.fieldGroup}>
-            <label style={s.label} htmlFor="login-password">Password</label>
+            <label style={s.label} htmlFor="login-password">{t('login.password_label')}</label>
             <div style={s.passwordWrap}>
               <input
                 id="login-password"
@@ -138,14 +140,14 @@ export default function LoginPage() {
             style={{ ...s.submitBtn, opacity: loading ? 0.7 : 1 }}
             disabled={loading}
           >
-            {loading ? "Signing in…" : "Sign In"}
+            {loading ? t('login.signing_in') : t('login.submit_btn')}
           </button>
         </form>
 
         <p style={s.signupPrompt}>
-          Don't have an account?{" "}
+          {t('login.no_account')}{" "}
           <button style={s.signupLink} onClick={() => navigate("/profile")}>
-            Set up your profile →
+            {t('login.setup_profile')}
           </button>
         </p>
       </main>

@@ -62,12 +62,12 @@ function convertSessionReport(s: SessionReport): ReporterReport {
   };
 }
 
-function formatLocation(report: ReporterReport): string {
+function formatLocation(report: ReporterReport, fallback = "Location not recorded"): string {
   if (report.location_address) return report.location_address;
   if (report.gps_latitude != null && report.gps_longitude != null) {
     return `${report.gps_latitude.toFixed(4)}, ${report.gps_longitude.toFixed(4)}`;
   }
-  return "Location not recorded";
+  return fallback;
 }
 
 function formatDate(dateStr: string): string {
@@ -101,7 +101,7 @@ function useWindowWidth(): number {
 const PAGE_SIZE = 20;
 
 export default function MyReportsPage() {
-  useTranslation();
+  const { t } = useTranslation();
   const { reporterId } = useAuthStore();
   const navigate = useNavigate();
   const width = useWindowWidth();
@@ -152,7 +152,7 @@ export default function MyReportsPage() {
       }
       setNextCursor(data.next_cursor);
     } catch {
-      setError("Failed to load reports. Please try again.");
+      setError(t('my_reports.load_error'));
     } finally {
       setLoading(false);
       setLoadingMore(false);
@@ -164,19 +164,19 @@ export default function MyReportsPage() {
   }, [fetchReports]);
 
   const emptyMessage = !reporterId
-    ? "Submit your first report to get started."
-    : "No reports submitted yet";
+    ? t('my_reports.empty_anonymous')
+    : t('my_reports.empty_title');
 
   const statusText = (report: ReporterReport) =>
     report.status === "submitted" ? "✓ Submitted" : (report.status ?? "Submitted");
 
   const renderDetailFields = (report: ReporterReport) => (
     <div style={styles.detailFields}>
-      <p style={styles.detailField}><strong>Location:</strong> {formatLocation(report)}</p>
-      <p style={styles.detailField}><strong>Damage Level:</strong> {DAMAGE_LABEL[report.damage_level] ?? report.damage_level}</p>
-      {report.disaster_type && <p style={styles.detailField}><strong>Disaster Type:</strong> {report.disaster_type}</p>}
-      <p style={styles.detailField}><strong>Date:</strong> {formatDateTime(report.submitted_at)}</p>
-      <p style={styles.detailField}><strong>Status:</strong> {statusText(report)}</p>
+      <p style={styles.detailField}><strong>{t('my_reports.label_location')}</strong> {formatLocation(report, t('my_reports.location_not_recorded'))}</p>
+      <p style={styles.detailField}><strong>{t('my_reports.label_damage')}</strong> {DAMAGE_LABEL[report.damage_level] ?? report.damage_level}</p>
+      {report.disaster_type && <p style={styles.detailField}><strong>{t('my_reports.label_disaster_type')}</strong> {report.disaster_type}</p>}
+      <p style={styles.detailField}><strong>{t('my_reports.label_date')}</strong> {formatDateTime(report.submitted_at)}</p>
+      <p style={styles.detailField}><strong>{t('my_reports.label_status')}</strong> {statusText(report)}</p>
       {report.infrastructure_name && <p style={styles.detailField}><strong>Infrastructure:</strong> {report.infrastructure_name}</p>}
       {report.building_name && <p style={styles.detailField}><strong>Building:</strong> {report.building_name}</p>}
     </div>
@@ -189,9 +189,9 @@ export default function MyReportsPage() {
         <style>{`@keyframes cr-spin { to { transform: rotate(360deg); } }`}</style>
         <div style={{ flex: 1, padding: "0 16px 32px" }}>
           <button onClick={() => setSelectedReport(null)} style={styles.backBtn}>
-            ← Back to My Reports
+            {t('my_reports.back')}
           </button>
-          <h3 style={styles.detailTitle}>Report Details</h3>
+          <h3 style={styles.detailTitle}>{t('my_reports.detail_title')}</h3>
           {renderDetailFields(selectedReport)}
         </div>
       </div>
@@ -207,7 +207,7 @@ export default function MyReportsPage() {
         {!reporterId && (
           <div style={styles.loginPrompt}>
             <p style={styles.loginPromptText}>
-              Log in to see all your reports across sessions and devices.
+              {t('my_reports.login_prompt')}
             </p>
             <div style={styles.loginPromptBtns}>
               <button onClick={() => navigate("/login")} style={styles.loginBtn}>
@@ -223,13 +223,13 @@ export default function MyReportsPage() {
         {loading ? (
           <div style={styles.centred}>
             <div style={styles.spinner} />
-            <p style={styles.loadingText}>Loading your reports...</p>
+            <p style={styles.loadingText}>{t('common.loading')}</p>
           </div>
         ) : error ? (
           <div style={styles.centred}>
             <p style={styles.errorText}>{error}</p>
             <button style={styles.retryBtn} onClick={() => fetchReports()}>
-              Try Again
+              {t('common.retry')}
             </button>
           </div>
         ) : reports.length === 0 ? (
@@ -241,17 +241,17 @@ export default function MyReportsPage() {
           <div style={styles.list}>
             {isSessionMode && (
               <p style={styles.sessionNote}>
-                Showing reports from this session. Log in to see your full history.
+                {t('my_reports.session_note')}
               </p>
             )}
 
             {/* A5: Desktop column headers */}
             {isDesktop && (
               <div style={styles.columnHeaders}>
-                <span>Location</span>
-                <span>Damage Level</span>
-                <span>Date</span>
-                <span>Status</span>
+                <span>{t('my_reports.col_location')}</span>
+                <span>{t('my_reports.col_damage')}</span>
+                <span>{t('my_reports.col_date')}</span>
+                <span>{t('my_reports.col_status')}</span>
               </div>
             )}
 
@@ -269,7 +269,7 @@ export default function MyReportsPage() {
                     onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.background = "#F7FAFC"; }}
                     onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = "#fff"; }}
                   >
-                    <span style={styles.desktopCell}>{formatLocation(report)}</span>
+                    <span style={styles.desktopCell}>{formatLocation(report, t('my_reports.location_not_recorded'))}</span>
                     <span>
                       <span style={{ ...styles.damageBadge, background: color + "22", color }}>
                         {label}
@@ -299,7 +299,7 @@ export default function MyReportsPage() {
                       {label}
                     </span>
                     <p style={styles.cardDate}>{formatDate(report.submitted_at)}</p>
-                    <p style={styles.cardLocation}>📍 {formatLocation(report)}</p>
+                    <p style={styles.cardLocation}>📍 {formatLocation(report, t('my_reports.location_not_recorded'))}</p>
                     <span style={styles.cardStatus}>{st}</span>
                   </div>
                 </div>
@@ -316,7 +316,7 @@ export default function MyReportsPage() {
                 onClick={() => fetchReports(nextCursor)}
                 disabled={loadingMore}
               >
-                {loadingMore ? "Loading..." : "Load More"}
+                {loadingMore ? t('common.loading') : t('my_reports.load_more')}
               </button>
             )}
           </div>
@@ -327,7 +327,7 @@ export default function MyReportsPage() {
       {isDesktop && selectedReport && (
         <div style={styles.detailPanel}>
           <button onClick={() => setSelectedReport(null)} style={styles.detailClose}>×</button>
-          <h3 style={styles.detailTitle}>Report Details</h3>
+          <h3 style={styles.detailTitle}>{t('my_reports.detail_title')}</h3>
           {renderDetailFields(selectedReport)}
         </div>
       )}

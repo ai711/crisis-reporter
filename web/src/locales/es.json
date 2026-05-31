@@ -73,7 +73,14 @@
     "loading": "Cargando mapa...",
     "selectLocation": "Toca un edificio para seleccionarlo",
     "gpsUnavailable": "GPS no disponible — selecciona la ubicación manualmente",
-    "searchPlaceholder": "Buscar una ubicación..."
+    "searchPlaceholder": "Buscar una ubicación...",
+    "offline_message": "El mapa requiere conexión a internet.",
+    "zoom_hint": "Acerca el zoom para ver edificios",
+    "damage_complete": "Completamente dañado",
+    "damage_partial": "Parcialmente dañado",
+    "damage_minimal": "Daño mínimo / Sin daño",
+    "pin_reported": "Reportado: ",
+    "pin_id": "ID: "
   },
   "settings": {
     "title": "Configuración",
@@ -82,7 +89,19 @@
     "account": "Cuenta",
     "login": "Iniciar sesión",
     "register": "Crear cuenta",
-    "logout": "Cerrar sesión"
+    "logout": "Cerrar sesión",
+    "section_account": "CUENTA",
+    "section_about": "ACERCA DE",
+    "section_session": "SESIÓN",
+    "change_country": "Cambiar país",
+    "change_language": "Cambiar idioma",
+    "version": "Versión",
+    "privacy_policy": "Política de privacidad",
+    "search_countries": "Buscar países...",
+    "no_countries_match": "No se encontraron países.",
+    "select_language": "Seleccionar idioma",
+    "lang_load_error": "No se pudo cargar el paquete de idioma. Por favor verifica tu conexión e inténtalo de nuevo.",
+    "lang_cache_note": "Usando datos de idioma guardados. Puede que algunos textos no estén completamente actualizados."
   },
   "offline": {
     "banner": "Estás sin conexión. Los reportes se guardarán y enviarán al reconectarte.",
@@ -140,5 +159,79 @@
     "chemical_incident": "Daños o contaminación causados por sustancias peligrosas",
     "conflict": "Daños a edificios e infraestructura en áreas afectadas por conflictos",
     "civil_unrest": "Daños a propiedades resultantes de disturbios civiles"
+  },
+  "nav": {
+    "home": "Inicio",
+    "map": "Mapa",
+    "reports": "Reportes"
+  },
+  "common": {
+    "loading": "Cargando...",
+    "loading_countries": "Cargando países…",
+    "retry": "Reintentar",
+    "cancel": "Cancelar",
+    "confirm": "Confirmar",
+    "back": "← Atrás",
+    "next": "Siguiente →",
+    "previous": "← Anterior",
+    "edit": "Editar",
+    "optional": "Opcional",
+    "saving": "Guardando…",
+    "go_back": "Volver",
+    "go_home": "Ir a inicio",
+    "got_it": "Entendido",
+    "refresh": "Actualizar"
+  },
+  "profile": {
+    "title": "Mi perfil",
+    "anonymous": "Reportero anónimo",
+    "first_name": "Nombre",
+    "last_name": "Apellido",
+    "email": "Correo electrónico",
+    "phone": "Número de teléfono",
+    "save_btn": "Guardar perfil",
+    "save_success": "Perfil guardado",
+    "save_error": "No se pudo guardar el perfil. Inténtalo de nuevo.",
+    "edit_photo": "Editar foto",
+    "completion_label": "Perfil {{completion}}% completo",
+    "email_invalid": "Introduce un correo electrónico válido",
+    "anon_gate_heading": "Crea una cuenta gratuita para guardar tu perfil y ganar insignias.",
+    "anon_gate_subtext": "También puedes enviar reportes de forma anónima.",
+    "anon_note": "Todos los campos del perfil son opcionales. Puedes enviar reportes de forma anónima."
+  },
+  "login": {
+    "title": "Iniciar sesión",
+    "email_label": "Correo electrónico",
+    "password_label": "Contraseña",
+    "submit_btn": "Iniciar sesión",
+    "signing_in": "Iniciando sesión…",
+    "validation": "Por favor introduce tu correo y contraseña.",
+    "invalid_credentials": "Correo o contraseña incorrectos.",
+    "no_account": "¿No tienes cuenta?",
+    "setup_profile": "Configura tu perfil →"
+  },
+  "my_reports": {
+    "location_not_recorded": "Ubicación no registrada",
+    "load_error": "Error al cargar reportes. Inténtalo de nuevo.",
+    "empty_title": "No se han enviado reportes",
+    "empty_anonymous": "Envía tu primer reporte para comenzar.",
+    "label_location": "Ubicación:",
+    "label_damage": "Nivel de daño:",
+    "label_disaster_type": "Tipo de desastre:",
+    "label_date": "Fecha:",
+    "label_status": "Estado:",
+    "back": "← Volver a mis reportes",
+    "detail_title": "Detalles del reporte",
+    "login_prompt": "Inicia sesión para ver todos tus reportes.",
+    "session_note": "Mostrando reportes de esta sesión. Inicia sesión para ver el historial completo.",
+    "col_location": "Ubicación",
+    "col_damage": "Nivel de daño",
+    "col_date": "Fecha",
+    "col_status": "Estado",
+    "load_more": "Cargar más"
+  },
+  "menu": {
+    "safety_tips": "Consejos de seguridad",
+    "profile": "Perfil del reportero"
   }
 }

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate, useLocation } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { useAuthStore } from "../stores/authStore";
 import api from "../services/api";
 
@@ -69,8 +70,21 @@ function IconClose() {
 export default function SideMenu({ open, onClose }: SideMenuProps) {
   const navigate = useNavigate();
   const location = useLocation(); // A10: read current route for active highlighting
+  const { t } = useTranslation();
   const { reporterId } = useAuthStore();
   const [profile, setProfile] = useState<ReporterProfile | null>(null);
+
+  const MENU_LABEL_KEYS: Record<string, string> = {
+    "Report an Incident": 'home.reportButton',
+    "Map": 'nav.map',
+    "My Reports": 'home.myReports',
+    "Safety Tips": 'menu.safety_tips',
+    "Reporter Profile": 'menu.profile',
+    "Badges & Certifications": 'badges.title',
+    "FAQ": 'faq.title',
+    "Settings": 'settings.title',
+    "About Crisis Reporter": 'about.title',
+  };
 
   const fetchProfile = useCallback(() => {
     if (!reporterId || profile) return;
@@ -94,7 +108,8 @@ export default function SideMenu({ open, onClose }: SideMenuProps) {
     navigate(route);
   }
 
-  const name = displayName(profile);
+  const rawName = displayName(profile);
+  const name = rawName === "Anonymous Reporter" ? t('profile.anonymous') : rawName;
   const completion = profile ? calcCompletion(profile) : 0;
 
   const content = (
@@ -191,7 +206,7 @@ export default function SideMenu({ open, onClose }: SideMenuProps) {
             {name}
           </p>
           <p style={{ color: "rgba(255,255,255,0.75)", fontSize: 12, margin: "0 0 12px" }}>
-            Profile {completion}% complete
+            {t('profile.completion_label', { completion })}
           </p>
 
           <div style={{ height: 5, background: "rgba(255,255,255,0.25)", borderRadius: 3, overflow: "hidden" }}>
@@ -239,7 +254,7 @@ export default function SideMenu({ open, onClose }: SideMenuProps) {
                     {item.icon}
                   </span>
                   <span style={{ fontSize: 14, color: "#fff", fontWeight: 700 }}>
-                    {item.label}
+                    {t(MENU_LABEL_KEYS[item.label] ?? item.label)}
                   </span>
                 </button>
               );
@@ -273,7 +288,7 @@ export default function SideMenu({ open, onClose }: SideMenuProps) {
                   {item.icon}
                 </span>
                 <span style={{ fontSize: 14, color: isActive ? BLUE : "#2d3748", fontWeight: isActive ? 700 : 500 }}>
-                  {item.label}
+                  {t(MENU_LABEL_KEYS[item.label] ?? item.label)}
                 </span>
               </button>
             );
