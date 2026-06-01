@@ -20,66 +20,39 @@ interface SideMenuProps {
   onClose: () => void;
 }
 
-function calcCompletion(p: ReporterProfile): number {
-  let n = 0;
-  if (p.first_name?.trim()) n++;
-  if (p.last_name?.trim()) n++;
-  if (p.email?.trim()) n++;
-  if (p.phone_number?.trim()) n++;
-  if (p.profile_photo_url) n++;
-  return n * 20;
-}
-
-function displayName(p: ReporterProfile | null): string {
-  if (!p) return "Anonymous Reporter";
-  const full = [p.first_name, p.last_name].filter(Boolean).join(" ").trim();
-  return full || "Anonymous Reporter";
-}
-
 interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 }
 
 interface MenuItem {
-  icon: string;
+  icon: string;       // Material Symbols icon name
   label: string;
   route: string;
   primary?: boolean;
 }
 
-// A9 fix: "Home" removed — Home is reached via the wordmark.
-// A7 fix: "Report an Incident" added first as a primary action item.
-// A7 fix: final order matches spec exactly.
 const MENU_ITEMS: MenuItem[] = [
-  { icon: "🚨", label: "Report an Incident",       route: "/report",       primary: true },
-  { icon: "🗺️",  label: "Map",                      route: "/map" },
-  { icon: "📋", label: "My Reports",               route: "/my-reports" },
-  { icon: "🛡️", label: "Safety Tips",              route: "/safety-tips" },
-  { icon: "👤", label: "Reporter Profile",         route: "/profile" },
-  { icon: "🏅", label: "Badges & Certifications", route: "/badges" },
-  { icon: "❓", label: "FAQ",                      route: "/faq" },
-  { icon: "⚙️", label: "Settings",                 route: "/settings" },
-  { icon: "ℹ️",  label: "About Crisis Reporter",   route: "/about" },
+  { icon: "campaign",    label: "Report an Incident",       route: "/report",       primary: true },
+  { icon: "map",         label: "Map",                      route: "/map" },
+  { icon: "assignment",  label: "My Reports",               route: "/my-reports" },
+  { icon: "shield",      label: "Safety Tips",              route: "/safety-tips" },
+  { icon: "person",      label: "Reporter Profile",         route: "/profile" },
+  { icon: "star",        label: "Badges & Certifications",  route: "/badges" },
+  { icon: "help",        label: "FAQ",                      route: "/faq" },
+  { icon: "settings",    label: "Settings",                 route: "/settings" },
+  { icon: "info",        label: "About Crisis Reporter",    route: "/about" },
 ];
-
-function IconClose() {
-  return (
-    <svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="#717782" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-      <line x1="18" y1="6" x2="6" y2="18" />
-      <line x1="6" y1="6" x2="18" y2="18" />
-    </svg>
-  );
-}
 
 export default function SideMenu({ open, onClose }: SideMenuProps) {
   const navigate = useNavigate();
-  const location = useLocation(); // A10: read current route for active highlighting
+  const location = useLocation();
   const { t } = useTranslation();
   const { reporterId } = useAuthStore();
   const [profile, setProfile] = useState<ReporterProfile | null>(null);
   const [canInstall, setCanInstall] = useState(false);
   const installPromptRef = useRef<BeforeInstallPromptEvent | null>(null);
+  const [hoveredRoute, setHoveredRoute] = useState<string | null>(null);
 
   const MENU_LABEL_KEYS: Record<string, string> = {
     "Report an Incident": 'home.reportButton',
@@ -94,25 +67,19 @@ export default function SideMenu({ open, onClose }: SideMenuProps) {
   };
 
   useEffect(() => {
-    // Check if a deferred install prompt is already available (captured at startup).
     const existing = (window as Window & { __pwaInstallPrompt?: BeforeInstallPromptEvent }).__pwaInstallPrompt;
     if (existing) {
       installPromptRef.current = existing;
       setCanInstall(true);
     }
-
     const handler = (e: Event) => {
       e.preventDefault();
       installPromptRef.current = e as BeforeInstallPromptEvent;
       setCanInstall(true);
     };
     window.addEventListener("beforeinstallprompt", handler);
-
     window.addEventListener("appinstalled", () => setCanInstall(false));
-
-    return () => {
-      window.removeEventListener("beforeinstallprompt", handler);
-    };
+    return () => { window.removeEventListener("beforeinstallprompt", handler); };
   }, []);
 
   async function handleInstall() {
@@ -128,8 +95,7 @@ export default function SideMenu({ open, onClose }: SideMenuProps) {
 
   const fetchProfile = useCallback(() => {
     if (!reporterId || profile) return;
-    api
-      .get<ReporterProfile>(`/api/reporters/${reporterId}`)
+    api.get<ReporterProfile>(`/api/reporters/${reporterId}`)
       .then((res) => setProfile(res.data))
       .catch(() => {});
   }, [reporterId, profile]);
@@ -148,19 +114,19 @@ export default function SideMenu({ open, onClose }: SideMenuProps) {
     navigate(route);
   }
 
-  const rawName = displayName(profile);
-  const name = rawName === "Anonymous Reporter" ? t('profile.anonymous') : rawName;
-  const completion = profile ? calcCompletion(profile) : 0;
+  // profile available for future display (name, avatar initials)
 
   const content = (
     <>
-      {/* Overlay — tap outside to close */}
+      {/* Overlay */}
       <div
         onClick={onClose}
         style={{
           position: "fixed",
           inset: 0,
           background: open ? "rgba(0,0,0,0.45)" : "rgba(0,0,0,0)",
+          backdropFilter: open ? "blur(2px)" : "none",
+          WebkitBackdropFilter: open ? "blur(2px)" : "none",
           zIndex: 1000,
           transition: "background 0.25s ease",
           pointerEvents: open ? "auto" : "none",
@@ -176,7 +142,7 @@ export default function SideMenu({ open, onClose }: SideMenuProps) {
           bottom: 0,
           width: "78vw",
           maxWidth: 304,
-          background: "#fff",
+          background: "#FFFFFF",
           zIndex: 1001,
           display: "flex",
           flexDirection: "column",
@@ -184,92 +150,68 @@ export default function SideMenu({ open, onClose }: SideMenuProps) {
           transform: open ? "translateX(0)" : "translateX(-100%)",
           transition: "transform 0.28s cubic-bezier(0.4, 0, 0.2, 1)",
           overflowY: "auto",
+          borderTopRightRadius: 16,
+          borderBottomRightRadius: 16,
         }}
       >
-        {/* A9: Close button at top-right of the drawer */}
-        <button
-          onClick={onClose}
-          aria-label="Close menu"
-          style={{
-            position: "absolute",
-            top: 12,
-            right: 12,
-            background: "transparent",
-            border: "none",
-            cursor: "pointer",
-            padding: 4,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            borderRadius: 6,
-            zIndex: 10,
-          }}
-        >
-          <IconClose />
-        </button>
-
-        {/* Profile section */}
-        <button
-          onClick={() => handleNavigate("/profile")}
-          style={{
-            background: BLUE,
-            padding: "28px 48px 20px 20px", // right padding leaves room for close btn
-            border: "none",
-            cursor: "pointer",
-            textAlign: "left",
-            width: "100%",
-            flexShrink: 0,
-          }}
-        >
-          <div
-            style={{
-              width: 54,
-              height: 54,
+        {/* ── Header: Brand + Close ── */}
+        <div style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "28px 20px 20px",
+          flexShrink: 0,
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{
+              width: 40,
+              height: 40,
               borderRadius: "50%",
-              background: "rgba(255,255,255,0.2)",
+              background: "rgba(4,104,177,0.1)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              fontSize: 22,
-              marginBottom: 12,
-              color: "#fff",
-              fontWeight: 700,
-              flexShrink: 0,
+            }}>
+              <span
+                className="material-symbols-outlined"
+                style={{ color: BLUE, fontSize: 22, fontVariationSettings: "'FILL' 1" }}
+              >
+                shield
+              </span>
+            </div>
+            <span style={{ fontSize: 20, fontWeight: 900, color: BLUE, fontFamily: "inherit" }}>
+              Crisis Reporter
+            </span>
+          </div>
+          <button
+            onClick={onClose}
+            aria-label="Close menu"
+            style={{
+              background: "transparent",
+              border: "none",
+              cursor: "pointer",
+              width: 40,
+              height: 40,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              borderRadius: "50%",
             }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "#F0EDED"; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; }}
           >
-            {profile?.first_name
-              ? (profile.first_name[0] + (profile.last_name?.[0] ?? "")).toUpperCase()
-              : "👤"}
-          </div>
+            <span className="material-symbols-outlined" style={{ color: "#717782", fontSize: 22 }}>close</span>
+          </button>
+        </div>
 
-          <p style={{ color: "#fff", fontSize: 15, fontWeight: 700, margin: "0 0 4px", lineHeight: 1.3 }}>
-            {name}
-          </p>
-          <p style={{ color: "rgba(255,255,255,0.75)", fontSize: 12, margin: "0 0 12px" }}>
-            {t('profile.completion_label', { completion })}
-          </p>
+        {/* Subtle divider */}
+        <div style={{ height: 1, background: "rgba(193,199,210,0.5)", flexShrink: 0, marginBottom: 8 }} />
 
-          <div style={{ height: 5, background: "rgba(255,255,255,0.25)", borderRadius: 3, overflow: "hidden" }}>
-            <div
-              style={{
-                height: "100%",
-                width: `${completion}%`,
-                background: "#fff",
-                borderRadius: 3,
-                transition: "width 0.4s ease",
-              }}
-            />
-          </div>
-        </button>
-
-        {/* Divider */}
-        <div style={{ height: 1, background: "#e2e8f0", flexShrink: 0 }} />
-
-        {/* Menu items */}
-        <nav style={{ flex: 1, padding: "8px 0" }}>
+        {/* ── Menu items ── */}
+        <nav style={{ flex: 1, padding: "0 16px", display: "flex", flexDirection: "column", gap: 4 }}>
           {MENU_ITEMS.map((item) => {
-            // A10: "Report an Incident" never carries an active state.
             const isActive = !item.primary && location.pathname === item.route;
+            const isHovered = hoveredRoute === item.route;
 
             if (item.primary) {
               return (
@@ -279,23 +221,26 @@ export default function SideMenu({ open, onClose }: SideMenuProps) {
                   style={{
                     display: "flex",
                     alignItems: "center",
-                    gap: 14,
+                    justifyContent: "space-between",
                     width: "100%",
-                    padding: "14px 20px",
+                    padding: "14px 16px",
                     background: BLUE,
                     border: "none",
-                    borderLeft: "3px solid transparent",
+                    borderRadius: 12,
                     cursor: "pointer",
                     textAlign: "left",
-                    margin: "6px 0",
+                    marginBottom: 4,
                   }}
                 >
-                  <span style={{ fontSize: 20, flexShrink: 0, width: 26, textAlign: "center" }}>
-                    {item.icon}
-                  </span>
-                  <span style={{ fontSize: 14, color: "#fff", fontWeight: 700 }}>
-                    {t(MENU_LABEL_KEYS[item.label] ?? item.label)}
-                  </span>
+                  <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                    <span className="material-symbols-outlined" style={{ color: "#fff", fontSize: 22, flexShrink: 0 }}>
+                      {item.icon}
+                    </span>
+                    <span style={{ fontSize: 15, color: "#fff", fontWeight: 700, fontFamily: "inherit" }}>
+                      {t(MENU_LABEL_KEYS[item.label] ?? item.label)}
+                    </span>
+                  </div>
+                  <span className="material-symbols-outlined" style={{ color: "rgba(255,255,255,0.7)", fontSize: 18 }}>chevron_right</span>
                 </button>
               );
             }
@@ -307,38 +252,45 @@ export default function SideMenu({ open, onClose }: SideMenuProps) {
                 style={{
                   display: "flex",
                   alignItems: "center",
-                  gap: 14,
+                  justifyContent: "space-between",
                   width: "100%",
-                  padding: "13px 20px",
-                  // A10: active route: left border + blue bg + blue bold text
-                  background: isActive ? "#F0F4FF" : "transparent",
+                  padding: "14px 16px",
+                  background: isActive ? "rgba(4,104,177,0.07)" : isHovered ? "#F6F3F2" : "transparent",
                   border: "none",
-                  borderLeft: isActive ? `3px solid ${BLUE}` : "3px solid transparent",
+                  borderRadius: 12,
                   cursor: "pointer",
                   textAlign: "left",
+                  transition: "background 0.12s",
                 }}
-                onMouseEnter={(e) => {
-                  if (!isActive) (e.currentTarget as HTMLButtonElement).style.background = "#f7fafc";
-                }}
-                onMouseLeave={(e) => {
-                  if (!isActive) (e.currentTarget as HTMLButtonElement).style.background = "transparent";
-                }}
+                onMouseEnter={() => setHoveredRoute(item.route)}
+                onMouseLeave={() => setHoveredRoute(null)}
               >
-                <span style={{ fontSize: 20, flexShrink: 0, width: 26, textAlign: "center" }}>
-                  {item.icon}
-                </span>
-                <span style={{ fontSize: 14, color: isActive ? BLUE : "#2d3748", fontWeight: isActive ? 700 : 500 }}>
-                  {t(MENU_LABEL_KEYS[item.label] ?? item.label)}
-                </span>
+                <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                  <span
+                    className="material-symbols-outlined"
+                    style={{ color: isActive ? BLUE : "#414751", fontSize: 22, flexShrink: 0 }}
+                  >
+                    {item.icon}
+                  </span>
+                  <span style={{
+                    fontSize: 15,
+                    color: isActive ? BLUE : "#1B1C1C",
+                    fontWeight: isActive ? 700 : 500,
+                    fontFamily: "inherit",
+                  }}>
+                    {t(MENU_LABEL_KEYS[item.label] ?? item.label)}
+                  </span>
+                </div>
+                <span className="material-symbols-outlined" style={{ color: "#C1C7D2", fontSize: 18 }}>chevron_right</span>
               </button>
             );
           })}
         </nav>
 
         {/* Divider */}
-        <div style={{ height: 1, background: "#e2e8f0", flexShrink: 0 }} />
+        <div style={{ height: 1, background: "rgba(193,199,210,0.3)", flexShrink: 0, margin: "8px 0 0" }} />
 
-        {/* PWA Install button — only rendered when browser supports it and app isn't installed */}
+        {/* PWA Install button */}
         {canInstall && (
           <div style={{ padding: "12px 16px 4px", flexShrink: 0 }}>
             <button
@@ -346,17 +298,17 @@ export default function SideMenu({ open, onClose }: SideMenuProps) {
               style={{
                 display: "flex",
                 alignItems: "center",
-                gap: 10,
+                gap: 12,
                 width: "100%",
-                padding: "11px 16px",
-                background: "#EBF4FF",
+                padding: "12px 16px",
+                background: "rgba(4,104,177,0.07)",
                 border: `1.5px solid ${BLUE}`,
-                borderRadius: 8,
+                borderRadius: 12,
                 cursor: "pointer",
                 textAlign: "left",
               }}
             >
-              <span style={{ fontSize: 18 }}>📲</span>
+              <span className="material-symbols-outlined" style={{ color: BLUE, fontSize: 20 }}>install_mobile</span>
               <div>
                 <p style={{ fontSize: 13, color: BLUE, fontWeight: 700, margin: 0, lineHeight: 1.3 }}>
                   Install App
@@ -370,12 +322,9 @@ export default function SideMenu({ open, onClose }: SideMenuProps) {
         )}
 
         {/* Footer */}
-        <div style={{ padding: "16px 20px", flexShrink: 0 }}>
-          <p style={{ fontSize: 11, color: "#a0aec0", margin: "0 0 2px", fontWeight: 500 }}>
-            Crisis Reporter v1.0.0
-          </p>
-          <p style={{ fontSize: 11, color: "#a0aec0", margin: 0, fontWeight: 600, letterSpacing: 0.5 }}>
-            UNDP
+        <div style={{ padding: "16px 24px 24px", flexShrink: 0 }}>
+          <p style={{ fontSize: 12, color: "#9CA3AF", margin: 0, fontWeight: 500, letterSpacing: "0.05em" }}>
+            Crisis Reporter v1.0
           </p>
         </div>
       </div>
