@@ -1,15 +1,18 @@
 import React from 'react';
 import { View, Text, StyleSheet, Dimensions } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
 
 const { width: screenWidth } = Dimensions.get('window');
 const scale = (size: number) => Math.round((screenWidth / 375) * size);
 
-const STEPS = [
-  { label: 'PHOTO', icon: '📷' },
-  { label: 'LOCATION', icon: '📍' },
-  { label: 'QUESTIONS', icon: '📋' },
-  { label: 'REVIEW', icon: '👁' },
-  { label: 'SUBMIT', icon: '✓' },
+type MIName = React.ComponentProps<typeof MaterialIcons>['name'];
+
+const STEPS: { label: string; icon: MIName }[] = [
+  { label: 'PHOTO', icon: 'camera-alt' },
+  { label: 'LOCATION', icon: 'location-on' },
+  { label: 'QUESTIONS', icon: 'description' },
+  { label: 'REVIEW', icon: 'visibility' },
+  { label: 'SUBMIT', icon: 'check-circle' },
 ];
 
 type StepIndicatorProps = {
@@ -57,14 +60,15 @@ export default function StepIndicator({ currentStep }: StepIndicatorProps) {
                       isPending && styles.circlePending,
                     ]}
                   >
-                    <Text
-                      style={[
-                        styles.circleIcon,
-                        isPending && styles.circleIconPending,
-                      ]}
-                    >
-                      {isComplete ? '✓' : step.icon}
-                    </Text>
+                    {isComplete ? (
+                      <MaterialIcons name={'check' as MIName} size={scale(16)} color="#FFFFFF" />
+                    ) : (
+                      <MaterialIcons
+                        name={step.icon}
+                        size={scale(16)}
+                        color={isPending ? '#717782' : '#FFFFFF'}
+                      />
+                    )}
                   </View>
                 </View>
 
@@ -102,7 +106,7 @@ const styles = StyleSheet.create({
     height: 2,
     marginHorizontal: 2,
     alignSelf: 'flex-start',
-    marginTop: 20, // vertically center with circles (half of largest circle 40/2)
+    marginTop: 20,
   },
   connectorComplete: {
     backgroundColor: '#0468B1',
@@ -145,13 +149,6 @@ const styles = StyleSheet.create({
     width: scale(32),
     height: scale(32),
     backgroundColor: '#E4E2E1',
-  },
-  circleIcon: {
-    fontSize: scale(14),
-    color: '#FFFFFF',
-  },
-  circleIconPending: {
-    color: '#717782',
   },
   label: {
     marginTop: 5,

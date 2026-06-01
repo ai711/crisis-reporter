@@ -5,6 +5,8 @@ import {
   TextInput, Alert, ActivityIndicator, Image, Modal, Linking, Platform,
   Dimensions, type NativeSyntheticEvent,
 } from "react-native";
+import { MaterialIcons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTranslation } from "react-i18next";
 import * as ImagePicker from "expo-image-picker";
@@ -1520,7 +1522,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
         contentContainerStyle={[styles.confirmContainer, { paddingTop: insets.top + 32, paddingBottom: insets.bottom + 32 }]}
       >
         <View style={styles.confirmIconCircleOnline}>
-          <Text style={styles.confirmIconCheck}>✓</Text>
+          <MaterialIcons name="check" size={scale(44)} color="#FFFFFF" />
         </View>
 
         <Text style={styles.confirmTitleLarge}>{t('review.confirmationTitle')}</Text>
@@ -1554,18 +1556,26 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
             </Text>
           </View>
           <View style={styles.confirmSummaryFootNote}>
-            <Text style={styles.confirmSummaryFootNoteText}>ℹ Your report has been received by UNDP staff.</Text>
+            <MaterialIcons name="info-outline" size={scale(14)} color="#9CA3AF" />
+            <Text style={styles.confirmSummaryFootNoteText}>Your report has been received by UNDP staff.</Text>
           </View>
         </View>
 
         <View style={styles.confirmScreenButtons}>
           <TouchableOpacity
-            style={styles.confirmPrimaryBtn}
+            activeOpacity={0.85}
             onPress={() => { resetForm(); setStep('photos'); }}
           >
-            <Text style={styles.confirmPrimaryBtnText}>
-              {t('review.confirmationSubmitAnother')}
-            </Text>
+            <LinearGradient
+              colors={['#0468B1', '#00508A']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.confirmGradientBtn}
+            >
+              <Text style={styles.confirmPrimaryBtnText}>
+                {t('review.confirmationSubmitAnother')}
+              </Text>
+            </LinearGradient>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -1610,7 +1620,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
         contentContainerStyle={[styles.confirmContainer, { paddingTop: insets.top + 32, paddingBottom: insets.bottom + 32 }]}
       >
         <View style={styles.confirmIconCircleOffline}>
-          <Text style={{ fontSize: scale(40), lineHeight: scale(48) }}>☁</Text>
+          <MaterialIcons name="cloud-upload" size={scale(44)} color="#FFFFFF" />
         </View>
 
         <Text style={styles.confirmTitleLarge}>{t('review.queueTitle')}</Text>
@@ -1628,11 +1638,11 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
           <View style={styles.offlineSyncAccent} />
           <Text style={styles.offlineSyncHeader}>PENDING SYNC</Text>
           <View style={styles.offlineSyncRow}>
-            <Text style={styles.offlineSyncIcon}>📵</Text>
+            <MaterialIcons name="wifi-off" size={scale(18)} color="#F5A623" />
             <Text style={styles.offlineSyncText}>Currently offline</Text>
           </View>
           <View style={styles.offlineSyncRow}>
-            <Text style={styles.offlineSyncIcon}>☁</Text>
+            <MaterialIcons name="cloud" size={scale(18)} color="#F5A623" />
             <Text style={styles.offlineSyncText}>1 report waiting to upload</Text>
           </View>
           <View style={styles.offlineSyncRow}>
@@ -1649,8 +1659,16 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
         </View>
 
         <View style={styles.confirmScreenButtons}>
-          <TouchableOpacity style={styles.confirmRetryBtn} onPress={retryUpload}>
-            <Text style={styles.confirmRetryBtnText}>↻ {t('review.queueRetry')}</Text>
+          <TouchableOpacity activeOpacity={0.85} onPress={retryUpload}>
+            <LinearGradient
+              colors={['#0468B1', '#00508A']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.confirmGradientBtn}
+            >
+              <MaterialIcons name="refresh" size={scale(18)} color="#FFFFFF" />
+              <Text style={styles.confirmRetryBtnText}>{t('review.queueRetry')}</Text>
+            </LinearGradient>
           </TouchableOpacity>
           <Text style={styles.confirmRetryHelper}>Tap to attempt upload if you have a connection</Text>
 
@@ -1727,7 +1745,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top }]}>
         <TouchableOpacity style={styles.backBtnTouch} onPress={() => navigation.goBack()}>
-          <Text style={styles.backBtn}>←</Text>
+          <MaterialIcons name="arrow-back" size={scale(24)} color="#0468B1" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{t("report.title")}</Text>
         <View style={styles.backBtnTouch} />
@@ -1815,7 +1833,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                       anchor="bottom"
                     >
                       <View style={styles.pinMarker}>
-                        <Text style={styles.pinMarkerIcon}>📍</Text>
+                        <MaterialIcons name="location-on" size={scale(36)} color="#0468B1" />
                       </View>
                     </Marker>
                   )}
@@ -1881,6 +1899,14 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                   </View>
                 )}
 
+                {/* Instruction pill overlay */}
+                {!selectedBuilding && !pinDropActive && (
+                  <View style={styles.mapInstructionPill} pointerEvents="none">
+                    <MaterialIcons name="info-outline" size={scale(14)} color="#0468B1" />
+                    <Text style={styles.mapInstructionText}>Tap a building or drop a pin to select location</Text>
+                  </View>
+                )}
+
                 {/* GPS recentre overlay button */}
                 <TouchableOpacity
                   style={styles.mapRecentreBtn}
@@ -1894,7 +1920,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                     }
                   }}
                 >
-                  <Text style={styles.mapRecentreIcon}>◎</Text>
+                  <MaterialIcons name="my-location" size={scale(24)} color="#FFFFFF" />
                 </TouchableOpacity>
               </View>
 
@@ -1952,26 +1978,32 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                 {/* Building selection info card */}
                 {selectedBuilding && (
                   <View style={styles.selectionCard}>
-                    <Text style={styles.selectionCardTitle}>Building Selected</Text>
+                    <Text style={styles.selectionCardTitle}>SELECTED LOCATION</Text>
                     <Text style={styles.selectionCardName}>
                       {selectedBuilding.name || "Unnamed building"}
                     </Text>
                     {selectedBuilding.building !== "yes" && (
                       <Text style={styles.selectionCardMeta}>Type: {selectedBuilding.building}</Text>
                     )}
-                    <Text style={styles.selectionCardCoords}>
-                      {selectedBuilding.centroid[1].toFixed(6)}, {selectedBuilding.centroid[0].toFixed(6)}
-                    </Text>
+                    <View style={styles.selectionCardCoordsRow}>
+                      <MaterialIcons name="satellite-alt" size={scale(12)} color="#717782" />
+                      <Text style={styles.selectionCardCoords}>
+                        {selectedBuilding.centroid[1].toFixed(5)}° N, {selectedBuilding.centroid[0].toFixed(5)}° E — GPS captured
+                      </Text>
+                    </View>
                   </View>
                 )}
 
                 {/* GPS-only info card (when GPS captured without building) */}
                 {gpsCoords && !selectedBuilding && (
                   <View style={styles.selectionCard}>
-                    <Text style={styles.selectionCardTitle}>GPS Location Captured</Text>
-                    <Text style={styles.selectionCardCoords}>
-                      {gpsCoords.lat.toFixed(6)}, {gpsCoords.lng.toFixed(6)}
-                    </Text>
+                    <Text style={styles.selectionCardTitle}>GPS LOCATION CAPTURED</Text>
+                    <View style={styles.selectionCardCoordsRow}>
+                      <MaterialIcons name="satellite-alt" size={scale(12)} color="#717782" />
+                      <Text style={styles.selectionCardCoords}>
+                        {gpsCoords.lat.toFixed(5)}° N, {gpsCoords.lng.toFixed(5)}° E
+                      </Text>
+                    </View>
                   </View>
                 )}
 
@@ -1981,8 +2013,9 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                   onPress={handleGetGPS}
                   disabled={gpsCapturing}
                 >
+                  {!gpsCapturing && <MaterialIcons name="location-on" size={scale(18)} color="#0468B1" />}
                   <Text style={styles.gpsButtonText}>
-                    {gpsCapturing ? "Getting location…" : "📍 Use My GPS Location"}
+                    {gpsCapturing ? "Getting location…" : "Use My GPS Location"}
                   </Text>
                 </TouchableOpacity>
 
@@ -2024,7 +2057,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
             <ScrollView style={styles.manualContainer} contentContainerStyle={styles.manualContent}>
               {/* Amber offline banner */}
               <View style={styles.offlineBanner}>
-                <Text style={styles.offlineBannerIcon}>📵</Text>
+                <MaterialIcons name="wifi-off" size={scale(20)} color="#FFFFFF" style={{ marginTop: 1 }} />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.offlineBannerPrimary}>
                     {t('locationScreen.offlineBanner')}
@@ -2039,21 +2072,23 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
               {locationScenario === 'offline_gps' && locationGpsCoords && (
                 <View style={styles.gpsIndicator}>
                   <View style={styles.gpsDot} />
+                  <MaterialIcons name="location-on" size={scale(14)} color="#38A169" />
                   <Text style={styles.gpsIndicatorText}>
-                    📍 {t('locationScreen.gpsRecorded')}
+                    {t('locationScreen.gpsRecorded')}
                   </Text>
                 </View>
               )}
               {locationScenario === 'offline_no_gps' && (
                 <View style={styles.gpsIndicator}>
+                  <MaterialIcons name="warning-amber" size={scale(14)} color="#E65100" />
                   <Text style={[styles.gpsIndicatorText, styles.gpsIndicatorUnavailable]}>
-                    ⚠️ {t('locationScreen.gpsUnavailable')}
+                    {t('locationScreen.gpsUnavailable')}
                   </Text>
                 </View>
               )}
 
               {/* Manual entry fields */}
-              <Text style={styles.manualFieldLabel}>{t('locationScreen.manualAddress')}</Text>
+              <Text style={styles.manualFieldLabel}>{t('locationScreen.manualAddress')} *</Text>
               <TextInput
                 style={styles.manualInput}
                 placeholder={t('locationScreen.manualAddressPlaceholder')}
@@ -2061,6 +2096,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                 onChangeText={setLocationAddress}
                 multiline={false}
               />
+              <Text style={styles.manualFieldHint}>e.g. 14 Ataturk Street, Kadikoy</Text>
 
               <Text style={styles.manualFieldLabel}>{t('locationScreen.manualLandmark')}</Text>
               <TextInput
@@ -2070,6 +2106,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                 onChangeText={setLocationLandmark}
                 multiline={false}
               />
+              <Text style={styles.manualFieldHint}>e.g. Near the school next to the central market</Text>
 
               <Text style={styles.manualFieldLabel}>{t('locationScreen.manualBuildingName')}</Text>
               <TextInput
@@ -2079,6 +2116,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                 onChangeText={setLocationBuildingName}
                 multiline={false}
               />
+              <Text style={styles.manualFieldHint}>e.g. Residential Block 4B, Al-Nour Mosque</Text>
 
               {/* At least one field required note */}
               {!locationAddress && !locationLandmark && !locationBuildingName && (
@@ -2092,39 +2130,48 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
           {/* Footer — Back and Next for all non-loading scenarios */}
           {locationScenario !== 'loading' && (
             <View style={[styles.footerBar, { paddingBottom: insets.bottom + 16 }]}>
-              <View style={styles.footerDamageRow}>
-                <TouchableOpacity
-                  style={styles.footerBackPill}
-                  onPress={() => setStep("photos")}
-                >
-                  <Text style={styles.footerBackPillText}>← Back</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.footerPillBtnFlex, !isLocationValid() && styles.footerPillBtnDisabled]}
-                  onPress={() => {
-                    if (!isLocationValid()) return;
-                    if (fromReview) {
-                      setFromReview(false);
-                      if (locationChangedForReview) {
-                        setLocationChangedForReview(false);
-                        setDamageQuestion(3);
-                        setInfrastructureName('');
-                        setShowLocationChangedNote(true);
-                        setStep('damage');
-                        return;
-                      }
-                      setStep('review');
+              <TouchableOpacity
+                activeOpacity={0.85}
+                disabled={!isLocationValid()}
+                onPress={() => {
+                  if (!isLocationValid()) return;
+                  if (fromReview) {
+                    setFromReview(false);
+                    if (locationChangedForReview) {
+                      setLocationChangedForReview(false);
+                      setDamageQuestion(3);
+                      setInfrastructureName('');
+                      setShowLocationChangedNote(true);
+                      setStep('damage');
                       return;
                     }
-                    setStep('damage');
-                  }}
-                  disabled={!isLocationValid()}
+                    setStep('review');
+                    return;
+                  }
+                  setStep('damage');
+                }}
+              >
+                <LinearGradient
+                  colors={isLocationValid() ? ['#0468B1', '#00508A'] : ['#E4E2E1', '#E4E2E1']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.footerGradientBtn}
                 >
                   <Text style={[styles.footerPillBtnText, !isLocationValid() && styles.footerPillBtnTextDisabled]}>
-                    Next →
+                    Next
                   </Text>
+                  <MaterialIcons name="arrow-forward" size={scale(20)} color={isLocationValid() ? '#FFFFFF' : '#9CA3AF'} />
+                </LinearGradient>
+              </TouchableOpacity>
+              {/* Offline scenarios don't show back — user taps header back arrow */}
+              {(locationScenario === 'online_gps' || locationScenario === 'online_no_gps') && (
+                <TouchableOpacity
+                  style={styles.footerTextBackBtn}
+                  onPress={() => setStep("photos")}
+                >
+                  <Text style={styles.footerTextBackBtnText}>← Back</Text>
                 </TouchableOpacity>
-              </View>
+              )}
             </View>
           )}
         </View>
@@ -2189,7 +2236,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                 }
               }}
             >
-              <Text style={styles.optionIcon}>🔍</Text>
+              <MaterialIcons name="visibility" size={scale(22)} color="#414751" style={styles.optionIconView} />
               <Text style={styles.optionLabel}>View</Text>
             </TouchableOpacity>
 
@@ -2202,7 +2249,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                 handleReplacePhoto(activeThumbnailIndex!);
               }}
             >
-              <Text style={styles.optionIcon}>🔄</Text>
+              <MaterialIcons name="sync" size={scale(22)} color="#414751" style={styles.optionIconView} />
               <Text style={styles.optionLabel}>Replace</Text>
             </TouchableOpacity>
 
@@ -2215,7 +2262,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                 handleRemovePhoto(activeThumbnailIndex!);
               }}
             >
-              <Text style={styles.optionIcon}>🗑️</Text>
+              <MaterialIcons name="delete-outline" size={scale(22)} color="#E53E3E" style={styles.optionIconView} />
               <Text style={[styles.optionLabel, styles.optionLabelDanger]}>Remove</Text>
             </TouchableOpacity>
 
@@ -2393,7 +2440,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                 {photos.length === 0 && (
                   <View style={styles.photoEmptyBox}>
                     <View style={styles.photoEmptyIconCircle}>
-                      <Text style={{ fontSize: scale(28), color: '#717782' }}>📷</Text>
+                      <MaterialIcons name="add-a-photo" size={scale(28)} color="#717782" />
                     </View>
                     <Text style={styles.photoEmptyText}>No photo added yet</Text>
                   </View>
@@ -2455,7 +2502,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                 {/* Max reached banner */}
                 {photos.length === 3 && (
                   <View style={styles.photoMaxBanner}>
-                    <Text style={styles.photoMaxBannerIcon}>⚠</Text>
+                    <MaterialIcons name="warning-amber" size={scale(18)} color="#8C5B00" />
                     <Text style={styles.photoMaxBannerText}>{t('photoScreen.maxPhotos')}</Text>
                   </View>
                 )}
@@ -2464,11 +2511,11 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                 {photos.length < 3 && (
                   <View style={styles.photoActionsCol}>
                     <TouchableOpacity style={styles.photoActionPill} onPress={handleTakePhoto}>
-                      <Text style={styles.photoActionPillIcon}>📷</Text>
+                      <MaterialIcons name="camera-alt" size={scale(20)} color="#0468B1" />
                       <Text style={styles.photoActionPillText}>{t("report.takePhoto")}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.photoActionPill} onPress={handlePickPhoto}>
-                      <Text style={styles.photoActionPillIcon}>🖼️</Text>
+                      <MaterialIcons name="photo-library" size={scale(20)} color="#0468B1" />
                       <Text style={styles.photoActionPillText}>{t("report.uploadPhoto")}</Text>
                     </TouchableOpacity>
                   </View>
@@ -2484,7 +2531,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                     t('photoScreen.guidelines.g4'),
                   ].map((tip, index) => (
                     <View key={index} style={styles.photoTipRow}>
-                      <Text style={styles.photoTipIcon}>✓</Text>
+                      <MaterialIcons name="check-circle" size={scale(18)} color="#006D37" style={{ marginTop: 1 }} />
                       <Text style={styles.photoTipText}>{tip}</Text>
                     </View>
                   ))}
@@ -2839,17 +2886,25 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
           {step === "photos" && (
             <View style={[styles.footerBar, { paddingBottom: insets.bottom + 16 }]}>
               <TouchableOpacity
-                style={[styles.footerPillBtn, photos.length === 0 && styles.footerPillBtnDisabled]}
                 onPress={() => {
                   if (!photos.length) return;
                   if (fromReview) { setFromReview(false); setStep('review'); return; }
                   setStep('location');
                 }}
                 disabled={photos.length === 0}
+                activeOpacity={0.85}
               >
-                <Text style={[styles.footerPillBtnText, photos.length === 0 && styles.footerPillBtnTextDisabled]}>
-                  Next →
-                </Text>
+                <LinearGradient
+                  colors={photos.length === 0 ? ['#E4E2E1', '#E4E2E1'] : ['#0468B1', '#00508A']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.footerGradientBtn}
+                >
+                  <Text style={[styles.footerPillBtnText, photos.length === 0 && styles.footerPillBtnTextDisabled]}>
+                    Next
+                  </Text>
+                  <MaterialIcons name="arrow-forward" size={scale(20)} color={photos.length === 0 ? '#9CA3AF' : '#FFFFFF'} />
+                </LinearGradient>
               </TouchableOpacity>
             </View>
           )}
@@ -2862,10 +2917,12 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                   style={styles.footerBackPill}
                   onPress={handleDamageBack}
                 >
-                  <Text style={styles.footerBackPillText}>← Back</Text>
+                  <MaterialIcons name="arrow-back" size={scale(18)} color="#0468B1" />
+                  <Text style={styles.footerBackPillText}>Back</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={styles.footerPillBtnFlex}
+                  style={{ flex: 1 }}
+                  activeOpacity={0.85}
                   onPress={() => {
                     if (damageQuestion > 8) { handleAdditionalNext(); return; }
                     if (!isDamageQuestionAnswered()) { setShowQuestionHint(true); return; }
@@ -2873,7 +2930,15 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                     handleDamageNext();
                   }}
                 >
-                  <Text style={styles.footerPillBtnText}>Next →</Text>
+                  <LinearGradient
+                    colors={['#0468B1', '#00508A']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.footerGradientBtnFlex}
+                  >
+                    <Text style={styles.footerPillBtnText}>Next</Text>
+                    <MaterialIcons name="arrow-forward" size={scale(18)} color="#FFFFFF" />
+                  </LinearGradient>
                 </TouchableOpacity>
               </View>
             </View>
@@ -2907,7 +2972,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                     style={{ minWidth: 44, minHeight: 44, justifyContent: 'center', alignItems: 'flex-end' }}
                     onPress={() => { setFromReview(true); setStep('photos'); }}
                   >
-                    <Text style={styles.reviewEditLink}>{t('review.editLink')} ✏</Text>
+                    <Text style={styles.reviewEditLink}>{t('review.editLink')} </Text>
                   </TouchableOpacity>
                 </View>
                 {photos.length > 0 ? (
@@ -2937,7 +3002,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                     style={{ minWidth: 44, minHeight: 44, justifyContent: 'center', alignItems: 'flex-end' }}
                     onPress={() => { setFromReview(true); setStep('location'); }}
                   >
-                    <Text style={styles.reviewEditLink}>{t('review.editLink')} ✏</Text>
+                    <Text style={styles.reviewEditLink}>{t('review.editLink')} </Text>
                   </TouchableOpacity>
                 </View>
 
@@ -3024,7 +3089,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                     style={{ minWidth: 44, minHeight: 44, justifyContent: 'center', alignItems: 'flex-end' }}
                     onPress={() => { setFromReview(true); setDamageQuestion(1); setStep('damage'); }}
                   >
-                    <Text style={styles.reviewEditLink}>{t('review.editLink')} ✏</Text>
+                    <Text style={styles.reviewEditLink}>{t('review.editLink')} </Text>
                   </TouchableOpacity>
                 </View>
 
@@ -3089,14 +3154,26 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
               </View>
             )}
             <TouchableOpacity
-              style={[styles.reviewSubmitBtn, (submitting || photos.length === 0) && styles.reviewSubmitBtnDisabled]}
+              activeOpacity={0.85}
               onPress={handleSubmit}
               disabled={submitting || photos.length === 0}
             >
-              {submitting
-                ? <ActivityIndicator color="#FFFFFF" />
-                : <Text style={styles.reviewSubmitBtnText}>{t('review.submitButton')}</Text>
-              }
+              <LinearGradient
+                colors={(submitting || photos.length === 0) ? ['#E4E2E1', '#E4E2E1'] : ['#0468B1', '#00508A']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.footerGradientBtn}
+              >
+                {submitting
+                  ? <ActivityIndicator color="#FFFFFF" />
+                  : <>
+                      <Text style={[styles.reviewSubmitBtnText, (photos.length === 0) && styles.footerPillBtnTextDisabled]}>
+                        {t('review.submitButton')}
+                      </Text>
+                      <MaterialIcons name="send" size={scale(18)} color={(photos.length === 0) ? '#9CA3AF' : '#FFFFFF'} />
+                    </>
+                }
+              </LinearGradient>
             </TouchableOpacity>
             <Text style={styles.reviewPrivacyNote}>
               Your report is encrypted and shared only with authorized UNDP staff.
@@ -3206,15 +3283,54 @@ const styles = StyleSheet.create({
     borderRadius: 28,
     borderWidth: 2,
     borderColor: '#0468B1',
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     alignItems: 'center',
     justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 4,
     minWidth: 44,
   },
   footerBackPillText: {
     color: '#0468B1',
     fontSize: scale(15),
     fontWeight: '700',
+  },
+  footerGradientBtn: {
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 8,
+    elevation: 4,
+    shadowColor: '#0468B1',
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+  },
+  footerGradientBtnFlex: {
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 8,
+    elevation: 4,
+    shadowColor: '#0468B1',
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+  },
+  footerTextBackBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 40,
+    marginTop: 4,
+  },
+  footerTextBackBtnText: {
+    color: '#717782',
+    fontSize: scale(14),
+    fontWeight: '600',
   },
 
   // ── STEP 1 — PHOTOS ────────────────────────────────────────────────────────
@@ -3655,6 +3771,31 @@ const styles = StyleSheet.create({
   },
   mapRecentreIcon: { fontSize: scale(24), color: '#FFFFFF' },
 
+  // Instruction pill
+  mapInstructionPill: {
+    position: 'absolute',
+    top: 12,
+    alignSelf: 'center' as const,
+    zIndex: 15,
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    borderRadius: 9999,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    gap: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  mapInstructionText: {
+    fontSize: scale(12),
+    fontWeight: '500',
+    color: '#1B1C1C',
+  },
+
   // Pin marker
   pinMarker: { alignItems: 'center', justifyContent: 'center' },
   pinMarkerIcon: { fontSize: scale(32), lineHeight: 36 },
@@ -3714,22 +3855,31 @@ const styles = StyleSheet.create({
 
   // Building selection card
   selectionCard: {
-    backgroundColor: '#E8F4FD',
-    borderWidth: 1.5,
-    borderColor: '#0468B1',
+    backgroundColor: '#F6F3F2',
     borderRadius: 12,
     padding: 12,
     gap: 2,
   },
-  selectionCardTitle: { fontSize: scale(11), fontWeight: '700', color: '#0468B1', textTransform: 'uppercase', letterSpacing: 0.5 },
-  selectionCardName: { fontSize: scale(15), fontWeight: '600', color: '#1B1C1C' },
+  selectionCardTitle: { fontSize: scale(10), fontWeight: '700', color: '#717782', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 2 },
+  selectionCardName: { fontSize: scale(17), fontWeight: '700', color: '#1B1C1C', marginBottom: 2 },
   selectionCardMeta: { fontSize: scale(12), color: '#717782' },
-  selectionCardCoords: { fontSize: scale(11), color: '#717782' },
+  selectionCardCoordsRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
+  selectionCardCoords: { fontSize: scale(11), color: '#717782', flex: 1 },
   manualToggle: { fontSize: scale(13), color: '#0468B1', textDecorationLine: 'underline' },
 
   // GPS button
-  gpsButton: { backgroundColor: '#0468B1', borderRadius: 26, padding: 14, alignItems: 'center' },
-  gpsButtonText: { color: '#FFFFFF', fontWeight: '700', fontSize: scale(15) },
+  gpsButton: {
+    borderWidth: 1.5,
+    borderColor: '#0468B1',
+    backgroundColor: 'transparent',
+    borderRadius: 12,
+    padding: 14,
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  gpsButtonText: { color: '#0468B1', fontWeight: '700', fontSize: scale(15) },
 
   // Offline location
   offlineBanner: {
@@ -3798,6 +3948,13 @@ const styles = StyleSheet.create({
     color: '#E53E3E',
     marginTop: 12,
     textAlign: 'center',
+  },
+  manualFieldHint: {
+    fontSize: scale(12),
+    color: '#9CA3AF',
+    fontStyle: 'italic',
+    marginTop: 4,
+    marginBottom: 4,
   },
 
   // Legacy — kept so existing unchanged JSX compiles
@@ -4030,6 +4187,19 @@ const styles = StyleSheet.create({
   },
 
   confirmScreenButtons: { width: '100%', gap: 12 },
+  confirmGradientBtn: {
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 8,
+    elevation: 4,
+    shadowColor: '#0468B1',
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+  },
   confirmPrimaryBtn: {
     height: 56,
     borderRadius: 28,
@@ -4194,6 +4364,8 @@ const styles = StyleSheet.create({
   modalTitle: { fontSize: scale(17), fontWeight: '700', color: '#1B1C1C', marginBottom: 12 },
   modalBody: { fontSize: scale(15), color: '#444', lineHeight: 22, marginBottom: 20 },
   modalButtons: { flexDirection: 'row', gap: 12 },
+
+  optionIconView: { width: 36 },
 
   // Photo action sheet
   optionsOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
