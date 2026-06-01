@@ -39,14 +39,14 @@ export default function SubmissionStepper({ currentStep }: SubmissionStepperProp
       position: "relative",
       flexShrink: 0,
     }}>
-      {/* Single background line behind all circles */}
+      {/* Progress line: blue fill up to current step, gray remainder */}
       <div style={{
         position: "absolute",
-        top: 37,   /* 24px paddingTop + 13px (half of 28px circle) */
-        left: 38,  /* 24px padding + half of first circle */
+        top: 37,
+        left: 38,
         right: 38,
-        height: 1,
-        background: "#E4E2E1",
+        height: 2,
+        background: `linear-gradient(to right, #0468B1 ${(currentIndex / (STEPS.length - 1)) * 100}%, #E4E2E1 ${(currentIndex / (STEPS.length - 1)) * 100}%)`,
         zIndex: 0,
       }} />
 
@@ -62,14 +62,14 @@ export default function SubmissionStepper({ currentStep }: SubmissionStepperProp
           const isCompleted = idx < currentIndex;
           const isActive = idx === currentIndex;
 
-          const circleBackground = isCompleted ? "#38A169"
+          const circleBackground = isCompleted ? "#0468B1"
             : isActive ? "#0468B1"
             : "#FFFFFF";
 
           const circleBorder = (isCompleted || isActive) ? "none" : "1.5px solid #C1C7D2";
           const iconColor = (isCompleted || isActive) ? "#FFFFFF" : "#717782";
 
-          const labelColor = isCompleted ? "#38A169"
+          const labelColor = isCompleted ? "#0468B1"
             : isActive ? "#0468B1"
             : "#717782";
 

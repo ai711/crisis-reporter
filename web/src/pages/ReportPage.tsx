@@ -2009,11 +2009,16 @@ export default function ReportPage() {
         {/* Step 3 — Damage Assessment */}
         {step === "damage" && (
           <div style={styles.step}>
-            <div style={styles.questionProgress}>Question {damageQuestion} of {totalQuestions}</div>
+            <div style={{ marginBottom: 4 }}>
+              <p style={styles.questionProgress}>Question {damageQuestion} of {totalQuestions}</p>
+              <div style={{ height: 6, background: "#E4E2E1", borderRadius: 3, overflow: "hidden" }}>
+                <div style={{ height: "100%", width: `${(damageQuestion / totalQuestions) * 100}%`, background: "#0468B1", borderRadius: 3, transition: "width 0.3s ease" }} />
+              </div>
+            </div>
 
             {damageQuestion === 1 && (
               <>
-                <h2 style={styles.stepTitle}>{qTitle(1, "How bad is the damage? *")}</h2>
+                <h2 style={styles.questionTitle}>{qTitle(1, "How bad is the damage? *")}</h2>
                 {qOptions(1, [
                   { value: "minimal", label: "Minimal / No damage" },
                   { value: "partial", label: "Partially damaged" },
@@ -2023,14 +2028,14 @@ export default function ReportPage() {
                     key={value}
                     style={{
                       ...styles.radioOption,
-                      borderColor: damageLevel === value ? "#0468B1" : "#E2E8F0",
-                      background: damageLevel === value ? "#F0F4FF" : "#fff",
+                      border: damageLevel === value ? "2px solid #0468B1" : "2px solid transparent",
+                      background: damageLevel === value ? "rgba(4,104,177,0.05)" : "#F6F3F2",
                     }}
                     onClick={() => { setDamageLevel(value as DamageLevel); setShowAnswerPrompt(false); }}
                   >
                     <div style={{
                       ...styles.radioCircle,
-                      border: damageLevel === value ? "6px solid #0468B1" : "2px solid #CBD5E0",
+                      border: damageLevel === value ? "6px solid #0468B1" : "2px solid #C1C7D2",
                     }} />
                     <span style={styles.radioLabel}>{label}</span>
                   </div>
@@ -2040,7 +2045,7 @@ export default function ReportPage() {
 
             {damageQuestion === 2 && (
               <>
-                <h2 style={styles.stepTitle}>{qTitle(2, "What type of infrastructure is this? *")}</h2>
+                <h2 style={styles.questionTitle}>{qTitle(2, "What type of infrastructure is this? *")}</h2>
                 <p style={styles.photoHint}>{t('report.select_all_apply')}</p>
                 {qOptions(2, [
                   { value: "residential", label: "Residential Infrastructure" },
@@ -2054,7 +2059,11 @@ export default function ReportPage() {
                 ]).map(({ value, label }) => (
                   <div
                     key={value}
-                    style={styles.checkRow}
+                    style={{
+                      ...styles.checkRow,
+                      border: infrastructureTypes.includes(value) ? "2px solid #0468B1" : "2px solid transparent",
+                      background: infrastructureTypes.includes(value) ? "rgba(4,104,177,0.05)" : "#F6F3F2",
+                    }}
                     onClick={() => { toggleInfraType(value); setShowAnswerPrompt(false); }}
                   >
                     <div style={{ ...styles.checkbox, ...(infrastructureTypes.includes(value) ? styles.checkboxSelected : {}) }}>
@@ -2081,7 +2090,7 @@ export default function ReportPage() {
 
             {damageQuestion === 3 && (
               <>
-                <h2 style={styles.stepTitle}>{qTitle(3, "What is the name of this infrastructure? *")}</h2>
+                <h2 style={styles.questionTitle}>{qTitle(3, "What is the name of this infrastructure? *")}</h2>
                 {locationChangedFlag && (
                   <p style={{ color: "#F57C00", fontSize: "0.85rem", margin: "0 0 8px", lineHeight: 1.5 }}>
                     {t('report.location_changed_warning')}
@@ -2102,7 +2111,7 @@ export default function ReportPage() {
 
             {damageQuestion === 4 && (
               <>
-                <h2 style={styles.stepTitle}>{qTitle(4, "What type of disaster caused this damage? *")}</h2>
+                <h2 style={styles.questionTitle}>{qTitle(4, "What type of disaster caused this damage? *")}</h2>
                 {Q4_OPTIONS.map(({ category, options }) => (
                   <div key={category}>
                     <div style={styles.categoryHeading}>{q4CategoryLabels[category] ?? category}</div>
@@ -2111,14 +2120,14 @@ export default function ReportPage() {
                         key={value}
                         style={{
                           ...styles.radioOption,
-                          borderColor: disasterType === value ? "#0468B1" : "#E2E8F0",
-                          background: disasterType === value ? "#F0F4FF" : "#fff",
+                          border: disasterType === value ? "2px solid #0468B1" : "2px solid transparent",
+                          background: disasterType === value ? "rgba(4,104,177,0.05)" : "#F6F3F2",
                         }}
                         onClick={() => { setDisasterType(value); setShowAnswerPrompt(false); }}
                       >
                         <div style={{
                           ...styles.radioCircle,
-                          border: disasterType === value ? "6px solid #0468B1" : "2px solid #CBD5E0",
+                          border: disasterType === value ? "6px solid #0468B1" : "2px solid #C1C7D2",
                         }} />
                         <span style={styles.radioLabel}>{label}</span>
                       </div>
@@ -2130,7 +2139,7 @@ export default function ReportPage() {
 
             {damageQuestion === 5 && (
               <>
-                <h2 style={styles.stepTitle}>{qTitle(5, "Is there debris blocking access? *")}</h2>
+                <h2 style={styles.questionTitle}>{qTitle(5, "Is there debris blocking access? *")}</h2>
                 {qOptions(5, [
                   { value: "yes", label: "Yes" },
                   { value: "no", label: "No" },
@@ -2139,14 +2148,14 @@ export default function ReportPage() {
                     key={value}
                     style={{
                       ...styles.radioOption,
-                      borderColor: debrisBlocking === value ? "#0468B1" : "#E2E8F0",
-                      background: debrisBlocking === value ? "#F0F4FF" : "#fff",
+                      border: debrisBlocking === value ? "2px solid #0468B1" : "2px solid transparent",
+                      background: debrisBlocking === value ? "rgba(4,104,177,0.05)" : "#F6F3F2",
                     }}
                     onClick={() => { setDebrisBlocking(value); setShowAnswerPrompt(false); }}
                   >
                     <div style={{
                       ...styles.radioCircle,
-                      border: debrisBlocking === value ? "6px solid #0468B1" : "2px solid #CBD5E0",
+                      border: debrisBlocking === value ? "6px solid #0468B1" : "2px solid #C1C7D2",
                     }} />
                     <span style={styles.radioLabel}>{label}</span>
                   </div>
@@ -2156,7 +2165,7 @@ export default function ReportPage() {
 
             {damageQuestion === 6 && (
               <>
-                <h2 style={styles.stepTitle}>{qTitle(6, "What is the current condition of electricity infrastructure in your community following the crisis? *")}</h2>
+                <h2 style={styles.questionTitle}>{qTitle(6, "What is the current condition of electricity infrastructure in your community following the crisis? *")}</h2>
                 {qOptions(6, [
                   { value: "no_damage", label: "No damage observed" },
                   { value: "minor", label: "Minor damage — service disruptions but quickly repairable" },
@@ -2169,14 +2178,14 @@ export default function ReportPage() {
                     key={value}
                     style={{
                       ...styles.radioOption,
-                      borderColor: electricityCondition === value ? "#0468B1" : "#E2E8F0",
-                      background: electricityCondition === value ? "#F0F4FF" : "#fff",
+                      border: electricityCondition === value ? "2px solid #0468B1" : "2px solid transparent",
+                      background: electricityCondition === value ? "rgba(4,104,177,0.05)" : "#F6F3F2",
                     }}
                     onClick={() => { setElectricityCondition(value); setShowAnswerPrompt(false); }}
                   >
                     <div style={{
                       ...styles.radioCircle,
-                      border: electricityCondition === value ? "6px solid #0468B1" : "2px solid #CBD5E0",
+                      border: electricityCondition === value ? "6px solid #0468B1" : "2px solid #C1C7D2",
                     }} />
                     <span style={styles.radioLabel}>{label}</span>
                   </div>
@@ -2186,7 +2195,7 @@ export default function ReportPage() {
 
             {damageQuestion === 7 && (
               <>
-                <h2 style={styles.stepTitle}>{qTitle(7, "How would you rate the overall functioning of health services in your community since the event? *")}</h2>
+                <h2 style={styles.questionTitle}>{qTitle(7, "How would you rate the overall functioning of health services in your community since the event? *")}</h2>
                 {qOptions(7, [
                   { value: "fully_functional", label: "Fully functional" },
                   { value: "partially_functional", label: "Partially functional" },
@@ -2198,14 +2207,14 @@ export default function ReportPage() {
                     key={value}
                     style={{
                       ...styles.radioOption,
-                      borderColor: healthServicesCondition === value ? "#0468B1" : "#E2E8F0",
-                      background: healthServicesCondition === value ? "#F0F4FF" : "#fff",
+                      border: healthServicesCondition === value ? "2px solid #0468B1" : "2px solid transparent",
+                      background: healthServicesCondition === value ? "rgba(4,104,177,0.05)" : "#F6F3F2",
                     }}
                     onClick={() => { setHealthServicesCondition(value); setShowAnswerPrompt(false); }}
                   >
                     <div style={{
                       ...styles.radioCircle,
-                      border: healthServicesCondition === value ? "6px solid #0468B1" : "2px solid #CBD5E0",
+                      border: healthServicesCondition === value ? "6px solid #0468B1" : "2px solid #C1C7D2",
                     }} />
                     <span style={styles.radioLabel}>{label}</span>
                   </div>
@@ -2215,7 +2224,7 @@ export default function ReportPage() {
 
             {damageQuestion === 8 && (
               <>
-                <h2 style={styles.stepTitle}>{qTitle(8, "What are the most pressing needs in your community right now? *")}</h2>
+                <h2 style={styles.questionTitle}>{qTitle(8, "What are the most pressing needs in your community right now? *")}</h2>
                 <p style={styles.photoHint}>{t('report.select_at_least_one')}</p>
                 {qOptions(8, [
                   { value: "food_water", label: "Food assistance and safe drinking water" },
@@ -2231,7 +2240,11 @@ export default function ReportPage() {
                 ]).map(({ value, label }) => (
                   <div
                     key={value}
-                    style={styles.checkRow}
+                    style={{
+                      ...styles.checkRow,
+                      border: pressingNeeds.includes(value) ? "2px solid #0468B1" : "2px solid transparent",
+                      background: pressingNeeds.includes(value) ? "rgba(4,104,177,0.05)" : "#F6F3F2",
+                    }}
                     onClick={() => { togglePressingNeed(value); setShowAnswerPrompt(false); }}
                   >
                     <div style={{ ...styles.checkbox, ...(pressingNeeds.includes(value) ? styles.checkboxSelected : {}) }}>
@@ -2266,14 +2279,18 @@ export default function ReportPage() {
               const selectedValue: string = typeof currentVal === "string" ? currentVal : "";
               return (
                 <>
-                  <h2 style={styles.stepTitle}>{aq.question_text} *</h2>
+                  <h2 style={styles.questionTitle}>{aq.question_text} *</h2>
                   {isMulti && <p style={styles.photoHint}>{t('report.select_all_apply')}</p>}
                   {aq.options.map((opt) => {
                     const isSelected = isMulti ? selectedValues.includes(opt.option_value) : selectedValue === opt.option_value;
                     return isMulti ? (
                       <div
                         key={opt.option_value}
-                        style={styles.checkRow}
+                        style={{
+                          ...styles.checkRow,
+                          border: isSelected ? "2px solid #0468B1" : "2px solid transparent",
+                          background: isSelected ? "rgba(4,104,177,0.05)" : "#F6F3F2",
+                        }}
                         onClick={() => {
                           setShowAnswerPrompt(false);
                           setAdditionalAnswers((prev) => {
@@ -2297,8 +2314,8 @@ export default function ReportPage() {
                         key={opt.option_value}
                         style={{
                           ...styles.radioOption,
-                          borderColor: isSelected ? "#0468B1" : "#E2E8F0",
-                          background: isSelected ? "#F0F4FF" : "#fff",
+                          border: isSelected ? "2px solid #0468B1" : "2px solid transparent",
+                          background: isSelected ? "rgba(4,104,177,0.05)" : "#F6F3F2",
                         }}
                         onClick={() => {
                           setShowAnswerPrompt(false);
@@ -2307,7 +2324,7 @@ export default function ReportPage() {
                       >
                         <div style={{
                           ...styles.radioCircle,
-                          border: isSelected ? "6px solid #0468B1" : "2px solid #CBD5E0",
+                          border: isSelected ? "6px solid #0468B1" : "2px solid #C1C7D2",
                         }} />
                         <span style={styles.radioLabel}>{opt.option_text}</span>
                       </div>
@@ -3224,24 +3241,31 @@ const styles: Record<string, React.CSSProperties> = {
     textAlign: "center",
   },
   questionProgress: {
-    fontSize: 13,
-    fontWeight: 600,
+    fontSize: 10,
+    fontWeight: 700,
     color: "#0468B1",
-    textAlign: "center" as const,
-    marginBottom: 4,
+    textTransform: "uppercase" as const,
+    letterSpacing: "0.1em",
+    marginBottom: 8,
   },
   radioOption: {
     display: "flex",
     alignItems: "center",
     gap: 12,
-    padding: "10px 16px",
-    minHeight: 44,
-    borderRadius: 8,
-    border: "1px solid #E2E8F0",
+    padding: "14px 18px",
+    minHeight: 52,
+    borderRadius: 12,
+    border: "2px solid transparent",
     marginBottom: 8,
     cursor: "pointer",
-    transition: "border-color 0.12s, background 0.12s",
+    transition: "border 0.12s, background 0.12s",
     boxSizing: "border-box" as const,
+  },
+  questionTitle: {
+    fontSize: 24,
+    fontWeight: 700,
+    color: "#1B1C1C",
+    lineHeight: 1.3,
   },
   radioCircle: {
     width: 20,
@@ -3281,17 +3305,20 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     alignItems: "center",
     gap: 12,
-    padding: "10px 4px",
-    minHeight: 44,
-    borderBottom: "1px solid #f0f0f0",
+    padding: "12px 16px",
+    minHeight: 52,
+    borderRadius: 12,
+    border: "2px solid transparent",
+    marginBottom: 8,
     cursor: "pointer",
+    transition: "border 0.12s, background 0.12s",
     boxSizing: "border-box" as const,
   },
   checkbox: {
     width: 22,
     height: 22,
-    border: "2px solid #ccc",
-    borderRadius: 4,
+    border: "2px solid #C1C7D2",
+    borderRadius: 6,
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
