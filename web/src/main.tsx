@@ -74,6 +74,19 @@ const queryClient = new QueryClient({
       e as BeforeInstallPromptEvent;
   });
 
+  // ── Service worker update reload — when a new SW takes over, reload so
+  // the page runs fresh JS (prevents stale-cache bugs like missing required
+  // fields that cause 422 on report submission).
+  if ("serviceWorker" in navigator) {
+    let reloading = false;
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (!reloading) {
+        reloading = true;
+        window.location.reload();
+      }
+    });
+  }
+
   // ── Mount React.
   createRoot(document.getElementById("root")!).render(
     <StrictMode>
