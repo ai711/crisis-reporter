@@ -1413,25 +1413,84 @@ export default function ReportPage() {
   // ── Success screen ────────────────────────────────────────────────────────────
 
   if (submitted) {
+    const locationSummary = selectedBuildingName
+      ? selectedBuildingName
+      : pinDropCoords
+        ? `${pinDropCoords.lat.toFixed(5)}, ${pinDropCoords.lng.toFixed(5)}`
+        : locationAddress || t('report.review_not_specified');
+    const incidentSummary = [DAMAGE_LABELS[damageLevel] ?? damageLevel, ...infrastructureTypes.slice(0, 1).map((v) => INFRA_LABELS[v] ?? v)].join(" — ");
+
     return (
       <div style={styles.container}>
         <div style={styles.successContainer}>
+          {/* Check circle */}
           <div style={styles.confirmCheckCircle}>
-            <span style={{ fontSize: 44, lineHeight: 1 }}>✓</span>
+            <span className="material-symbols-outlined" style={{ fontSize: 48, color: "#FFFFFF", fontVariationSettings: "'FILL' 1, 'wght' 700" }}>check</span>
           </div>
-          <h2 style={styles.successTitle}>{t('report.success_title')}</h2>
-          <p style={styles.successText}>
-            {t("confirmation.success_message")}
-          </p>
-          <button style={styles.primaryButton} onClick={resetForm}>
-            {t('report.submit_another')}
-          </button>
-          <button
-            style={{ ...styles.secondaryButton, border: "none", color: "#666", fontSize: 15 }}
-            onClick={() => navigate("/")}
-          >
-            {t('common.go_home')}
-          </button>
+
+          <h2 style={styles.successTitle}>{t('report.success_title')}!</h2>
+          <p style={styles.successText}>{t("confirmation.success_message")}</p>
+
+          {/* Report summary card */}
+          <div style={{ width: "100%", background: "#F6F3F2", borderRadius: 16, padding: 20, display: "flex", flexDirection: "column" as const, gap: 20, position: "relative" as const, overflow: "hidden", marginBottom: 28 }}>
+            <div style={{ position: "absolute" as const, top: 0, left: 0, bottom: 0, width: 4, background: "#0468B1", opacity: 0.25, borderRadius: "4px 0 0 4px" }} />
+            <p style={{ fontSize: 10, fontWeight: 700, color: "#717782", textTransform: "uppercase" as const, letterSpacing: "0.1em", margin: 0 }}>Report Summary</p>
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+              <div style={{ background: "#E4E2E1", borderRadius: 8, padding: 8, flexShrink: 0 }}>
+                <span className="material-symbols-outlined" style={{ fontSize: 20, color: "#0468B1", display: "block" }}>location_on</span>
+              </div>
+              <div style={{ textAlign: "left" as const }}>
+                <span style={{ fontSize: 12, color: "#717782", display: "block" }}>Location</span>
+                <span style={{ fontSize: 15, fontWeight: 600, color: "#1B1C1C" }}>{locationSummary}</span>
+              </div>
+            </div>
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+              <div style={{ background: "#E4E2E1", borderRadius: 8, padding: 8, flexShrink: 0 }}>
+                <span className="material-symbols-outlined" style={{ fontSize: 20, color: "#0468B1", display: "block" }}>home_repair_service</span>
+              </div>
+              <div style={{ textAlign: "left" as const }}>
+                <span style={{ fontSize: 12, color: "#717782", display: "block" }}>Incident Type</span>
+                <span style={{ fontSize: 15, fontWeight: 600, color: "#1B1C1C" }}>{incidentSummary}</span>
+              </div>
+            </div>
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+              <div style={{ background: "#E4E2E1", borderRadius: 8, padding: 8, flexShrink: 0 }}>
+                <span className="material-symbols-outlined" style={{ fontSize: 20, color: "#0468B1", display: "block" }}>schedule</span>
+              </div>
+              <div style={{ textAlign: "left" as const }}>
+                <span style={{ fontSize: 12, color: "#717782", display: "block" }}>Status</span>
+                <span style={{ fontSize: 15, fontWeight: 600, color: "#1B1C1C" }}>Submitted just now</span>
+              </div>
+            </div>
+            <div style={{ borderTop: "1px solid rgba(193,199,210,0.4)", paddingTop: 16 }}>
+              <p style={{ fontSize: 13, color: "#717782", display: "flex", alignItems: "center", gap: 8, margin: 0, fontStyle: "italic", textAlign: "left" as const }}>
+                <span className="material-symbols-outlined" style={{ fontSize: 16, flexShrink: 0 }}>info</span>
+                Your report ID has been recorded in the background
+              </p>
+            </div>
+          </div>
+
+          {/* Action buttons */}
+          <div style={{ width: "100%", display: "flex", flexDirection: "column" as const, gap: 12 }}>
+            <button
+              style={{ width: "100%", height: 56, background: "linear-gradient(to bottom, #0468B1, #00508A)", color: "#FFFFFF", border: "none", borderRadius: 12, fontSize: 16, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 4px 12px rgba(4,104,177,0.25)" }}
+              onClick={resetForm}
+            >
+              {t('report.submit_another')}
+            </button>
+            <button
+              style={{ width: "100%", height: 56, background: "transparent", border: "2px solid #0468B1", borderRadius: 12, fontSize: 16, fontWeight: 700, color: "#0468B1", cursor: "pointer", fontFamily: "inherit" }}
+              onClick={() => navigate("/")}
+            >
+              {t('common.go_home')}
+            </button>
+            <button
+              style={{ width: "100%", height: 48, background: "transparent", border: "none", fontSize: 15, fontWeight: 600, color: "#0468B1", cursor: "pointer", fontFamily: "inherit" }}
+              onClick={() => navigate("/my-reports")}
+            >
+              {t('navigation.my_reports', 'View My Reports')}
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -2370,8 +2429,10 @@ export default function ReportPage() {
             `https://api.maptiler.com/maps/streets-v2/static/${lng},${lat},15/300x160.png?key=${MAPTILER_KEY}&markers=${lng},${lat}`;
 
           return (
-            <div style={{ maxWidth: 720, margin: "0 auto", padding: "24px 16px 100px", width: "100%", boxSizing: "border-box" as const }}>
-              <h2 style={styles.stepTitle}>{t('report.review_title')}</h2>
+            <div style={{ maxWidth: 720, margin: "0 auto", padding: "16px 16px 120px", width: "100%", boxSizing: "border-box" as const }}>
+              <p style={{ textAlign: "center" as const, fontSize: 13, color: "#717782", marginBottom: 24, lineHeight: 1.5 }}>
+                {t('report.review_intro', 'Please review your report before submitting. Tap any section to edit.')}
+              </p>
 
               {/* ── Photos section ── */}
               <div style={styles.reviewSection}>
@@ -2391,12 +2452,12 @@ export default function ReportPage() {
                             onClick={() => setReviewPhotoIndex(reviewPhotoIndex === idx ? null : idx)}
                             style={{
                               position: "relative" as const,
-                              width: 72,
-                              height: 72,
-                              borderRadius: 8,
+                              width: 100,
+                              height: 100,
+                              borderRadius: 10,
                               overflow: "visible" as const,
                               cursor: "pointer",
-                              border: "2px solid #E2E8F0",
+                              border: "2px solid #E4E2E1",
                               flexShrink: 0,
                             }}
                           >
@@ -2548,55 +2609,65 @@ export default function ReportPage() {
                 </div>
               </div>
 
-              {/* ── Questions section ── */}
+              {/* ── Damage Assessment section ── */}
               <div style={styles.reviewSection}>
                 <div style={styles.reviewSectionHeader}>
-                  <span style={styles.reviewSectionTitle}>{t('report.review_questions')}</span>
+                  <span style={styles.reviewSectionTitle}>{t('report.review_damage_assessment', 'Damage Assessment')}</span>
                   <button style={styles.editLink} onClick={() => { setEditingFromReview(true); setDamageQuestion(1); setStep("damage"); }}>{t('common.edit')}</button>
                 </div>
-                <div style={styles.reviewCard}>
-                  <div style={styles.reviewRow}>
-                    <span style={styles.reviewLabel}>{t('report.review_q1')}</span>
-                    <span style={styles.reviewValue}>{DAMAGE_LABELS[damageLevel] ?? damageLevel}</span>
+                <div style={{ display: "flex", flexDirection: "column" as const, gap: 8 }}>
+                  <div style={styles.reviewDataCard}>
+                    <p style={styles.reviewDataLabel}>{t('report.review_q1')}</p>
+                    <p style={styles.reviewDataValue}>{DAMAGE_LABELS[damageLevel] ?? damageLevel}</p>
                   </div>
-                  <div style={styles.reviewRow}>
-                    <span style={styles.reviewLabel}>{t('report.review_q2')}</span>
-                    <span style={styles.reviewValue}>{infrastructureTypes.map((v) => INFRA_LABELS[v] ?? v).join(", ")}</span>
+                  <div style={styles.reviewDataCard}>
+                    <p style={styles.reviewDataLabel}>{t('report.review_q2')}</p>
+                    <p style={styles.reviewDataValue}>{infrastructureTypes.map((v) => INFRA_LABELS[v] ?? v).join(", ")}</p>
                   </div>
                   {infrastructureOther && (
-                    <div style={styles.reviewRow}>
-                      <span style={styles.reviewLabel}>Q2 — Other (specify)</span>
-                      <span style={styles.reviewValue}>{infrastructureOther}</span>
+                    <div style={styles.reviewDataCard}>
+                      <p style={styles.reviewDataLabel}>Q2 — Other</p>
+                      <p style={styles.reviewDataValue}>{infrastructureOther}</p>
                     </div>
                   )}
-                  <div style={styles.reviewRow}>
-                    <span style={styles.reviewLabel}>{t('report.review_q3')}</span>
-                    <span style={styles.reviewValue}>{infrastructureName}</span>
+                  <div style={styles.reviewDataCard}>
+                    <p style={styles.reviewDataLabel}>{t('report.review_q3')}</p>
+                    <p style={styles.reviewDataValue}>{infrastructureName}</p>
                   </div>
-                  <div style={styles.reviewRow}>
-                    <span style={styles.reviewLabel}>{t('report.review_q4')}</span>
-                    <span style={styles.reviewValue}>{DISASTER_LABELS[disasterType] ?? disasterType}</span>
+                  <div style={styles.reviewDataCard}>
+                    <p style={styles.reviewDataLabel}>{t('report.review_q4')}</p>
+                    <p style={styles.reviewDataValue}>{DISASTER_LABELS[disasterType] ?? disasterType}</p>
                   </div>
-                  <div style={styles.reviewRow}>
-                    <span style={styles.reviewLabel}>{t('report.review_q5')}</span>
-                    <span style={styles.reviewValue}>{DEBRIS_LABELS[debrisBlocking] ?? debrisBlocking}</span>
+                  <div style={styles.reviewDataCard}>
+                    <p style={styles.reviewDataLabel}>{t('report.review_q5')}</p>
+                    <p style={styles.reviewDataValue}>{DEBRIS_LABELS[debrisBlocking] ?? debrisBlocking}</p>
                   </div>
-                  <div style={styles.reviewRow}>
-                    <span style={styles.reviewLabel}>{t('report.review_q6')}</span>
-                    <span style={styles.reviewValue}>{ELECTRICITY_LABELS[electricityCondition] ?? electricityCondition}</span>
+                </div>
+              </div>
+
+              {/* ── Community Impact section ── */}
+              <div style={styles.reviewSection}>
+                <div style={styles.reviewSectionHeader}>
+                  <span style={styles.reviewSectionTitle}>{t('report.review_community_impact', 'Community Impact')}</span>
+                  <button style={styles.editLink} onClick={() => { setEditingFromReview(true); setDamageQuestion(6); setStep("damage"); }}>{t('common.edit')}</button>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column" as const, gap: 8 }}>
+                  <div style={styles.reviewDataCard}>
+                    <p style={styles.reviewDataLabel}>{t('report.review_q6')}</p>
+                    <p style={styles.reviewDataValue}>{ELECTRICITY_LABELS[electricityCondition] ?? electricityCondition}</p>
                   </div>
-                  <div style={styles.reviewRow}>
-                    <span style={styles.reviewLabel}>{t('report.review_q7')}</span>
-                    <span style={styles.reviewValue}>{HEALTH_LABELS[healthServicesCondition] ?? healthServicesCondition}</span>
+                  <div style={styles.reviewDataCard}>
+                    <p style={styles.reviewDataLabel}>{t('report.review_q7')}</p>
+                    <p style={styles.reviewDataValue}>{HEALTH_LABELS[healthServicesCondition] ?? healthServicesCondition}</p>
                   </div>
-                  <div style={styles.reviewRow}>
-                    <span style={styles.reviewLabel}>{t('report.review_q8')}</span>
-                    <span style={styles.reviewValue}>{pressingNeeds.map((v) => PRESSING_NEEDS_LABELS[v] ?? v).join(", ")}</span>
+                  <div style={styles.reviewDataCard}>
+                    <p style={styles.reviewDataLabel}>{t('report.review_q8')}</p>
+                    <p style={styles.reviewDataValue}>{pressingNeeds.map((v) => PRESSING_NEEDS_LABELS[v] ?? v).join(", ")}</p>
                   </div>
                   {pressingNeedsOther && (
-                    <div style={styles.reviewRow}>
-                      <span style={styles.reviewLabel}>Q8 — Other (specify)</span>
-                      <span style={styles.reviewValue}>{pressingNeedsOther}</span>
+                    <div style={styles.reviewDataCard}>
+                      <p style={styles.reviewDataLabel}>Q8 — Other</p>
+                      <p style={styles.reviewDataValue}>{pressingNeedsOther}</p>
                     </div>
                   )}
                   {/* A13 — additional questions from package */}
@@ -2605,26 +2676,26 @@ export default function ReportPage() {
                     const q = additionalQuestions[idx];
                     if (!q) return null;
                     return (
-                      <div key={orderIdxStr} style={styles.reviewRow}>
-                        <span style={styles.reviewLabel}>{q.question_text}</span>
-                        <span style={styles.reviewValue}>
-                          {Array.isArray(answer) ? answer.join(", ") : answer}
-                        </span>
+                      <div key={orderIdxStr} style={styles.reviewDataCard}>
+                        <p style={styles.reviewDataLabel}>{q.question_text}</p>
+                        <p style={styles.reviewDataValue}>{Array.isArray(answer) ? answer.join(", ") : answer}</p>
                       </div>
                     );
                   })}
                 </div>
               </div>
 
-              {/* E32 — No internet error */}
+              {/* E32 — No internet error (amber card) */}
               {submitError === "no_internet" && (
-                <div style={{ color: "#E53E3E", fontSize: "0.875rem", margin: "8px 0", textAlign: "center" as const }}>
-                  <p style={{ margin: "0 0 4px" }}>{t('report.error_no_internet')}</p>
-                  <p style={{ margin: "0 0 8px", color: "#717782", fontSize: "0.8rem" }}>
-                    {t('report.error_no_internet_warning')}
-                  </p>
+                <div style={{ background: "#FFF9F0", border: "1px solid rgba(245,166,35,0.3)", borderRadius: 12, padding: "16px", marginBottom: 8 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                    <span className="material-symbols-outlined" style={{ fontSize: 20, color: "#F5A623" }}>wifi_off</span>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: "#F5A623", textTransform: "uppercase" as const, letterSpacing: "0.08em" }}>No Connection</span>
+                  </div>
+                  <p style={{ margin: "0 0 4px", fontSize: 14, color: "#1B1C1C" }}>{t('report.error_no_internet')}</p>
+                  <p style={{ margin: "0 0 12px", color: "#717782", fontSize: 13 }}>{t('report.error_no_internet_warning')}</p>
                   <button
-                    style={{ color: "#0468B1", background: "none", border: "none", textDecoration: "underline", cursor: "pointer", fontSize: "0.875rem" }}
+                    style={{ color: "#0468B1", background: "none", border: "none", textDecoration: "underline", cursor: "pointer", fontSize: 14, fontWeight: 600, padding: 0, fontFamily: "inherit" }}
                     onClick={() => void handleSubmit()}
                   >{t('common.retry')}</button>
                 </div>
@@ -2656,28 +2727,56 @@ export default function ReportPage() {
           bottom: 0,
           left: 0,
           right: 0,
-          background: "#FFFFFF",
-          borderTop: "1px solid #E2E8F0",
-          padding: `12px 24px env(safe-area-inset-bottom, 12px)`,
+          background: "rgba(255,255,255,0.95)",
+          backdropFilter: "blur(16px)",
+          WebkitBackdropFilter: "blur(16px)",
+          padding: `16px 24px env(safe-area-inset-bottom, 20px)`,
           display: "flex",
-          gap: 12,
+          flexDirection: "column" as const,
+          gap: 10,
           zIndex: 10,
         }}>
-          <button
-            style={styles.secondaryButton}
-            onClick={() => { setDamageQuestion(8); setStep("damage"); }}
-          >{t('common.back')}</button>
+          {/* GPS captured indicator */}
+          {gpsLatitude !== null && (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+              <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#006d37", flexShrink: 0 }} />
+              <span style={{ fontSize: 12, fontWeight: 500, color: "#006d37" }}>
+                {t('report.gps_attached', 'GPS location captured and attached to this report')}
+              </span>
+            </div>
+          )}
+          {/* Submit button */}
           <button
             style={{
-              ...styles.primaryButton,
-              opacity: (preparingPhotos || submitting || photos.length === 0) ? 0.7 : 1,
-              flex: 1,
+              width: "100%",
+              height: 56,
+              background: (preparingPhotos || submitting || photos.length === 0) ? "#E4E2E1" : "linear-gradient(to bottom, #0468B1, #00508A)",
+              color: (preparingPhotos || submitting || photos.length === 0) ? "#717782" : "#FFFFFF",
+              border: "none",
+              borderRadius: 12,
+              fontSize: 17,
+              fontWeight: 700,
+              cursor: (preparingPhotos || submitting || photos.length === 0) ? "not-allowed" : "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
+              fontFamily: "inherit",
+              boxShadow: (preparingPhotos || submitting || photos.length === 0) ? "none" : "0 4px 16px rgba(4,104,177,0.3)",
+              transition: "opacity 0.15s",
             }}
             onClick={() => void handleSubmit()}
             disabled={preparingPhotos || submitting || photos.length === 0}
           >
             {preparingPhotos ? t('report.preparing_photos') : submitting ? t("report.submitting") : t("report.submit")}
+            {!preparingPhotos && !submitting && (
+              <span className="material-symbols-outlined" style={{ fontSize: 20 }}>arrow_forward</span>
+            )}
           </button>
+          {/* Privacy note */}
+          <p style={{ textAlign: "center" as const, fontSize: 11, color: "#717782", lineHeight: 1.5, margin: 0 }}>
+            {t('report.review_privacy_note', 'Your report will be reviewed by UNDP and used to coordinate crisis response')}
+          </p>
         </div>
       )}
 
@@ -3206,6 +3305,26 @@ const styles: Record<string, React.CSSProperties> = {
     maxWidth: "60%",
     textAlign: "right",
   },
+  reviewDataCard: {
+    background: "#F6F3F2",
+    borderRadius: 12,
+    padding: "12px 16px",
+  },
+  reviewDataLabel: {
+    fontSize: 10,
+    fontWeight: 700,
+    color: "#717782",
+    textTransform: "uppercase" as const,
+    letterSpacing: "0.1em",
+    margin: "0 0 4px",
+  },
+  reviewDataValue: {
+    fontSize: 15,
+    fontWeight: 700,
+    color: "#1B1C1C",
+    lineHeight: 1.4,
+    margin: 0,
+  },
   offlineNotice: {
     background: "#fff3e0",
     border: "1px solid #ffcc02",
@@ -3219,21 +3338,25 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
-    justifyContent: "center",
-    padding: "40px 24px",
-    gap: 20,
+    padding: "48px 24px 40px",
     textAlign: "center",
     minHeight: "100dvh",
+    background: "#fcf9f8",
   },
   successTitle: {
-    fontSize: 22,
+    fontSize: 36,
     fontWeight: 700,
-    color: "#1A2B4A",
+    color: "#1B1C1C",
+    lineHeight: 1.2,
+    marginBottom: 12,
   },
   successText: {
     fontSize: 16,
-    color: "#666",
+    color: "#717782",
     lineHeight: 1.6,
+    marginBottom: 32,
+    paddingLeft: 8,
+    paddingRight: 8,
   },
   error: {
     color: "#d32f2f",
@@ -3360,16 +3483,16 @@ const styles: Record<string, React.CSSProperties> = {
     textAlign: "center",
   },
   confirmCheckCircle: {
-    width: 80,
-    height: 80,
+    width: 96,
+    height: 96,
     borderRadius: "50%",
-    background: "#22c55e",
+    background: "linear-gradient(145deg, #27AE60, #1E8449)",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    color: "#fff",
-    fontSize: 44,
     flexShrink: 0,
+    marginBottom: 24,
+    boxShadow: "0 8px 32px rgba(39,174,96,0.28)",
   },
   confirmRef: {
     fontSize: 14,
@@ -3413,28 +3536,31 @@ const styles: Record<string, React.CSSProperties> = {
   reviewSection: {
     display: "flex",
     flexDirection: "column",
-    gap: 6,
+    gap: 12,
+    marginBottom: 28,
   },
   reviewSectionHeader: {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
+    marginBottom: 4,
   },
   reviewSectionTitle: {
-    fontSize: 11,
+    fontSize: 16,
     fontWeight: 700,
-    color: "#9CA3AF",
-    textTransform: "uppercase" as const,
-    letterSpacing: "0.06em",
+    color: "#1B1C1C",
   },
   editLink: {
     background: "transparent",
     border: "none",
     color: "#0468B1",
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: 600,
     cursor: "pointer",
     padding: 0,
+    display: "flex",
+    alignItems: "center",
+    gap: 4,
   },
   reviewPhotoThumb: {
     width: 80,
