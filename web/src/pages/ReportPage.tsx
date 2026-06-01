@@ -1745,20 +1745,22 @@ export default function ReportPage() {
             {/* D2/E1 — Amber banner: offline on arrival OR mid-session drop */}
             {locationOffline && (
               <div style={{
-                background: "#FEF3C7",
-                border: "1px solid #F5A623",
-                borderRadius: 8,
-                padding: "12px 16px",
-                margin: "8px 12px 0",
+                background: "#F5A623",
+                padding: "12px 20px",
                 display: "flex",
-                alignItems: "center",
-                gap: 8,
+                gap: 12,
+                alignItems: "flex-start",
                 flexShrink: 0,
               }}>
-                <span style={{ color: "#F5A623", fontSize: 20 }}>⚠</span>
-                <span style={{ color: "#92400E", fontSize: "0.875rem", fontWeight: 500 }}>
-                  {t("location.offline_banner")}
-                </span>
+                <span className="material-symbols-outlined" style={{ fontSize: 20, color: "#FFFFFF", marginTop: 1, flexShrink: 0 }}>wifi_off</span>
+                <div>
+                  <p style={{ color: "#FFFFFF", fontWeight: 600, fontSize: 14, margin: 0, lineHeight: 1.3 }}>
+                    {t("location.offline_banner")}
+                  </p>
+                  <p style={{ color: "rgba(255,255,255,0.9)", fontSize: 12, margin: "4px 0 0" }}>
+                    {t("location.offline_gps_background", "Your GPS coordinates are still being recorded in the background")}
+                  </p>
+                </div>
               </div>
             )}
 
@@ -1766,6 +1768,37 @@ export default function ReportPage() {
             {(!locationOffline || connectionLostMidSession) && (
             <div style={{ flex: 1, position: "relative", minHeight: 260 }}>
               <div ref={mapContainerRef} style={{ position: "absolute", inset: 0 }} />
+
+              {/* Instruction pill */}
+              <div style={{
+                position: "absolute", top: 14, left: "50%", transform: "translateX(-50%)",
+                zIndex: 10, background: "rgba(255,255,255,0.92)", backdropFilter: "blur(8px)",
+                borderRadius: 9999, padding: "8px 16px",
+                boxShadow: "0 2px 8px rgba(0,0,0,0.10)",
+                display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap",
+              }}>
+                <span className="material-symbols-outlined" style={{ fontSize: 16, color: "#0468B1" }}>info</span>
+                <span style={{ fontSize: 12, fontWeight: 500, color: "#1B1C1C" }}>
+                  {t('report.location_tap_hint', 'Tap a building or drop a pin')}
+                </span>
+              </div>
+
+              {/* Floating GPS recenter button */}
+              <div style={{ position: "absolute", bottom: 24, right: 16, zIndex: 10 }}>
+                <button
+                  onClick={() => void triggerGeolocation()}
+                  style={{
+                    width: 52, height: 52, borderRadius: "50%",
+                    background: "#0468B1", color: "#fff", border: "none",
+                    cursor: "pointer", boxShadow: "0 4px 16px rgba(4,104,177,0.35)",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                  }}
+                  title={t('report.gps_button')}
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: 24 }}>my_location</span>
+                </button>
+              </div>
+
               {locationMapZoom < 14 && (
                 <div style={styles.zoomHint}>{t('report.location_zoom_hint')}</div>
               )}
@@ -1841,7 +1874,13 @@ export default function ReportPage() {
 
             {/* Bottom panel */}
             <div style={styles.locationPanel}>
-              <h2 style={{ ...styles.stepTitle, marginBottom: 4 }}>{t("report.location")}</h2>
+
+              {/* Offline form header label */}
+              {locationOffline && !connectionLostMidSession && (
+                <p style={{ fontSize: 10, fontWeight: 700, color: "#717782", textTransform: "uppercase", letterSpacing: "0.1em", margin: 0 }}>
+                  {t('report.step_2_of_5', 'Step 2 of 5 — Enter Location Manually')}
+                </p>
+              )}
 
               {/* F2/F3 — Connection lost mid-session (map still visible above) */}
               {connectionLostMidSession && (
@@ -1857,11 +1896,26 @@ export default function ReportPage() {
                 </div>
               )}
 
-              {/* D4 — GPS captured while offline */}
+              {/* D4 — GPS captured while offline (green status card) */}
               {locationOffline && gpsLatitude !== null && (
-                <p style={{ color: "#065F46", fontSize: "0.8rem", margin: "0 0 4px" }}>
-                  {t("location.offline_gps_captured")}
-                </p>
+                <div style={{
+                  background: "rgba(0,109,55,0.07)",
+                  border: "1px solid rgba(0,109,55,0.18)",
+                  borderRadius: 12, padding: "12px 16px",
+                  display: "flex", alignItems: "center", gap: 10,
+                }}>
+                  <div style={{ position: "relative", flexShrink: 0 }}>
+                    <span className="material-symbols-outlined" style={{ fontSize: 22, color: "#006d37", display: "block" }}>location_on</span>
+                    <div style={{
+                      position: "absolute", top: -2, right: -2,
+                      width: 9, height: 9, borderRadius: "50%",
+                      background: "#4ADE80", border: "2px solid #fff",
+                    }} />
+                  </div>
+                  <p style={{ fontSize: 12, fontWeight: 500, color: "#006d37", margin: 0, lineHeight: 1.4 }}>
+                    {t("location.offline_gps_captured", "GPS location captured — will be attached to your report")}
+                  </p>
+                </div>
               )}
 
               {/* E3 — No internet and no GPS */}
@@ -1885,6 +1939,7 @@ export default function ReportPage() {
                   )}
                   {buildingCentroidLat !== null && buildingCentroidLng !== null && (
                     <div style={styles.selectionCardCoords}>
+                      <span className="material-symbols-outlined" style={{ fontSize: 13, color: "#0468B1" }}>satellite_alt</span>
                       {buildingCentroidLat.toFixed(6)}, {buildingCentroidLng.toFixed(6)}
                     </div>
                   )}
@@ -1894,6 +1949,7 @@ export default function ReportPage() {
                 <div style={styles.selectionCard}>
                   <div style={styles.selectionCardTitle}>{t('report.pin_dropped')}</div>
                   <div style={styles.selectionCardCoords}>
+                    <span className="material-symbols-outlined" style={{ fontSize: 13, color: "#0468B1" }}>satellite_alt</span>
                     {pinDropCoords.lat.toFixed(6)}, {pinDropCoords.lng.toFixed(6)}
                   </div>
                 </div>
@@ -1902,6 +1958,7 @@ export default function ReportPage() {
                 <div style={styles.selectionCard}>
                   <div style={styles.selectionCardTitle}>{t('report.gps_captured')}</div>
                   <div style={styles.selectionCardCoords}>
+                    <span className="material-symbols-outlined" style={{ fontSize: 13, color: "#0468B1" }}>satellite_alt</span>
                     {gpsLatitude.toFixed(6)}, {gpsLongitude.toFixed(6)}
                   </div>
                 </div>
@@ -1972,62 +2029,101 @@ export default function ReportPage() {
                 </p>
               )}
 
-              {!gpsDenied && (
+              {!gpsDenied && !locationOffline && (
                 <button
                   style={styles.gpsButton}
                   onClick={() => void triggerGeolocation()}
                   disabled={gpsCapturing}
                 >
-                  📍 {gpsCapturing ? t('report.gps_getting') : t('report.gps_button')}
+                  <span className="material-symbols-outlined" style={{ fontSize: 18 }}>my_location</span>
+                  {gpsCapturing ? t('report.gps_getting') : t('report.gps_button')}
                 </button>
               )}
 
-              <button
-                style={styles.manualToggle}
-                onClick={() => setManualExpanded(!manualExpanded)}
-              >
-                {manualExpanded ? t('report.hide_manual_entry') : t('report.show_manual_entry')}
-              </button>
+              {!locationOffline && (
+                <button
+                  style={styles.manualToggle}
+                  onClick={() => setManualExpanded(!manualExpanded)}
+                >
+                  {manualExpanded ? t('report.hide_manual_entry') : t('report.show_manual_entry')}
+                </button>
+              )}
 
               {manualExpanded && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  <input
-                    style={styles.input}
-                    type="text"
-                    placeholder="Address"
-                    value={locationAddress}
-                    onChange={(e) => {
-                      setLocationAddress(e.target.value);
-                      if (!selectedBuildingId && !pinDropCoords) setLocationEntryMethod("manual_text");
-                    }}
-                  />
-                  <input
-                    style={styles.input}
-                    type="text"
-                    placeholder={t('report.landmark_placeholder')}
-                    value={locationLandmark}
-                    onChange={(e) => {
-                      setLocationLandmark(e.target.value);
-                      if (!selectedBuildingId && !pinDropCoords) setLocationEntryMethod("manual_text");
-                    }}
-                  />
-                  <input
-                    style={styles.input}
-                    type="text"
-                    placeholder="Building Name"
-                    value={locationBuildingName}
-                    onChange={(e) => {
-                      setLocationBuildingName(e.target.value);
-                      if (!selectedBuildingId && !pinDropCoords) setLocationEntryMethod("manual_text");
-                    }}
-                  />
+                <div style={{ display: "flex", flexDirection: "column", gap: locationOffline ? 16 : 8 }}>
+                  {/* Address */}
+                  <div>
+                    {locationOffline && <label style={styles.fieldLabel}>{t('report.address_label', 'Address')} *</label>}
+                    <input
+                      style={styles.input}
+                      type="text"
+                      placeholder={locationOffline ? t('report.address_placeholder', 'Street address or area name') : 'Address'}
+                      value={locationAddress}
+                      onChange={(e) => {
+                        setLocationAddress(e.target.value);
+                        if (!selectedBuildingId && !pinDropCoords) setLocationEntryMethod("manual_text");
+                      }}
+                    />
+                    {locationOffline && (
+                      <p style={{ fontSize: 11, color: "#717782", margin: "4px 0 0", fontStyle: "italic" }}>
+                        {t('report.address_hint', 'e.g. 14 Ataturk Street, Kadikoy')}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Nearby Landmark */}
+                  <div>
+                    {locationOffline && <label style={styles.fieldLabel}>{t('report.landmark_label', 'Nearby Landmark')}</label>}
+                    <input
+                      style={styles.input}
+                      type="text"
+                      placeholder={t('report.landmark_placeholder')}
+                      value={locationLandmark}
+                      onChange={(e) => {
+                        setLocationLandmark(e.target.value);
+                        if (!selectedBuildingId && !pinDropCoords) setLocationEntryMethod("manual_text");
+                      }}
+                    />
+                    {locationOffline && (
+                      <p style={{ fontSize: 11, color: "#717782", margin: "4px 0 0", fontStyle: "italic" }}>
+                        {t('report.landmark_hint', 'e.g. Near the school next to the central market')}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Building Name */}
+                  <div>
+                    {locationOffline && <label style={styles.fieldLabel}>{t('report.building_name_label_manual', 'Building Name')}</label>}
+                    <input
+                      style={styles.input}
+                      type="text"
+                      placeholder={locationOffline ? t('report.building_name_placeholder', 'Name of the specific building or structure') : 'Building Name'}
+                      value={locationBuildingName}
+                      onChange={(e) => {
+                        setLocationBuildingName(e.target.value);
+                        if (!selectedBuildingId && !pinDropCoords) setLocationEntryMethod("manual_text");
+                      }}
+                    />
+                    {locationOffline && (
+                      <p style={{ fontSize: 11, color: "#717782", margin: "4px 0 0", fontStyle: "italic" }}>
+                        {t('report.building_name_hint', 'e.g. Residential Block 4B, Al-Nour Mosque')}
+                      </p>
+                    )}
+                  </div>
+
+                  {locationOffline && (
+                    <p style={{ fontSize: 11, color: "#717782", margin: 0 }}>
+                      {t('report.at_least_one_required', '* At least one field must be filled in to continue')}
+                    </p>
+                  )}
                 </div>
               )}
 
-              {/* H4 — Sticky on desktop so Next is always visible regardless of panel content height */}
+              {/* H4 — Nav buttons */}
               <div style={{
                 display: "flex",
-                gap: 12,
+                flexDirection: "column",
+                gap: 4,
                 marginTop: 8,
                 ...(window.innerWidth > 768 ? {
                   position: "sticky" as const,
@@ -2038,13 +2134,28 @@ export default function ReportPage() {
                   zIndex: 5,
                 } : {}),
               }}>
-                <button style={styles.secondaryButton} onClick={() => setStep("photos")}>{t('common.back')}</button>
                 <button
-                  style={{ ...styles.primaryButton, opacity: isLocationValid() ? 1 : 0.5 }}
+                  style={{
+                    width: "100%",
+                    height: 56,
+                    background: isLocationValid()
+                      ? "linear-gradient(135deg, #0468B1, #00508A)"
+                      : "#E4E2E1",
+                    color: isLocationValid() ? "#fff" : "#717782",
+                    border: "none",
+                    borderRadius: 12,
+                    fontSize: 16,
+                    fontWeight: 700,
+                    cursor: isLocationValid() ? "pointer" : "not-allowed",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 8,
+                    fontFamily: "inherit",
+                  }}
                   disabled={!isLocationValid()}
                   onClick={() => {
                     if (editingFromReview) {
-                      // B21 — check if building changed; if so force Q3 re-confirmation
                       if (selectedBuildingId !== prevBuildingId) {
                         setLocationChangedFlag(true);
                         setDamageQuestion(3);
@@ -2059,7 +2170,26 @@ export default function ReportPage() {
                   }}
                 >
                   {t('common.next')}
+                  <span className="material-symbols-outlined" style={{ fontSize: 20 }}>arrow_forward</span>
                 </button>
+                {!locationOffline && (
+                  <button
+                    style={{
+                      background: "none",
+                      border: "none",
+                      color: "#717782",
+                      fontSize: 14,
+                      cursor: "pointer",
+                      padding: "10px 0",
+                      textAlign: "center" as const,
+                      width: "100%",
+                      fontFamily: "inherit",
+                    }}
+                    onClick={() => setStep("photos")}
+                  >
+                    {t('common.back')}
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -2984,45 +3114,50 @@ const styles: Record<string, React.CSSProperties> = {
     alignSelf: "flex-start",
   },
   locationPanel: {
-    padding: "14px 16px 20px",
+    padding: "16px 16px 20px",
     background: "#fff",
-    borderTop: "1px solid #e0e0e0",
+    borderRadius: "16px 16px 0 0",
+    boxShadow: "0 -8px 32px rgba(0,0,0,0.08)",
     display: "flex",
     flexDirection: "column",
     gap: 10,
     overflowY: "auto",
-    maxHeight: 380,
+    maxHeight: 400,
     flexShrink: 0,
   },
   selectionCard: {
-    background: "#E8F4FD",
-    border: "1.5px solid #0468B1",
-    borderRadius: 8,
-    padding: "10px 14px",
+    background: "#F6F3F2",
+    borderRadius: 12,
+    padding: "12px 16px",
   },
   selectionCardTitle: {
-    fontSize: 12,
-    fontWeight: 600,
-    color: "#0468B1",
+    fontSize: 10,
+    fontWeight: 700,
+    color: "#717782",
     textTransform: "uppercase" as const,
-    letterSpacing: "0.04em",
+    letterSpacing: "0.1em",
+    marginBottom: 4,
   },
   selectionCardName: {
-    fontSize: 15,
-    fontWeight: 600,
-    color: "#1A2B4A",
+    fontSize: 18,
+    fontWeight: 700,
+    color: "#1B1C1C",
     marginTop: 2,
+    lineHeight: 1.3,
   },
   selectionCardMeta: {
     fontSize: 12,
-    color: "#718096",
+    color: "#717782",
     marginTop: 2,
   },
   selectionCardCoords: {
     fontSize: 11,
-    color: "#718096",
-    marginTop: 4,
+    color: "#717782",
+    marginTop: 6,
     fontVariantNumeric: "tabular-nums",
+    display: "flex",
+    alignItems: "center",
+    gap: 4,
   },
   // B3/B11 — Desktop floating confirmation card
   confirmCardDesktop: {
@@ -3126,30 +3261,36 @@ const styles: Record<string, React.CSSProperties> = {
     display: "block",
     marginBottom: 4,
   },
-  // B7 — Location note textarea
+  // B7 — Location note textarea (underline style)
   noteTextarea: {
     width: "100%",
-    padding: "12px 16px",
-    borderRadius: 8,
-    border: "1px solid #E2E8F0",
+    padding: "10px 0",
+    borderRadius: 0,
+    border: "none",
+    borderBottom: "2px solid #0468B1",
     fontSize: 15,
     outline: "none",
-    background: "#fff",
+    background: "transparent",
     boxSizing: "border-box" as const,
-    resize: "vertical" as const,
+    resize: "none" as const,
     fontFamily: "inherit",
     lineHeight: 1.5,
   },
   gpsButton: {
-    padding: "12px 16px",
-    background: "#1A2B4A",
-    color: "#fff",
-    border: "none",
+    padding: "10px 16px",
+    background: "transparent",
+    color: "#0468B1",
+    border: "1.5px solid #0468B1",
     borderRadius: 8,
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: 600,
     cursor: "pointer",
     width: "100%",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    fontFamily: "inherit",
   },
   manualToggle: {
     background: "none",
