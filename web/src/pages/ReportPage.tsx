@@ -1377,6 +1377,13 @@ export default function ReportPage() {
       if (isTimeout) {
         setSubmitError("timeout");
       } else {
+        // Log full error to console so 422 validation detail is visible in DevTools
+        const axiosErr = err as { response?: { status?: number; data?: unknown } };
+        if (axiosErr?.response) {
+          console.error("[ReportPage] submit error", axiosErr.response.status, axiosErr.response.data);
+        } else {
+          console.error("[ReportPage] submit error", err);
+        }
         setSubmitError("server_error");
         setError(t("report.error"));
       }
@@ -1451,8 +1458,7 @@ export default function ReportPage() {
     );
   }
 
-  // ── Guidelines state ──────────────────────────────────────────────────────────
-  const guidelinesPass = photos.length > 0;
+  // ── Guidelines ────────────────────────────────────────────────────────────────
   const GUIDELINES = [
     t("photo_guidelines.guideline_1"),
     t("photo_guidelines.guideline_2"),
@@ -1462,15 +1468,26 @@ export default function ReportPage() {
 
   // ── Photo step sub-components ─────────────────────────────────────────────────
 
-  const renderPhotoThumbnails = () => (
+  const renderPhotoGrid = () => (
     <div style={styles.photoGrid}>
       {photos.map((photo, index) => (
         <div
           key={index}
-          style={{ ...styles.photoThumb, cursor: "pointer" }}
+          style={{ position: "relative" as const, aspectRatio: "1", borderRadius: 12, overflow: "visible", cursor: "pointer" }}
           onClick={() => setSelectedPhotoIndex(selectedPhotoIndex === index ? null : index)}
         >
-          <img src={URL.createObjectURL(photo)} style={styles.thumbImg} alt={`Photo ${index + 1}`} />
+          <img
+            src={URL.createObjectURL(photo)}
+            style={{ width: "100%", height: "100%", objectFit: "cover" as const, borderRadius: 12, display: "block" }}
+            alt={`Photo ${index + 1}`}
+          />
+          <button
+            style={styles.thumbRemoveBtn}
+            onClick={(e) => { e.stopPropagation(); handlePhotoRemove(index); }}
+            aria-label="Remove photo"
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: 14, color: "#FFFFFF", lineHeight: 1, display: "block" }}>close</span>
+          </button>
           {selectedPhotoIndex === index && (
             <div style={styles.thumbPopover} onClick={(e) => e.stopPropagation()}>
               <button
@@ -1502,81 +1519,52 @@ export default function ReportPage() {
           )}
         </div>
       ))}
-    </div>
-  );
-
-  const renderAddAnotherButton = () => {
-    if (isMobile) {
-      return (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 4 }}>
-          {!cameraDenied && (
-            <button
-              style={styles.addAnotherBtn}
-              onClick={() => void handleTakePhoto()}
-            >
-              {t('report.take_another_photo')}
-            </button>
-          )}
-          <button style={styles.addAnotherBtn} onClick={() => fileInputRef.current?.click()}>
-            {t('report.upload_another_photo')}
-          </button>
+      {photos.length < 3 && (
+        <div
+          style={styles.photoSlotActive}
+          onClick={() => fileInputRef.current?.click()}
+          role="button"
+          aria-label="Add photo"
+        >
+          <span className="material-symbols-outlined" style={{ fontSize: 32, color: "#0468B1" }}>add</span>
         </div>
-      );
-    }
-    return (
-      <button style={styles.addAnotherBtn} onClick={() => fileInputRef.current?.click()}>
-        {t('report.upload_another_photo')}
-      </button>
-    );
-  };
-
-  const renderDesktopDropZone = () => (
-    <div
-      style={{
-        ...styles.dropZone,
-        border: isDragging ? "2px dashed #0468B1" : "2px dashed #E2E8F0",
-        background: isDragging ? "#F0F4FF" : "transparent",
-      }}
-      onDragEnter={handleDragEnter}
-      onDragLeave={handleDragLeave}
-      onDragOver={handleDragOver}
-      onDrop={handleDrop}
-    >
-      {isDragging ? (
-        <span style={{ color: "#0468B1", fontWeight: 600, fontSize: 15 }}>{t('report.drop_photo_here')}</span>
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
-          <span style={{ fontSize: 13, color: "#717782" }}>{t('report.drag_photo_here')}</span>
-          <button style={styles.uploadBtn} onClick={() => fileInputRef.current?.click()}>
-            📁 {t('report.upload_photo_btn')}
-          </button>
+      )}
+      {photos.length < 2 && (
+        <div style={styles.photoSlotFaded} aria-hidden="true">
+          <span className="material-symbols-outlined" style={{ fontSize: 32, color: "#C1C7D2" }}>add</span>
         </div>
       )}
     </div>
   );
 
-  const renderMobileButtons = () => (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      {!cameraDenied && (
-        <p style={styles.permNote}>
-          {t('report.camera_permission_note')}
-        </p>
+  const renderPhotoActionButtons = () => (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      {isMobile && !cameraDenied && (
+        <button
+          style={styles.photoActionBtn}
+          onClick={() => void handleTakePhoto()}
+        >
+          <span className="material-symbols-outlined" style={{ fontSize: 20 }}>photo_camera</span>
+          {t('report.take_photo_btn')}
+        </button>
       )}
       {cameraDenied && (
         <div style={styles.denialBox}>
-          <p style={styles.denialMsg}>
-            {t('report.camera_denied_msg')}
-          </p>
+          <p style={styles.denialMsg}>{t('report.camera_denied_msg')}</p>
         </div>
       )}
-      {!cameraDenied && (
-        <button style={styles.cameraBtn} onClick={() => void handleTakePhoto()}>
-          📷 {t('report.take_photo_btn')}
-        </button>
-      )}
-      <button style={styles.uploadBtn} onClick={() => fileInputRef.current?.click()}>
-        📁 {t('report.upload_photo_btn')}
+      <button
+        style={styles.photoActionBtn}
+        onClick={() => fileInputRef.current?.click()}
+      >
+        <span className="material-symbols-outlined" style={{ fontSize: 20 }}>image</span>
+        {t('report.upload_photo_btn')}
       </button>
+      {!isMobile && (
+        <p style={{ fontSize: 12, color: "#717782", margin: 0, textAlign: "center" as const }}>
+          {t('report.drag_photo_here')}
+        </p>
+      )}
     </div>
   );
 
@@ -1599,37 +1587,86 @@ export default function ReportPage() {
 
         {/* Step 1 — Photos */}
         {step === "photos" && (
-          <div style={styles.step}>
-            <h2 style={styles.stepTitle}>{t("report.photos")} *</h2>
+          <div style={{ padding: "20px 16px 96px", display: "flex", flexDirection: "column" as const, gap: 16 }}>
+            {/* Step label */}
+            <p style={{ fontSize: 10, fontWeight: 700, color: "#717782", letterSpacing: "0.1em", textTransform: "uppercase" as const, margin: 0 }}>
+              STEP 1 OF 5 — ADD PHOTO
+            </p>
 
-            <ul style={styles.guidelineList}>
-              {GUIDELINES.map((text, i) => (
-                <li key={i} style={styles.guidelineItem}>
-                  <span style={{ color: guidelinesPass ? "#38A169" : "#CBD5E0", fontSize: 14, flexShrink: 0 }}>
-                    {guidelinesPass ? "✓" : "●"}
-                  </span>
-                  <span style={{ color: "#717782", fontSize: "0.8rem" }}>{text}</span>
-                </li>
-              ))}
-            </ul>
-
-            {photos.length > 0 && renderPhotoThumbnails()}
-
-            {photos.length === 0 && (
-              isMobile ? renderMobileButtons() : renderDesktopDropZone()
+            {/* Photo content: empty state placeholder or 3-slot grid */}
+            {photos.length === 0 ? (
+              <div
+                style={{
+                  width: "100%",
+                  aspectRatio: "4 / 2.8",
+                  border: isDragging ? "2px dashed #0468B1" : "2px dashed #C1C7D2",
+                  borderRadius: 16,
+                  display: "flex",
+                  flexDirection: "column" as const,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  background: isDragging ? "rgba(4,104,177,0.04)" : "#FFFFFF",
+                  gap: 8,
+                }}
+                onDragEnter={handleDragEnter}
+                onDragLeave={handleDragLeave}
+                onDragOver={handleDragOver}
+                onDrop={handleDrop}
+              >
+                {isDragging ? (
+                  <span style={{ color: "#0468B1", fontWeight: 600, fontSize: 15 }}>{t('report.drop_photo_here')}</span>
+                ) : (
+                  <>
+                    <div style={{ width: 48, height: 48, background: "#EAEAE7", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <span className="material-symbols-outlined" style={{ fontSize: 24, color: "#717782" }}>no_photography</span>
+                    </div>
+                    <p style={{ fontSize: 14, fontWeight: 500, color: "#717782", margin: 0 }}>No photo added yet</p>
+                  </>
+                )}
+              </div>
+            ) : (
+              renderPhotoGrid()
             )}
-            {photos.length > 0 && photos.length < 3 && renderAddAnotherButton()}
+
+            {/* Photo count (1–2 photos) */}
+            {photos.length > 0 && photos.length < 3 && (
+              <p style={{ fontSize: 14, color: "#717782", margin: 0 }}>
+                {photos.length} of 3 photos added. You can add up to 3.
+              </p>
+            )}
+
+            {/* Max photos amber banner */}
             {photos.length === 3 && (
-              <p style={{ fontSize: 13, color: "#717782", margin: 0 }}>{t('report.max_photos_reached')}</p>
+              <div style={{ background: "#FFF3CD", display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", borderRadius: 8 }}>
+                <span className="material-symbols-outlined" style={{ fontSize: 20, color: "#6C4500", fontVariationSettings: "'FILL' 1" }}>warning</span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: "#6C4500" }}>{t('report.max_photos_reached')}</span>
+              </div>
             )}
+
+            {/* Action buttons (hidden when max photos reached) */}
+            {photos.length < 3 && renderPhotoActionButtons()}
 
             {dropExtraMessage && (
               <p style={{ fontSize: 13, color: "#717782", margin: 0 }}>{dropExtraMessage}</p>
             )}
-
             {photoError && (
               <p style={{ fontSize: "0.85rem", color: "#E53E3E", margin: 0 }}>{photoError}</p>
             )}
+
+            {/* Photo Tips card */}
+            <div style={{ background: "#F6F3F2", borderRadius: 16, padding: "16px 20px", display: "flex", flexDirection: "column" as const, gap: 16 }}>
+              <p style={{ fontSize: 10, fontWeight: 700, color: "#717782", letterSpacing: "0.1em", textTransform: "uppercase" as const, margin: 0 }}>
+                PHOTO TIPS
+              </p>
+              <div style={{ display: "flex", flexDirection: "column" as const, gap: 12 }}>
+                {GUIDELINES.map((text, i) => (
+                  <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+                    <span className="material-symbols-outlined" style={{ fontSize: 20, color: "#006D37", flexShrink: 0 }}>check</span>
+                    <span style={{ fontSize: 14, color: "#1B1C1C", fontWeight: 500, lineHeight: 1.4 }}>{text}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
 
             <input
               ref={fileInputRef}
@@ -1639,14 +1676,6 @@ export default function ReportPage() {
               style={{ display: "none" }}
               onChange={handleFileInputChange}
             />
-
-            <button
-              style={{ ...styles.primaryButton, opacity: photos.length > 0 ? 1 : 0.5 }}
-              disabled={photos.length === 0}
-              onClick={() => setStep("location")}
-            >
-              {t('common.next')}
-            </button>
           </div>
         )}
 
@@ -2635,6 +2664,48 @@ export default function ReportPage() {
         </div>
       )}
 
+      {/* Photo step fixed footer */}
+      {step === "photos" && (
+        <div style={{
+          position: "fixed" as const,
+          bottom: 0,
+          left: 0,
+          right: 0,
+          background: "rgba(255,255,255,0.92)",
+          backdropFilter: "blur(12px)",
+          WebkitBackdropFilter: "blur(12px)",
+          borderTop: "1px solid rgba(193,199,210,0.2)",
+          padding: "16px 24px",
+          display: "flex",
+          zIndex: 10,
+        }}>
+          <button
+            style={{
+              flex: 1,
+              height: 56,
+              background: photos.length > 0 ? "linear-gradient(to bottom, #0468B1, #00508A)" : "#E4E2E1",
+              color: photos.length > 0 ? "#FFFFFF" : "#717782",
+              border: "none",
+              borderRadius: 12,
+              fontSize: 16,
+              fontWeight: 700,
+              cursor: photos.length > 0 ? "pointer" : "not-allowed",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
+              fontFamily: "inherit",
+              boxShadow: photos.length > 0 ? "0 4px 12px rgba(4,104,177,0.3)" : "none",
+            }}
+            disabled={photos.length === 0}
+            onClick={() => setStep("location")}
+          >
+            {t('common.next')}
+            <span className="material-symbols-outlined" style={{ fontSize: 20 }}>arrow_forward</span>
+          </button>
+        </div>
+      )}
+
       {/* Always-rendered replace file input — used from both photo step and review step */}
       <input
         ref={replaceInputRef}
@@ -3477,5 +3548,56 @@ const styles: Record<string, React.CSSProperties> = {
     maxHeight: "90vh",
     objectFit: "contain" as const,
     borderRadius: 8,
+  },
+  photoSlotActive: {
+    aspectRatio: "1",
+    borderRadius: 12,
+    border: "2px dashed #0468B1",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "rgba(4,104,177,0.05)",
+    cursor: "pointer",
+  },
+  photoSlotFaded: {
+    aspectRatio: "1",
+    borderRadius: 12,
+    border: "2px dashed #C1C7D2",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "#F6F3F2",
+  },
+  thumbRemoveBtn: {
+    position: "absolute" as const,
+    top: 6,
+    right: 6,
+    width: 24,
+    height: 24,
+    borderRadius: "50%",
+    background: "#BA1A1A",
+    border: "none",
+    cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 0,
+    zIndex: 1,
+  },
+  photoActionBtn: {
+    width: "100%",
+    height: 48,
+    border: "2px solid #0468B1",
+    borderRadius: 12,
+    background: "transparent",
+    color: "#0468B1",
+    fontSize: 15,
+    fontWeight: 700,
+    cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    fontFamily: "inherit",
   },
 };
