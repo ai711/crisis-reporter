@@ -2170,7 +2170,6 @@ export default function ReportPage() {
                   }}
                 >
                   {t('common.next')}
-                  <span className="material-symbols-outlined" style={{ fontSize: 20 }}>arrow_forward</span>
                 </button>
                 {!locationOffline && (
                   <button
