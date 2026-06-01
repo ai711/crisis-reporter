@@ -48,41 +48,24 @@ function getInitials(first: string, last: string): string {
   return (a + b).toUpperCase();
 }
 
-// ── Icons ─────────────────────────────────────────────────────────────────────
+const COUNTRY_CODES = [
+  "+1", "+7", "+20", "+27", "+30", "+31", "+32", "+33", "+34", "+36",
+  "+39", "+40", "+41", "+43", "+44", "+45", "+46", "+47", "+48", "+49",
+  "+52", "+54", "+55", "+56", "+57", "+58", "+60", "+61", "+62", "+63",
+  "+64", "+65", "+66", "+81", "+82", "+84", "+86", "+90", "+91", "+92",
+  "+98", "+212", "+213", "+216", "+218", "+234", "+254", "+255", "+256",
+  "+880", "+886", "+960", "+961", "+962", "+963", "+964", "+965", "+966",
+  "+967", "+968", "+971", "+972", "+974", "+975", "+976", "+977", "+992",
+  "+993", "+994", "+995", "+996", "+998",
+];
 
-function IconBack() {
-  return (
-    <svg
-      width={22}
-      height={22}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="#0468B1"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <polyline points="15 18 9 12 15 6" />
-    </svg>
-  );
-}
-
-function IconPerson() {
-  return (
-    <svg
-      width={36}
-      height={36}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="#9CA3AF"
-      strokeWidth={1.5}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
-      <circle cx="12" cy="7" r="4" />
-    </svg>
-  );
+function parsePhoneNumber(stored: string): { code: string; number: string } {
+  if (!stored) return { code: "+1", number: "" };
+  // Sort longest codes first to avoid "+1" matching "+12..." prematurely
+  const sorted = [...COUNTRY_CODES].sort((a, b) => b.length - a.length);
+  const match = sorted.find((c) => stored.startsWith(c));
+  if (match) return { code: match, number: stored.slice(match.length).trim() };
+  return { code: "+1", number: stored };
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -92,14 +75,15 @@ export default function ProfilePage() {
   const { t } = useTranslation();
   const { reporterId } = useAuthStore();
 
-  // Form fields
+  // Form state
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
+  const [phoneCountryCode, setPhoneCountryCode] = useState("+1");
   const [phone, setPhone] = useState("");
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
 
-  // C5/C6: Photo upload state
+  // Photo upload
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
@@ -109,15 +93,13 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [emailError, setEmailError] = useState("");
+  const [isDirty, setIsDirty] = useState(false);
 
   const successTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Fetch existing profile on mount
+  // ── Load profile ────────────────────────────────────────────────────────────
   useEffect(() => {
-    if (!reporterId) {
-      setLoading(false);
-      return;
-    }
+    if (!reporterId) { setLoading(false); return; }
     api
       .get<ReporterProfile>(`/api/reporters/${reporterId}`)
       .then((res) => {
@@ -125,19 +107,17 @@ export default function ProfilePage() {
         setFirstName(p.first_name ?? "");
         setLastName(p.last_name ?? "");
         setEmail(p.email ?? "");
-        setPhone(p.phone_number ?? "");
+        const parsed = parsePhoneNumber(p.phone_number ?? "");
+        setPhoneCountryCode(parsed.code);
+        setPhone(parsed.number);
         setPhotoUrl(p.profile_photo_url ?? null);
       })
-      .catch(() => {
-        // Profile may not exist yet — start with empty fields
-      })
+      .catch(() => {})
       .finally(() => setLoading(false));
   }, [reporterId]);
 
   useEffect(() => {
-    return () => {
-      if (successTimer.current) clearTimeout(successTimer.current);
-    };
+    return () => { if (successTimer.current) clearTimeout(successTimer.current); };
   }, []);
 
   const displayPhoto = photoPreview ?? photoUrl;
@@ -147,49 +127,46 @@ export default function ProfilePage() {
   // ── Handlers ────────────────────────────────────────────────────────────────
 
   const handlePhoneChange = (value: string) => {
-    setPhone(value.replace(/[^\d\s+\-()]/g, ""));
+    setPhone(value.replace(/[^\d\s\-()]/g, ""));
+    setIsDirty(true);
   };
 
   const handleEmailChange = (value: string) => {
     setEmail(value);
-    if (emailError && (value === "" || EMAIL_RE.test(value))) {
-      setEmailError("");
-    }
+    setIsDirty(true);
+    if (emailError && (value === "" || EMAIL_RE.test(value))) setEmailError("");
   };
 
-  // C5/C6: Photo file selection handler
   const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const objectUrl = URL.createObjectURL(file);
-    setPhotoPreview(objectUrl);
+    setPhotoPreview(URL.createObjectURL(file));
     setPhotoFile(file);
-    // Reset input so the same file can be re-selected
+    setIsDirty(true);
     e.target.value = "";
   };
 
   const handleSave = async () => {
+    if (!isDirty || saving) return;
     if (email.trim() && !EMAIL_RE.test(email.trim())) {
-      setEmailError(t('profile.email_invalid'));
+      setEmailError(t("profile.email_invalid"));
       return;
     }
     setEmailError("");
-
     if (!reporterId) return;
+
     setSaving(true);
     setSaveStatus("idle");
 
     try {
-      // C5/C6: Upload photo first if a new one was selected
       if (photoFile) {
-        const formData = new FormData();
-        formData.append("photo", photoFile);
-        const photoRes = await api.post<{ profile_photo_url: string }>(
-          `/api/reporters/${reporterId}/photo`,
-          formData,
+        const fd = new FormData();
+        fd.append("photo", photoFile);
+        const res = await api.post<{ profile_photo_url: string }>(
+          `/api/reporters/${reporterId}/photo`, fd,
           { headers: { "Content-Type": "multipart/form-data" } }
         );
-        setPhotoUrl(photoRes.data.profile_photo_url);
+        setPhotoUrl(res.data.profile_photo_url);
         setPhotoFile(null);
         setPhotoPreview(null);
       }
@@ -198,11 +175,13 @@ export default function ProfilePage() {
         first_name: firstName.trim() || null,
         last_name: lastName.trim() || null,
         email: email.trim() || null,
-        phone_number: phone.trim() || null,
+        phone_number: phone.trim() ? `${phoneCountryCode}${phone.trim()}` : null,
       });
+
       setSaveStatus("success");
+      setIsDirty(false);
       if (successTimer.current) clearTimeout(successTimer.current);
-      successTimer.current = setTimeout(() => setSaveStatus("idle"), 2000);
+      successTimer.current = setTimeout(() => setSaveStatus("idle"), 2500);
     } catch {
       setSaveStatus("error");
     } finally {
@@ -210,54 +189,47 @@ export default function ProfilePage() {
     }
   };
 
-  // ── C8: Anonymous reporter gate — shown after all hooks ───────────────────
-
+  // ── Anonymous gate ──────────────────────────────────────────────────────────
   if (!reporterId) {
     return (
       <div style={s.page}>
         <header style={s.header}>
           <button style={s.backBtn} onClick={() => navigate("/")} aria-label="Back">
-            <IconBack />
+            <span className="material-symbols-outlined" style={{ color: "#0468B1", fontSize: 24, lineHeight: 1 }}>
+              arrow_back
+            </span>
           </button>
-          <span style={s.headerTitle}>{t('profile.title')}</span>
+          <span style={s.headerTitle}>{t("profile.title")}</span>
           <div style={{ minWidth: 44, flexShrink: 0 }} />
         </header>
         <div style={s.anonGate}>
-          <p style={s.anonGateHeading}>
-            {t('profile.anon_gate_heading')}
-          </p>
-          <p style={s.anonGateSubtext}>
-            {t('profile.anon_gate_subtext')}
-          </p>
+          <div style={s.anonGateIcon}>
+            <span className="material-symbols-outlined" style={{ color: "#0468B1", fontSize: 48, fontVariationSettings: "'FILL' 1" }}>
+              person
+            </span>
+          </div>
+          <p style={s.anonGateHeading}>{t("profile.anon_gate_heading")}</p>
+          <p style={s.anonGateSubtext}>{t("profile.anon_gate_subtext")}</p>
           <div style={s.anonGateBtns}>
-            <button
-              onClick={() => navigate("/login")}
-              style={s.loginBtn}
-            >
-              Log In
-            </button>
-            <button
-              onClick={() => navigate("/login?mode=register")}
-              style={s.registerBtn}
-            >
-              Create Account
-            </button>
+            <button onClick={() => navigate("/login")} style={s.loginBtn}>Log In</button>
+            <button onClick={() => navigate("/login?mode=register")} style={s.registerBtn}>Create Account</button>
           </div>
         </div>
       </div>
     );
   }
 
-  // ── Loading spinner ────────────────────────────────────────────────────────
-
+  // ── Loading ─────────────────────────────────────────────────────────────────
   if (loading) {
     return (
       <div style={s.page}>
         <header style={s.header}>
           <button style={s.backBtn} onClick={() => navigate("/")} aria-label="Back">
-            <IconBack />
+            <span className="material-symbols-outlined" style={{ color: "#0468B1", fontSize: 24, lineHeight: 1 }}>
+              arrow_back
+            </span>
           </button>
-          <span style={s.headerTitle}>{t('profile.title')}</span>
+          <span style={s.headerTitle}>{t("profile.title")}</span>
           <div style={{ minWidth: 44, flexShrink: 0 }} />
         </header>
         <div style={s.loadingWrap}>
@@ -267,51 +239,62 @@ export default function ProfilePage() {
     );
   }
 
-  // ── Full profile form ──────────────────────────────────────────────────────
+  // ── Full profile ────────────────────────────────────────────────────────────
+  const canSave = isDirty && !saving;
 
   return (
     <div style={s.page}>
-      {/* Header */}
+      {/* ── Header ── */}
       <header style={s.header}>
         <button style={s.backBtn} onClick={() => navigate("/")} aria-label="Back">
-          <IconBack />
+          <span className="material-symbols-outlined" style={{ color: "#0468B1", fontSize: 24, lineHeight: 1 }}>
+            arrow_back
+          </span>
         </button>
-        <span style={s.headerTitle}>{t('profile.title')}</span>
-        <div style={{ width: 36 }} />
+        <span style={s.headerTitle}>{t("profile.title")}</span>
+        <div style={{ minWidth: 44, flexShrink: 0 }} />
       </header>
 
-      <div style={s.content}>
-        {/* ── Completion bar ── */}
-        <div style={s.completionWrap}>
-          <p style={s.completionLabel}>{t('profile.completion_label', { completion })}</p>
-          <div style={s.barTrack}>
-            <div
-              style={{
-                ...s.barFill,
-                width: `${completion}%`,
-                transition: "width 0.4s ease",
-              }}
-            />
-          </div>
-        </div>
+      {/* ── Scrollable body ── */}
+      <div style={s.body}>
 
-        {/* ── Avatar ── */}
-        <div style={s.avatarSection}>
-          <div style={s.avatarCircle}>
-            {displayPhoto ? (
-              <img src={displayPhoto} alt="Profile" style={s.avatarImg} />
-            ) : initials ? (
-              <span style={s.avatarInitials}>{initials}</span>
-            ) : (
-              <IconPerson />
-            )}
+        {/* Avatar section */}
+        <section style={s.avatarSection}>
+          <div style={s.avatarWrapper}>
+            <div
+              style={s.avatarCircle}
+              onClick={() => photoInputRef.current?.click()}
+              role="button"
+              aria-label="Change profile photo"
+            >
+              {displayPhoto ? (
+                <img src={displayPhoto} alt="Profile" style={s.avatarImg} />
+              ) : initials ? (
+                <span style={s.avatarInitials}>{initials}</span>
+              ) : (
+                <span
+                  className="material-symbols-outlined"
+                  style={{ color: "#717782", fontSize: 56, lineHeight: 1, userSelect: "none" }}
+                >
+                  person
+                </span>
+              )}
+            </div>
+            <button
+              style={s.cameraBadge}
+              onClick={() => photoInputRef.current?.click()}
+              aria-label="Upload photo"
+            >
+              <span
+                className="material-symbols-outlined"
+                style={{ color: "#fff", fontSize: 18, lineHeight: 1, fontVariationSettings: "'FILL' 1" }}
+              >
+                photo_camera
+              </span>
+            </button>
           </div>
-          {/* C5/C6: Real photo upload — file picker on desktop, camera on mobile */}
-          <button
-            style={s.editPhotoBtn}
-            onClick={() => photoInputRef.current?.click()}
-          >
-            {t('profile.edit_photo')}
+          <button style={s.editPhotoBtn} onClick={() => photoInputRef.current?.click()}>
+            {displayPhoto ? t("profile.edit_photo") : "Add Profile Photo"}
           </button>
           <input
             ref={photoInputRef}
@@ -321,102 +304,152 @@ export default function ProfilePage() {
             style={{ display: "none" }}
             onChange={handlePhotoSelect}
           />
+        </section>
+
+        {/* Completion bar */}
+        <section style={s.completionSection}>
+          <div style={s.completionRow}>
+            <span style={s.completionTitle}>Profile Completion</span>
+            <span style={s.completionPct}>{completion}%</span>
+          </div>
+          <div style={s.barTrack}>
+            <div style={{ ...s.barFill, width: `${completion}%`, transition: "width 0.4s ease" }} />
+          </div>
+          <p style={s.completionHint}>
+            Adding your email or phone number links all your reports to your profile
+          </p>
+        </section>
+
+        {/* Info notice */}
+        <div style={s.infoNotice}>
+          <span
+            className="material-symbols-outlined"
+            style={{ color: "#0468B1", fontSize: 20, flexShrink: 0, lineHeight: 1, fontVariationSettings: "'FILL' 1" }}
+          >
+            info
+          </span>
+          <p style={s.infoNoticeText}>{t("profile.anon_note")}</p>
         </div>
 
-        {/* ── Profile fields ── */}
-        <div style={s.card}>
+        {/* Form fields */}
+        <div style={s.formFields}>
+
           {/* First Name */}
           <div style={s.fieldGroup}>
-            <label style={s.fieldLabel}>{t('profile.first_name')}</label>
+            <label style={s.fieldLabel}>First Name (optional)</label>
             <input
               style={s.fieldInput}
               type="text"
               value={firstName}
-              onChange={(e) => setFirstName(e.target.value.slice(0, 100))}
+              onChange={(e) => { setFirstName(e.target.value.slice(0, 100)); setIsDirty(true); }}
               placeholder="Enter your first name"
               maxLength={100}
             />
           </div>
 
-          <div style={s.divider} />
-
           {/* Last Name */}
           <div style={s.fieldGroup}>
-            <label style={s.fieldLabel}>{t('profile.last_name')}</label>
+            <label style={s.fieldLabel}>Last Name (optional)</label>
             <input
               style={s.fieldInput}
               type="text"
               value={lastName}
-              onChange={(e) => setLastName(e.target.value.slice(0, 100))}
+              onChange={(e) => { setLastName(e.target.value.slice(0, 100)); setIsDirty(true); }}
               placeholder="Enter your last name"
               maxLength={100}
             />
           </div>
 
-          <div style={s.divider} />
-
           {/* Email */}
           <div style={s.fieldGroup}>
-            <label style={s.fieldLabel}>{t('profile.email')}</label>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 6 }}>
+              <label style={{ ...s.fieldLabel, marginBottom: 0 }}>Email Address (optional)</label>
+              <span style={s.fieldHint}>Links all your reports to this email</span>
+            </div>
             <input
               style={{
                 ...s.fieldInput,
-                borderColor: emailError ? "#FC8181" : "transparent",
-                borderWidth: emailError ? 1 : 0,
-                borderStyle: "solid",
+                ...(emailError ? { outline: "1.5px solid #E53E3E" } : {}),
               }}
               type="email"
               value={email}
               onChange={(e) => handleEmailChange(e.target.value)}
-              placeholder="Enter your email"
+              placeholder="name@example.com"
               inputMode="email"
+              autoComplete="email"
             />
             {emailError && <p style={s.inlineError}>{emailError}</p>}
           </div>
 
-          <div style={s.divider} />
-
-          {/* Phone */}
+          {/* Mobile Number */}
           <div style={s.fieldGroup}>
-            <label style={s.fieldLabel}>{t('profile.phone')}</label>
-            <input
-              style={s.fieldInput}
-              type="tel"
-              value={phone}
-              onChange={(e) => handlePhoneChange(e.target.value)}
-              placeholder="Optional"
-              inputMode="tel"
-            />
+            <label style={s.fieldLabel}>Mobile Number (optional)</label>
+            <div style={{ display: "flex", gap: 8 }}>
+              {/* Country code select */}
+              <div style={{ position: "relative", flexShrink: 0 }}>
+                <select
+                  style={s.countryCodeSelect}
+                  value={phoneCountryCode}
+                  onChange={(e) => { setPhoneCountryCode(e.target.value); setIsDirty(true); }}
+                >
+                  {COUNTRY_CODES.map((code) => (
+                    <option key={code} value={code}>{code}</option>
+                  ))}
+                </select>
+                <span
+                  className="material-symbols-outlined"
+                  style={{
+                    position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)",
+                    fontSize: 16, color: "#717782", pointerEvents: "none", lineHeight: 1,
+                  }}
+                >
+                  expand_more
+                </span>
+              </div>
+              <input
+                style={{ ...s.fieldInput, flex: 1, margin: 0 }}
+                type="tel"
+                value={phone}
+                onChange={(e) => handlePhoneChange(e.target.value)}
+                placeholder="Enter mobile number"
+                inputMode="tel"
+              />
+            </div>
           </div>
         </div>
 
-        {/* ── Save button ── */}
-        <button
-          style={{
-            ...s.saveBtn,
-            opacity: saving ? 0.7 : 1,
-            cursor: saving ? "not-allowed" : "pointer",
-          }}
-          onClick={handleSave}
-          disabled={saving}
-        >
-          {saving ? t('common.saving') : t('profile.save_btn')}
-        </button>
-
-        {/* ── Feedback messages ── */}
+        {/* Status banners */}
         {saveStatus === "success" && (
-          <div style={s.successMsg}>{t('profile.save_success')}</div>
+          <div style={s.successMsg}>
+            <span className="material-symbols-outlined" style={{ color: "#276749", fontSize: 18, fontVariationSettings: "'FILL' 1" }}>
+              check_circle
+            </span>
+            {t("profile.save_success")}
+          </div>
         )}
         {saveStatus === "error" && (
           <div style={s.errorMsg}>
-            {t('profile.save_error')}
+            <span className="material-symbols-outlined" style={{ color: "#C53030", fontSize: 18 }}>
+              error
+            </span>
+            {t("profile.save_error")}
           </div>
         )}
 
-        {/* ── Anonymous note ── */}
-        <p style={s.anonNote}>
-          {t('profile.anon_note')}
-        </p>
+        {/* Spacer for fixed footer */}
+        <div style={{ height: 120 }} />
+      </div>
+
+      {/* ── Fixed footer ── */}
+      <div style={s.footer}>
+        <button
+          style={{ ...s.saveBtn, ...(canSave ? {} : s.saveBtnDisabled) }}
+          onClick={handleSave}
+          disabled={!canSave}
+        >
+          {saving ? t("common.saving") : t("profile.save_btn")}
+        </button>
+        <p style={s.footerHint}>Your profile is saved locally and synced when online</p>
       </div>
     </div>
   );
@@ -426,16 +459,18 @@ export default function ProfilePage() {
 
 const s: Record<string, React.CSSProperties> = {
   page: {
-    flex: 1,
+    minHeight: "100vh",
     background: "#F6F3F2",
     display: "flex",
     flexDirection: "column",
   },
+
+  // Header
   header: {
-    position: "sticky" as const,
+    position: "sticky",
     top: 0,
     zIndex: 50,
-    background: "rgba(255,255,255,0.92)",
+    background: "rgba(252,249,248,0.92)",
     backdropFilter: "blur(12px)",
     WebkitBackdropFilter: "blur(12px)",
     height: 56,
@@ -444,7 +479,7 @@ const s: Record<string, React.CSSProperties> = {
     justifyContent: "space-between",
     padding: "0 20px",
     flexShrink: 0,
-    boxSizing: "border-box" as const,
+    boxSizing: "border-box",
   },
   backBtn: {
     background: "transparent",
@@ -457,18 +492,278 @@ const s: Record<string, React.CSSProperties> = {
     minHeight: 44,
     borderRadius: 22,
     flexShrink: 0,
-    color: "#0468B1",
+    padding: 0,
   },
   headerTitle: {
     color: "#1B1C1C",
     fontSize: 17,
     fontWeight: 600,
-    position: "absolute" as const,
+    position: "absolute",
     left: "50%",
     transform: "translateX(-50%)",
-    whiteSpace: "nowrap" as const,
+    whiteSpace: "nowrap",
   },
-  // C8: Anonymous gate styles
+
+  // Body
+  body: {
+    flex: 1,
+    overflowY: "auto",
+    padding: "28px 24px 0",
+  },
+
+  // Avatar
+  avatarSection: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    marginBottom: 28,
+  },
+  avatarWrapper: {
+    position: "relative",
+    display: "inline-flex",
+  },
+  avatarCircle: {
+    width: 128,
+    height: 128,
+    borderRadius: "50%",
+    background: "#E4E2E1",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+    cursor: "pointer",
+  },
+  avatarImg: {
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+  },
+  avatarInitials: {
+    fontSize: 42,
+    fontWeight: 700,
+    color: "#0468B1",
+    lineHeight: 1,
+    userSelect: "none",
+  },
+  cameraBadge: {
+    position: "absolute",
+    bottom: 4,
+    right: 4,
+    width: 36,
+    height: 36,
+    borderRadius: "50%",
+    background: "#0468B1",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    border: "3px solid #F6F3F2",
+    boxSizing: "border-box",
+    cursor: "pointer",
+    boxShadow: "0 2px 8px rgba(4,104,177,0.3)",
+  },
+  editPhotoBtn: {
+    marginTop: 12,
+    background: "transparent",
+    border: "none",
+    color: "#0468B1",
+    fontSize: 14,
+    fontWeight: 600,
+    cursor: "pointer",
+    padding: 0,
+    fontFamily: "inherit",
+  },
+
+  // Completion
+  completionSection: {
+    marginBottom: 16,
+  },
+  completionRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 10,
+  },
+  completionTitle: {
+    fontSize: 14,
+    fontWeight: 500,
+    color: "#414751",
+  },
+  completionPct: {
+    fontSize: 15,
+    fontWeight: 700,
+    color: "#0468B1",
+  },
+  barTrack: {
+    height: 8,
+    background: "#E4E2E1",
+    borderRadius: 4,
+    overflow: "hidden",
+    marginBottom: 8,
+  },
+  barFill: {
+    height: "100%",
+    background: "#0468B1",
+    borderRadius: 4,
+  },
+  completionHint: {
+    fontSize: 12,
+    color: "#717782",
+    margin: 0,
+    lineHeight: 1.45,
+    opacity: 0.85,
+  },
+
+  // Info notice
+  infoNotice: {
+    background: "rgba(4,104,177,0.06)",
+    border: "1px solid rgba(4,104,177,0.15)",
+    borderRadius: 12,
+    padding: "12px 14px",
+    display: "flex",
+    gap: 10,
+    alignItems: "flex-start",
+    margin: "16px 0 24px",
+  },
+  infoNoticeText: {
+    fontSize: 13,
+    color: "#00497F",
+    margin: 0,
+    lineHeight: 1.5,
+    flex: 1,
+    fontWeight: 500,
+  },
+
+  // Form fields
+  formFields: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 20,
+  },
+  fieldGroup: {
+    display: "flex",
+    flexDirection: "column",
+  },
+  fieldLabel: {
+    fontSize: 11,
+    fontWeight: 700,
+    color: "#717782",
+    letterSpacing: 0.7,
+    textTransform: "uppercase",
+    marginBottom: 6,
+  },
+  fieldHint: {
+    fontSize: 10,
+    color: "#0468B1",
+    fontStyle: "italic",
+    fontWeight: 500,
+    opacity: 0.85,
+  },
+  fieldInput: {
+    width: "100%",
+    height: 48,
+    padding: "0 14px",
+    background: "#F0EDED",
+    border: "none",
+    borderRadius: 8,
+    fontSize: 15,
+    color: "#1B1C1C",
+    outline: "none",
+    boxSizing: "border-box",
+    fontFamily: "inherit",
+  },
+  countryCodeSelect: {
+    height: 48,
+    width: 90,
+    padding: "0 28px 0 12px",
+    background: "#F0EDED",
+    border: "none",
+    borderRadius: 8,
+    fontSize: 14,
+    color: "#1B1C1C",
+    outline: "none",
+    appearance: "none",
+    WebkitAppearance: "none",
+    cursor: "pointer",
+    fontFamily: "inherit",
+    fontWeight: 600,
+  },
+  inlineError: {
+    fontSize: 12,
+    color: "#E53E3E",
+    margin: "4px 0 0",
+  },
+
+  // Status messages
+  successMsg: {
+    marginTop: 16,
+    background: "rgba(56,161,105,0.08)",
+    border: "1px solid rgba(56,161,105,0.3)",
+    borderRadius: 10,
+    padding: "12px 16px",
+    fontSize: 14,
+    color: "#276749",
+    fontWeight: 500,
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+  },
+  errorMsg: {
+    marginTop: 16,
+    background: "rgba(197,48,48,0.06)",
+    border: "1px solid rgba(197,48,48,0.2)",
+    borderRadius: 10,
+    padding: "12px 16px",
+    fontSize: 14,
+    color: "#C53030",
+    fontWeight: 500,
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+  },
+
+  // Fixed footer
+  footer: {
+    position: "fixed",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    background: "#F6F3F2",
+    padding: "12px 24px 28px",
+    display: "flex",
+    flexDirection: "column",
+    gap: 8,
+    zIndex: 40,
+  },
+  saveBtn: {
+    width: "100%",
+    height: 52,
+    background: "linear-gradient(135deg, #0468B1, #00508A)",
+    color: "#fff",
+    border: "none",
+    borderRadius: 14,
+    fontSize: 15,
+    fontWeight: 700,
+    cursor: "pointer",
+    fontFamily: "inherit",
+    boxShadow: "0 4px 14px rgba(4,104,177,0.3)",
+    transition: "opacity 0.15s",
+  },
+  saveBtnDisabled: {
+    background: "#E4E2E1",
+    color: "#9CA3AF",
+    cursor: "not-allowed",
+    boxShadow: "none",
+  },
+  footerHint: {
+    fontSize: 11,
+    color: "#9CA3AF",
+    textAlign: "center",
+    margin: 0,
+    fontWeight: 500,
+    letterSpacing: 0.2,
+  },
+
+  // Anonymous gate
   anonGate: {
     flex: 1,
     display: "flex",
@@ -478,18 +773,29 @@ const s: Record<string, React.CSSProperties> = {
     textAlign: "center",
     padding: "40px 24px",
   },
+  anonGateIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: "50%",
+    background: "rgba(4,104,177,0.08)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 20,
+  },
   anonGateHeading: {
-    color: "#1A2B4A",
-    fontSize: "1rem",
-    fontWeight: 600,
+    color: "#1B1C1C",
+    fontSize: 18,
+    fontWeight: 700,
     margin: "0 0 8px",
     lineHeight: 1.4,
   },
   anonGateSubtext: {
-    color: "#718096",
-    fontSize: "0.875rem",
-    margin: "0 0 24px",
-    lineHeight: 1.5,
+    color: "#717782",
+    fontSize: 14,
+    margin: "0 0 28px",
+    lineHeight: 1.6,
+    maxWidth: 280,
   },
   anonGateBtns: {
     display: "flex",
@@ -498,25 +804,29 @@ const s: Record<string, React.CSSProperties> = {
     flexWrap: "wrap",
   },
   loginBtn: {
-    background: "#0468B1",
+    background: "linear-gradient(135deg, #0468B1, #00508A)",
     color: "#fff",
     border: "none",
-    borderRadius: 8,
-    padding: "12px 24px",
+    borderRadius: 10,
+    padding: "12px 28px",
     fontWeight: 700,
     cursor: "pointer",
     fontSize: 15,
+    fontFamily: "inherit",
   },
   registerBtn: {
     background: "transparent",
     color: "#0468B1",
-    border: "1px solid #0468B1",
-    borderRadius: 8,
-    padding: "12px 24px",
+    border: "1.5px solid #0468B1",
+    borderRadius: 10,
+    padding: "12px 28px",
     fontWeight: 600,
     cursor: "pointer",
     fontSize: 15,
+    fontFamily: "inherit",
   },
+
+  // Loading
   loadingWrap: {
     flex: 1,
     display: "flex",
@@ -526,155 +836,9 @@ const s: Record<string, React.CSSProperties> = {
   spinner: {
     width: 36,
     height: 36,
-    border: "3px solid #E2E8F0",
+    border: "3px solid #E4E2E1",
     borderTop: "3px solid #0468B1",
     borderRadius: "50%",
     animation: "spin 1s linear infinite",
-  },
-  content: {
-    flex: 1,
-    padding: "24px 16px 40px",
-    display: "flex",
-    flexDirection: "column",
-    gap: 20,
-  },
-  completionWrap: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 8,
-  },
-  completionLabel: {
-    fontSize: 13,
-    fontWeight: 600,
-    color: "#4A5568",
-    margin: 0,
-  },
-  barTrack: {
-    height: 8,
-    background: "#E2E8F0",
-    borderRadius: 4,
-    overflow: "hidden",
-  },
-  barFill: {
-    height: "100%",
-    background: "#0468B1",
-    borderRadius: 4,
-  },
-  avatarSection: {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    gap: 10,
-  },
-  avatarCircle: {
-    width: 96,
-    height: 96,
-    borderRadius: "50%",
-    background: "#E3F2FD",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    overflow: "hidden",
-    border: "2px solid #BFDBFE",
-  },
-  avatarImg: {
-    width: "100%",
-    height: "100%",
-    objectFit: "cover",
-  },
-  avatarInitials: {
-    fontSize: 28,
-    fontWeight: 700,
-    color: "#0468B1",
-    lineHeight: 1,
-  },
-  editPhotoBtn: {
-    background: "transparent",
-    border: "none",
-    color: "#0468B1",
-    fontSize: 13,
-    fontWeight: 600,
-    cursor: "pointer",
-    padding: 0,
-    textDecoration: "underline",
-    textUnderlineOffset: 3,
-  },
-  card: {
-    background: "#fff",
-    borderRadius: 12,
-    border: "1px solid #E2E8F0",
-    overflow: "hidden",
-  },
-  fieldGroup: {
-    padding: "14px 16px",
-    display: "flex",
-    flexDirection: "column",
-    gap: 6,
-  },
-  fieldLabel: {
-    fontSize: 11,
-    fontWeight: 700,
-    color: "#9CA3AF",
-    letterSpacing: 0.6,
-    textTransform: "uppercase",
-  },
-  fieldInput: {
-    width: "100%",
-    fontSize: 15,
-    color: "#1A2B4A",
-    background: "transparent",
-    border: "none",
-    outline: "none",
-    padding: 0,
-    boxSizing: "border-box",
-  },
-  inlineError: {
-    fontSize: 12,
-    color: "#E53E3E",
-    margin: 0,
-    marginTop: 2,
-  },
-  divider: {
-    height: 1,
-    background: "#F0F4F8",
-    marginLeft: 16,
-  },
-  saveBtn: {
-    width: "100%",
-    padding: "15px",
-    background: "#0468B1",
-    color: "#fff",
-    border: "none",
-    borderRadius: 9999,
-    fontSize: 16,
-    fontWeight: 600,
-    transition: "opacity 0.15s",
-    fontFamily: "inherit",
-  },
-  successMsg: {
-    background: "#F0FFF4",
-    border: "1px solid #9AE6B4",
-    borderRadius: 8,
-    padding: "12px 16px",
-    fontSize: 14,
-    color: "#276749",
-    fontWeight: 500,
-    textAlign: "center",
-  },
-  errorMsg: {
-    background: "#FFF5F5",
-    border: "1px solid #FC8181",
-    borderRadius: 8,
-    padding: "12px 16px",
-    fontSize: 14,
-    color: "#C53030",
-    textAlign: "center",
-  },
-  anonNote: {
-    fontSize: 12,
-    color: "#9CA3AF",
-    textAlign: "center",
-    margin: 0,
-    lineHeight: 1.5,
   },
 };

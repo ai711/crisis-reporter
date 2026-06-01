@@ -3,6 +3,7 @@ import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
   StyleSheet, ActivityIndicator, Alert, Image, Dimensions,
 } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import * as SecureStore from "expo-secure-store";
@@ -13,6 +14,20 @@ import api from "../services/api";
 
 const { width: screenWidth } = Dimensions.get("window");
 const scale = (size: number) => Math.round((screenWidth / 375) * size);
+
+const COUNTRY_CODES = [
+  "+1", "+7", "+20", "+27", "+33", "+34", "+39", "+44", "+49",
+  "+52", "+55", "+61", "+62", "+63", "+65", "+66", "+81", "+82",
+  "+86", "+90", "+91", "+92", "+98", "+234", "+254", "+880", "+971", "+966",
+];
+
+function parsePhoneNumber(stored: string): { code: string; number: string } {
+  if (!stored) return { code: "+1", number: "" };
+  const sorted = [...COUNTRY_CODES].sort((a, b) => b.length - a.length);
+  const match = sorted.find((c) => stored.startsWith(c));
+  if (match) return { code: match, number: stored.slice(match.length).trim() };
+  return { code: "+1", number: stored };
+}
 
 export default function ReporterProfileScreen() {
   const insets = useSafeAreaInsets();
@@ -28,25 +43,22 @@ export default function ReporterProfileScreen() {
   const [loading, setLoading] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [focusedField, setFocusedField] = useState<string | null>(null);
+  const [isDirty, setIsDirty] = useState(false);
 
-  const initialValues = useRef({ firstName: "", lastName: "", email: "", phone: "" });
-
-  const hasChanges =
-    firstName !== initialValues.current.firstName ||
-    lastName !== initialValues.current.lastName ||
-    email !== initialValues.current.email ||
-    phone !== initialValues.current.phone;
+  const initialValues = useRef({
+    firstName: "", lastName: "", email: "",
+    phone: "", phoneCountryCode: "+1",
+  });
 
   const completionCount = [firstName, lastName, email, phone].filter(Boolean).length;
   const completion = Math.round((completionCount / 4) * 100);
 
-  // ── Load reporter ID + pre-populate fields ──────────────────────────────
+  // ── Load reporter ID + profile ───────────────────────────────────────────────
 
   useEffect(() => {
     const init = async () => {
       const id = await SecureStore.getItemAsync("cr_reporter_id");
       setReporterId(id ?? null);
-
       if (!id || id.startsWith("CR-PENDING-")) return;
 
       // Try local cache first (works offline)
@@ -57,16 +69,18 @@ export default function ReporterProfileScreen() {
           const parts = (profile.name ?? "").split(" ");
           const fn = parts[0] ?? "";
           const ln = parts.slice(1).join(" ");
+          const parsed = parsePhoneNumber(profile.phone ?? "");
           setFirstName(fn);
           setLastName(ln);
           if (profile.email) setEmail(profile.email);
-          if (profile.phone) setPhone(profile.phone);
+          setPhoneCountryCode(parsed.code);
+          setPhone(parsed.number);
           if (profile.photo_url) setPhotoUrl(profile.photo_url);
           initialValues.current = {
-            firstName: fn,
-            lastName: ln,
+            firstName: fn, lastName: ln,
             email: profile.email ?? "",
-            phone: profile.phone ?? "",
+            phone: parsed.number,
+            phoneCountryCode: parsed.code,
           };
         }
       } catch {
@@ -77,51 +91,43 @@ export default function ReporterProfileScreen() {
       try {
         const response = await api.get(`/api/reporters/${id}`);
         const data = response.data;
-        if (data.name) {
-          const parts = (data.name ?? "").split(" ");
-          const fn = parts[0] ?? "";
-          const ln = parts.slice(1).join(" ");
-          setFirstName(fn);
-          setLastName(ln);
-        }
+        const fn2 = data.first_name ?? (data.name ? (data.name.split(" ")[0] ?? "") : "");
+        const ln2 = data.last_name ?? (data.name ? data.name.split(" ").slice(1).join(" ") : "");
+        const parsed2 = parsePhoneNumber(data.phone_number ?? data.phone ?? "");
+        setFirstName(fn2);
+        setLastName(ln2);
         if (data.email) setEmail(data.email);
-        if (data.phone) setPhone(data.phone);
-        if (data.photo_url) setPhotoUrl(data.photo_url);
-
-        const fn2 = data.name ? data.name.split(" ")[0] ?? "" : "";
-        const ln2 = data.name ? data.name.split(" ").slice(1).join(" ") : "";
+        setPhoneCountryCode(parsed2.code);
+        setPhone(parsed2.number);
+        if (data.profile_photo_url ?? data.photo_url) {
+          setPhotoUrl(data.profile_photo_url ?? data.photo_url);
+        }
         initialValues.current = {
-          firstName: fn2,
-          lastName: ln2,
+          firstName: fn2, lastName: ln2,
           email: data.email ?? "",
-          phone: data.phone ?? "",
+          phone: parsed2.number,
+          phoneCountryCode: parsed2.code,
         };
-
         await AsyncStorage.setItem("cr_profile_cache", JSON.stringify({
-          name: data.name ?? "",
+          name: [fn2, ln2].filter(Boolean).join(" "),
           email: data.email ?? "",
-          phone: data.phone ?? "",
-          photo_url: data.photo_url ?? "",
+          phone: data.phone_number ?? data.phone ?? "",
+          photo_url: data.profile_photo_url ?? data.photo_url ?? "",
         }));
       } catch {
         // API unavailable — cached values already applied
       }
     };
-
     init();
   }, []);
 
-  // ── Photo picker ──────────────────────────────────────────────────────────
+  // ── Photo picker ─────────────────────────────────────────────────────────────
 
   const uploadProfilePhoto = async (uri: string) => {
     if (!reporterId || reporterId.startsWith("CR-PENDING-")) return;
     try {
       const formData = new FormData();
-      formData.append("photo", {
-        uri,
-        type: "image/jpeg",
-        name: "profile_photo.jpg",
-      } as any);
+      formData.append("photo", { uri, type: "image/jpeg", name: "profile_photo.jpg" } as any);
       await api.post(`/api/reporters/${reporterId}/photo`, formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
@@ -131,61 +137,55 @@ export default function ReporterProfileScreen() {
   };
 
   const handlePickPhoto = () => {
-    Alert.alert(
-      "Profile Photo",
-      "Choose a source",
-      [
-        {
-          text: "Take a Photo",
-          onPress: async () => {
-            const { status } = await ImagePicker.requestCameraPermissionsAsync();
-            if (status !== "granted") {
-              Alert.alert("Camera needed", "Please allow camera access in settings.");
-              return;
-            }
-            const result = await ImagePicker.launchCameraAsync({
-              mediaTypes: ImagePicker.MediaTypeOptions.Images,
-              allowsEditing: true,
-              aspect: [1, 1],
-              quality: 0.8,
-            });
-            if (!result.canceled && result.assets?.[0]) {
-              const uri = result.assets[0].uri;
-              setPhotoUrl(uri);
-              await uploadProfilePhoto(uri);
-            }
-          },
+    Alert.alert("Profile Photo", "Choose a source", [
+      {
+        text: "Take a Photo",
+        onPress: async () => {
+          const { status } = await ImagePicker.requestCameraPermissionsAsync();
+          if (status !== "granted") {
+            Alert.alert("Camera needed", "Please allow camera access in settings.");
+            return;
+          }
+          const result = await ImagePicker.launchCameraAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            allowsEditing: true, aspect: [1, 1], quality: 0.8,
+          });
+          if (!result.canceled && result.assets?.[0]) {
+            const uri = result.assets[0].uri;
+            setPhotoUrl(uri);
+            setIsDirty(true);
+            await uploadProfilePhoto(uri);
+          }
         },
-        {
-          text: "Upload from Gallery",
-          onPress: async () => {
-            const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-            if (status !== "granted") {
-              Alert.alert("Gallery needed", "Please allow gallery access in settings.");
-              return;
-            }
-            const result = await ImagePicker.launchImageLibraryAsync({
-              mediaTypes: ImagePicker.MediaTypeOptions.Images,
-              allowsEditing: true,
-              aspect: [1, 1],
-              quality: 0.8,
-            });
-            if (!result.canceled && result.assets?.[0]) {
-              const uri = result.assets[0].uri;
-              setPhotoUrl(uri);
-              await uploadProfilePhoto(uri);
-            }
-          },
+      },
+      {
+        text: "Upload from Gallery",
+        onPress: async () => {
+          const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+          if (status !== "granted") {
+            Alert.alert("Gallery needed", "Please allow gallery access in settings.");
+            return;
+          }
+          const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            allowsEditing: true, aspect: [1, 1], quality: 0.8,
+          });
+          if (!result.canceled && result.assets?.[0]) {
+            const uri = result.assets[0].uri;
+            setPhotoUrl(uri);
+            setIsDirty(true);
+            await uploadProfilePhoto(uri);
+          }
         },
-        { text: "Cancel", style: "cancel" },
-      ]
-    );
+      },
+      { text: "Cancel", style: "cancel" },
+    ]);
   };
 
-  // ── Save ──────────────────────────────────────────────────────────────────
+  // ── Save ─────────────────────────────────────────────────────────────────────
 
   const handleSave = async () => {
-    if (!hasChanges || !reporterId || loading) return;
+    if (!isDirty || !reporterId || loading) return;
     setLoading(true);
 
     const fullName = [firstName.trim(), lastName.trim()].filter(Boolean).join(" ");
@@ -199,23 +199,23 @@ export default function ReporterProfileScreen() {
         phone: fullPhone,
         photo_url: photoUrl ?? "",
       }));
-    } catch {
-      // Local save failed — continue to API attempt
-    }
+    } catch { /* local save failed */ }
 
-    // Attempt API save
     try {
       await api.patch(`/api/reporters/${reporterId}`, {
-        name: fullName || undefined,
+        first_name: firstName.trim() || undefined,
+        last_name: lastName.trim() || undefined,
         email: email.trim() || undefined,
-        phone: fullPhone || undefined,
+        phone_number: fullPhone || undefined,
       });
       initialValues.current = {
         firstName: firstName.trim(),
         lastName: lastName.trim(),
         email: email.trim(),
         phone: phone.trim(),
+        phoneCountryCode,
       };
+      setIsDirty(false);
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch {
@@ -228,14 +228,19 @@ export default function ReporterProfileScreen() {
     }
   };
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  // ── Helpers ──────────────────────────────────────────────────────────────────
+
+  const mark = () => setIsDirty(true);
 
   const inputStyle = (field: string, hasValue: boolean) => [
     styles.input,
     focusedField === field && styles.inputFocused,
-    hasValue && !focusedField && styles.inputFilled,
-    hasValue && focusedField === field && styles.inputFocused,
+    hasValue && styles.inputFilled,
   ];
+
+  const canSave = isDirty && !loading;
+
+  // ── Render ───────────────────────────────────────────────────────────────────
 
   return (
     <View style={styles.container}>
@@ -254,30 +259,32 @@ export default function ReporterProfileScreen() {
 
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 100 }]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Profile photo section */}
-        <View style={styles.photoSection}>
-          <TouchableOpacity onPress={handlePickPhoto} style={styles.avatarWrapper}>
+        {/* ── Avatar section ── */}
+        <View style={styles.avatarSection}>
+          <TouchableOpacity onPress={handlePickPhoto} style={styles.avatarWrapper} activeOpacity={0.85}>
             {photoUrl ? (
               <Image source={{ uri: photoUrl }} style={styles.avatar} />
             ) : (
               <View style={styles.avatarEmpty}>
-                <MaterialIcons name="person" size={scale(48)} color="#9CA3AF" />
+                <MaterialIcons name="person" size={scale(56)} color="#9CA3AF" />
               </View>
             )}
             <View style={styles.cameraBadge}>
               <MaterialIcons name="photo-camera" size={scale(16)} color="#FFFFFF" />
             </View>
           </TouchableOpacity>
-          <Text style={styles.photoLabel}>{photoUrl ? "Change Photo" : "Add Profile Photo"}</Text>
+          <TouchableOpacity onPress={handlePickPhoto} activeOpacity={0.7}>
+            <Text style={styles.photoLabel}>{photoUrl ? "Change Photo" : "Add Profile Photo"}</Text>
+          </TouchableOpacity>
           {reporterId && (
             <Text style={styles.reporterIdText}>{reporterId}</Text>
           )}
         </View>
 
-        {/* Profile completion */}
+        {/* ── Completion bar ── */}
         <View style={styles.completionCard}>
           <View style={styles.completionRow}>
             <Text style={styles.completionLabel}>Profile Completion</Text>
@@ -289,12 +296,12 @@ export default function ReporterProfileScreen() {
           <View style={styles.completionHintRow}>
             <MaterialIcons name="info-outline" size={scale(14)} color="#717782" />
             <Text style={styles.completionHint}>
-              Add your email or phone number to unlock badges
+              Adding your email or phone number links all your reports to your profile
             </Text>
           </View>
         </View>
 
-        {/* Optional info notice */}
+        {/* ── Info notice ── */}
         <View style={styles.infoNotice}>
           <MaterialIcons name="info" size={scale(18)} color="#0468B1" />
           <Text style={styles.infoNoticeText}>
@@ -302,17 +309,18 @@ export default function ReporterProfileScreen() {
           </Text>
         </View>
 
-        {/* Form fields */}
-        <View style={styles.formCard}>
+        {/* ── Form fields ── */}
+        <View style={styles.formSection}>
+
           {/* First Name */}
           <View style={styles.fieldGroup}>
             <Text style={styles.fieldLabel}>FIRST NAME (OPTIONAL)</Text>
             <TextInput
               style={inputStyle("firstName", !!firstName)}
-              placeholder="First name"
+              placeholder="Enter your first name"
               placeholderTextColor="#9CA3AF"
               value={firstName}
-              onChangeText={setFirstName}
+              onChangeText={(v) => { setFirstName(v); mark(); }}
               onFocus={() => setFocusedField("firstName")}
               onBlur={() => setFocusedField(null)}
             />
@@ -323,10 +331,10 @@ export default function ReporterProfileScreen() {
             <Text style={styles.fieldLabel}>LAST NAME (OPTIONAL)</Text>
             <TextInput
               style={inputStyle("lastName", !!lastName)}
-              placeholder="Last name"
+              placeholder="Enter your last name"
               placeholderTextColor="#9CA3AF"
               value={lastName}
-              onChangeText={setLastName}
+              onChangeText={(v) => { setLastName(v); mark(); }}
               onFocus={() => setFocusedField("lastName")}
               onBlur={() => setFocusedField(null)}
             />
@@ -336,17 +344,17 @@ export default function ReporterProfileScreen() {
           <View style={styles.fieldGroup}>
             <View style={styles.fieldLabelRow}>
               <Text style={[styles.fieldLabel, { marginBottom: 0 }]}>EMAIL ADDRESS (OPTIONAL)</Text>
-              <Text style={styles.fieldHint}>Links all your reports to this email</Text>
+              <Text style={styles.fieldHint}>Links all your reports</Text>
             </View>
             <View style={{ height: 6 }} />
             <TextInput
               style={inputStyle("email", !!email)}
-              placeholder="email@example.com"
+              placeholder="name@example.com"
               placeholderTextColor="#9CA3AF"
               keyboardType="email-address"
               autoCapitalize="none"
               value={email}
-              onChangeText={setEmail}
+              onChangeText={(v) => { setEmail(v); mark(); }}
               onFocus={() => setFocusedField("email")}
               onBlur={() => setFocusedField(null)}
             />
@@ -359,18 +367,19 @@ export default function ReporterProfileScreen() {
               <TextInput
                 style={[inputStyle("phoneCode", true), styles.phoneCodeInput]}
                 value={phoneCountryCode}
-                onChangeText={setPhoneCountryCode}
+                onChangeText={(v) => { setPhoneCountryCode(v); mark(); }}
                 keyboardType="phone-pad"
                 onFocus={() => setFocusedField("phoneCode")}
                 onBlur={() => setFocusedField(null)}
+                maxLength={5}
               />
               <TextInput
                 style={[inputStyle("phone", !!phone), styles.phoneNumberInput]}
-                placeholder="Phone number"
+                placeholder="Enter mobile number"
                 placeholderTextColor="#9CA3AF"
                 keyboardType="phone-pad"
                 value={phone}
-                onChangeText={setPhone}
+                onChangeText={(v) => { setPhone(v); mark(); }}
                 onFocus={() => setFocusedField("phone")}
                 onBlur={() => setFocusedField(null)}
               />
@@ -381,30 +390,35 @@ export default function ReporterProfileScreen() {
         {/* Success banner */}
         {saveSuccess && (
           <View style={styles.successBanner}>
-            <MaterialIcons name="check-circle" size={scale(16)} color="#38A169" />
-            <Text style={styles.successBannerText}>Profile saved</Text>
+            <MaterialIcons name="check-circle" size={scale(16)} color="#276749" />
+            <Text style={styles.successBannerText}>Profile saved successfully</Text>
           </View>
         )}
       </ScrollView>
 
-      {/* Fixed footer */}
+      {/* ── Fixed footer ── */}
       <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
         <TouchableOpacity
-          style={[styles.saveBtn, (!hasChanges || loading) && styles.saveBtnDisabled]}
           onPress={handleSave}
-          disabled={!hasChanges || loading}
+          disabled={!canSave}
+          activeOpacity={canSave ? 0.85 : 1}
         >
-          {loading ? (
-            <ActivityIndicator color={hasChanges ? "#FFF" : "#9CA3AF"} />
-          ) : (
-            <Text style={[styles.saveBtnText, (!hasChanges || loading) && styles.saveBtnTextDisabled]}>
-              Save Profile
-            </Text>
-          )}
+          <LinearGradient
+            colors={canSave ? ["#0468B1", "#00508A"] : ["#E4E2E1", "#E4E2E1"]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.saveBtn}
+          >
+            {loading ? (
+              <ActivityIndicator color={canSave ? "#FFFFFF" : "#9CA3AF"} />
+            ) : (
+              <Text style={[styles.saveBtnText, !canSave && styles.saveBtnTextDisabled]}>
+                Save Profile
+              </Text>
+            )}
+          </LinearGradient>
         </TouchableOpacity>
-        <Text style={styles.footerHint}>
-          Your profile is saved locally and synced when online
-        </Text>
+        <Text style={styles.footerHint}>Your profile is saved locally and synced when online</Text>
       </View>
     </View>
   );
@@ -415,7 +429,7 @@ const styles = StyleSheet.create({
 
   // Header
   header: {
-    backgroundColor: "rgba(255,255,255,0.92)",
+    backgroundColor: "rgba(252,249,248,0.95)",
     flexDirection: "row",
     alignItems: "flex-end",
     justifyContent: "space-between",
@@ -430,59 +444,68 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   scrollContent: { paddingTop: 0 },
 
-  // Photo section
-  photoSection: { alignItems: "center", marginTop: 24 },
+  // ── Avatar section ──
+  avatarSection: { alignItems: "center", paddingTop: 28, paddingBottom: 4 },
   avatarWrapper: { position: "relative" },
-  avatar: { width: scale(96), height: scale(96), borderRadius: scale(48) },
+  avatar: {
+    width: scale(128),
+    height: scale(128),
+    borderRadius: scale(64),
+  },
   avatarEmpty: {
-    width: scale(96),
-    height: scale(96),
-    borderRadius: scale(48),
+    width: scale(128),
+    height: scale(128),
+    borderRadius: scale(64),
     backgroundColor: "#E4E2E1",
     justifyContent: "center",
     alignItems: "center",
   },
   cameraBadge: {
     position: "absolute",
-    bottom: 0,
-    right: 0,
-    width: scale(32),
-    height: scale(32),
-    borderRadius: scale(16),
+    bottom: 2,
+    right: 2,
+    width: scale(36),
+    height: scale(36),
+    borderRadius: scale(18),
     backgroundColor: "#0468B1",
     justifyContent: "center",
     alignItems: "center",
-    borderWidth: 2,
-    borderColor: "#FFFFFF",
+    borderWidth: 3,
+    borderColor: "#F6F3F2",
+    shadowColor: "#0468B1",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
   },
   photoLabel: {
     color: "#0468B1",
     fontSize: scale(14),
     fontWeight: "600",
-    marginTop: 10,
+    marginTop: 12,
   },
   reporterIdText: {
-    fontSize: scale(12),
+    fontSize: scale(11),
     color: "#9CA3AF",
     marginTop: 4,
     letterSpacing: 0.5,
   },
 
-  // Profile completion
+  // ── Completion card ──
   completionCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
+    backgroundColor: "#F0EDED",
+    borderRadius: 14,
     marginHorizontal: screenWidth * 0.05,
     padding: 16,
-    marginTop: 20,
+    marginTop: 24,
   },
   completionRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
   },
-  completionLabel: { fontSize: scale(14), fontWeight: "500", color: "#1B1C1C" },
-  completionPct: { fontSize: scale(16), fontWeight: "700", color: "#0468B1" },
+  completionLabel: { fontSize: scale(14), fontWeight: "500", color: "#414751" },
+  completionPct: { fontSize: scale(15), fontWeight: "700", color: "#0468B1" },
   progressTrack: {
     height: 8,
     borderRadius: 4,
@@ -493,13 +516,13 @@ const styles = StyleSheet.create({
   progressFill: { height: 8, borderRadius: 4, backgroundColor: "#0468B1" },
   completionHintRow: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     gap: 6,
-    marginTop: 8,
+    marginTop: 10,
   },
-  completionHint: { fontSize: scale(13), color: "#717782", flex: 1 },
+  completionHint: { fontSize: scale(12), color: "#717782", flex: 1, lineHeight: scale(17) },
 
-  // Info notice
+  // ── Info notice ──
   infoNotice: {
     backgroundColor: "rgba(4,104,177,0.06)",
     borderRadius: 12,
@@ -509,16 +532,21 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "flex-start",
     gap: 10,
+    borderWidth: 1,
+    borderColor: "rgba(4,104,177,0.12)",
   },
-  infoNoticeText: { fontSize: scale(13), color: "#0468B1", flex: 1 },
+  infoNoticeText: {
+    fontSize: scale(13),
+    color: "#00497F",
+    flex: 1,
+    lineHeight: scale(18),
+    fontWeight: "500",
+  },
 
-  // Form card
-  formCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
+  // ── Form section ──
+  formSection: {
     marginHorizontal: screenWidth * 0.05,
-    padding: 20,
-    marginTop: 16,
+    marginTop: 20,
     gap: 20,
   },
   fieldGroup: {},
@@ -539,78 +567,74 @@ const styles = StyleSheet.create({
     fontSize: scale(10),
     color: "#0468B1",
     fontStyle: "italic",
+    fontWeight: "500",
   },
   input: {
-    backgroundColor: "#E4E2E1",
-    borderRadius: 4,
+    backgroundColor: "#F0EDED",
+    borderRadius: 8,
     paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: scale(14),
+    paddingVertical: scale(13),
+    fontSize: scale(15),
     color: "#1B1C1C",
     borderBottomWidth: 2,
     borderBottomColor: "transparent",
   },
   inputFocused: { borderBottomColor: "#0468B1" },
-  inputFilled: { borderBottomColor: "#0468B1" },
+  inputFilled: { backgroundColor: "#E8E5E4", borderBottomColor: "#0468B1" },
   phoneRow: { flexDirection: "row", gap: 8 },
-  phoneCodeInput: { width: 72 },
+  phoneCodeInput: { width: scale(72), textAlign: "center" },
   phoneNumberInput: { flex: 1 },
 
-  // Success banner
+  // ── Success banner ──
   successBanner: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    backgroundColor: "rgba(56,161,105,0.1)",
-    borderRadius: 8,
+    backgroundColor: "rgba(56,161,105,0.08)",
+    borderRadius: 10,
     paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingVertical: 12,
     marginHorizontal: screenWidth * 0.05,
-    marginTop: 12,
+    marginTop: 16,
     borderLeftWidth: 3,
     borderLeftColor: "#38A169",
   },
   successBannerText: {
-    color: "#38A169",
+    color: "#276749",
     fontSize: scale(14),
     fontWeight: "600",
   },
 
-  // Footer
+  // ── Footer ──
   footer: {
-    backgroundColor: "rgba(255,255,255,0.92)",
+    backgroundColor: "#F6F3F2",
     paddingTop: 12,
     paddingHorizontal: screenWidth * 0.05,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: "#E4E2E1",
   },
   saveBtn: {
     height: 52,
-    borderRadius: 26,
-    backgroundColor: "#0468B1",
+    borderRadius: 14,
     justifyContent: "center",
     alignItems: "center",
-    elevation: 4,
     shadowColor: "#0468B1",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-  },
-  saveBtnDisabled: {
-    backgroundColor: "#E4E2E1",
-    elevation: 0,
-    shadowOpacity: 0,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 4,
   },
   saveBtnText: {
     color: "#FFFFFF",
-    fontSize: scale(16),
-    fontWeight: "600",
+    fontSize: scale(15),
+    fontWeight: "700",
+    letterSpacing: 0.3,
   },
   saveBtnTextDisabled: { color: "#9CA3AF" },
   footerHint: {
-    fontSize: scale(12),
+    fontSize: scale(11),
     color: "#9CA3AF",
     textAlign: "center",
     marginTop: 8,
+    fontWeight: "500",
+    letterSpacing: 0.2,
   },
 });
