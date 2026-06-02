@@ -34,7 +34,11 @@
     "noReportsTitle": "No reports yet",
     "noReportsBody": "Your submitted reports will appear here",
     "firstReportHint": "Tap \"Report an Incident\" to submit your first report",
-    "recentReports": "YOUR RECENT REPORTS"
+    "recentReports": "YOUR RECENT REPORTS",
+    "pendingSync": "Pending Sync",
+    "offline": "Offline",
+    "unknownLocation": "Unknown location",
+    "unnamedLocation": "Unnamed location"
   },
   "loginPrompt": {
     "title": "Have you used Crisis Reporter before?",
@@ -147,7 +151,8 @@
     "damage_partial": "Partially Damaged",
     "damage_minimal": "Minimal / No Damage",
     "pin_reported": "Reported: ",
-    "pin_id": "ID: "
+    "pin_id": "ID: ",
+    "loading_reports": "Loading reports…"
   },
   "settings": {
     "title": "Settings",

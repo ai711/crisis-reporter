@@ -85,12 +85,14 @@ export async function loadLanguagePackage(langCode: string): Promise<LangPackage
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data: Record<string, unknown> = await res.json();
 
-    i18n.addResourceBundle(langCode, "translation", data, true, true);
+    // Extract the flat strings dict (backend wraps it in { version, language_code, strings })
+    const strings = (data.strings as Record<string, unknown>) ?? data;
+    i18n.addResourceBundle(langCode, "translation", strings, true, true);
     // Step 3: Apply the language
     await i18n.changeLanguage(langCode);
 
     try {
-      localStorage.setItem(cacheKey, JSON.stringify(data));
+      localStorage.setItem(cacheKey, JSON.stringify(strings));
       localStorage.setItem(versionKey, (data.version as string) || '');
     } catch { /* ignore */ }
 
