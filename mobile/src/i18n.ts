@@ -34,10 +34,6 @@ async function safeFetch(url: string): Promise<Response> {
  * Fetches the published language package from the backend for `langCode`,
  * caches it to AsyncStorage, and merges the `strings` object into i18next.
  *
- * For the 6 UN languages: updates Q-key and UI-string translations that may
- * have been edited through the dashboard after the app was built.
- * For non-UN languages: provides whatever translations exist in the backend.
- *
  * Version-aware: downloads only when the backend reports a newer version than
  * what is cached, so this is cheap to call on every startup.
  *
@@ -83,7 +79,8 @@ export async function fetchLanguagePackageFromBackend(langCode: string): Promise
     if (!res.ok) return;
 
     const data = await res.json();
-    const strings: Record<string, string> = data.strings ?? {};
+    // Always extract the nested `strings` dict — backend wraps in { version, language_code, strings }
+    const strings: Record<string, string> = data.strings ?? data;
     if (Object.keys(strings).length === 0) return;
 
     // Persist to AsyncStorage for offline use
@@ -123,38 +120,44 @@ export async function loadDynamicLanguagePackage(langCode: string): Promise<bool
   }
 }
 
-// ── Main init ─────────────────────────────────────────────────────────────────
+// ── Synchronous init — all resources are bundled, so this completes instantly ─
 
-export const initI18n = async () => {
-  const savedLanguage = await AsyncStorage.getItem("cr_language");
+i18n.use(initReactI18next).init({
+  resources: {
+    en: { translation: en },
+    ar: { translation: ar },
+    zh: { translation: zh },
+    fr: { translation: fr },
+    ru: { translation: ru },
+    es: { translation: es },
+  },
+  lng: "en",            // Safe default — overwritten below after AsyncStorage read
+  fallbackLng: "en",
+  interpolation: { escapeValue: false },
+});
 
-  await i18n.use(initReactI18next).init({
-    resources: {
-      en: { translation: en },
-      ar: { translation: ar },
-      zh: { translation: zh },
-      fr: { translation: fr },
-      ru: { translation: ru },
-      es: { translation: es },
-    },
-    lng: savedLanguage || "en",
-    fallbackLng: "en",
-    interpolation: { escapeValue: false },
-  });
+// ── Async language restore — runs immediately after module loads ───────────────
+// Reads the saved language from AsyncStorage and switches i18n to it.
+// For non-UN languages also loads the cached dynamic package.
+// Fire-and-forget background refresh keeps backend Q-key strings up to date.
+(async () => {
+  try {
+    const savedLanguage = await AsyncStorage.getItem("cr_language");
+    const activeLang = savedLanguage || "en";
 
-  const activeLang = savedLanguage || "en";
+    if (savedLanguage && savedLanguage !== "en") {
+      // Non-UN languages: load from cached dynamic package first
+      if (!UN_CODES.includes(savedLanguage)) {
+        await loadDynamicLanguagePackage(savedLanguage);
+      }
+      await i18n.changeLanguage(savedLanguage);
+    }
 
-  if (!UN_CODES.includes(activeLang)) {
-    // Non-UN language: load from cache first for instant display, then refresh
-    await loadDynamicLanguagePackage(activeLang);
+    // Background refresh for ALL languages — merges backend Q-key strings
+    fetchLanguagePackageFromBackend(activeLang).catch(() => {});
+  } catch (e) {
+    console.warn("[i18n] Async language restore failed:", e);
   }
-
-  // Fire-and-forget background refresh for ALL languages (UN + non-UN).
-  // Merges backend Q-key and UI-string translations on top of the bundled locale.
-  // Does not block the UI — the app is already usable from the bundled locale.
-  fetchLanguagePackageFromBackend(activeLang).catch(() => {});
-};
-
-initI18n();
+})();
 
 export default i18n;

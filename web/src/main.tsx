@@ -14,7 +14,7 @@ void WEB_SESSION_ID;
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import i18n, { loadLanguagePackageFromCache } from "./i18n";
+import i18n, { loadLanguagePackage, loadLanguagePackageFromCache } from "./i18n";
 import App from "./App.tsx";
 import "./index.css";
 import { registerSyncTriggers } from "./utils/offlineQueue";
@@ -52,14 +52,18 @@ const queryClient = new QueryClient({
   // without triggering a second network call.
   fetchAndCacheCountries();
 
-  // ── C (startup): Restore returning user's language package from cache.
-  // This is synchronous-equivalent (reads localStorage, no network).
+  // ── C (startup): Restore returning user's language package.
+  // Try cache first (instant); if empty fall back to a network fetch so the
+  // language is always applied before React mounts.
   try {
     const savedLang = localStorage.getItem("cr_language");
-    console.log('[i18n] Loading language from cache:', savedLang);
     if (savedLang && savedLang !== "en") {
-      await loadLanguagePackageFromCache(savedLang);
-      // If no cache exists for this language the app stays on EN — acceptable.
+      const loaded = await loadLanguagePackageFromCache(savedLang);
+      if (!loaded) {
+        // No cache — fetch locale file + backend strings (locale file is static,
+        // so this resolves in <100 ms in most cases).
+        await loadLanguagePackage(savedLang);
+      }
     }
   } catch { /* ignore */ }
 

@@ -1,7 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import React, { Suspense, lazy, useEffect } from "react";
 import AppLayout from "./components/AppLayout";
-import i18n, { loadLanguagePackageFromCache } from "./i18n";
+import i18n, { loadLanguagePackage, loadLanguagePackageFromCache } from "./i18n";
 import { flushProgressQueue } from "./utils/progressQueue";
 
 const OnboardingPage = lazy(() => import("./pages/OnboardingPage"));
@@ -138,9 +138,11 @@ function AppContent() {
 
   useEffect(() => {
     const savedLang = localStorage.getItem("cr_language");
-    if (savedLang && savedLang !== "en") {
-      loadLanguagePackageFromCache(savedLang);
-    }
+    if (!savedLang || savedLang === "en") return;
+    // Try cache first; if cache is empty (e.g. storage cleared) fall back to network
+    loadLanguagePackageFromCache(savedLang).then((loaded) => {
+      if (!loaded) loadLanguagePackage(savedLang).catch(() => {});
+    });
   }, [location.pathname]);
 
   // Flush any queued progress entries as soon as the browser reports online.

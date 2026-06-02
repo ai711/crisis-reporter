@@ -4,22 +4,16 @@ interface CrisisTypeModalProps {
   onClose: () => void;
 }
 
-const CRISIS_TYPES: {
-  key: string;
-  name: string;
-  icon: string;
-  bg: string;
-  desc: string;
-}[] = [
-  { key: "earthquake",        name: "Earthquake",          icon: "🌍", bg: "#FEF3C7", desc: "Collapsed buildings, ground damage, structural failures" },
-  { key: "flood",             name: "Flood",               icon: "🌊", bg: "#DBEAFE", desc: "Water damage, flooded roads, submerged structures" },
-  { key: "tsunami",           name: "Tsunami",             icon: "🏄", bg: "#E0F2FE", desc: "Coastal flooding and wave-driven infrastructure damage" },
-  { key: "hurricane_cyclone", name: "Hurricane / Cyclone", icon: "🌀", bg: "#EDE9FE", desc: "Wind damage, roof collapse, flooding, downed trees" },
-  { key: "wildfire",          name: "Wildfire",            icon: "🔥", bg: "#FEE2E2", desc: "Fire damage to structures and emergency evacuations" },
-  { key: "explosion",         name: "Explosion",           icon: "💥", bg: "#FFE4CC", desc: "Blast damage to buildings and surrounding infrastructure" },
-  { key: "chemical_incident", name: "Chemical Incident",   icon: "☣️", bg: "#DCFCE7", desc: "Hazardous material leaks or contamination zones" },
-  { key: "conflict",          name: "Conflict",            icon: "⚔️",  bg: "#FEE2E2", desc: "Armed conflict damage to infrastructure and buildings" },
-  { key: "civil_unrest",      name: "Civil Unrest",        icon: "🚨", bg: "#FEF9C3", desc: "Damage from public disorder or civil disturbances" },
+const CRISIS_TYPES: { key: string; name: string; desc: string }[] = [
+  { key: "earthquake",        name: "Earthquake",          desc: "Structural damage to buildings and infrastructure caused by seismic activity" },
+  { key: "flood",             name: "Flood",               desc: "Water damage to properties, roads, and community areas" },
+  { key: "tsunami",           name: "Tsunami",             desc: "Coastal destruction caused by large ocean waves" },
+  { key: "hurricane_cyclone", name: "Hurricane / Cyclone", desc: "Wind and water damage from tropical storm systems" },
+  { key: "wildfire",          name: "Wildfire",            desc: "Fire damage to buildings, land, and surrounding areas" },
+  { key: "explosion",         name: "Explosion",           desc: "Blast damage to structures and nearby properties" },
+  { key: "chemical_incident", name: "Chemical Incident",   desc: "Damage or contamination caused by hazardous substances" },
+  { key: "conflict",          name: "Conflict",            desc: "Damage to buildings and infrastructure in conflict-affected areas" },
+  { key: "civil_unrest",      name: "Civil Unrest",        desc: "Property damage resulting from civil disturbances" },
 ];
 
 export default function CrisisTypeModal({ onClose }: CrisisTypeModalProps) {
@@ -56,17 +50,12 @@ export default function CrisisTypeModal({ onClose }: CrisisTypeModalProps) {
           {CRISIS_TYPES.map((ct, idx) => (
             <div key={ct.key}>
               <div style={s.item}>
-                <div style={{ ...s.iconCircle, background: ct.bg }}>
-                  <span style={s.iconEmoji}>{ct.icon}</span>
-                </div>
-                <div style={s.itemText}>
-                  <p style={s.itemName}>
-                    {t(`disaster_label.${ct.key}`, ct.name)}
-                  </p>
-                  <p style={s.itemDesc}>
-                    {t(`crisis_types.${ct.key}`, ct.desc)}
-                  </p>
-                </div>
+                <p style={s.itemName}>
+                  {t(`disaster_label.${ct.key}`, ct.name)}
+                </p>
+                <p style={s.itemDesc}>
+                  {t(`crisis_types.${ct.key}`, ct.desc)}
+                </p>
               </div>
               {idx < CRISIS_TYPES.length - 1 && <div style={s.divider} />}
             </div>
@@ -132,33 +121,12 @@ const s: Record<string, React.CSSProperties> = {
   },
   item: {
     padding: "12px 0",
-    display: "flex",
-    alignItems: "flex-start",
-    gap: 14,
-  },
-  iconCircle: {
-    width: 46,
-    height: 46,
-    borderRadius: "50%",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    flexShrink: 0,
-  },
-  iconEmoji: {
-    fontSize: 22,
-    lineHeight: "1",
-  },
-  itemText: {
-    flex: 1,
-    minWidth: 0,
-    paddingTop: 2,
   },
   itemName: {
     fontSize: 14,
     fontWeight: 700,
     color: "#1A2B4A",
-    margin: "0 0 3px",
+    margin: "0 0 4px",
   },
   itemDesc: {
     fontSize: 13,
@@ -169,6 +137,5 @@ const s: Record<string, React.CSSProperties> = {
   divider: {
     height: 1,
     background: "#F0F4F8",
-    marginLeft: 60,
   },
 };

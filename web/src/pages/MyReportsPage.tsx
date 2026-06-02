@@ -73,14 +73,6 @@ function formatLocation(report: ReporterReport, fallback = "Location not recorde
   return fallback;
 }
 
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
-}
-
 function formatDateTime(dateStr: string): string {
   return new Date(dateStr).toLocaleString(undefined, {
     year: "numeric",

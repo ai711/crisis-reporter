@@ -204,7 +204,8 @@ export default function OnboardingScreen() {
         const pkgResponse = await api.get(
           `/api/language-packages/active/${selectedLang}`
         );
-        const translationMap: Record<string, string> = pkgResponse.data;
+        const translationMap: Record<string, string> =
+          pkgResponse.data?.strings ?? pkgResponse.data;
         if (translationMap && Object.keys(translationMap).length > 0) {
           await AsyncStorage.setItem(
             `cr_lang_package_${selectedLang}`,
