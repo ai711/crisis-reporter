@@ -6,6 +6,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import NetInfo from "@react-native-community/netinfo";
 import { useAuthStore } from "./src/stores/authStore";
 import { initDeviceId, syncRegistrationQueue } from "./src/services/auth";
+import { flushProgressQueue } from "./src/utils/progressQueue";
 import "./src/i18n";
 
 import OnboardingScreen from "./src/screens/OnboardingScreen";
@@ -41,9 +42,13 @@ function Navigation() {
   }, []);
 
   useEffect(() => {
+    // Attempt to flush queued progress once on mount, then again whenever
+    // the device reports a network reconnection.
+    flushProgressQueue();
     const unsubscribe = NetInfo.addEventListener((state) => {
       if (state.isConnected === true && state.isInternetReachable !== false) {
         syncRegistrationQueue();
+        flushProgressQueue();
       }
     });
     return () => unsubscribe();

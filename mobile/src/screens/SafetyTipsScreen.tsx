@@ -16,6 +16,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialIcons } from '@expo/vector-icons';
 import api from '../services/api';
 import { useAuthStore } from '../stores/authStore';
+import { enqueueProgress } from '../utils/progressQueue';
 
 const { width: screenWidth } = Dimensions.get('window');
 const scale = (size: number) => Math.round((screenWidth / 375) * size);
@@ -170,17 +171,11 @@ export default function SafetyTipsScreen() {
     }
   }, [viewState]);
 
-  const syncPartComplete = useCallback(async (partCompleted: string) => {
+  const syncPartComplete = useCallback((partCompleted: string) => {
     const reporterId = useAuthStore.getState().reporterId;
     if (!reporterId) return;
-    try {
-      await api.post(`/api/reporters/${reporterId}/safety-progress`, {
-        part_completed: partCompleted,
-        completed_at: new Date().toISOString(),
-      });
-    } catch (e) {
-      console.warn('Progress sync failed', e);
-    }
+    // enqueueProgress posts immediately; queues to AsyncStorage if offline
+    enqueueProgress(reporterId, partCompleted);
   }, []);
 
   const checkBadge = useCallback(
