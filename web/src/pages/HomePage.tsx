@@ -8,6 +8,8 @@ import { detectPlatform } from "../services/auth";
 import api, { tokenStorage } from "../services/api";
 import CrisisTypeModal from "../components/CrisisTypeModal";
 import { loadLanguagePackageFromCache } from "../i18n";
+import { getPendingItems } from "../utils/offlineQueue";
+import type { QueuedReport } from "../types";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
@@ -21,6 +23,7 @@ export default function HomePage() {
   const [crisisModalOpen, setCrisisModalOpen] = useState(false);
   const [loginPromptOpen, setLoginPromptOpen] = useState(false);
   const [loginPromptBusy, setLoginPromptBusy] = useState(false);
+  const [offlineReports, setOfflineReports] = useState<QueuedReport[]>([]);
 
   // B19: Welcome card — shown only if not previously dismissed
   const [welcomeVisible, setWelcomeVisible] = useState(() => {
@@ -32,6 +35,13 @@ export default function HomePage() {
     setWelcomeVisible(false);
     try { localStorage.setItem("cr_welcome_dismissed", "true"); } catch { /* ignore */ }
   };
+
+  // Load offline queued reports from IndexedDB — shown in recent reports section
+  useEffect(() => {
+    getPendingItems()
+      .then((items) => setOfflineReports(items))
+      .catch(() => {});
+  }, []);
 
   // Apply cached language on mount so returning users see the correct language immediately
   useEffect(() => {
@@ -193,74 +203,87 @@ export default function HomePage() {
           </div>
         )}
 
-        {/* B14: Primary action — full-width, dominant */}
-        <button style={s.reportBtn} onClick={handleReportClick}>
-          {t('home.reportButton')}
-        </button>
-
-        {/* B15: "What can I report?" link — directly below the button */}
+        {/* B15: "What can I report?" link */}
         <button style={s.whatLink} onClick={() => setCrisisModalOpen(true)}>
+          <span style={s.whatLinkIcon}>📋</span>
           {t('home.whatCanReport')}
+          <span style={s.whatLinkChevron}>›</span>
         </button>
 
-        {reportsLoading ? (
-          <div style={{padding: '16px 20px', textAlign: 'center',
-            fontSize: 14, color: '#717782'}}>
-            {t('home.loadingReports')}
-          </div>
-        ) : reportsError ? (
-          <div style={{padding: '20px 16px'}}>
-            <div style={{background: 'white', borderRadius: 16, padding: '20px',
-              textAlign: 'center'}}>
-              <div style={{fontSize: 32, marginBottom: 8}}>📋</div>
-              <div style={{fontSize: 15, fontWeight: 600, color: '#1B1C1C',
-                marginBottom: 4}}>{t('home.noReportsTitle')}</div>
-              <div style={{fontSize: 13, color: '#717782'}}>
-                {t('home.noReportsBody')}
+        {/* ── Recent reports: offline queue + API history ── */}
+        <div>
+          {/* Offline pending reports — always shown if any exist */}
+          {offlineReports.length > 0 && (
+            <div>
+              <div style={s.sectionLabel}>
+                ⏳ {t('home.pendingSync', 'Pending Sync')} ({offlineReports.length})
               </div>
+              {offlineReports.slice(0, 3).map((qr) => {
+                const loc =
+                  qr.report.location?.location_building_name ||
+                  qr.report.location?.location_address ||
+                  (qr.report.location?.gps_latitude != null
+                    ? `${qr.report.location.gps_latitude.toFixed(3)}, ${(qr.report.location.gps_longitude ?? 0).toFixed(3)}`
+                    : t('home.unknownLocation', 'Unknown location'));
+                return (
+                  <div key={qr.local_id} style={s.reportRow}>
+                    <div style={s.pendingDot} />
+                    <div style={s.reportRowBody}>
+                      <div style={s.reportRowName}>{loc}</div>
+                      <div style={s.reportRowMeta}>
+                        {qr.report.damage_level} · {new Date(qr.created_at).toLocaleDateString()}
+                      </div>
+                    </div>
+                    <span style={s.pendingBadge}>{t('home.offline', 'Offline')}</span>
+                  </div>
+                );
+              })}
             </div>
-          </div>
-        ) : reportsData?.reports?.length === 0 ? (
-          <div style={{padding: '20px 16px'}}>
-            <div style={{background: 'white', borderRadius: 16, padding: '20px',
-              textAlign: 'center'}}>
-              <div style={{fontSize: 32, marginBottom: 8}}>📋</div>
-              <div style={{fontSize: 15, fontWeight: 600, color: '#1B1C1C',
-                marginBottom: 4}}>{t('home.noReportsTitle')}</div>
-              <div style={{fontSize: 13, color: '#717782'}}>
+          )}
+
+          {/* API-fetched recent reports */}
+          {reportsLoading ? (
+            <div style={s.reportsLoading}>{t('home.loadingReports', 'Loading reports…')}</div>
+          ) : reportsError ? null : reportsData?.reports?.length === 0 && offlineReports.length === 0 ? (
+            <div style={s.emptyCard}>
+              <div style={{fontSize: 28, marginBottom: 6}}>📋</div>
+              <div style={{fontSize: 14, fontWeight: 600, color: '#1B1C1C', marginBottom: 4}}>
+                {t('home.noReportsTitle')}
+              </div>
+              <div style={{fontSize: 12, color: '#717782'}}>
                 {t('home.firstReportHint')}
               </div>
             </div>
-          </div>
-        ) : (
-          <div style={{padding: '0 16px'}}>
-            <div style={{fontSize: 11, fontWeight: 700, color: '#717782',
-              textTransform: 'uppercase', letterSpacing: '1.2px',
-              marginBottom: 8, marginTop: 16}}>
-              {t('home.recentReports')}
-            </div>
-            {reportsData?.reports?.slice(0, 3).map((report: any) => (
-              <div key={report.id} style={{background: 'white', borderRadius: 16,
-                padding: '14px 16px', marginBottom: 10,
-                display: 'flex', alignItems: 'center', gap: 12}}>
-                <div style={{width: 8, height: 8, borderRadius: 4, flexShrink: 0,
-                  background: report.flag_status === 'green' ? '#38A169'
-                    : report.flag_status === 'red' ? '#E53E3E'
-                    : report.flag_status === 'orange' ? '#F2994A'
-                    : '#9CA3AF'}} />
-                <div style={{flex: 1, minWidth: 0}}>
-                  <div style={{fontSize: 13, fontWeight: 600, color: '#1B1C1C',
-                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}}>
-                    {report.building_name || report.infrastructure_name || 'Unnamed location'}
-                  </div>
-                  <div style={{fontSize: 11, color: '#717782', marginTop: 2}}>
-                    {report.damage_level} · {new Date(report.submitted_at).toLocaleDateString()}
+          ) : (reportsData?.reports?.length ?? 0) > 0 ? (
+            <div>
+              <div style={s.sectionLabel}>{t('home.recentReports', 'Recent Reports')}</div>
+              {(reportsData?.reports as any[])?.slice(0, 3).map((report: any) => (
+                <div key={report.id} style={s.reportRow}>
+                  <div style={{
+                    width: 8, height: 8, borderRadius: 4, flexShrink: 0,
+                    background: report.flag_status === 'green' ? '#38A169'
+                      : report.flag_status === 'red' ? '#E53E3E'
+                      : report.flag_status === 'orange' ? '#F2994A'
+                      : '#9CA3AF',
+                  }} />
+                  <div style={s.reportRowBody}>
+                    <div style={s.reportRowName}>
+                      {report.building_name || report.infrastructure_name || t('home.unnamedLocation', 'Unnamed location')}
+                    </div>
+                    <div style={s.reportRowMeta}>
+                      {report.damage_level} · {new Date(report.submitted_at).toLocaleDateString()}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
+              ))}
+            </div>
+          ) : null}
+        </div>
+
+        {/* B14: Primary action — moved to bottom of 1st-half content */}
+        <button style={s.reportBtn} onClick={handleReportClick}>
+          {t('home.reportButton')}
+        </button>
       </main>
 
       {/* ── Login prompt bottom sheet ── */}
@@ -356,18 +379,99 @@ const s: Record<string, React.CSSProperties> = {
     fontFamily: "var(--font-family)",
     minHeight: 52,
   },
-  // B15: "What can I report?" link
+  // B15: "What can I report?" — styled as a tappable row card
   whatLink: {
-    background: "transparent",
-    border: "none",
-    color: "#0468B1",
-    fontSize: 13,
-    fontWeight: 500,
+    background: "#fff",
+    border: "1px solid #E2E8F0",
+    borderRadius: 12,
+    padding: "12px 16px",
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
     cursor: "pointer",
-    textDecoration: "underline",
-    textAlign: "center",
-    padding: "4px 0",
-    marginTop: -8, // pull up closer to the button
+    width: "100%",
+    boxSizing: "border-box" as const,
+    boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
+    color: "#1A2B4A",
+    fontSize: 14,
+    fontWeight: 600,
+    textAlign: "left" as const,
+  },
+  whatLinkIcon: {
+    fontSize: 18,
+    lineHeight: "1",
+    flexShrink: 0,
+  },
+  whatLinkChevron: {
+    marginLeft: "auto",
+    fontSize: 18,
+    color: "#9CA3AF",
+    fontWeight: 400,
+  },
+  sectionLabel: {
+    fontSize: 11,
+    fontWeight: 700,
+    color: '#717782',
+    textTransform: 'uppercase' as const,
+    letterSpacing: '1.2px',
+    marginBottom: 8,
+    marginTop: 4,
+  },
+  reportRow: {
+    background: 'white',
+    borderRadius: 12,
+    padding: '12px 14px',
+    marginBottom: 8,
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+    border: '1px solid #F0F4F8',
+  },
+  reportRowBody: {
+    flex: 1,
+    minWidth: 0,
+  },
+  reportRowName: {
+    fontSize: 13,
+    fontWeight: 600,
+    color: '#1B1C1C',
+    whiteSpace: 'nowrap' as const,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+  },
+  reportRowMeta: {
+    fontSize: 11,
+    color: '#717782',
+    marginTop: 2,
+  },
+  pendingDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    flexShrink: 0,
+    background: '#F5A623',
+  },
+  pendingBadge: {
+    fontSize: 11,
+    fontWeight: 600,
+    color: '#F5A623',
+    background: 'rgba(245,166,35,0.12)',
+    borderRadius: 6,
+    padding: '2px 8px',
+    flexShrink: 0,
+  },
+  reportsLoading: {
+    padding: '12px 0',
+    fontSize: 13,
+    color: '#717782',
+    textAlign: 'center' as const,
+  },
+  emptyCard: {
+    background: 'white',
+    borderRadius: 14,
+    padding: '20px',
+    textAlign: 'center' as const,
+    marginTop: 4,
   },
   reportsCard: {
     background: "var(--color-white)",

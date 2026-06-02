@@ -68,43 +68,6 @@ function InfoRow({
   );
 }
 
-// ── Tech row ───────────────────────────────────────────────────────────────────
-
-function TechRow({
-  label,
-  value,
-  last = false,
-}: {
-  label: string;
-  value: string;
-  last?: boolean;
-}) {
-  return (
-    <div
-      style={{
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        padding: "12px 16px",
-        borderBottom: last ? "none" : "1px solid #f0f4f8",
-      }}
-    >
-      <span style={{ fontSize: 13, color: "#718096", fontWeight: 500 }}>{label}</span>
-      <span
-        style={{
-          fontSize: 13,
-          color: BLUE,
-          fontWeight: 600,
-          textAlign: "right",
-          maxWidth: "58%",
-        }}
-      >
-        {value}
-      </span>
-    </div>
-  );
-}
-
 // ── Page ───────────────────────────────────────────────────────────────────────
 
 export default function AboutPage() {
@@ -192,36 +155,7 @@ export default function AboutPage() {
 
         {/* ── Version info card ── */}
         <Card>
-          <InfoRow label={t('about.version')} value="1.0.0" />
-          <InfoRow label={t('about.build_date')} value="May 2026" last />
-        </Card>
-
-        {/* ── Technology card ── */}
-        <Card>
-          <div
-            style={{
-              padding: "12px 16px 8px",
-              borderBottom: "1px solid #e2e8f0",
-            }}
-          >
-            <p
-              style={{
-                fontSize: 11,
-                fontWeight: 700,
-                color: "#a0aec0",
-                textTransform: "uppercase",
-                letterSpacing: 0.8,
-                margin: 0,
-              }}
-            >
-              {t('about.built_with')}
-            </p>
-          </div>
-          <TechRow label="Backend"    value="FastAPI + PostgreSQL" />
-          <TechRow label="Mobile App" value="React Native + Expo" />
-          <TechRow label="Web App"    value="React + Vite" />
-          <TechRow label="Maps"       value="MapLibre GL JS" />
-          <TechRow label="Hosting"    value="Railway" last />
+          <InfoRow label={t('about.version')} value="1.0.0" last />
         </Card>
 
         {/* ── Legal text ── */}

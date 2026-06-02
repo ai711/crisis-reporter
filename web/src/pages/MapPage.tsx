@@ -237,6 +237,7 @@ export default function MapPage() {
 
   const [showZoomHint, setShowZoomHint] = useState(false);
   const [selectedPin, setSelectedPin] = useState<PinDetail | null>(null);
+  const [reportsLoading, setReportsLoading] = useState(false);
 
   // D30: Offline detection
   const [isOnline, setIsOnline] = useState(navigator.onLine);
@@ -370,6 +371,7 @@ export default function MapPage() {
       setShowZoomHint(initialZoom < 14);
       if (initialZoom >= 14) fetchBuildings(mapInstance);
 
+      setReportsLoading(true);
       try {
         const crisisRes = await api.get("/api/crises/active");
         const list = Array.isArray(crisisRes.data)
@@ -383,7 +385,9 @@ export default function MapPage() {
           const source = mapInstance.getSource("reports") as maplibregl.GeoJSONSource | undefined;
           source?.setData(reportsGeoJSON(reportsRes.data.reports));
         }
-      } catch { /* reports non-critical */ }
+      } catch { /* reports non-critical */ } finally {
+        setReportsLoading(false);
+      }
     });
 
     return () => {
@@ -416,6 +420,15 @@ export default function MapPage() {
       ) : (
         <div style={s.mapWrapper}>
           <div ref={mapContainer} style={s.map} />
+
+          {/* Reports loading chip — shown while crisis + reports fetch runs */}
+          {reportsLoading && (
+            <div style={s.reportsLoadingChip}>
+              <style>{`@keyframes cr-map-spin { to { transform: rotate(360deg); } }`}</style>
+              <div style={s.miniSpinner} />
+              <span style={s.reportsLoadingText}>{t('map.loading_reports', 'Loading reports…')}</span>
+            </div>
+          )}
 
           {showZoomHint && (
             <div style={s.zoomHint}>{t('map.zoom_hint')}</div>
@@ -539,6 +552,35 @@ const s: Record<string, React.CSSProperties> = {
     left: 0,
     right: 0,
     bottom: 0,
+  },
+  reportsLoadingChip: {
+    position: "absolute",
+    top: 12,
+    left: "50%",
+    transform: "translateX(-50%)",
+    background: "rgba(255,255,255,0.96)",
+    borderRadius: 20,
+    padding: "7px 14px",
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
+    zIndex: 10,
+    whiteSpace: "nowrap",
+  },
+  miniSpinner: {
+    width: 14,
+    height: 14,
+    border: "2px solid #e0e0e0",
+    borderTop: "2px solid #0468B1",
+    borderRadius: "50%",
+    flexShrink: 0,
+    animation: "cr-map-spin 0.8s linear infinite",
+  },
+  reportsLoadingText: {
+    fontSize: 12,
+    fontWeight: 600,
+    color: "#1A2B4A",
   },
   zoomHint: {
     position: "absolute",

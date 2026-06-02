@@ -23,6 +23,31 @@ const API_URL = "https://crisis-reporter-production.up.railway.app";
 // Module-level flag — survives navigation, ensures one check per app session
 const packageSyncDone = { current: false };
 
+// Crisis type icon + background maps for the "What can I report?" modal
+const CRISIS_ICONS: Record<string, string> = {
+  earthquake:        "🌍",
+  flood:             "🌊",
+  tsunami:           "🏄",
+  hurricane_cyclone: "🌀",
+  wildfire:          "🔥",
+  explosion:         "💥",
+  chemical_incident: "☣️",
+  conflict:          "⚔️",
+  civil_unrest:      "🚨",
+};
+
+const CRISIS_BG: Record<string, string> = {
+  earthquake:        "#FEF3C7",
+  flood:             "#DBEAFE",
+  tsunami:           "#E0F2FE",
+  hurricane_cyclone: "#EDE9FE",
+  wildfire:          "#FEE2E2",
+  explosion:         "#FFE4CC",
+  chemical_incident: "#DCFCE7",
+  conflict:          "#FEE2E2",
+  civil_unrest:      "#FEF9C3",
+};
+
 interface HomeScreenProps {
   navigation: any;
 }
@@ -402,15 +427,23 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
               </TouchableOpacity>
             </View>
             <ScrollView showsVerticalScrollIndicator={false}>
-              {Object.values(
+              {Object.entries(
                 t("whatCanIReport.types", { returnObjects: true }) as Record<
                   string,
                   { name: string; description: string }
                 >
-              ).map((type) => (
-                <View key={type.name} style={styles.crisisTypeRow}>
-                  <Text style={styles.crisisTypeName}>{type.name}</Text>
-                  <Text style={styles.crisisTypeDesc}>{type.description}</Text>
+              ).map(([key, type], idx, arr) => (
+                <View key={key}>
+                  <View style={styles.crisisTypeRow}>
+                    <View style={[styles.crisisIconCircle, { backgroundColor: CRISIS_BG[key] ?? "#F5F5F5" }]}>
+                      <Text style={styles.crisisIcon}>{CRISIS_ICONS[key] ?? "📋"}</Text>
+                    </View>
+                    <View style={styles.crisisTypeText}>
+                      <Text style={styles.crisisTypeName}>{type.name}</Text>
+                      <Text style={styles.crisisTypeDesc}>{type.description}</Text>
+                    </View>
+                  </View>
+                  {idx < arr.length - 1 && <View style={styles.crisisTypeDivider} />}
                 </View>
               ))}
             </ScrollView>
@@ -836,18 +869,39 @@ const styles = StyleSheet.create({
   },
   crisisTypeRow: {
     paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#F6F3F2",
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+  },
+  crisisIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  crisisIcon: {
+    fontSize: scale(22),
+  },
+  crisisTypeText: {
+    flex: 1,
+    paddingTop: 2,
   },
   crisisTypeName: {
     fontSize: scale(15),
     fontWeight: "600",
     color: "#1B1C1C",
-    marginBottom: 2,
+    marginBottom: 3,
   },
   crisisTypeDesc: {
     fontSize: scale(13),
     color: "#717782",
     lineHeight: scale(13) * 1.5,
+  },
+  crisisTypeDivider: {
+    height: 1,
+    backgroundColor: "#F0F4F8",
+    marginLeft: 56,
   },
 });

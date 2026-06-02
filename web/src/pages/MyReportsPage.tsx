@@ -3,6 +3,8 @@ import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "../stores/authStore";
 import api, { tokenStorage } from "../services/api";
+import { getPendingItems } from "../utils/offlineQueue";
+import type { QueuedReport } from "../types";
 
 interface ReporterReport {
   id: string;
@@ -17,8 +19,9 @@ interface ReporterReport {
   first_photo_url: string | null;
   status?: string;
   flag_status?: string;
-  disaster_type?: string;
-  infrastructure_name?: string;
+  disaster_type?: string | null;
+  infrastructure_name?: string | null;
+  infrastructure_type?: string | null;
 }
 
 interface SessionReport {
@@ -100,6 +103,13 @@ function useWindowWidth(): number {
 
 const PAGE_SIZE = 20;
 
+const FLAG_BADGE: Record<string, { bg: string; color: string; label: string }> = {
+  green:  { bg: "rgba(56,161,105,0.12)",  color: "#38A169", label: "✓ Verified"  },
+  orange: { bg: "rgba(242,153,74,0.12)",  color: "#F2994A", label: "⚠ Review"   },
+  red:    { bg: "rgba(229,62,62,0.12)",   color: "#E53E3E", label: "✗ Flagged"  },
+  grey:   { bg: "rgba(156,163,175,0.12)", color: "#9CA3AF", label: "◉ Pending"  },
+};
+
 export default function MyReportsPage() {
   const { t } = useTranslation();
   const { reporterId } = useAuthStore();
@@ -108,6 +118,7 @@ export default function MyReportsPage() {
   const isDesktop = width > 768;
 
   const [reports, setReports] = useState<ReporterReport[]>([]);
+  const [offlineReports, setOfflineReports] = useState<QueuedReport[]>([]);
   const [loading, setLoading] = useState(!!reporterId);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -176,6 +187,13 @@ export default function MyReportsPage() {
     fetchReports();
   }, [fetchReports]);
 
+  // Load offline queued reports from IndexedDB
+  useEffect(() => {
+    getPendingItems()
+      .then(setOfflineReports)
+      .catch(() => {});
+  }, []);
+
   const emptyMessage = !reporterId
     ? t('my_reports.empty_anonymous')
     : t('my_reports.empty_title');
@@ -183,17 +201,38 @@ export default function MyReportsPage() {
   const statusText = (report: ReporterReport) =>
     report.status === "submitted" ? "✓ Submitted" : (report.status ?? "Submitted");
 
-  const renderDetailFields = (report: ReporterReport) => (
-    <div style={styles.detailFields}>
-      <p style={styles.detailField}><strong>{t('my_reports.label_location')}</strong> {formatLocation(report, t('my_reports.location_not_recorded'))}</p>
-      <p style={styles.detailField}><strong>{t('my_reports.label_damage')}</strong> {DAMAGE_LABEL[report.damage_level] ?? report.damage_level}</p>
-      {report.disaster_type && <p style={styles.detailField}><strong>{t('my_reports.label_disaster_type')}</strong> {report.disaster_type}</p>}
-      <p style={styles.detailField}><strong>{t('my_reports.label_date')}</strong> {formatDateTime(report.submitted_at)}</p>
-      <p style={styles.detailField}><strong>{t('my_reports.label_status')}</strong> {statusText(report)}</p>
-      {report.infrastructure_name && <p style={styles.detailField}><strong>Infrastructure:</strong> {report.infrastructure_name}</p>}
-      {report.building_name && <p style={styles.detailField}><strong>Building:</strong> {report.building_name}</p>}
-    </div>
-  );
+  const renderDetailFields = (report: ReporterReport) => {
+    const flagInfo = report.flag_status ? FLAG_BADGE[report.flag_status] : null;
+    return (
+      <div style={styles.detailFields}>
+        <p style={styles.detailField}><strong>📍 {t('my_reports.label_location')}</strong> {formatLocation(report, t('my_reports.location_not_recorded'))}</p>
+        <p style={styles.detailField}><strong>⚠ {t('my_reports.label_damage')}</strong> {DAMAGE_LABEL[report.damage_level] ?? report.damage_level}</p>
+        {report.disaster_type && (
+          <p style={styles.detailField}><strong>⚡ {t('my_reports.label_disaster_type')}</strong> {report.disaster_type}</p>
+        )}
+        {(report.infrastructure_name || report.infrastructure_type) && (
+          <p style={styles.detailField}><strong>🏗 Infrastructure</strong> {report.infrastructure_name || report.infrastructure_type}</p>
+        )}
+        {report.building_name && (
+          <p style={styles.detailField}><strong>🏢 Building</strong> {report.building_name}</p>
+        )}
+        <p style={styles.detailField}><strong>🕐 {t('my_reports.label_date')}</strong> {formatDateTime(report.submitted_at)}</p>
+        <p style={styles.detailField}>
+          <strong>📊 Review Status</strong>{" "}
+          {flagInfo ? (
+            <span style={{ ...styles.flagBadge, background: flagInfo.bg, color: flagInfo.color }}>
+              {flagInfo.label}
+            </span>
+          ) : (
+            statusText(report)
+          )}
+        </p>
+        {report.photo_count > 0 && (
+          <p style={styles.detailField}><strong>📷 Photos</strong> {report.photo_count}</p>
+        )}
+      </div>
+    );
+  };
 
   // A6: Mobile full-screen detail view
   if (!isDesktop && selectedReport) {
@@ -258,6 +297,46 @@ export default function MyReportsPage() {
               </p>
             )}
 
+            {/* Offline queued reports — shown at top */}
+            {offlineReports.length > 0 && (
+              <>
+                <p style={styles.sectionLabel}>⏳ Pending Sync ({offlineReports.length})</p>
+                {offlineReports.map((qr) => {
+                  const loc =
+                    qr.report.location?.location_building_name ||
+                    qr.report.location?.location_address ||
+                    (qr.report.location?.gps_latitude != null
+                      ? `${qr.report.location.gps_latitude.toFixed(4)}, ${(qr.report.location.gps_longitude ?? 0).toFixed(4)}`
+                      : t('my_reports.location_not_recorded'));
+                  const dmgColor = DAMAGE_COLOR[qr.report.damage_level as string] ?? "#999";
+                  const dmgLabel = DAMAGE_LABEL[qr.report.damage_level as string] ?? qr.report.damage_level;
+                  return (
+                    <div key={qr.local_id} style={styles.card}>
+                      <div style={styles.thumbnailPlaceholder}>
+                        <span style={{ fontSize: 22 }}>⏳</span>
+                      </div>
+                      <div style={styles.cardBody}>
+                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" as const, alignItems: "center" }}>
+                          <span style={{ ...styles.damageBadge, background: dmgColor + "22", color: dmgColor }}>
+                            {dmgLabel}
+                          </span>
+                          <span style={{ ...styles.flagBadge, background: "rgba(245,166,35,0.12)", color: "#F5A623" }}>
+                            Offline
+                          </span>
+                        </div>
+                        <p style={styles.cardDate}>🕐 {formatDateTime(qr.created_at)}</p>
+                        <p style={styles.cardLocation}>📍 {loc}</p>
+                        {qr.report.infrastructure_type && (
+                          <p style={styles.cardMeta}>🏗 {qr.report.infrastructure_type}</p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+                {reports.length > 0 && <p style={styles.sectionLabel}>Submitted</p>}
+              </>
+            )}
+
             {/* A5: Desktop column headers */}
             {isDesktop && (
               <div style={styles.columnHeaders}>
@@ -272,6 +351,7 @@ export default function MyReportsPage() {
               const color = DAMAGE_COLOR[report.damage_level] ?? "#999";
               const label = DAMAGE_LABEL[report.damage_level] ?? report.damage_level;
               const st = statusText(report);
+              const flagInfo = report.flag_status ? FLAG_BADGE[report.flag_status] : null;
 
               if (isDesktop) {
                 return (
@@ -288,7 +368,7 @@ export default function MyReportsPage() {
                         {label}
                       </span>
                     </span>
-                    <span style={styles.desktopCell}>{formatDate(report.submitted_at)}</span>
+                    <span style={styles.desktopCell}>{formatDateTime(report.submitted_at)}</span>
                     <span style={{ ...styles.desktopCell, color: "#388e3c" }}>{st}</span>
                   </div>
                 );
@@ -308,12 +388,29 @@ export default function MyReportsPage() {
                     </div>
                   )}
                   <div style={styles.cardBody}>
-                    <span style={{ ...styles.damageBadge, background: color + "22", color }}>
-                      {label}
-                    </span>
-                    <p style={styles.cardDate}>{formatDate(report.submitted_at)}</p>
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" as const, alignItems: "center" }}>
+                      <span style={{ ...styles.damageBadge, background: color + "22", color }}>
+                        {label}
+                      </span>
+                      {flagInfo && (
+                        <span style={{ ...styles.flagBadge, background: flagInfo.bg, color: flagInfo.color }}>
+                          {flagInfo.label}
+                        </span>
+                      )}
+                    </div>
+                    <p style={styles.cardDate}>🕐 {formatDateTime(report.submitted_at)}</p>
                     <p style={styles.cardLocation}>📍 {formatLocation(report, t('my_reports.location_not_recorded'))}</p>
-                    <span style={styles.cardStatus}>{st}</span>
+                    {(report.disaster_type || report.infrastructure_name || report.infrastructure_type) && (
+                      <p style={styles.cardMeta}>
+                        {report.disaster_type && <span>⚡ {report.disaster_type}</span>}
+                        {(report.infrastructure_name || report.infrastructure_type) && (
+                          <span>
+                            {report.disaster_type ? " · " : ""}
+                            🏗 {report.infrastructure_name || report.infrastructure_type}
+                          </span>
+                        )}
+                      </p>
+                    )}
                   </div>
                 </div>
               );
@@ -511,8 +608,25 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 12,
     fontWeight: 600,
   },
-  cardDate: { fontSize: 13, color: "#888", margin: 0 },
-  cardLocation: { fontSize: 13, color: "#1A2B4A", margin: 0 },
+  sectionLabel: {
+    fontSize: 11,
+    fontWeight: 700,
+    color: "#717782",
+    textTransform: "uppercase" as const,
+    letterSpacing: "0.08em",
+    margin: "8px 0 6px",
+  },
+  flagBadge: {
+    alignSelf: "flex-start",
+    display: "inline-block",
+    padding: "2px 8px",
+    borderRadius: 20,
+    fontSize: 11,
+    fontWeight: 600,
+  },
+  cardDate: { fontSize: 12, color: "#888", margin: "2px 0 0" },
+  cardLocation: { fontSize: 13, color: "#1A2B4A", margin: "2px 0 0" },
+  cardMeta: { fontSize: 12, color: "#717782", margin: "2px 0 0" },
   cardStatus: { fontSize: 12, color: "#717782" },
   loadMoreBtn: {
     marginTop: 4,

@@ -80,10 +80,6 @@ export default function AboutScreen() {
             <Text style={styles.infoLabel}>Version</Text>
             <Text style={styles.infoValue}>1.0.0</Text>
           </View>
-          <View style={[styles.infoRow, { marginTop: 8 }]}>
-            <Text style={styles.infoLabel}>Build</Text>
-            <Text style={styles.infoValue}>prototype</Text>
-          </View>
         </View>
 
         <Text style={styles.versionNote}>

@@ -35,6 +35,10 @@ interface SubmittedReport {
   } | null;
   photo_count: number;
   first_photo_url: string | null;
+  flag_status?: string | null;
+  disaster_type?: string | null;
+  infrastructure_type?: string | null;
+  infrastructure_name?: string | null;
 }
 
 interface SubmittedReportsResponse {
@@ -101,9 +105,17 @@ const formatDamageLevel = (level: string | null | undefined): string => {
 
 const getDamagePill = (level: string | null | undefined) => {
   if (!level) return { bg: 'rgba(113,119,130,0.1)', color: '#717782' };
-  if (level === 'completely_destroyed') return { bg: 'rgba(229,62,62,0.1)', color: '#E53E3E' };
-  if (level === 'partially_damaged') return { bg: 'rgba(242,153,74,0.1)', color: '#F2994A' };
+  if (level === 'completely_destroyed' || level === 'complete') return { bg: 'rgba(229,62,62,0.1)', color: '#E53E3E' };
+  if (level === 'partially_damaged' || level === 'partial') return { bg: 'rgba(242,153,74,0.1)', color: '#F2994A' };
   return { bg: 'rgba(56,161,105,0.1)', color: '#38A169' };
+};
+
+const getFlagPill = (flag: string | null | undefined) => {
+  if (!flag) return null;
+  if (flag === 'green')  return { bg: 'rgba(56,161,105,0.1)',  color: '#38A169', label: '✓ Verified' };
+  if (flag === 'orange') return { bg: 'rgba(242,153,74,0.1)',  color: '#F2994A', label: '⚠ Under Review' };
+  if (flag === 'red')    return { bg: 'rgba(229,62,62,0.1)',   color: '#E53E3E', label: '✗ Flagged' };
+  return                        { bg: 'rgba(156,163,175,0.1)', color: '#9CA3AF', label: '◉ Processing' };
 };
 
 // ── Component ──────────────────────────────────────────────────────────────────
@@ -477,6 +489,7 @@ export default function MyReportsScreen() {
 
             {submittedReports.map((report) => {
               const damagePill = getDamagePill(report.damage_level);
+              const flagPill = getFlagPill(report.flag_status);
               return (
                 <TouchableOpacity
                   key={report.id}
@@ -486,8 +499,10 @@ export default function MyReportsScreen() {
                 >
                   {/* ROW 1: Status pill + date */}
                   <View style={styles.cardRow1}>
-                    <View style={[styles.statusPill, { backgroundColor: 'rgba(56,161,105,0.12)' }]}>
-                      <Text style={[styles.statusPillText, { color: '#38A169' }]}>Submitted</Text>
+                    <View style={[styles.statusPill, { backgroundColor: flagPill?.bg ?? 'rgba(56,161,105,0.12)' }]}>
+                      <Text style={[styles.statusPillText, { color: flagPill?.color ?? '#38A169' }]}>
+                        {flagPill?.label ?? 'Submitted'}
+                      </Text>
                     </View>
                     <Text style={styles.cardDate}>{formatTime(report.submitted_at)}</Text>
                   </View>
@@ -507,6 +522,20 @@ export default function MyReportsScreen() {
                       {formatDamageLevel(report.damage_level)}
                     </Text>
                   </View>
+
+                  {/* ROW 4: Disaster type + infrastructure */}
+                  {(report.disaster_type || report.infrastructure_name || report.infrastructure_type) && (
+                    <Text style={styles.submittedMetaText} numberOfLines={1}>
+                      {[
+                        report.disaster_type ? `⚡ ${report.disaster_type}` : null,
+                        (report.infrastructure_name || report.infrastructure_type)
+                          ? `🏗 ${report.infrastructure_name || report.infrastructure_type}`
+                          : null,
+                      ]
+                        .filter(Boolean)
+                        .join('  ·  ')}
+                    </Text>
+                  )}
                 </TouchableOpacity>
               );
             })}
@@ -726,11 +755,18 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  // Card ROW 4: infrastructure type
+  // Card ROW 4: infrastructure type (queued cards)
   infraText: {
     fontSize: scale(13),
     color: '#717782',
     marginTop: 4,
+  },
+
+  // Submitted card meta row (disaster type + infrastructure)
+  submittedMetaText: {
+    fontSize: scale(12),
+    color: '#717782',
+    marginTop: 6,
   },
 
   // Failed attempts note
