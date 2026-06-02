@@ -113,6 +113,418 @@ async def _seed_notification_types() -> None:
         logger.info("Notification types seeded/updated to Chapter 13 spec")
 
 
+async def _seed_safety_tips_content() -> None:
+    """Seed rich multi-slide safety tips content for all 9 disaster types and Parts B/C.
+
+    Rules:
+    - Only inserts an AppSetting row when none exists — never overwrites admin edits.
+    - Part A slides are stored as {title, dos, donts} so the mobile slide renderer can
+      display the DO / DON'T labels correctly.
+    - Part B / Part C slides are stored as {title, bullets}.
+    - After seeding, triggers StringKey creation for each disaster so the auto-translation
+      pipeline can produce translated versions for all active languages.
+    """
+    from app.models.app_setting import AppSetting
+
+    # ── Part A — 9 disaster types × 7 slides each ─────────────────────────────
+    # Format: {"title": str, "dos": [str, ...], "donts": [str, ...]}
+    # Tiles have the Do:/Don't: prefix stripped; bullets placed in the correct array.
+
+    _DISASTER_SLIDES: dict[str, list[dict]] = {
+        "earthquake": [
+            {"title": "Drop and Take Cover",
+             "dos": ["Drop to your hands and knees immediately",
+                     "Take cover under a sturdy table or desk, or against an interior wall away from windows"],
+             "donts": []},
+            {"title": "Hold On and Stay Put",
+             "dos": ["Hold on and protect your head and neck with your arms",
+                     "Stay where you are until the shaking stops — most injuries happen when people try to move"],
+             "donts": []},
+            {"title": "Move Away from Outdoor Hazards",
+             "dos": ["If outdoors, move away from buildings, streetlights, and utility wires",
+                     "If in a vehicle, pull over away from buildings and overpasses and stay inside"],
+             "donts": []},
+            {"title": "After the Shaking Stops",
+             "dos": ["After shaking stops, check yourself and others for injuries before moving",
+                     "Expect aftershocks — drop, cover, and hold on each time"],
+             "donts": []},
+            {"title": "Run Outside or Use Doorways",
+             "dos": [],
+             "donts": ["Do not run outside while shaking is happening — most injuries occur when people try to move during shaking",
+                       "Do not stand in a doorway — doorways offer no special protection"]},
+            {"title": "Use Elevators or Open Flames",
+             "dos": [],
+             "donts": ["Do not use elevators after an earthquake — use stairs only",
+                       "Do not light candles, matches, or any open flame — gas pipes may be damaged"]},
+            {"title": "Re-enter or Spread Rumours",
+             "dos": [],
+             "donts": ["Do not return to a damaged building until declared structurally safe",
+                       "Do not spread unverified information — only share from official sources"]},
+        ],
+        "flood": [
+            {"title": "Move to Higher Ground",
+             "dos": ["Move immediately to higher ground if flooding is imminent",
+                     "Turn off utilities at the main switch if safe to do so"],
+             "donts": []},
+            {"title": "Disconnect Appliances and Evacuate",
+             "dos": ["Disconnect electrical appliances — do not touch them if wet or standing in water",
+                     "If evacuation is ordered, leave immediately with your emergency kit"],
+             "donts": []},
+            {"title": "If Trapped, Signal for Help",
+             "dos": ["If trapped, move to the highest floor and signal for help from a window",
+                     "Drink only bottled or boiled water — floodwater contaminates supplies"],
+             "donts": []},
+            {"title": "Protect Yourself and Monitor Updates",
+             "dos": ["Wear rubber boots and waterproof gloves if walking through floodwater",
+                     "Listen to official emergency broadcasts for updates and evacuation routes"],
+             "donts": []},
+            {"title": "Walk or Drive Through Floodwater",
+             "dos": [],
+             "donts": ["Do not walk through moving floodwater — 15 cm of fast-moving water can knock an adult down",
+                       "Do not drive through flooded roads — water depth is impossible to judge"]},
+            {"title": "Touch Floodwater or Return Too Soon",
+             "dos": [],
+             "donts": ["Do not touch floodwater if avoidable — it may contain sewage, chemicals, or debris",
+                       "Do not return home until authorities declare it safe"]},
+            {"title": "Use Damaged Appliances or Ignore Orders",
+             "dos": [],
+             "donts": ["Do not use electrical equipment that has been in contact with floodwater",
+                       "Do not ignore evacuation orders — each flood event is different"]},
+        ],
+        "tsunami": [
+            {"title": "Move to Higher Ground Immediately",
+             "dos": ["If you feel a strong earthquake near the coast, move immediately to higher ground — do not wait for a warning",
+                     "A sudden recession of the sea is a natural warning sign — move inland immediately"],
+             "donts": []},
+            {"title": "Move on Foot and Seek High Ground",
+             "dos": ["Move on foot if possible — roads may be congested or damaged",
+                     "Go to a designated tsunami evacuation zone or the highest ground available"],
+             "donts": []},
+            {"title": "If Caught in a Wave",
+             "dos": ["If caught in a wave, grab onto something that floats",
+                     "After the first wave, stay where you are — later waves are often larger"],
+             "donts": []},
+            {"title": "Wait for the Official All-Clear",
+             "dos": ["Listen to official broadcasts — an all-clear must come from authorities before returning",
+                     "Help others move to higher ground only if you can do so safely"],
+             "donts": []},
+            {"title": "Go to the Coast or Assume It's Over",
+             "dos": [],
+             "donts": ["Do not go to the coast to watch the tsunami — people who do are frequently killed",
+                       "Do not assume danger is over after the first wave — subsequent waves can arrive for hours"]},
+            {"title": "Use Bridges or Return Too Soon",
+             "dos": [],
+             "donts": ["Do not use bridges or low-lying roads during or after a tsunami warning",
+                       "Do not return to coastal areas until authorities issue a formal all-clear"]},
+            {"title": "Rely Solely on Sirens or Drive Through Zones",
+             "dos": [],
+             "donts": ["Do not rely solely on sirens — if you feel a large earthquake near the coast, act immediately",
+                       "Do not attempt to drive through tsunami inundation zones — vehicles are easily swept away"]},
+        ],
+        "hurricane_cyclone": [
+            {"title": "Follow Evacuation Orders",
+             "dos": ["Follow evacuation orders immediately when issued",
+                     "Board up windows and secure outdoor furniture before the storm arrives"],
+             "donts": []},
+            {"title": "Prepare Emergency Supplies",
+             "dos": ["Prepare an emergency kit with water, food, medications, flashlight — enough for 72 hours",
+                     "Fill clean containers with drinking water before the storm — supplies may be disrupted"],
+             "donts": []},
+            {"title": "Stay Indoors During the Storm",
+             "dos": ["Stay indoors during the storm, away from windows and glass doors",
+                     "If the eye passes over, stay sheltered — dangerous winds will return from the opposite direction"],
+             "donts": []},
+            {"title": "After the Storm",
+             "dos": ["After the storm, check your home for structural damage before entering",
+                     "Listen to official broadcasts for road conditions and public health guidance"],
+             "donts": []},
+            {"title": "Go Outside During the Storm",
+             "dos": [],
+             "donts": ["Do not go outside during the storm — flying debris causes most hurricane fatalities",
+                       "Do not assume the storm is over if winds suddenly calm — the eye passes quickly"]},
+            {"title": "Use Generators Indoors or Touch Downed Lines",
+             "dos": [],
+             "donts": ["Do not use generators or charcoal grills indoors — carbon monoxide poisoning is a leading cause of post-hurricane deaths",
+                       "Do not touch downed power lines or walk through standing water near them"]},
+            {"title": "Drive Through Flooding or Return Too Soon",
+             "dos": [],
+             "donts": ["Do not drive through flooded roads — hurricane flooding is extensive",
+                       "Do not return to evacuated areas until authorities declare it safe"]},
+        ],
+        "wildfire": [
+            {"title": "Evacuate Immediately When Ordered",
+             "dos": ["If you receive an evacuation order, leave immediately — wildfires change direction rapidly",
+                     "Close all windows and doors as you leave to slow fire entering — leave them unlocked for emergency responders"],
+             "donts": []},
+            {"title": "Protect Yourself While Evacuating",
+             "dos": ["Wear a mask or cover your nose and mouth with a damp cloth while evacuating",
+                     "Take your emergency kit, medications, important documents, and pets if you can do so quickly"],
+             "donts": []},
+            {"title": "If There Is No Escape Route",
+             "dos": ["If caught with no escape route, shelter in a building or lie face down in a ditch away from vegetation",
+                     "Breathe through your nose — nasal passages filter more smoke than mouth breathing"],
+             "donts": []},
+            {"title": "After a Wildfire",
+             "dos": ["After a wildfire, check your roof for embers before re-entering — embers can smoulder for hours",
+                     "Wear a mask and gloves when working in ash — it may contain toxic materials"],
+             "donts": []},
+            {"title": "Ignore Orders or Re-enter Too Soon",
+             "dos": [],
+             "donts": ["Do not ignore evacuation orders even if the fire seems far away — wildfires can travel faster than a person can run",
+                       "Do not re-enter evacuated areas until declared safe — hidden hot spots can reignite"]},
+            {"title": "Park Under Trees or Use Contaminated Water",
+             "dos": [],
+             "donts": ["Do not park under trees during or after a wildfire — weakened trees can fall without warning",
+                       "Do not use water that may be contaminated by fire retardants — use bottled water only"]},
+            {"title": "Inhale Ash or Fight the Fire Yourself",
+             "dos": [],
+             "donts": ["Do not inhale ash unnecessarily — wear a properly fitted particulate mask where available",
+                       "Do not attempt to fight a wildfire yourself — evacuate and let trained firefighters handle it"]},
+        ],
+        "explosion": [
+            {"title": "Take Cover Immediately",
+             "dos": ["Immediately take cover behind a solid object or drop to the ground face down",
+                     "Cover your head and neck with your arms to protect from debris"],
+             "donts": []},
+            {"title": "Move Away and Help If Safe",
+             "dos": ["Once the immediate danger passes, move away from the site quickly and calmly",
+                     "Help injured people move away only if you can do so safely without putting yourself at risk"],
+             "donts": []},
+            {"title": "Seek Medical Attention and Report",
+             "dos": ["Seek medical attention for any injuries — blast injuries may not be immediately visible",
+                     "Report the explosion to emergency services as soon as you are in a safe location"],
+             "donts": []},
+            {"title": "Follow Official Instructions",
+             "dos": ["Follow instructions from emergency services and authorities on the ground",
+                     "Stay upwind of the explosion site to avoid inhaling smoke or chemical fumes"],
+             "donts": []},
+            {"title": "Return to the Site or Use Phones Near Gas",
+             "dos": [],
+             "donts": ["Do not return to the explosion site — secondary explosions are common",
+                       "Do not use mobile phones or electrical switches near a gas leak — sparks can trigger another explosion"]},
+            {"title": "Touch Debris or Spread Rumours",
+             "dos": [],
+             "donts": ["Do not touch suspicious packages or debris around the site",
+                       "Do not post unverified information about the cause — this can spread panic"]},
+            {"title": "Block Access or Enter Damaged Buildings",
+             "dos": [],
+             "donts": ["Do not block emergency service access routes",
+                       "Do not enter damaged buildings — structural collapse risk is high after an explosion"]},
+        ],
+        "chemical_incident": [
+            {"title": "Move Upwind or Shelter in Place",
+             "dos": ["Move upwind and uphill from the incident immediately",
+                     "If indoors, shelter in place — close all windows, doors, and ventilation systems"],
+             "donts": []},
+            {"title": "Decontaminate and Cover Your Mouth",
+             "dos": ["If you have been exposed, remove outer clothing and wash skin thoroughly with water",
+                     "Cover your nose and mouth with a wet cloth if you must move through contaminated air"],
+             "donts": []},
+            {"title": "Follow Evacuation Instructions",
+             "dos": ["Follow evacuation instructions from emergency services exactly",
+                     "Seek medical attention even if you feel well — chemical exposure symptoms can be delayed"],
+             "donts": []},
+            {"title": "Monitor Updates and Flush Eyes If Needed",
+             "dos": ["Listen to official broadcasts for information on safe zones and decontamination points",
+                     "If your eyes are burning, flush them with clean water for at least 15 minutes"],
+             "donts": []},
+            {"title": "Approach the Source or Eat Nearby",
+             "dos": [],
+             "donts": ["Do not approach the source of a chemical incident — even brief exposure can be fatal",
+                       "Do not eat, drink, or smoke in or near the affected area"]},
+            {"title": "Trust Your Nose or Re-enter Too Soon",
+             "dos": [],
+             "donts": ["Do not rely on smell to determine safety — many hazardous chemicals are odourless",
+                       "Do not re-enter the affected area until authorities declare it safe"]},
+            {"title": "Spread Rumours or Remove Protective Gear",
+             "dos": [],
+             "donts": ["Do not spread rumours about the cause — chemical incidents cause significant public panic",
+                       "Do not remove protective clothing given by emergency services until instructed"]},
+        ],
+        "conflict": [
+            {"title": "Find Cover and Stay Away from Windows",
+             "dos": ["If caught in an active conflict zone, find cover immediately — lie flat behind a solid structure",
+                     "Stay away from windows, doors, and open spaces during active shooting or shelling"],
+             "donts": []},
+            {"title": "Follow Legitimate Authority and Move Safely",
+             "dos": ["Follow instructions from legitimate security forces or humanitarian organisations",
+                     "If evacuating, move quickly and low, using buildings and terrain as cover"],
+             "donts": []},
+            {"title": "Keep an Emergency Bag Ready",
+             "dos": ["Keep an emergency bag ready with documents, water, food, and medications",
+                     "Identify safe exit routes from your home and neighbourhood in advance"],
+             "donts": []},
+            {"title": "Shelter in Place and Conserve Power",
+             "dos": ["If sheltering in place, move to an interior room away from windows on the lowest floor",
+                     "Conserve phone battery and charge devices whenever power is available"],
+             "donts": []},
+            {"title": "Film Military or Touch Unexploded Ordnance",
+             "dos": [],
+             "donts": ["Do not film or photograph military personnel or equipment — this can put you at serious risk",
+                       "Do not approach unexploded ordnance or debris — mark the location and report it"]},
+            {"title": "Use Open Flames or Post Your Location",
+             "dos": [],
+             "donts": ["Do not use open flames at night — light can attract attention in conflict zones",
+                       "Do not spread your location on social media during active conflict"]},
+            {"title": "Cross Front Lines or Ignore Curfews",
+             "dos": [],
+             "donts": ["Do not attempt to cross front lines or enter restricted areas",
+                       "Do not ignore curfews or movement restrictions imposed by authorities"]},
+        ],
+        "civil_unrest": [
+            {"title": "Move Calmly to the Edges",
+             "dos": ["If caught in a crowd disturbance, move calmly to the edges and away from the crowd",
+                     "Stay aware of your surroundings and identify exit routes before any situation escalates"],
+             "donts": []},
+            {"title": "If Tear Gas Is Used",
+             "dos": ["If tear gas is used, move upwind and flush eyes with clean water",
+                     "Cover your nose and mouth with a wet cloth to reduce inhalation of irritants"],
+             "donts": []},
+            {"title": "Stay in Contact and Follow Instructions",
+             "dos": ["Stay in contact with family or trusted contacts about your location",
+                     "Follow instructions from police or security forces unless doing so puts you at immediate risk"],
+             "donts": []},
+            {"title": "Observe Safely and Document from a Distance",
+             "dos": ["If you are a reporter or observer, identify yourself clearly and stay to the periphery",
+                     "Document damage and injuries only from a safe distance"],
+             "donts": []},
+            {"title": "Engage or Blend In With Crowds",
+             "dos": [],
+             "donts": ["Do not engage with crowds or attempt to intervene in confrontations",
+                       "Do not wear clothing that could be mistaken for that of any group involved"]},
+            {"title": "Share Real-Time Movements or Use Flash",
+             "dos": [],
+             "donts": ["Do not share real-time location of security forces or crowd movements on social media",
+                       "Do not use flash photography in tense situations — it can provoke a response"]},
+            {"title": "Block Emergency Routes or Spread Rumours",
+             "dos": [],
+             "donts": ["Do not block emergency vehicle access routes",
+                       "Do not spread unverified reports of casualties or causes — this escalates tensions"]},
+        ],
+    }
+
+    # ── Part B — Reporting Guidelines (5 slides) ──────────────────────────────
+    _PART_B_SLIDES: list[dict] = [
+        {"title": "Only Report What You Can Safely See",
+         "bullets": ["Never put yourself in danger to get closer to an incident. If you cannot see it from a safe distance, do not report it.",
+                     "Your safety is more valuable than any report. Accurate reporting from a safe vantage point is always better than no report at all."]},
+        {"title": "Take Clear Photos from a Safe Distance",
+         "bullets": ["Use zoom rather than approaching the damage. A clear photo from 20 metres is more useful than a blurred one from 5 metres.",
+                     "Photograph the full structure, not just the damage. Context — surrounding buildings, street layout — is essential for assessment."]},
+        {"title": "Be Accurate with Location — Use GPS When Possible",
+         "bullets": ["Enable GPS on your device before reaching the site. Allow the app to auto-detect your location for the highest accuracy.",
+                     "If GPS is unavailable, note the building name, street address, or a nearby landmark to allow accurate manual geo-coding."]},
+        {"title": "One Report Per Building — No Duplicates",
+         "bullets": ["Submit only one report per building per visit. Duplicate reports waste analyst time and distort damage statistics.",
+                     "If conditions have changed significantly since your last report on a building, submit an update rather than a new report."]},
+        {"title": "Your Identity is Protected — Reports Are Anonymised",
+         "bullets": ["Your name, email, and device information are encrypted at rest and never included in exported datasets.",
+                     "Reports shared with humanitarian organisations contain only location data, damage classification, and timestamps — never personal identifiers."]},
+    ]
+
+    # ── Part C — First Aid Tips (6 slides) ────────────────────────────────────
+    _PART_C_SLIDES: list[dict] = [
+        {"title": "Controlling Bleeding",
+         "bullets": ["Apply firm, direct pressure to the wound with a clean cloth or bandage and maintain it continuously for at least 10 minutes.",
+                     "Elevate the injured limb above heart level if possible. Do not remove the cloth — add more on top if it soaks through."]},
+        {"title": "Recovery Position",
+         "bullets": ["Place an unconscious, breathing person on their side with their top knee bent forward to prevent them rolling back.",
+                     "Tilt their head back gently to open the airway, and place their hand under their cheek. Monitor breathing continuously."]},
+        {"title": "Treating Shock",
+         "bullets": ["Lay the person flat and, if not injured, raise their legs 20–30 cm above heart level to improve blood flow to vital organs.",
+                     "Keep them warm with a blanket. Do not give food or water. Reassure them calmly and monitor their breathing until help arrives."]},
+        {"title": "Burns Treatment",
+         "bullets": ["Cool the burn immediately under cool (not cold) running water for at least 20 minutes. Remove jewellery near the burn if possible.",
+                     "Cover the burn loosely with cling film or a clean non-fluffy material. Do not apply butter, toothpaste, or ice."]},
+        {"title": "Fractures and Immobilisation",
+         "bullets": ["Do not attempt to straighten a fractured limb. Immobilise it in the position found using a splint and soft padding.",
+                     "A splint can be improvised from a straight stick, rolled newspaper, or folded clothing tied firmly — not tightly — above and below the fracture."]},
+        {"title": "When Not to Move an Injured Person",
+         "bullets": ["Do not move someone who may have a spinal injury (high-impact trauma, neck pain, tingling/numbness) unless they are in immediate danger.",
+                     "If you must move them, keep the head, neck, and spine aligned at all times and use multiple people to maintain a straight carry."]},
+    ]
+
+    seeded_disasters: list[str] = []
+    seeded_b = False
+    seeded_c = False
+
+    async with AsyncSessionLocal() as db:
+        # ── Part A ─────────────────────────────────────────────────────────────
+        for disaster_type, slides_data in _DISASTER_SLIDES.items():
+            key = f"content_safety-tips_{disaster_type}"
+            row = (await db.execute(select(AppSetting).where(AppSetting.key == key))).scalar_one_or_none()
+            if row is None:
+                db.add(AppSetting(key=key, value={
+                    "slides": slides_data,
+                    "version": 1,
+                    "updated_at": None,
+                }))
+                seeded_disasters.append(disaster_type)
+
+        # ── Part B ─────────────────────────────────────────────────────────────
+        row_b = (await db.execute(
+            select(AppSetting).where(AppSetting.key == "content_reporting-guidelines")
+        )).scalar_one_or_none()
+        if row_b is None:
+            db.add(AppSetting(key="content_reporting-guidelines", value={
+                "slides": _PART_B_SLIDES,
+                "version": 1,
+                "updated_at": None,
+            }))
+            seeded_b = True
+
+        # ── Part C ─────────────────────────────────────────────────────────────
+        row_c = (await db.execute(
+            select(AppSetting).where(AppSetting.key == "content_first-aid")
+        )).scalar_one_or_none()
+        if row_c is None:
+            db.add(AppSetting(key="content_first-aid", value={
+                "slides": _PART_C_SLIDES,
+                "version": 1,
+                "updated_at": None,
+            }))
+            seeded_c = True
+
+        if seeded_disasters or seeded_b or seeded_c:
+            await db.commit()
+
+    if seeded_disasters:
+        logger.info("Safety tips content seeded for: %s", ", ".join(seeded_disasters))
+    if seeded_b:
+        logger.info("Reporting guidelines (Part B) content seeded")
+    if seeded_c:
+        logger.info("First aid (Part C) content seeded")
+
+    # Kick off StringKey creation + auto-translation for newly seeded content.
+    # Runs in the background — safe to fail gracefully if translation service is unavailable.
+    if seeded_disasters or seeded_b or seeded_c:
+        async def _run_translation_sync() -> None:
+            from app.routers.content import (
+                _sync_safety_tips_to_translation,
+                _sync_slideshow_to_translation,
+            )
+            async with AsyncSessionLocal() as db:
+                for dt in seeded_disasters:
+                    try:
+                        await _sync_safety_tips_to_translation(dt, _DISASTER_SLIDES[dt], db)
+                    except Exception as exc:
+                        logger.warning("Translation sync skipped for %s: %s", dt, exc)
+            if seeded_b:
+                async with AsyncSessionLocal() as db:
+                    try:
+                        await _sync_slideshow_to_translation("B", _PART_B_SLIDES, db)
+                    except Exception as exc:
+                        logger.warning("Translation sync skipped for Part B: %s", exc)
+            if seeded_c:
+                async with AsyncSessionLocal() as db:
+                    try:
+                        await _sync_slideshow_to_translation("C", _PART_C_SLIDES, db)
+                    except Exception as exc:
+                        logger.warning("Translation sync skipped for Part C: %s", exc)
+
+        asyncio.create_task(_run_translation_sync())
+
+
 async def seed_first_admin() -> None:
     """Create an admin user from FIRST_ADMIN_EMAIL / FIRST_ADMIN_PASSWORD env vars
     if no admin users exist yet. Safe to run every startup — no-op once an admin exists."""
@@ -510,6 +922,7 @@ async def lifespan(app: FastAPI):
     await seed_first_admin()
     await _seed_default_roles()
     await _seed_notification_types()
+    await _seed_safety_tips_content()
     # Remove the ZZ placeholder country if it exists
     try:
         async with AsyncSessionLocal() as db:
