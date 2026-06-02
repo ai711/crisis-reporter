@@ -28,6 +28,7 @@ import ProjectsPage from "./pages/ProjectsPage";
 import ProjectDetailPage from "./pages/ProjectDetailPage";
 import UserDetailPage from "./pages/UserDetailPage";
 import AccessDeniedPage from "./pages/AccessDeniedPage";
+import ContentManagementPage from "./pages/ContentManagementPage";
 
 // ── Query client ──────────────────────────────────────────────────────────────
 
@@ -234,6 +235,14 @@ export default function App() {
               element={
                 <ProtectedRoute requiredSection="app_configuration">
                   <SystemSettingsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/content"
+              element={
+                <ProtectedRoute requiredSection="app_configuration">
+                  <ContentManagementPage />
                 </ProtectedRoute>
               }
             />
