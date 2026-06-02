@@ -197,7 +197,7 @@ function PartAEditor({ disasterKey }: { disasterKey: string }) {
 
 // ── Part B / C editor ─────────────────────────────────────────────────────────
 
-function SlideshowEditor({ contentType, label }: { contentType: "reporting-guidelines" | "first-aid"; label: string }) {
+function SlideshowEditor({ contentType }: { contentType: "reporting-guidelines" | "first-aid" }) {
   const qc = useQueryClient();
   const [slides, setSlides] = useState<SlideshowSlide[]>([]);
   const [saved, setSaved] = useState(false);
@@ -432,7 +432,7 @@ export default function ContentManagementPage() {
             <h3 style={{ margin: "0 0 20px", fontSize: 17, fontWeight: 700, color: "#1B1C1C" }}>
               Reporting Guidelines Slides
             </h3>
-            <SlideshowEditor contentType="reporting-guidelines" label="Reporting Guidelines" />
+            <SlideshowEditor contentType="reporting-guidelines" />
           </div>
         )}
 
@@ -442,7 +442,7 @@ export default function ContentManagementPage() {
             <h3 style={{ margin: "0 0 20px", fontSize: 17, fontWeight: 700, color: "#1B1C1C" }}>
               First Aid Slides
             </h3>
-            <SlideshowEditor contentType="first-aid" label="First Aid" />
+            <SlideshowEditor contentType="first-aid" />
           </div>
         )}
       </div>
