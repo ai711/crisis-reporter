@@ -14,8 +14,8 @@ const CARD_BG = "#FFFFFF";
 
 // All Part A disaster IDs — must match SafetyTipsPage
 const PART_A_IDS = [
-  "earthquake", "flood", "tsunami", "hurricane",
-  "wildfire", "explosion", "chemical", "conflict", "unrest",
+  "earthquake", "flood", "tsunami", "hurricane_cyclone",
+  "wildfire", "explosion", "chemical_incident", "conflict", "civil_unrest",
 ] as const;
 
 const TOTAL_MODULES = 11; // 9 Part A + B + C

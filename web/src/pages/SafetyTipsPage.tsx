@@ -120,7 +120,7 @@ const DISASTERS: DisasterType[] = [
     ],
   },
   {
-    id: "hurricane",
+    id: "hurricane_cyclone",
     label: "Hurricane / Cyclone",
     icon: "cyclone",
     slides: [
@@ -162,7 +162,7 @@ const DISASTERS: DisasterType[] = [
     ],
   },
   {
-    id: "chemical",
+    id: "chemical_incident",
     label: "Chemical Incident",
     icon: "science",
     slides: [
@@ -190,7 +190,7 @@ const DISASTERS: DisasterType[] = [
     ],
   },
   {
-    id: "unrest",
+    id: "civil_unrest",
     label: "Civil Unrest",
     icon: "groups_2",
     slides: [
