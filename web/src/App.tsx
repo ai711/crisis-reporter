@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-route
 import React, { Suspense, lazy, useEffect } from "react";
 import AppLayout from "./components/AppLayout";
 import i18n, { loadLanguagePackageFromCache } from "./i18n";
+import { flushProgressQueue } from "./utils/progressQueue";
 
 const OnboardingPage = lazy(() => import("./pages/OnboardingPage"));
 const LoginPage = lazy(() => import("./pages/LoginPage"));
@@ -141,6 +142,14 @@ function AppContent() {
       loadLanguagePackageFromCache(savedLang);
     }
   }, [location.pathname]);
+
+  // Flush any queued progress entries as soon as the browser reports online.
+  // Also attempt once on mount in case the app was offline at last use.
+  useEffect(() => {
+    flushProgressQueue();
+    window.addEventListener("online", flushProgressQueue);
+    return () => window.removeEventListener("online", flushProgressQueue);
+  }, []);
 
   return (
     <Suspense fallback={<LoadingSpinner />}>

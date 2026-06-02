@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect } from "react";
 import type { CSSProperties } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import api from "../services/api";
+import { enqueueProgress } from "../utils/progressQueue";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -268,12 +268,8 @@ function SlideViewer({ slides, completionKey, onComplete }: SlideViewerProps) {
       const partKey = completionKey.id
         ? `${completionKey.part}_${completionKey.id}`
         : completionKey.part;
-      try {
-        await api.post(`/api/reporters/${reporterId}/safety-progress`, {
-          part_completed: partKey,
-          completed_at: new Date().toISOString(),
-        });
-      } catch { /* silent fail */ }
+      // enqueueProgress posts immediately; if offline, queues for retry on reconnect
+      enqueueProgress(reporterId, partKey);
     }
     onComplete();
   }
