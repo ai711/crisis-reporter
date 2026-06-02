@@ -170,23 +170,18 @@ export default function SafetyTipsScreen() {
     }
   }, [viewState]);
 
-  const syncProgress = useCallback(
-    async (pA: Record<string, boolean>, pB: boolean, pC: boolean) => {
-      const reporterId = useAuthStore.getState().reporterId;
-      if (!reporterId) return;
-      try {
-        await api.post(`/api/reporters/${reporterId}/safety-progress`, {
-          part_a_complete: Object.values(pA).filter(Boolean).length === 9,
-          part_a_count: Object.values(pA).filter(Boolean).length,
-          part_b_complete: pB,
-          part_c_complete: pC,
-        });
-      } catch (e) {
-        console.warn('Progress sync failed', e);
-      }
-    },
-    [],
-  );
+  const syncPartComplete = useCallback(async (partCompleted: string) => {
+    const reporterId = useAuthStore.getState().reporterId;
+    if (!reporterId) return;
+    try {
+      await api.post(`/api/reporters/${reporterId}/safety-progress`, {
+        part_completed: partCompleted,
+        completed_at: new Date().toISOString(),
+      });
+    } catch (e) {
+      console.warn('Progress sync failed', e);
+    }
+  }, []);
 
   const checkBadge = useCallback(
     (pA: Record<string, boolean>, pB: boolean, pC: boolean) => {
@@ -211,30 +206,30 @@ export default function SafetyTipsScreen() {
       setProgressA(newProgressA);
       await AsyncStorage.setItem('cr_tips_progress_a', JSON.stringify(newProgressA));
       await AsyncStorage.setItem('cr_safety_a_complete', 'true');
-      syncProgress(newProgressA, progressB, progressC);
+      syncPartComplete(`A_${disasterType}`);
       checkBadge(newProgressA, progressB, progressC);
       setViewState({ screen: 'part_a_list' });
     },
-    [progressA, progressB, progressC, syncProgress, checkBadge],
+    [progressA, progressB, progressC, syncPartComplete, checkBadge],
   );
 
   const handlePartBComplete = useCallback(async () => {
     setProgressB(true);
     await AsyncStorage.setItem('cr_tips_progress_b', 'true');
     await AsyncStorage.setItem('cr_safety_b_complete', 'true');
-    syncProgress(progressA, true, progressC);
+    syncPartComplete('B');
     checkBadge(progressA, true, progressC);
     setViewState({ screen: 'overview' });
-  }, [progressA, progressC, syncProgress, checkBadge]);
+  }, [progressA, progressC, syncPartComplete, checkBadge]);
 
   const handlePartCComplete = useCallback(async () => {
     setProgressC(true);
     await AsyncStorage.setItem('cr_tips_progress_c', 'true');
     await AsyncStorage.setItem('cr_safety_c_complete', 'true');
-    syncProgress(progressA, progressB, true);
+    syncPartComplete('C');
     checkBadge(progressA, progressB, true);
     setViewState({ screen: 'overview' });
-  }, [progressA, progressB, syncProgress, checkBadge]);
+  }, [progressA, progressB, syncPartComplete, checkBadge]);
 
   const completedA = Object.values(progressA).filter(Boolean).length;
 
@@ -632,8 +627,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 14,
-    backgroundColor: 'rgba(255,255,255,0.92)',
+    backgroundColor: '#F6F3F2',
     height: 56,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E4E2E1',
   },
   headerBack: { width: 44, minWidth: 44, minHeight: 44 },
   headerSpacer: { width: 44 },
@@ -860,7 +857,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: screenWidth * 0.05,
     paddingTop: 12,
     gap: 12,
-    backgroundColor: 'rgba(255,255,255,0.92)',
+    backgroundColor: '#F6F3F2',
     borderTopWidth: 1,
     borderTopColor: '#E4E2E1',
   },

@@ -1,4 +1,5 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
+import type { CSSProperties } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import api from "../services/api";
@@ -6,8 +7,10 @@ import api from "../services/api";
 // ── Constants ──────────────────────────────────────────────────────────────────
 
 const BLUE = "#0468B1";
-const BLUE_DARK = "#035a9a";
 const GREEN = "#38A169";
+const BG = "#F6F3F2";
+const CARD_BG = "#FFFFFF";
+const FIELD_BG = "#F0EDED";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -19,11 +22,57 @@ interface Slide {
 interface DisasterType {
   id: string;
   label: string;
-  emoji: string;
+  icon: string; // Material Symbol icon name
   slides: Slide[];
 }
 
 type Part = "A" | "B" | "C";
+
+type View =
+  | { type: "home" }
+  | { type: "partA_list" }
+  | { type: "slide"; part: Part; disasterId?: string };
+
+// ── Material Symbol component ─────────────────────────────────────────────────
+
+function MatIcon({
+  name,
+  size = 24,
+  fill = false,
+  color = "currentColor",
+  style: extraStyle,
+}: {
+  name: string;
+  size?: number;
+  fill?: boolean;
+  color?: string;
+  style?: CSSProperties;
+}) {
+  return (
+    <span
+      style={{
+        fontFamily: "'Material Symbols Outlined'",
+        fontWeight: 400,
+        fontStyle: "normal",
+        fontSize: size,
+        lineHeight: 1,
+        letterSpacing: "normal",
+        textTransform: "none",
+        display: "inline-block",
+        whiteSpace: "nowrap",
+        wordWrap: "normal",
+        direction: "ltr",
+        WebkitFontSmoothing: "antialiased",
+        fontVariationSettings: `'FILL' ${fill ? 1 : 0}, 'wght' 400, 'GRAD' 0, 'opsz' 24`,
+        color,
+        userSelect: "none",
+        ...extraStyle,
+      }}
+    >
+      {name}
+    </span>
+  );
+}
 
 // ── Safety Content ─────────────────────────────────────────────────────────────
 
@@ -31,7 +80,7 @@ const DISASTERS: DisasterType[] = [
   {
     id: "earthquake",
     label: "Earthquake",
-    emoji: "🌍",
+    icon: "volcano",
     slides: [
       { title: "Do: Drop and Take Cover", bullets: ["Drop to your hands and knees immediately", "Take cover under a sturdy table or desk, or against an interior wall away from windows"] },
       { title: "Do: Hold On and Stay Put", bullets: ["Hold on and protect your head and neck with your arms", "Stay where you are until the shaking stops — most injuries happen when people try to move"] },
@@ -45,7 +94,7 @@ const DISASTERS: DisasterType[] = [
   {
     id: "flood",
     label: "Flood",
-    emoji: "🌊",
+    icon: "water_drop",
     slides: [
       { title: "Do: Move to Higher Ground", bullets: ["Move immediately to higher ground if flooding is imminent", "Turn off utilities at the main switch if safe to do so"] },
       { title: "Do: Disconnect Appliances and Evacuate", bullets: ["Disconnect electrical appliances — do not touch them if wet or standing in water", "If evacuation is ordered, leave immediately with your emergency kit"] },
@@ -59,7 +108,7 @@ const DISASTERS: DisasterType[] = [
   {
     id: "tsunami",
     label: "Tsunami",
-    emoji: "🌊",
+    icon: "tsunami",
     slides: [
       { title: "Do: Move to Higher Ground Immediately", bullets: ["If you feel a strong earthquake near the coast, move immediately to higher ground — do not wait for a warning", "A sudden recession of the sea is a natural warning sign — move inland immediately"] },
       { title: "Do: Move on Foot and Seek High Ground", bullets: ["Move on foot if possible — roads may be congested or damaged", "Go to a designated tsunami evacuation zone or the highest ground available"] },
@@ -73,7 +122,7 @@ const DISASTERS: DisasterType[] = [
   {
     id: "hurricane",
     label: "Hurricane / Cyclone",
-    emoji: "🌀",
+    icon: "cyclone",
     slides: [
       { title: "Do: Follow Evacuation Orders", bullets: ["Follow evacuation orders immediately when issued", "Board up windows and secure outdoor furniture before the storm arrives"] },
       { title: "Do: Prepare Emergency Supplies", bullets: ["Prepare an emergency kit with water, food, medications, flashlight — enough for 72 hours", "Fill clean containers with drinking water before the storm — supplies may be disrupted"] },
@@ -87,7 +136,7 @@ const DISASTERS: DisasterType[] = [
   {
     id: "wildfire",
     label: "Wildfire",
-    emoji: "🔥",
+    icon: "local_fire_department",
     slides: [
       { title: "Do: Evacuate Immediately When Ordered", bullets: ["If you receive an evacuation order, leave immediately — wildfires change direction rapidly", "Close all windows and doors as you leave to slow fire entering — leave them unlocked for emergency responders"] },
       { title: "Do: Protect Yourself While Evacuating", bullets: ["Wear a mask or cover your nose and mouth with a damp cloth while evacuating", "Take your emergency kit, medications, important documents, and pets if you can do so quickly"] },
@@ -101,7 +150,7 @@ const DISASTERS: DisasterType[] = [
   {
     id: "explosion",
     label: "Explosion",
-    emoji: "💥",
+    icon: "explosion",
     slides: [
       { title: "Do: Take Cover Immediately", bullets: ["Immediately take cover behind a solid object or drop to the ground face down", "Cover your head and neck with your arms to protect from debris"] },
       { title: "Do: Move Away and Help If Safe", bullets: ["Once the immediate danger passes, move away from the site quickly and calmly", "Help injured people move away only if you can do so safely without putting yourself at risk"] },
@@ -115,7 +164,7 @@ const DISASTERS: DisasterType[] = [
   {
     id: "chemical",
     label: "Chemical Incident",
-    emoji: "☣️",
+    icon: "science",
     slides: [
       { title: "Do: Move Upwind or Shelter in Place", bullets: ["Move upwind and uphill from the incident immediately", "If indoors, shelter in place — close all windows, doors, and ventilation systems"] },
       { title: "Do: Decontaminate and Cover Your Mouth", bullets: ["If you have been exposed, remove outer clothing and wash skin thoroughly with water", "Cover your nose and mouth with a wet cloth if you must move through contaminated air"] },
@@ -129,7 +178,7 @@ const DISASTERS: DisasterType[] = [
   {
     id: "conflict",
     label: "Conflict",
-    emoji: "⚔️",
+    icon: "military_tech",
     slides: [
       { title: "Do: Find Cover and Stay Away from Windows", bullets: ["If caught in an active conflict zone, find cover immediately — lie flat behind a solid structure", "Stay away from windows, doors, and open spaces during active shooting or shelling"] },
       { title: "Do: Follow Legitimate Authority and Move Safely", bullets: ["Follow instructions from legitimate security forces or humanitarian organisations", "If evacuating, move quickly and low, using buildings and terrain as cover"] },
@@ -143,7 +192,7 @@ const DISASTERS: DisasterType[] = [
   {
     id: "unrest",
     label: "Civil Unrest",
-    emoji: "🚨",
+    icon: "groups_2",
     slides: [
       { title: "Do: Move Calmly to the Edges", bullets: ["If caught in a crowd disturbance, move calmly to the edges and away from the crowd", "Stay aware of your surroundings and identify exit routes before any situation escalates"] },
       { title: "Do: If Tear Gas Is Used", bullets: ["If tear gas is used, move upwind and flush eyes with clean water", "Cover your nose and mouth with a wet cloth to reduce inhalation of irritants"] },
@@ -173,24 +222,6 @@ const PART_C_SLIDES: Slide[] = [
   { title: "When Not to Move an Injured Person", bullets: ["Do not move someone who may have a spinal injury (high-impact trauma, neck pain, tingling/numbness) unless they are in immediate danger.", "If you must move them, keep the head, neck, and spine aligned at all times and use multiple people to maintain a straight carry."] },
 ];
 
-// ── Icons ──────────────────────────────────────────────────────────────────────
-
-function IconBack() {
-  return (
-    <svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke="#0468B1" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="15 18 9 12 15 6" />
-    </svg>
-  );
-}
-
-function IconCheck() {
-  return (
-    <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={GREEN} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="20 6 9 17 4 12" />
-    </svg>
-  );
-}
-
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 function lsKey(part: Part, id?: string): string {
@@ -199,12 +230,10 @@ function lsKey(part: Part, id?: string): string {
   return "cr_safety_partC";
 }
 
-// B8: Use localStorage for logged-in reporters, sessionStorage for anonymous.
 function getStorage(): Storage {
   return localStorage.getItem("cr_reporter_id") ? localStorage : sessionStorage;
 }
 
-// B8: Check both storages so progress is visible regardless of login state at time of completion.
 function isComplete(part: Part, id?: string): boolean {
   const key = lsKey(part, id);
   return localStorage.getItem(key) === "1" || sessionStorage.getItem(key) === "1";
@@ -214,23 +243,15 @@ function markComplete(part: Part, id?: string) {
   getStorage().setItem(lsKey(part, id), "1");
 }
 
-function isAllComplete(): boolean {
-  const aComplete = DISASTERS.every((d) => isComplete("A", d.id));
-  return aComplete && isComplete("B") && isComplete("C");
-}
-
-// ── Sub-components ─────────────────────────────────────────────────────────────
+// ── SlideViewer ────────────────────────────────────────────────────────────────
 
 interface SlideViewerProps {
   slides: Slide[];
-  totalLabel: string;
   completionKey: { part: Part; id?: string };
   onComplete: () => void;
-  onBack: () => void;
-  title: string;
 }
 
-function SlideViewer({ slides, totalLabel: _totalLabel, completionKey, onComplete, onBack, title }: SlideViewerProps) {
+function SlideViewer({ slides, completionKey, onComplete }: SlideViewerProps) {
   const { t } = useTranslation();
   const [current, setCurrent] = useState(0);
   const [done, setDone] = useState(() => isComplete(completionKey.part, completionKey.id));
@@ -239,12 +260,9 @@ function SlideViewer({ slides, totalLabel: _totalLabel, completionKey, onComplet
   const isLast = current === total - 1;
   const isDo = slide.title.startsWith("Do:");
 
-  // B7: Backend write for logged-in reporters; localStorage/sessionStorage write for all.
   async function handleComplete() {
     markComplete(completionKey.part, completionKey.id);
     setDone(true);
-    onComplete();
-
     const reporterId = localStorage.getItem("cr_reporter_id");
     if (reporterId) {
       const partKey = completionKey.id
@@ -255,41 +273,41 @@ function SlideViewer({ slides, totalLabel: _totalLabel, completionKey, onComplet
           part_completed: partKey,
           completed_at: new Date().toISOString(),
         });
-      } catch { /* silent fail — storage write already succeeded */ }
+      } catch { /* silent fail */ }
     }
+    onComplete();
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      {/* Slide viewer header */}
-      <div style={{ padding: "12px 16px", borderBottom: "1px solid #e2e8f0", display: "flex", alignItems: "center", gap: 12 }}>
-        <button onClick={onBack} style={{ background: "none", border: "none", cursor: "pointer", padding: 4, display: "flex", alignItems: "center" }}>
-          <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={BLUE} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="15 18 9 12 15 6" />
-          </svg>
-        </button>
-        <span style={{ fontWeight: 600, fontSize: 15, color: "#2d3748", flex: 1 }}>{title}</span>
-        {done && <span style={{ fontSize: 12, color: GREEN, fontWeight: 600 }}>{t('safety.complete')}</span>}
-      </div>
-
-      {/* Slide counter */}
-      <div style={{ padding: "8px 20px", background: "#f7fafc", borderBottom: "1px solid #e2e8f0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <span style={{ fontSize: 12, color: "#718096", fontWeight: 500 }}>{t('safety.slide_progress', { n: current + 1, total })}</span>
+    <div style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden" }}>
+      {/* Slide counter + dots */}
+      <div style={{ padding: "10px 24px", background: BG, borderBottom: `1px solid #E4E2E1`, display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
+        <span style={{ fontSize: 12, color: "#717782", fontWeight: 500 }}>
+          {t('safety.slide_progress', { n: current + 1, total })}
+        </span>
         <div style={{ display: "flex", gap: 4 }}>
           {slides.map((_, i) => (
-            <div key={i} style={{ width: 8, height: 8, borderRadius: "50%", background: i === current ? BLUE : i < current ? GREEN : "#cbd5e0", transition: "background 0.2s" }} />
+            <div
+              key={i}
+              style={{
+                width: 8,
+                height: 8,
+                borderRadius: "50%",
+                background: i === current ? BLUE : i < current ? GREEN : "#C1C7D2",
+                transition: "background 0.2s",
+              }}
+            />
           ))}
         </div>
       </div>
 
       {/* Slide content */}
-      <div style={{ flex: 1, overflowY: "auto", padding: "24px 20px" }}>
+      <div style={{ flex: 1, overflowY: "auto", padding: "24px 24px" }}>
         <div style={{
           background: isDo ? "#f0fff4" : "#fff5f5",
           border: `2px solid ${isDo ? "#9ae6b4" : "#feb2b2"}`,
-          borderRadius: 12,
-          padding: "20px 18px",
-          marginBottom: 16,
+          borderRadius: 16,
+          padding: "20px 20px",
         }}>
           <div style={{
             display: "inline-block",
@@ -298,36 +316,42 @@ function SlideViewer({ slides, totalLabel: _totalLabel, completionKey, onComplet
             fontSize: 11,
             fontWeight: 700,
             borderRadius: 4,
-            padding: "2px 8px",
-            marginBottom: 12,
+            padding: "2px 10px",
+            marginBottom: 14,
             letterSpacing: 0.5,
             textTransform: "uppercase",
           }}>
             {isDo ? t('safety.do') : t('safety.dont')}
           </div>
-          <h3 style={{ margin: "0 0 16px", fontSize: 17, fontWeight: 700, color: "#2d3748", lineHeight: 1.4 }}>
+          <h3 style={{ margin: "0 0 16px", fontSize: 17, fontWeight: 700, color: "#1B1C1C", lineHeight: 1.4 }}>
             {slide.title.replace(/^Do: |^Don't: /, "")}
           </h3>
           <ul style={{ margin: 0, paddingLeft: 20 }}>
             {slide.bullets.map((b, i) => (
-              <li key={i} style={{ color: "#4a5568", fontSize: 14, lineHeight: 1.7, marginBottom: i === 0 ? 8 : 0 }}>{b}</li>
+              <li key={i} style={{ color: "#414751", fontSize: 14, lineHeight: 1.7, marginBottom: i === 0 ? 8 : 0 }}>{b}</li>
             ))}
           </ul>
         </div>
+        {done && (
+          <div style={{ marginTop: 16, padding: "10px 16px", background: "#f0fff4", borderRadius: 10, display: "flex", alignItems: "center", gap: 8 }}>
+            <MatIcon name="check_circle" size={18} color={GREEN} fill />
+            <span style={{ fontSize: 13, color: "#276749", fontWeight: 600 }}>{t('safety.completed')}</span>
+          </div>
+        )}
       </div>
 
-      {/* Navigation */}
-      <div style={{ padding: "14px 20px", borderTop: "1px solid #e2e8f0", display: "flex", gap: 10 }}>
+      {/* Navigation footer */}
+      <div style={{ padding: "14px 24px", background: BG, borderTop: `1px solid #E4E2E1`, display: "flex", gap: 10, flexShrink: 0 }}>
         <button
           onClick={() => setCurrent((c) => Math.max(0, c - 1))}
           disabled={current === 0}
           style={{
             flex: 1,
-            padding: "11px 0",
-            borderRadius: 8,
-            border: `1.5px solid ${current === 0 ? "#e2e8f0" : BLUE}`,
-            background: "#fff",
-            color: current === 0 ? "#a0aec0" : BLUE,
+            padding: "12px 0",
+            borderRadius: 10,
+            border: `1.5px solid ${current === 0 ? "#E4E2E1" : BLUE}`,
+            background: CARD_BG,
+            color: current === 0 ? "#C1C7D2" : BLUE,
             fontWeight: 600,
             fontSize: 14,
             cursor: current === 0 ? "not-allowed" : "pointer",
@@ -340,25 +364,30 @@ function SlideViewer({ slides, totalLabel: _totalLabel, completionKey, onComplet
             onClick={handleComplete}
             style={{
               flex: 2,
-              padding: "11px 0",
-              borderRadius: 8,
+              padding: "12px 0",
+              borderRadius: 10,
               border: "none",
               background: done ? GREEN : BLUE,
               color: "#fff",
               fontWeight: 700,
               fontSize: 14,
               cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 6,
             }}
           >
             {done ? t('safety.completed') : t('safety.mark_complete')}
+            {!done && <MatIcon name="check" size={16} color="#fff" />}
           </button>
         ) : (
           <button
             onClick={() => setCurrent((c) => Math.min(total - 1, c + 1))}
             style={{
               flex: 1,
-              padding: "11px 0",
-              borderRadius: 8,
+              padding: "12px 0",
+              borderRadius: 10,
               border: "none",
               background: BLUE,
               color: "#fff",
@@ -380,258 +409,381 @@ function SlideViewer({ slides, totalLabel: _totalLabel, completionKey, onComplet
 export default function SafetyTipsPage() {
   const navigate = useNavigate();
   const { t } = useTranslation();
-  const [activePart, setActivePart] = useState<Part>("A");
-  const [selectedDisaster, setSelectedDisaster] = useState<string | null>(null);
-  const [completionRevision, setCompletionRevision] = useState(0);
+  const [view, setView] = useState<View>({ type: "home" });
+  const [rev, setRev] = useState(0);
 
-  const refresh = useCallback(() => setCompletionRevision((n) => n + 1), []);
+  // Inject Material Symbols font if not already loaded
+  useEffect(() => {
+    const id = "material-symbols-stylesheet";
+    if (!document.getElementById(id)) {
+      const link = document.createElement("link");
+      link.id = id;
+      link.rel = "stylesheet";
+      link.href =
+        "https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap";
+      document.head.appendChild(link);
+    }
+  }, []);
 
-  const allDone = isAllComplete();
+  const refresh = useCallback(() => setRev((n) => n + 1), []);
+  // rev is read below inside render branches to force re-render after markComplete
+  void rev;
 
-  const tabs: { id: Part; label: string }[] = [
-    { id: "A", label: t('safety.tab_a') },
-    { id: "B", label: t('safety.tab_b') },
-    { id: "C", label: t('safety.tab_c') },
-  ];
+  // ── Slide view ───────────────────────────────────────────────────────────────
+  if (view.type === "slide") {
+    const { part, disasterId } = view;
+    const backTarget: View = part === "A" ? { type: "partA_list" } : { type: "home" };
 
-  function handlePartChange(part: Part) {
-    setActivePart(part);
-    setSelectedDisaster(null);
-  }
+    let slides: Slide[];
+    let slideTitle: string;
+    if (part === "A") {
+      const d = DISASTERS.find((d) => d.id === disasterId)!;
+      slides = d.slides;
+      slideTitle = d.label;
+    } else if (part === "B") {
+      slides = PART_B_SLIDES;
+      slideTitle = t('safety.part_b_title');
+    } else {
+      slides = PART_C_SLIDES;
+      slideTitle = t('safety.part_c_title');
+    }
 
-  // Part A: disaster selected → show slide viewer
-  if (activePart === "A" && selectedDisaster) {
-    const disaster = DISASTERS.find((d) => d.id === selectedDisaster)!;
     return (
-      <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-        <header className="page-header">
-          <button className="page-header-back" onClick={() => navigate("/")}>
-            <IconBack />
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", background: BG }}>
+        <header
+          className="page-header"
+          style={{ background: BG, borderBottom: "1px solid #E4E2E1" }}
+        >
+          <button
+            className="page-header-back"
+            onClick={() => setView(backTarget)}
+          >
+            <svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={BLUE} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="15 18 9 12 15 6" />
+            </svg>
           </button>
-          <span className="page-header-title">{t('safety.title')}</span>
+          <span className="page-header-title">{slideTitle}</span>
           <div className="page-header-spacer" />
         </header>
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+        <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
           <SlideViewer
-            slides={disaster.slides}
-            totalLabel={`Slide X of ${disaster.slides.length}`}
-            completionKey={{ part: "A", id: disaster.id }}
-            onComplete={refresh}
-            onBack={() => setSelectedDisaster(null)}
-            title={`${disaster.emoji} ${disaster.label}`}
+            slides={slides}
+            completionKey={{ part, id: disasterId }}
+            onComplete={() => { refresh(); setView(backTarget); }}
           />
         </div>
       </div>
     );
   }
 
-  // Part B: show slide viewer directly
-  if (activePart === "B") {
+  // ── Part A disaster list ─────────────────────────────────────────────────────
+  if (view.type === "partA_list") {
+    const completedA = DISASTERS.filter((d) => isComplete("A", d.id)).length;
+
     return (
-      <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-        <header className="page-header">
-          <button className="page-header-back" onClick={() => navigate("/")}>
-            <IconBack />
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", background: BG }}>
+        <header
+          className="page-header"
+          style={{ background: BG, borderBottom: "1px solid #E4E2E1" }}
+        >
+          <button
+            className="page-header-back"
+            onClick={() => setView({ type: "home" })}
+          >
+            <svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={BLUE} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="15 18 9 12 15 6" />
+            </svg>
           </button>
-          <span className="page-header-title">{t('safety.title')}</span>
+          <span className="page-header-title">Part A — Safety Tips</span>
           <div className="page-header-spacer" />
         </header>
-        <div style={{ display: "flex", background: "#fff", borderBottom: "1px solid #e2e8f0", flexShrink: 0 }}>
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => handlePartChange(tab.id)}
-              style={{
-                flex: 1,
-                padding: "11px 4px",
-                border: "none",
-                borderBottom: activePart === tab.id ? `3px solid ${BLUE}` : "3px solid transparent",
-                background: "#fff",
-                color: activePart === tab.id ? BLUE : "#718096",
-                fontWeight: activePart === tab.id ? 700 : 500,
-                fontSize: 11,
-                cursor: "pointer",
-                transition: "all 0.15s",
-              }}
-            >
-              {tab.label}
-            </button>
-          ))}
+
+        {/* Progress tracker */}
+        <div style={{ padding: "12px 24px 0", background: BG }}>
+          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 6 }}>
+            <span style={{ fontSize: 12, color: "#717782", fontWeight: 500 }}>
+              {completedA} of 9 completed
+            </span>
+          </div>
+          <div style={{ height: 6, background: "#E4E2E1", borderRadius: 3, overflow: "hidden" }}>
+            <div style={{ height: "100%", width: `${(completedA / 9) * 100}%`, background: BLUE, borderRadius: 3, transition: "width 0.3s" }} />
+          </div>
         </div>
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-          <SlideViewer
-            slides={PART_B_SLIDES}
-            totalLabel={`Slide X of ${PART_B_SLIDES.length}`}
-            completionKey={{ part: "B" }}
-            onComplete={refresh}
-            onBack={() => {}}
-            title={t('safety.part_b_title')}
-          />
+
+        {/* List */}
+        <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px 32px" }}>
+          <p style={{ fontSize: 10, fontWeight: 700, color: "#717782", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 16 }}>
+            Tap a disaster type to read the safety tips
+          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {DISASTERS.map((d) => {
+              const done = isComplete("A", d.id);
+              return (
+                <button
+                  key={d.id}
+                  onClick={() => setView({ type: "slide", part: "A", disasterId: d.id })}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    background: FIELD_BG,
+                    border: "none",
+                    borderRadius: 12,
+                    padding: "14px 16px",
+                    cursor: "pointer",
+                    textAlign: "left",
+                    transition: "background 0.15s",
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "#E8E5E4")}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = FIELD_BG)}
+                >
+                  <div style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 10,
+                    background: "#E4E2E1",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    marginRight: 14,
+                    flexShrink: 0,
+                  }}>
+                    <MatIcon name={d.icon} size={22} color={BLUE} />
+                  </div>
+                  <span style={{ flex: 1, fontWeight: 700, fontSize: 15, color: "#1B1C1C" }}>{d.label}</span>
+                  {done ? (
+                    <MatIcon name="check_circle" size={22} color={GREEN} fill />
+                  ) : (
+                    <MatIcon name="chevron_right" size={20} color="#C1C7D2" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Offline info banner */}
+          <div style={{ marginTop: 32, background: "#EAE7E7", borderRadius: 16, padding: "20px 16px", display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center" }}>
+            <MatIcon name="cloud_done" size={28} color={BLUE} />
+            <p style={{ margin: "10px 0 4px", fontSize: 14, fontWeight: 600, color: "#1B1C1C" }}>Ready for the field</p>
+            <p style={{ margin: 0, fontSize: 13, color: "#717782", lineHeight: 1.5 }}>
+              Content works offline and is available in all supported languages
+            </p>
+          </div>
         </div>
       </div>
     );
   }
 
-  // Part C: show slide viewer directly
-  if (activePart === "C") {
-    return (
-      <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-        <header className="page-header">
-          <button className="page-header-back" onClick={() => navigate("/")}>
-            <IconBack />
-          </button>
-          <span className="page-header-title">{t('safety.title')}</span>
-          <div className="page-header-spacer" />
-        </header>
-        <div style={{ display: "flex", background: "#fff", borderBottom: "1px solid #e2e8f0", flexShrink: 0 }}>
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => handlePartChange(tab.id)}
-              style={{
-                flex: 1,
-                padding: "11px 4px",
-                border: "none",
-                borderBottom: activePart === tab.id ? `3px solid ${BLUE}` : "3px solid transparent",
-                background: "#fff",
-                color: activePart === tab.id ? BLUE : "#718096",
-                fontWeight: activePart === tab.id ? 700 : 500,
-                fontSize: 11,
-                cursor: "pointer",
-                transition: "all 0.15s",
-              }}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-          <SlideViewer
-            slides={PART_C_SLIDES}
-            totalLabel={`Slide X of ${PART_C_SLIDES.length}`}
-            completionKey={{ part: "C" }}
-            onComplete={refresh}
-            onBack={() => {}}
-            title={t('safety.part_c_title')}
-          />
-        </div>
-      </div>
-    );
-  }
+  // ── Home screen ──────────────────────────────────────────────────────────────
 
-  // Part A — disaster list
-  const partADone = DISASTERS.filter((d) => isComplete("A", d.id)).length;
+  const completedA = DISASTERS.filter((d) => isComplete("A", d.id)).length;
+  const partBDone = isComplete("B");
+  const partCDone = isComplete("C");
 
-  // completionRevision is read here to ensure re-render after markComplete
-  void completionRevision;
+  // First 3 disaster chips — show completion status
+  const shownChips = DISASTERS.slice(0, 3);
+  const moreCount = DISASTERS.length - shownChips.length; // 6
+
+  const partABtnLabel =
+    completedA === 9 ? "✓ Completed" : completedA > 0 ? "Continue Safety Tips" : "Start";
 
   return (
-    <div style={{ flex: 1, display: "flex", flexDirection: "column", background: "#F6F3F2" }}>
-      {/* Header */}
-      <header className="page-header">
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", background: BG }}>
+      <header
+        className="page-header"
+        style={{ background: BG, borderBottom: "1px solid #E4E2E1" }}
+      >
         <button className="page-header-back" onClick={() => navigate("/")}>
-          <IconBack />
+          <svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={BLUE} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="15 18 9 12 15 6" />
+          </svg>
         </button>
-        <span className="page-header-title">Safety Tips</span>
+        <span className="page-header-title">{t('safety.title')}</span>
         <div className="page-header-spacer" />
       </header>
 
-      {/* Tabs */}
-      <div style={{ display: "flex", background: "#fff", borderBottom: "1px solid #e2e8f0", flexShrink: 0 }}>
-        {tabs.map((tab) => (
+      <div style={{ flex: 1, overflowY: "auto", padding: "24px 24px 40px" }}>
+        {/* Intro */}
+        <p style={{ fontSize: 14, color: "#414751", textAlign: "center", marginBottom: 28, lineHeight: 1.6, padding: "0 8px" }}>
+          Learn how to stay safe and report effectively. Complete both parts to earn your Safety Training badge.
+        </p>
+
+        {/* ── Part A Card ── */}
+        <article style={{ background: CARD_BG, borderRadius: 16, padding: 24, marginBottom: 16, boxShadow: "0 4px 24px rgba(0,0,0,0.05)" }}>
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 16, marginBottom: 16 }}>
+            <div style={{ background: "rgba(4,104,177,0.08)", padding: 12, borderRadius: 16, flexShrink: 0 }}>
+              <MatIcon name="shield" size={22} color={BLUE} fill />
+            </div>
+            <div style={{ flex: 1 }}>
+              <h3 style={{ margin: "0 0 4px", fontSize: 16, fontWeight: 700, color: "#1B1C1C", lineHeight: 1.3 }}>
+                Part A — Safety Tips by Disaster Type
+              </h3>
+              <p style={{ margin: 0, fontSize: 13, color: "#717782" }}>{completedA} of 9 completed</p>
+            </div>
+          </div>
+
+          {/* Progress bar */}
+          <div style={{ height: 8, background: "#E4E2E1", borderRadius: 4, overflow: "hidden", marginBottom: 16 }}>
+            <div style={{ height: "100%", width: `${(completedA / 9) * 100}%`, background: BLUE, borderRadius: 4, transition: "width 0.3s" }} />
+          </div>
+
+          {/* Disaster chips */}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 20 }}>
+            {shownChips.map((d) => {
+              const done = isComplete("A", d.id);
+              return done ? (
+                <div key={d.id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 12px", background: "rgba(56,161,105,0.1)", border: "1px solid rgba(56,161,105,0.25)", borderRadius: 99 }}>
+                  <MatIcon name="check_circle" size={15} color={GREEN} fill />
+                  <span style={{ fontSize: 12, fontWeight: 600, color: "#276749" }}>{d.label}</span>
+                </div>
+              ) : (
+                <div key={d.id} style={{ padding: "5px 12px", background: FIELD_BG, border: "1px solid #C1C7D2", borderRadius: 99 }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: "#414751" }}>{d.label}</span>
+                </div>
+              );
+            })}
+            <div style={{ padding: "5px 8px" }}>
+              <span style={{ fontSize: 12, fontWeight: 500, color: "#717782" }}>+{moreCount} more</span>
+            </div>
+          </div>
+
+          {/* Button */}
           <button
-            key={tab.id}
-            onClick={() => handlePartChange(tab.id)}
+            onClick={() => setView({ type: "partA_list" })}
             style={{
-              flex: 1,
-              padding: "11px 4px",
-              border: "none",
-              borderBottom: activePart === tab.id ? `3px solid ${BLUE}` : "3px solid transparent",
-              background: "#fff",
-              color: activePart === tab.id ? BLUE : "#718096",
-              fontWeight: activePart === tab.id ? 700 : 500,
-              fontSize: 11,
+              width: "100%",
+              height: 48,
+              borderRadius: 12,
+              background: completedA === 9 ? "transparent" : BLUE,
+              color: completedA === 9 ? GREEN : "#fff",
+              border: completedA === 9 ? `1.5px solid ${GREEN}` : "none",
+              fontWeight: 700,
+              fontSize: 15,
               cursor: "pointer",
-              transition: "all 0.15s",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
+              transition: "opacity 0.15s",
             }}
           >
-            {tab.label}
+            {partABtnLabel}
+            {completedA < 9 && <MatIcon name="arrow_forward" size={18} color="#fff" />}
           </button>
-        ))}
-      </div>
+        </article>
 
-      {/* Completion banner */}
-      {allDone && (
-        <div style={{
-          background: "#f0fff4",
-          border: "1.5px solid #9ae6b4",
-          borderRadius: 10,
-          margin: "14px 16px 0",
-          padding: "12px 16px",
-          display: "flex",
-          alignItems: "center",
-          gap: 10,
-          flexShrink: 0,
-        }}>
-          <span style={{ fontSize: 22 }}>🏅</span>
-          <span style={{ fontSize: 13, color: "#276749", fontWeight: 600, lineHeight: 1.4 }}>
-            {t('safety.all_complete_banner')}
-          </span>
-        </div>
-      )}
+        {/* ── Part B Card ── */}
+        <article style={{ background: CARD_BG, borderRadius: 16, padding: 24, marginBottom: 16, boxShadow: "0 4px 24px rgba(0,0,0,0.05)" }}>
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 16, marginBottom: 16 }}>
+            <div style={{ background: "rgba(4,104,177,0.08)", padding: 12, borderRadius: 16, flexShrink: 0 }}>
+              <MatIcon name="description" size={22} color={BLUE} fill />
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <h3 style={{ margin: "0 0 4px", fontSize: 16, fontWeight: 700, color: "#1B1C1C", lineHeight: 1.3 }}>
+                  Part B — Reporting Guidelines
+                </h3>
+              </div>
+              <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: partBDone ? GREEN : "#F5A623" }}>
+                {partBDone ? "Completed" : "Not started"}
+              </p>
+            </div>
+          </div>
 
-      {/* Progress */}
-      <div style={{ padding: "12px 16px 4px", flexShrink: 0 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-          <span style={{ fontSize: 12, color: "#718096", fontWeight: 500 }}>{t('safety.progress_label')}</span>
-          <span style={{ fontSize: 12, color: BLUE, fontWeight: 700 }}>{partADone} / {DISASTERS.length}</span>
-        </div>
-        <div style={{ height: 6, background: "#e2e8f0", borderRadius: 3, overflow: "hidden" }}>
-          <div style={{ height: "100%", width: `${(partADone / DISASTERS.length) * 100}%`, background: BLUE, borderRadius: 3, transition: "width 0.3s" }} />
-        </div>
-      </div>
+          {/* Progress bar */}
+          <div style={{ height: 8, background: "#E4E2E1", borderRadius: 4, overflow: "hidden", marginBottom: 16 }}>
+            <div style={{ height: "100%", width: partBDone ? "100%" : "0%", background: BLUE, borderRadius: 4, transition: "width 0.3s" }} />
+          </div>
 
-      {/* Disaster list */}
-      <div style={{ flex: 1, overflowY: "auto", padding: "8px 16px 24px" }}>
-        {DISASTERS.map((d) => {
-          const done = isComplete("A", d.id);
-          return (
+          <p style={{ fontSize: 14, color: "#414751", lineHeight: 1.6, marginBottom: 20 }}>
+            Simple do's and don'ts for submitting a report safely and accurately during a crisis
+          </p>
+
+          <button
+            onClick={() => setView({ type: "slide", part: "B" })}
+            style={{
+              width: "100%",
+              height: 48,
+              borderRadius: 12,
+              background: partBDone ? "transparent" : BLUE,
+              color: partBDone ? GREEN : "#fff",
+              border: partBDone ? `1.5px solid ${GREEN}` : "none",
+              fontWeight: 700,
+              fontSize: 15,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
+            }}
+          >
+            {partBDone ? "✓ Completed" : "Start"}
+            {!partBDone && <MatIcon name="arrow_forward" size={18} color="#fff" />}
+          </button>
+        </article>
+
+        {/* ── Part C Card ── */}
+        <article style={{ background: CARD_BG, borderRadius: 16, padding: 24, marginBottom: 24, boxShadow: "0 4px 24px rgba(0,0,0,0.05)" }}>
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 16, marginBottom: 16 }}>
+            <div style={{ background: "rgba(4,104,177,0.08)", padding: 12, borderRadius: 16, flexShrink: 0 }}>
+              <MatIcon name="medical_services" size={22} color={BLUE} fill />
+            </div>
+            <div style={{ flex: 1 }}>
+              <h3 style={{ margin: "0 0 4px", fontSize: 16, fontWeight: 700, color: "#1B1C1C", lineHeight: 1.3 }}>
+                Part C — First Aid Tips
+              </h3>
+              <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: partCDone ? GREEN : "#F5A623" }}>
+                {partCDone ? "Completed" : "Not started"}
+              </p>
+            </div>
+          </div>
+
+          {/* Progress bar */}
+          <div style={{ height: 8, background: "#E4E2E1", borderRadius: 4, overflow: "hidden", marginBottom: 20 }}>
+            <div style={{ height: "100%", width: partCDone ? "100%" : "0%", background: BLUE, borderRadius: 4 }} />
+          </div>
+
+          <button
+            onClick={() => setView({ type: "slide", part: "C" })}
+            style={{
+              width: "100%",
+              height: 48,
+              borderRadius: 12,
+              background: partCDone ? "transparent" : BLUE,
+              color: partCDone ? GREEN : "#fff",
+              border: partCDone ? `1.5px solid ${GREEN}` : "none",
+              fontWeight: 700,
+              fontSize: 15,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
+            }}
+          >
+            {partCDone ? "✓ Completed" : "Start"}
+            {!partCDone && <MatIcon name="arrow_forward" size={18} color="#fff" />}
+          </button>
+        </article>
+
+        {/* Badge teaser */}
+        <section style={{ background: "rgba(4,104,177,0.07)", borderRadius: 16, padding: "16px 20px", display: "flex", alignItems: "center", gap: 16 }}>
+          <div style={{ background: BLUE, borderRadius: "50%", width: 40, height: 40, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <MatIcon name="star" size={20} color="#fff" fill />
+          </div>
+          <div style={{ flex: 1 }}>
+            <p style={{ margin: "0 0 6px", fontSize: 13, fontWeight: 700, color: "#1B1C1C", lineHeight: 1.4 }}>
+              Complete both parts to unlock your Safety Training Badge
+            </p>
             <button
-              key={d.id}
-              onClick={() => setSelectedDisaster(d.id)}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                width: "100%",
-                background: "#fff",
-                border: "none",
-                borderRadius: 12,
-                padding: "14px 16px",
-                marginBottom: 10,
-                cursor: "pointer",
-                boxShadow: "0 1px 3px rgba(0,0,0,0.07)",
-                textAlign: "left",
-                transition: "box-shadow 0.15s",
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.boxShadow = "0 3px 8px rgba(4,104,177,0.15)")}
-              onMouseLeave={(e) => (e.currentTarget.style.boxShadow = "0 1px 3px rgba(0,0,0,0.07)")}
+              onClick={() => navigate("/badges")}
+              style={{ background: "none", border: "none", color: BLUE, fontWeight: 700, fontSize: 13, cursor: "pointer", padding: 0, display: "flex", alignItems: "center", gap: 4 }}
             >
-              <span style={{ fontSize: 28, marginRight: 14, flexShrink: 0 }}>{d.emoji}</span>
-              <span style={{ flex: 1, fontWeight: 600, fontSize: 15, color: "#2d3748" }}>{d.label}</span>
-              {done ? (
-                <IconCheck />
-              ) : (
-                <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#cbd5e0" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="9 18 15 12 9 6" />
-                </svg>
-              )}
+              View Badges
+              <MatIcon name="arrow_forward" size={14} color={BLUE} />
             </button>
-          );
-        })}
+          </div>
+        </section>
       </div>
     </div>
   );
 }
-
-// Suppress unused import warning — BLUE_DARK is kept for potential use in future slide themes
-void BLUE_DARK;
