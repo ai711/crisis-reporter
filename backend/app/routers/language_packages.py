@@ -1807,17 +1807,177 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
     ("Q8_OPT_PROTECTION",   "answer",   "Protection services and psychosocial support"),
     ("Q8_OPT_LOCAL_SUPPORT","answer",   "Support from local authorities and community organizations"),
     ("Q8_OPT_OTHER",        "answer",   "Other — please specify"),
+
+    # ── Navigation / global chrome ────────────────────────────────────────────────
+    ("NAV_HOME",            "ui_nav",   "Home"),
+    ("NAV_MAP",             "ui_nav",   "Map"),
+    ("NAV_REPORTS",         "ui_nav",   "Reports"),
+
+    # ── Common / shared UI ────────────────────────────────────────────────────────
+    ("COMMON_LOADING",              "ui_common", "Loading..."),
+    ("COMMON_LOADING_COUNTRIES",    "ui_common", "Loading countries…"),
+    ("COMMON_RETRY",                "ui_common", "Retry"),
+    ("COMMON_CANCEL",               "ui_common", "Cancel"),
+    ("COMMON_CONFIRM",              "ui_common", "Confirm"),
+    ("COMMON_BACK",                 "ui_common", "← Back"),
+    ("COMMON_NEXT",                 "ui_common", "Next →"),
+    ("COMMON_PREVIOUS",             "ui_common", "← Previous"),
+    ("COMMON_EDIT",                 "ui_common", "Edit"),
+    ("COMMON_OPTIONAL",             "ui_common", "Optional"),
+    ("COMMON_SAVING",               "ui_common", "Saving…"),
+    ("COMMON_GO_BACK",              "ui_common", "Go Back"),
+    ("COMMON_GO_HOME",              "ui_common", "Go to Home"),
+    ("COMMON_GOT_IT",               "ui_common", "Got it"),
+    ("COMMON_REFRESH",              "ui_common", "Refresh"),
+
+    # ── Terms & Conditions ────────────────────────────────────────────────────────
+    ("TERMS_TITLE",         "ui_terms", "Terms and Conditions"),
+    ("TERMS_SUBTITLE",      "ui_terms", "Please read and accept the terms below to continue."),
+    ("TERMS_ERROR",         "ui_terms", "You must accept the Terms and Conditions to continue."),
+    ("TERMS_AGREE",         "ui_terms", "I Agree"),
+    ("TERMS_DECLINE",       "ui_terms", "Decline"),
+    ("TERMS_PRIVACY",       "ui_terms", "Your data is secured by UNDP Privacy Protocols"),
+
+    # ── Onboarding ────────────────────────────────────────────────────────────────
+    ("ONBOARDING_SELECT_COUNTRY",       "ui_onboarding", "Select Your Country"),
+    ("ONBOARDING_SELECT_LANGUAGE",      "ui_onboarding", "Select Language"),
+    ("ONBOARDING_COUNTRY_PLACEHOLDER",  "ui_onboarding", "Search for your country..."),
+    ("ONBOARDING_INACTIVE",             "ui_onboarding", "We are unable to provide any assistance for your region at this moment"),
+    ("ONBOARDING_CONTINUE",             "ui_onboarding", "Continue"),
+    ("ONBOARDING_MORE_LANGUAGES_TITLE", "ui_onboarding", "More languages"),
+    ("ONBOARDING_MORE_LANGUAGES_BTN",   "ui_onboarding", "+ More"),
+    ("ONBOARDING_SHOW_LESS",            "ui_onboarding", "Show less"),
+    ("ONBOARDING_LANG_LOAD_ERROR",      "ui_onboarding", "Could not load language. Check your connection and try again."),
+
+    # ── Home screen ───────────────────────────────────────────────────────────────
+    ("HOME_REPORT_BUTTON",      "ui_home", "Report an Incident"),
+    ("HOME_QUEUED_REPORTS",     "ui_home", "{{count}} report(s) waiting to sync"),
+    ("HOME_MY_REPORTS",         "ui_home", "My Reports"),
+    ("HOME_NO_REPORTS_TITLE",   "ui_home", "No reports yet"),
+    ("HOME_NO_REPORTS_BODY",    "ui_home", "Your submitted reports will appear here"),
+    ("HOME_RECENT_REPORTS",     "ui_home", "YOUR RECENT REPORTS"),
+
+    # ── Report form ───────────────────────────────────────────────────────────────
+    ("REPORT_TITLE",            "ui_report", "Report Damage"),
+    ("REPORT_SUBMIT",           "ui_report", "Submit Report"),
+    ("REPORT_SUBMITTING",       "ui_report", "Submitting..."),
+    ("REPORT_SUCCESS",          "ui_report", "Report submitted successfully"),
+    ("REPORT_ERROR",            "ui_report", "Failed to submit report. Please try again."),
+    ("REPORT_QUEUED",           "ui_report", "Report saved. Will sync when internet is available."),
+    ("REPORT_PHOTO_REQUIRED",   "ui_report", "At least one photo is required"),
+    ("REPORT_MAX_PHOTOS",       "ui_report", "Maximum 3 photos per report"),
+    ("REPORT_ADD_PHOTO",        "ui_report", "Add Photo"),
+    ("REPORT_TAKE_PHOTO",       "ui_report", "Take a Photo"),
+    ("REPORT_UPLOAD_PHOTO",     "ui_report", "Upload from Gallery"),
+    ("REPORT_GPS_BUTTON",       "ui_report", "Use My GPS Location"),
+    ("REPORT_GPS_GETTING",      "ui_report", "Getting location…"),
+    ("REPORT_SELECT_BUILDING",  "ui_report", "Select building on map"),
+    ("REPORT_SUBMIT_ANOTHER",   "ui_report", "Submit Another Report"),
+    ("REPORT_REVIEW_TITLE",     "ui_report", "Review Your Report"),
+    ("REPORT_DUPE_TITLE",       "ui_report", "Possible duplicate report"),
+    ("REPORT_DUPE_SUBMIT",      "ui_report", "Submit anyway"),
+    ("REPORT_NO_CRISIS",        "ui_report", "No active crisis found. Please try again later."),
+
+    # ── Settings ──────────────────────────────────────────────────────────────────
+    ("SETTINGS_TITLE",          "ui_settings", "Settings"),
+    ("SETTINGS_LANGUAGE",       "ui_settings", "Language"),
+    ("SETTINGS_COUNTRY",        "ui_settings", "Country"),
+    ("SETTINGS_ACCOUNT",        "ui_settings", "Account"),
+    ("SETTINGS_LOGIN",          "ui_settings", "Log In"),
+    ("SETTINGS_REGISTER",       "ui_settings", "Create Account"),
+    ("SETTINGS_LOGOUT",         "ui_settings", "Log Out"),
+    ("SETTINGS_CHANGE_COUNTRY", "ui_settings", "Change Country"),
+    ("SETTINGS_CHANGE_LANGUAGE","ui_settings", "Change Language"),
+    ("SETTINGS_PRIVACY_POLICY", "ui_settings", "Privacy Policy"),
+
+    # ── Offline / connectivity ────────────────────────────────────────────────────
+    ("OFFLINE_BANNER",  "ui_offline", "You are offline. Reports will be saved and sent when you reconnect."),
+    ("OFFLINE_SYNCING", "ui_offline", "Syncing your reports..."),
+
+    # ── Error messages ────────────────────────────────────────────────────────────
+    ("ERROR_REQUIRED",       "ui_error", "This field is required"),
+    ("ERROR_NETWORK",        "ui_error", "Network error. Please check your connection."),
+    ("ERROR_UNKNOWN",        "ui_error", "Something went wrong. Please try again."),
+    ("ERROR_NO_INTERNET",    "ui_error", "No internet connection. Please check your connection and try again."),
+    ("ERROR_TIMEOUT",        "ui_error", "This is taking longer than expected. Please try again."),
+
+    # ── Profile ───────────────────────────────────────────────────────────────────
+    ("PROFILE_TITLE",           "ui_profile", "My Profile"),
+    ("PROFILE_ANONYMOUS",       "ui_profile", "Anonymous Reporter"),
+    ("PROFILE_FIRST_NAME",      "ui_profile", "First Name"),
+    ("PROFILE_LAST_NAME",       "ui_profile", "Last Name"),
+    ("PROFILE_EMAIL",           "ui_profile", "Email Address"),
+    ("PROFILE_PHONE",           "ui_profile", "Phone Number"),
+    ("PROFILE_SAVE_BTN",        "ui_profile", "Save Profile"),
+    ("PROFILE_SAVE_SUCCESS",    "ui_profile", "Profile saved"),
+    ("PROFILE_SAVE_ERROR",      "ui_profile", "Could not save profile. Please try again."),
+    ("PROFILE_ANON_GATE",       "ui_profile", "Create a free account to save your profile and earn badges."),
+
+    # ── Login ─────────────────────────────────────────────────────────────────────
+    ("LOGIN_TITLE",             "ui_login", "Sign In"),
+    ("LOGIN_EMAIL_LABEL",       "ui_login", "Email"),
+    ("LOGIN_PASSWORD_LABEL",    "ui_login", "Password"),
+    ("LOGIN_SUBMIT_BTN",        "ui_login", "Sign In"),
+    ("LOGIN_SIGNING_IN",        "ui_login", "Signing in…"),
+    ("LOGIN_INVALID_CREDENTIALS","ui_login","Invalid email or password."),
+    ("LOGIN_NO_ACCOUNT",        "ui_login", "Don't have an account?"),
+
+    # ── My Reports ────────────────────────────────────────────────────────────────
+    ("MY_REPORTS_EMPTY_TITLE",  "ui_my_reports", "No reports submitted yet"),
+    ("MY_REPORTS_LOAD_ERROR",   "ui_my_reports", "Failed to load reports. Please try again."),
+    ("MY_REPORTS_LOAD_MORE",    "ui_my_reports", "Load More"),
+    ("MY_REPORTS_LABEL_DAMAGE", "ui_my_reports", "Damage Level:"),
+    ("MY_REPORTS_LABEL_DATE",   "ui_my_reports", "Date:"),
+    ("MY_REPORTS_LABEL_STATUS", "ui_my_reports", "Status:"),
+
+    # ── Safety Tips UI ────────────────────────────────────────────────────────────
+    ("SAFETY_TITLE",            "ui_safety", "Safety Tips"),
+    ("SAFETY_DO",               "ui_safety", "DO"),
+    ("SAFETY_DONT",             "ui_safety", "DON'T"),
+    ("SAFETY_MARK_COMPLETE",    "ui_safety", "Mark as Complete"),
+    ("SAFETY_COMPLETED",        "ui_safety", "✓ Completed"),
+    ("SAFETY_PART_B_TITLE",     "ui_safety", "Reporting Guidelines"),
+    ("SAFETY_PART_C_TITLE",     "ui_safety", "First Aid Essentials"),
+    ("SAFETY_SLIDE_PROGRESS",   "ui_safety", "Slide {{n}} of {{total}}"),
+
+    # ── Badges ────────────────────────────────────────────────────────────────────
+    ("BADGES_TITLE",            "ui_badges", "Badges & Certifications"),
+    ("BADGES_ANON_HEADING",     "ui_badges", "Badges are available to reporters with a verified account."),
+    ("BADGES_ANON_BODY",        "ui_badges", "Log in or create a free account to earn and view your badges."),
+    ("BADGES_STATUS_EARNED",    "ui_badges", "Earned ✓"),
+    ("BADGES_STATUS_LOCKED",    "ui_badges", "Locked"),
+    ("BADGES_SAFETY_NAME",      "ui_badges", "Safety Training Completion"),
+    ("BADGES_SAFETY_DESC",      "ui_badges", "Complete all safety training modules in Crisis Reporter."),
+    ("BADGES_REFERRAL_NAME",    "ui_badges", "Community Referral"),
+
+    # ── Disaster type labels (for display in UI) ─────────────────────────────────
+    ("DISASTER_EARTHQUAKE",         "disaster_label", "Earthquake"),
+    ("DISASTER_FLOOD",              "disaster_label", "Flood"),
+    ("DISASTER_TSUNAMI",            "disaster_label", "Tsunami"),
+    ("DISASTER_HURRICANE_CYCLONE",  "disaster_label", "Hurricane or Cyclone"),
+    ("DISASTER_WILDFIRE",           "disaster_label", "Wildfire"),
+    ("DISASTER_EXPLOSION",          "disaster_label", "Explosion"),
+    ("DISASTER_CHEMICAL_INCIDENT",  "disaster_label", "Chemical Incident"),
+    ("DISASTER_CONFLICT",           "disaster_label", "Conflict"),
+    ("DISASTER_CIVIL_UNREST",       "disaster_label", "Civil Unrest"),
 ]
 
 
 async def seed_string_keys() -> None:
+    """Idempotent, incremental seed — inserts only StringKey rows that don't yet
+    exist.  New keys added to _SEED_KEYS in future commits will be picked up on
+    the next startup without affecting existing translations."""
     async with AsyncSessionLocal() as session:
-        result = await session.execute(select(StringKey).limit(1))
-        if result.scalar_one_or_none() is not None:
-            return
+        # Load all existing keys in one query
+        existing_result = await session.execute(select(StringKey.key))
+        existing_keys: set[str] = {row[0] for row in existing_result.all()}
 
+        added = 0
         for key, category, english_text in _SEED_KEYS:
-            session.add(StringKey(key=key, category=category, english_text=english_text))
+            if key not in existing_keys:
+                session.add(StringKey(key=key, category=category, english_text=english_text))
+                added += 1
 
-        await session.commit()
-        log.info("Seeded %d string keys", len(_SEED_KEYS))
+        if added:
+            await session.commit()
+            log.info("Seeded %d new string keys (%d total defined)", added, len(_SEED_KEYS))
