@@ -17,6 +17,7 @@ import type { DamageLevel } from "../types";
 const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 const MAPTILER_KEY = import.meta.env.VITE_MAPTILER_KEY || "";
 const MAP_STYLE = `https://api.maptiler.com/maps/streets/style.json?key=${MAPTILER_KEY}`;
+const DRAFT_KEY = "cr_report_draft";
 
 const OSM_STYLE: maplibregl.StyleSpecification = {
   version: 8,
@@ -379,6 +380,10 @@ export default function ReportPage() {
 
   // E32/E34/E35 — submit error type (no offline queue on web)
   const [submitError, setSubmitError] = useState<"no_internet" | "timeout" | "server_error" | null>(null);
+
+  // Draft restore banner state
+  const [draftPrompt, setDraftPrompt] = useState<"idle" | "showing" | "dismissed">("idle");
+  const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Refs
   const isSubmittedRef = useRef(false);
@@ -870,6 +875,82 @@ export default function ReportPage() {
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, []);
 
+  // ── Draft auto-save ──────────────────────────────────────────────────────────
+
+  // On mount: check localStorage for an existing draft and offer to restore it.
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(DRAFT_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      const hasProgress =
+        (typeof parsed.step === "string" && parsed.step !== "photos") ||
+        (typeof parsed.damageLevel === "string" && parsed.damageLevel !== "") ||
+        (Array.isArray(parsed.infrastructureTypes) && (parsed.infrastructureTypes as string[]).length > 0) ||
+        (typeof parsed.locationAddress === "string" && parsed.locationAddress !== "") ||
+        (typeof parsed.selectedBuildingId === "string" && parsed.selectedBuildingId !== "");
+      if (hasProgress && parsed.savedAt) {
+        setDraftPrompt("showing");
+      } else {
+        localStorage.removeItem(DRAFT_KEY);
+      }
+    } catch {
+      try { localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ }
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Save immediately whenever the user advances a step or damage sub-question.
+  useEffect(() => {
+    if (isSubmittedRef.current || draftPrompt === "showing") return;
+    try {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify({
+        savedAt: new Date().toISOString(),
+        step, damageQuestion, damageLevel,
+        infrastructureTypes, infrastructureOther, infrastructureName,
+        disasterType, debrisBlocking, electricityCondition,
+        healthServicesCondition, pressingNeeds, pressingNeedsOther,
+        additionalAnswers,
+        locationAddress, locationLandmark, locationBuildingName, locationNote,
+        gpsLatitude, gpsLongitude,
+        selectedBuildingId, selectedBuildingName,
+        buildingCentroidLat, buildingCentroidLng,
+        pinDropCoords, locationEntryMethod,
+      }));
+    } catch { /* localStorage full or unavailable */ }
+  }, [step, damageQuestion]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Debounced save (1.2 s) triggered by changes to text / selection fields within a step.
+  useEffect(() => {
+    if (isSubmittedRef.current || draftPrompt === "showing") return;
+    if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
+    draftTimerRef.current = setTimeout(() => {
+      try {
+        localStorage.setItem(DRAFT_KEY, JSON.stringify({
+          savedAt: new Date().toISOString(),
+          step, damageQuestion, damageLevel,
+          infrastructureTypes, infrastructureOther, infrastructureName,
+          disasterType, debrisBlocking, electricityCondition,
+          healthServicesCondition, pressingNeeds, pressingNeedsOther,
+          additionalAnswers,
+          locationAddress, locationLandmark, locationBuildingName, locationNote,
+          gpsLatitude, gpsLongitude,
+          selectedBuildingId, selectedBuildingName,
+          buildingCentroidLat, buildingCentroidLng,
+          pinDropCoords, locationEntryMethod,
+        }));
+      } catch { /* ignore */ }
+    }, 1200);
+    return () => { if (draftTimerRef.current) clearTimeout(draftTimerRef.current); };
+  }, [ // eslint-disable-line react-hooks/exhaustive-deps
+    damageLevel, infrastructureTypes, infrastructureOther, infrastructureName,
+    disasterType, debrisBlocking, electricityCondition,
+    healthServicesCondition, pressingNeeds, pressingNeedsOther,
+    additionalAnswers,
+    locationAddress, locationLandmark, locationBuildingName, locationNote,
+    gpsLatitude, gpsLongitude, selectedBuildingId, selectedBuildingName,
+    buildingCentroidLat, buildingCentroidLng, pinDropCoords, locationEntryMethod,
+  ]);
+
   // ── Photo validation wiring ──────────────────────────────────────────────────
 
   const validateAndAddPhoto = async (file: File) => {
@@ -1098,7 +1179,54 @@ export default function ReportPage() {
     setLocationChangedFlag(false);
     setPrevBuildingId("");
     setSubmitError(null);
+    clearDraft();
     setStep("photos");
+  };
+
+  const clearDraft = () => {
+    try { localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ }
+    setDraftPrompt("dismissed");
+  };
+
+  const restoreDraft = () => {
+    try {
+      const raw = localStorage.getItem(DRAFT_KEY);
+      if (!raw) return;
+      const d = JSON.parse(raw) as Record<string, unknown>;
+      if (typeof d.step === "string" && ["photos", "location", "damage", "review"].includes(d.step))
+        setStep(d.step as "photos" | "location" | "damage" | "review");
+      if (typeof d.damageLevel === "string") setDamageLevel(d.damageLevel as DamageLevel | "");
+      if (Array.isArray(d.infrastructureTypes)) setInfrastructureTypes(d.infrastructureTypes as string[]);
+      if (typeof d.infrastructureOther === "string") setInfrastructureOther(d.infrastructureOther);
+      if (typeof d.infrastructureName === "string") setInfrastructureName(d.infrastructureName);
+      if (typeof d.disasterType === "string") setDisasterType(d.disasterType);
+      if (typeof d.debrisBlocking === "string") setDebrisBlocking(d.debrisBlocking);
+      if (typeof d.electricityCondition === "string") setElectricityCondition(d.electricityCondition);
+      if (typeof d.healthServicesCondition === "string") setHealthServicesCondition(d.healthServicesCondition);
+      if (Array.isArray(d.pressingNeeds)) setPressingNeeds(d.pressingNeeds as string[]);
+      if (typeof d.pressingNeedsOther === "string") setPressingNeedsOther(d.pressingNeedsOther);
+      if (typeof d.damageQuestion === "number") setDamageQuestion(d.damageQuestion);
+      if (d.additionalAnswers && typeof d.additionalAnswers === "object" && !Array.isArray(d.additionalAnswers))
+        setAdditionalAnswers(d.additionalAnswers as Record<number, string | string[]>);
+      if (typeof d.locationAddress === "string") setLocationAddress(d.locationAddress);
+      if (typeof d.locationLandmark === "string") setLocationLandmark(d.locationLandmark);
+      if (typeof d.locationBuildingName === "string") setLocationBuildingName(d.locationBuildingName);
+      if (typeof d.locationNote === "string") setLocationNote(d.locationNote);
+      if (typeof d.gpsLatitude === "number") setGpsLatitude(d.gpsLatitude);
+      if (typeof d.gpsLongitude === "number") setGpsLongitude(d.gpsLongitude);
+      if (typeof d.selectedBuildingId === "string") setSelectedBuildingId(d.selectedBuildingId);
+      if (typeof d.selectedBuildingName === "string") setSelectedBuildingName(d.selectedBuildingName);
+      if (typeof d.buildingCentroidLat === "number") setBuildingCentroidLat(d.buildingCentroidLat);
+      if (typeof d.buildingCentroidLng === "number") setBuildingCentroidLng(d.buildingCentroidLng);
+      if (d.pinDropCoords && typeof d.pinDropCoords === "object") {
+        const p = d.pinDropCoords as { lat?: number; lng?: number };
+        if (typeof p.lat === "number" && typeof p.lng === "number")
+          setPinDropCoords({ lat: p.lat, lng: p.lng });
+      }
+      if (typeof d.locationEntryMethod === "string")
+        setLocationEntryMethod(d.locationEntryMethod as "map_selection" | "pin_drop" | "manual_text" | null);
+    } catch { /* corrupted draft — ignore */ }
+    setDraftPrompt("dismissed");
   };
 
   // G5 — Valid if any usable coordinate or text field is filled
@@ -1352,7 +1480,27 @@ export default function ReportPage() {
 
       saveSubmittedLocation();
 
-      // D27 — write to sessionStorage so anonymous duplicate check works within session
+      // Persist submitted report to localStorage so My Reports survives browser restarts.
+      // Fields match the SessionReport interface consumed by MyReportsPage.
+      try {
+        const localReports: Array<Record<string, unknown>> = JSON.parse(
+          localStorage.getItem("cr_local_reports") || "[]"
+        );
+        localReports.push({
+          id: reportId,
+          damage_level: damageLevel,
+          gps_latitude: buildingCentroidLat ?? pinDropCoords?.lat ?? gpsLatitude,
+          gps_longitude: buildingCentroidLng ?? pinDropCoords?.lng ?? gpsLongitude,
+          location_address: buildLocationAddress() || null,
+          submitted_at: submitTapTime,
+          created_at: new Date().toISOString(),
+        });
+        // Cap at 100 entries — oldest dropped first
+        if (localReports.length > 100) localReports.splice(0, localReports.length - 100);
+        localStorage.setItem("cr_local_reports", JSON.stringify(localReports));
+      } catch { /* non-critical */ }
+
+      // D27 — also write to sessionStorage for the within-session duplicate check
       try {
         const sessionReports: Array<Record<string, unknown>> = JSON.parse(
           sessionStorage.getItem("cr_session_reports") || "[]"
@@ -1369,6 +1517,7 @@ export default function ReportPage() {
 
       setSubmittedReportId(reportId);
       isSubmittedRef.current = true;
+      try { localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ }
       setSubmitted(true);
     } catch (err: unknown) {
       clearTimeout(timeoutId);
@@ -1640,6 +1789,54 @@ export default function ReportPage() {
 
       {/* 5-step labeled stepper */}
       <SubmissionStepper currentStep={getStepperStep(step, submitting)} />
+
+      {/* Draft restore banner */}
+      {draftPrompt === "showing" && (() => {
+        let savedLabel = "";
+        try {
+          const raw = localStorage.getItem(DRAFT_KEY);
+          if (raw) {
+            const d = JSON.parse(raw) as { savedAt?: string };
+            if (d.savedAt) {
+              savedLabel = new Date(d.savedAt).toLocaleString(undefined, {
+                month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
+              });
+            }
+          }
+        } catch { /* ignore */ }
+        return (
+          <div style={{
+            display: "flex", alignItems: "center", flexWrap: "wrap" as const,
+            gap: 10, padding: "10px 16px",
+            background: "#FFF8E1", borderBottom: "1px solid #FFE082",
+            fontSize: 13, color: "#5D4037",
+          }}>
+            <span style={{ flex: 1, minWidth: 160 }}>
+              📝 Unsaved draft{savedLabel ? ` from ${savedLabel}` : ""}. Resume?
+            </span>
+            <button
+              onClick={restoreDraft}
+              style={{
+                background: "#0468B1", color: "#fff", border: "none",
+                borderRadius: 6, padding: "6px 14px", fontSize: 13,
+                fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+              }}
+            >
+              Resume
+            </button>
+            <button
+              onClick={clearDraft}
+              style={{
+                background: "transparent", color: "#5D4037", border: "1px solid #BCAAA4",
+                borderRadius: 6, padding: "6px 14px", fontSize: 13,
+                fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+              }}
+            >
+              Discard
+            </button>
+          </div>
+        );
+      })()}
 
       {/* Content */}
       <div style={{ ...styles.content, overflow: step === "location" ? "hidden" : "auto" }}>

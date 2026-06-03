@@ -120,6 +120,22 @@ export async function getQueueCount(): Promise<number> {
   });
 }
 
+export async function getAllQueueItems(): Promise<QueuedReport[]> {
+  const db = await openDB();
+
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, "readonly");
+    const store = tx.objectStore(STORE_NAME);
+    const request = store.getAll();
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+export async function resetItemForRetry(local_id: string): Promise<void> {
+  return updateItemStatus(local_id, "pending", 0);
+}
+
 // ── Sync engine ───────────────────────────────────────────────────────────────
 
 let isSyncing = false;

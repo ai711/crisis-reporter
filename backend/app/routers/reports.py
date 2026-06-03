@@ -172,6 +172,9 @@ class ReporterReportItem(BaseModel):
     photo_count: int = 0
     first_photo_url: Optional[str] = None
     flag_status: Optional[str]
+    disaster_type: Optional[str] = None
+    infrastructure_type: Optional[str] = None
+    infrastructure_name: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -566,6 +569,9 @@ async def get_my_reports(
             photo_count=photo_count,
             first_photo_url=first_photo_url,
             flag_status=r.flag_status,
+            disaster_type=r.disaster_type,
+            infrastructure_type=r.infrastructure_type,
+            infrastructure_name=r.infrastructure_name,
         ))
 
     next_cursor = None

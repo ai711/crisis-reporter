@@ -27,12 +27,12 @@ interface SubmittedReport {
   id: string;
   damage_level: string | null;
   submitted_at: string | null;
-  location: {
-    location_address: string | null;
-    location_building_name?: string | null;
-    gps_latitude: number | null;
-    gps_longitude: number | null;
-  } | null;
+  // Flat fields matching /api/reports/my response (no nested location object)
+  gps_latitude: number | null;
+  gps_longitude: number | null;
+  location_address: string | null;
+  location_landmark: string | null;
+  building_name: string | null;
   photo_count: number;
   first_photo_url: string | null;
   flag_status?: string | null;
@@ -65,11 +65,11 @@ const getQueuedLocationLabel = (report: QueuedReport): string => {
 };
 
 const getSubmittedLocationLabel = (report: SubmittedReport): string => {
-  if (!report.location) return 'Unknown location';
-  if (report.location.location_building_name) return report.location.location_building_name;
-  if (report.location.location_address) return report.location.location_address;
-  if (report.location.gps_latitude != null) {
-    return `${report.location.gps_latitude.toFixed(4)}, ${(report.location.gps_longitude ?? 0).toFixed(4)}`;
+  if (report.building_name) return report.building_name;
+  if (report.location_address) return report.location_address;
+  if (report.location_landmark) return report.location_landmark;
+  if (report.gps_latitude != null) {
+    return `${report.gps_latitude.toFixed(4)}, ${(report.gps_longitude ?? 0).toFixed(4)}`;
   }
   return 'Unknown location';
 };
@@ -95,10 +95,12 @@ const isFailed = (report: QueuedReport): boolean =>
 const formatDamageLevel = (level: string | null | undefined): string => {
   if (!level) return '—';
   const map: Record<string, string> = {
-    completely_destroyed: 'Completely Destroyed',
+    complete: 'Completely Damaged',
+    completely_destroyed: 'Completely Damaged',
+    partial: 'Partially Damaged',
     partially_damaged: 'Partially Damaged',
-    minimal_no_damage: 'Minimal/No Damage',
-    minimal: 'Minimal/No Damage',
+    minimal: 'Minimal / No Damage',
+    minimal_no_damage: 'Minimal / No Damage',
   };
   return map[level] ?? level;
 };
