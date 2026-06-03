@@ -638,14 +638,25 @@ async def publish_language_package(
     )
     next_version = f"1.{(count_result.scalar() or 0)}"
 
-    strings_being_published = len(approved)
+    # Total strings in this published package = ALL active keys.
+    # The gate above guarantees every active key has either an approved or an
+    # already-published translation, so after promoting approved → published the
+    # full set of active keys is covered.
+    #
+    # Formula: retained_from_prev - removed_inactive + new_translations
+    #          = (active keys with prev published) - 0 + len(approved)
+    #          = len(all_keys)          ← simplified, because gate ensures coverage
+    active_key_ids = {k.id for k in all_keys}
+    retained_count = len(active_key_ids & already_published_ids)
+    new_count      = len(approved)
+    total_strings  = len(all_keys)   # retained_count + new_count (= total active keys)
 
     pkg = LanguagePackage(
         language_code=language_code,
         version=next_version,
         status="published",
         published_at=datetime.now(timezone.utc),
-        string_count=strings_being_published,
+        string_count=total_strings,
         published_by=current_user.email,
     )
     db.add(pkg)
@@ -654,7 +665,12 @@ async def publish_language_package(
         db,
         event_type="package_published",
         lang_code=language_code,
-        details={"version": next_version, "string_count": len(approved)},
+        details={
+            "version": next_version,
+            "string_count": total_strings,
+            "new_strings": new_count,
+            "retained_strings": retained_count,
+        },
         performed_by=current_user.full_name,
         dashboard_user_id=str(current_user.id),
     )
@@ -682,12 +698,15 @@ async def list_language_packages(
     )
     pkgs = pkgs_result.scalars().all()
 
-    counts_result = await db.execute(
-        select(Translation.language_code, func.count(Translation.id))
-        .where(Translation.status == "published")
-        .group_by(Translation.language_code)
+    # Fallback for pre-fix rows that have string_count = NULL:
+    # Count active string keys (the source of truth for what's in the current
+    # package). This is only a valid approximation for the *currently published*
+    # package — archived packages with a NULL count cannot be reconstructed
+    # accurately, so we leave them as 0 rather than displaying a misleading number.
+    active_key_count_result = await db.execute(
+        select(func.count(StringKey.id)).where(StringKey.is_active == True)
     )
-    lang_counts: dict[str, int] = {row[0]: row[1] for row in counts_result.all()}
+    active_key_count: int = active_key_count_result.scalar() or 0
 
     return [
         LanguagePackageListOut(
@@ -697,7 +716,14 @@ async def list_language_packages(
             status=p.status,
             published_at=p.published_at,
             created_at=p.created_at,
-            string_count=p.string_count if p.string_count is not None else lang_counts.get(p.language_code, 0),
+            # Use stored count when available. For legacy NULL rows: approximate
+            # with active key count for the current published package only;
+            # archived packages with no stored count show 0 (unknown).
+            string_count=(
+                p.string_count
+                if p.string_count is not None
+                else (active_key_count if p.status == "published" else 0)
+            ),
             published_by=p.published_by,
         )
         for p in pkgs
