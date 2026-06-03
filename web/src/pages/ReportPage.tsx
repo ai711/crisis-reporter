@@ -1595,13 +1595,13 @@ export default function ReportPage() {
           {/* Report summary card */}
           <div style={{ width: "100%", background: "#F6F3F2", borderRadius: 16, padding: 20, display: "flex", flexDirection: "column" as const, gap: 20, position: "relative" as const, overflow: "hidden", marginBottom: 28 }}>
             <div style={{ position: "absolute" as const, top: 0, left: 0, bottom: 0, width: 4, background: "#0468B1", opacity: 0.25, borderRadius: "4px 0 0 4px" }} />
-            <p style={{ fontSize: 10, fontWeight: 700, color: "#717782", textTransform: "uppercase" as const, letterSpacing: "0.1em", margin: 0 }}>Report Summary</p>
+            <p style={{ fontSize: 10, fontWeight: 700, color: "#717782", textTransform: "uppercase" as const, letterSpacing: "0.1em", margin: 0 }}>{t('report.success_report_summary')}</p>
             <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
               <div style={{ background: "#E4E2E1", borderRadius: 8, padding: 8, flexShrink: 0 }}>
                 <span className="material-symbols-outlined" style={{ fontSize: 20, color: "#0468B1", display: "block" }}>location_on</span>
               </div>
               <div style={{ textAlign: "left" as const }}>
-                <span style={{ fontSize: 12, color: "#717782", display: "block" }}>Location</span>
+                <span style={{ fontSize: 12, color: "#717782", display: "block" }}>{t('report.success_location_label')}</span>
                 <span style={{ fontSize: 15, fontWeight: 600, color: "#1B1C1C" }}>{locationSummary}</span>
               </div>
             </div>
@@ -1610,7 +1610,7 @@ export default function ReportPage() {
                 <span className="material-symbols-outlined" style={{ fontSize: 20, color: "#0468B1", display: "block" }}>home_repair_service</span>
               </div>
               <div style={{ textAlign: "left" as const }}>
-                <span style={{ fontSize: 12, color: "#717782", display: "block" }}>Incident Type</span>
+                <span style={{ fontSize: 12, color: "#717782", display: "block" }}>{t('report.success_incident_label')}</span>
                 <span style={{ fontSize: 15, fontWeight: 600, color: "#1B1C1C" }}>{incidentSummary}</span>
               </div>
             </div>
@@ -1619,14 +1619,14 @@ export default function ReportPage() {
                 <span className="material-symbols-outlined" style={{ fontSize: 20, color: "#0468B1", display: "block" }}>schedule</span>
               </div>
               <div style={{ textAlign: "left" as const }}>
-                <span style={{ fontSize: 12, color: "#717782", display: "block" }}>Status</span>
-                <span style={{ fontSize: 15, fontWeight: 600, color: "#1B1C1C" }}>Submitted just now</span>
+                <span style={{ fontSize: 12, color: "#717782", display: "block" }}>{t('report.success_status_label')}</span>
+                <span style={{ fontSize: 15, fontWeight: 600, color: "#1B1C1C" }}>{t('report.success_submitted_now')}</span>
               </div>
             </div>
             <div style={{ borderTop: "1px solid rgba(193,199,210,0.4)", paddingTop: 16 }}>
               <p style={{ fontSize: 13, color: "#717782", display: "flex", alignItems: "center", gap: 8, margin: 0, fontStyle: "italic", textAlign: "left" as const }}>
                 <span className="material-symbols-outlined" style={{ fontSize: 16, flexShrink: 0 }}>info</span>
-                Your report ID has been recorded in the background
+                {t('report.success_report_id_note')}
               </p>
             </div>
           </div>
@@ -1717,7 +1717,7 @@ export default function ReportPage() {
                   setSelectedPhotoIndex(null);
                 }}
               >
-                View
+                {t('report.photo_action_view')}
               </button>
               <button
                 style={styles.thumbAction}
@@ -1727,13 +1727,13 @@ export default function ReportPage() {
                   replaceInputRef.current?.click();
                 }}
               >
-                Replace
+                {t('report.photo_action_replace')}
               </button>
               <button
                 style={{ ...styles.thumbAction, color: "#E53E3E" }}
                 onClick={() => handlePhotoRemove(index)}
               >
-                Remove
+                {t('report.photo_action_remove')}
               </button>
             </div>
           )}
@@ -2801,7 +2801,7 @@ export default function ReportPage() {
                                 <button
                                   style={styles.thumbAction}
                                   onClick={() => { setViewingPhoto(photo); setReviewPhotoIndex(null); }}
-                                >View</button>
+                                >{t('report.photo_action_view')}</button>
                                 <button
                                   style={styles.thumbAction}
                                   onClick={() => {
@@ -2809,7 +2809,7 @@ export default function ReportPage() {
                                     setReviewPhotoIndex(null);
                                     replaceInputRef.current?.click();
                                   }}
-                                >Replace</button>
+                                >{t('report.photo_action_replace')}</button>
                                 <button
                                   style={{ ...styles.thumbAction, color: "#E53E3E" }}
                                   onClick={() => {
@@ -2822,7 +2822,7 @@ export default function ReportPage() {
                                     setReviewPhotoIndex(null);
                                     setReviewPhotoError("");
                                   }}
-                                >Remove</button>
+                                >{t('report.photo_action_remove')}</button>
                               </div>
                             )}
                           </div>
@@ -2865,12 +2865,12 @@ export default function ReportPage() {
                   {selectedBuildingId ? (
                     <>
                       <div style={styles.reviewRow}>
-                        <span style={styles.reviewLabel}>Building</span>
+                        <span style={styles.reviewLabel}>{t('report.review_label_building')}</span>
                         <span style={styles.reviewValue}>{selectedBuildingName || t('report.building_selected')}</span>
                       </div>
                       {selectedBuildingType && selectedBuildingType !== "yes" && (
                         <div style={styles.reviewRow}>
-                          <span style={styles.reviewLabel}>Type</span>
+                          <span style={styles.reviewLabel}>{t('report.review_label_type')}</span>
                           <span style={styles.reviewValue}>{selectedBuildingType.replace(/_/g, " ")}</span>
                         </div>
                       )}
@@ -2890,19 +2890,19 @@ export default function ReportPage() {
                     <>
                       {locationAddress && (
                         <div style={styles.reviewRow}>
-                          <span style={styles.reviewLabel}>Address</span>
+                          <span style={styles.reviewLabel}>{t('report.review_label_address')}</span>
                           <span style={styles.reviewValue}>{locationAddress}</span>
                         </div>
                       )}
                       {locationLandmark && (
                         <div style={styles.reviewRow}>
-                          <span style={styles.reviewLabel}>Landmark</span>
+                          <span style={styles.reviewLabel}>{t('report.review_label_landmark')}</span>
                           <span style={styles.reviewValue}>{locationLandmark}</span>
                         </div>
                       )}
                       {locationBuildingName && (
                         <div style={styles.reviewRow}>
-                          <span style={styles.reviewLabel}>Building name</span>
+                          <span style={styles.reviewLabel}>{t('report.review_label_building_name')}</span>
                           <span style={styles.reviewValue}>{locationBuildingName}</span>
                         </div>
                       )}
@@ -2914,7 +2914,7 @@ export default function ReportPage() {
                     </>
                   ) : (
                     <div style={styles.reviewRow}>
-                      <span style={styles.reviewLabel}>Location</span>
+                      <span style={styles.reviewLabel}>{t('report.review_label_location')}</span>
                       <span style={styles.reviewValue}>{t('report.review_not_specified')}</span>
                     </div>
                   )}
@@ -2922,18 +2922,18 @@ export default function ReportPage() {
                   {/* A9 — location note */}
                   {locationNote && (
                     <div style={styles.reviewRow}>
-                      <span style={styles.reviewLabel}>Location note</span>
+                      <span style={styles.reviewLabel}>{t('report.review_label_location_note')}</span>
                       <span style={styles.reviewValue}>{locationNote}</span>
                     </div>
                   )}
 
                   {/* A10 — GPS captured / unavailable indicator */}
                   <div style={{ ...styles.reviewRow, borderBottom: "none" }}>
-                    <span style={styles.reviewLabel}>GPS</span>
+                    <span style={styles.reviewLabel}>{t('report.review_label_gps')}</span>
                     <span style={{ ...styles.reviewValue, color: gpsLatitude !== null ? "#38A169" : "#9CA3AF" }}>
                       {gpsLatitude !== null
                         ? `${gpsLatitude.toFixed(5)}, ${gpsLongitude?.toFixed(5)} ✓`
-                        : "Not available"}
+                        : t('report.review_gps_not_available')}
                     </span>
                   </div>
                 </div>
@@ -2956,7 +2956,7 @@ export default function ReportPage() {
                   </div>
                   {infrastructureOther && (
                     <div style={styles.reviewDataCard}>
-                      <p style={styles.reviewDataLabel}>Q2 — Other</p>
+                      <p style={styles.reviewDataLabel}>{t('report.review_label_q2_other')}</p>
                       <p style={styles.reviewDataValue}>{infrastructureOther}</p>
                     </div>
                   )}
@@ -2996,7 +2996,7 @@ export default function ReportPage() {
                   </div>
                   {pressingNeedsOther && (
                     <div style={styles.reviewDataCard}>
-                      <p style={styles.reviewDataLabel}>Q8 — Other</p>
+                      <p style={styles.reviewDataLabel}>{t('report.review_label_q8_other')}</p>
                       <p style={styles.reviewDataValue}>{pressingNeedsOther}</p>
                     </div>
                   )}
@@ -3020,7 +3020,7 @@ export default function ReportPage() {
                 <div style={{ background: "#FFF9F0", border: "1px solid rgba(245,166,35,0.3)", borderRadius: 12, padding: "16px", marginBottom: 8 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
                     <span className="material-symbols-outlined" style={{ fontSize: 20, color: "#F5A623" }}>wifi_off</span>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: "#F5A623", textTransform: "uppercase" as const, letterSpacing: "0.08em" }}>No Connection</span>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: "#F5A623", textTransform: "uppercase" as const, letterSpacing: "0.08em" }}>{t('report.error_no_connection')}</span>
                   </div>
                   <p style={{ margin: "0 0 4px", fontSize: 14, color: "#1B1C1C" }}>{t('report.error_no_internet')}</p>
                   <p style={{ margin: "0 0 12px", color: "#717782", fontSize: 13 }}>{t('report.error_no_internet_warning')}</p>

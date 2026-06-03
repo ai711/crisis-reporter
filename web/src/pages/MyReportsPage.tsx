@@ -62,17 +62,11 @@ const DAMAGE_COLOR: Record<string, string> = {
   minimal:  "#388e3c",
 };
 
-const DAMAGE_LABEL: Record<string, string> = {
-  complete: "Completely Damaged",
-  partial:  "Partially Damaged",
-  minimal:  "Minimal / No Damage",
-};
-
-const FLAG_BADGE: Record<string, { bg: string; color: string; label: string }> = {
-  green:  { bg: "rgba(56,161,105,0.12)",  color: "#38A169", label: "✓ Verified" },
-  orange: { bg: "rgba(242,153,74,0.12)",  color: "#F2994A", label: "⚠ Review"  },
-  red:    { bg: "rgba(229,62,62,0.12)",   color: "#E53E3E", label: "✗ Flagged" },
-  grey:   { bg: "rgba(156,163,175,0.12)", color: "#9CA3AF", label: "◉ Pending" },
+const FLAG_BG_COLOR: Record<string, { bg: string; color: string }> = {
+  green:  { bg: "rgba(56,161,105,0.12)",  color: "#38A169" },
+  orange: { bg: "rgba(242,153,74,0.12)",  color: "#F2994A" },
+  red:    { bg: "rgba(229,62,62,0.12)",   color: "#E53E3E" },
+  grey:   { bg: "rgba(156,163,175,0.12)", color: "#9CA3AF" },
 };
 
 function convertLocalReport(r: LocalReport): ReporterReport {
@@ -139,6 +133,27 @@ export default function MyReportsPage() {
   const { t } = useTranslation();
   const { reporterId } = useAuthStore();
   const navigate = useNavigate();
+
+  // Translation-aware helpers (defined inside component so t() is in scope)
+  const damageLabel = (level: string) => {
+    const map: Record<string, string> = {
+      complete: t("my_reports.damage_complete"),
+      partial:  t("my_reports.damage_partial"),
+      minimal:  t("my_reports.damage_minimal"),
+    };
+    return map[level] ?? level;
+  };
+
+  const flagBadge = (status: string) => {
+    const colors = FLAG_BG_COLOR[status] ?? { bg: "rgba(156,163,175,0.12)", color: "#9CA3AF" };
+    const labelMap: Record<string, string> = {
+      green:  t("my_reports.status_verified"),
+      orange: t("my_reports.status_review"),
+      red:    t("my_reports.status_flagged"),
+      grey:   t("my_reports.status_pending"),
+    };
+    return { ...colors, label: labelMap[status] ?? status };
+  };
   const width = useWindowWidth();
   const isDesktop = width > 768;
 
@@ -292,26 +307,26 @@ export default function MyReportsPage() {
   // ── Render helpers ────────────────────────────────────────────────────────────
 
   const statusText = (report: ReporterReport) =>
-    report.status === "submitted" ? "✓ Submitted" : (report.status ?? "Submitted");
+    report.status === "submitted" ? t("my_reports.status_submitted") : (report.status ?? t("my_reports.status_submitted"));
 
   const renderDetailFields = (report: ReporterReport) => {
-    const flagInfo = report.flag_status ? FLAG_BADGE[report.flag_status] : null;
+    const flagInfo = report.flag_status ? flagBadge(report.flag_status) : null;
     return (
       <div style={styles.detailFields}>
         <p style={styles.detailField}><strong>📍 {t("my_reports.label_location")}</strong>{" "}{formatLocation(report, t("my_reports.location_not_recorded"))}</p>
-        <p style={styles.detailField}><strong>⚠ {t("my_reports.label_damage")}</strong>{" "}{DAMAGE_LABEL[report.damage_level] ?? report.damage_level}</p>
+        <p style={styles.detailField}><strong>⚠ {t("my_reports.label_damage")}</strong>{" "}{damageLabel(report.damage_level)}</p>
         {report.disaster_type && (
           <p style={styles.detailField}><strong>⚡ {t("my_reports.label_disaster_type")}</strong>{" "}{report.disaster_type}</p>
         )}
         {(report.infrastructure_name || report.infrastructure_type) && (
-          <p style={styles.detailField}><strong>🏗 Infrastructure</strong>{" "}{report.infrastructure_name || report.infrastructure_type}</p>
+          <p style={styles.detailField}><strong>🏗 {t("my_reports.label_infrastructure")}</strong>{" "}{report.infrastructure_name || report.infrastructure_type}</p>
         )}
         {report.building_name && (
-          <p style={styles.detailField}><strong>🏢 Building</strong>{" "}{report.building_name}</p>
+          <p style={styles.detailField}><strong>🏢 {t("my_reports.label_building")}</strong>{" "}{report.building_name}</p>
         )}
         <p style={styles.detailField}><strong>🕐 {t("my_reports.label_date")}</strong>{" "}{formatDateTime(report.submitted_at)}</p>
         <p style={styles.detailField}>
-          <strong>📊 Review Status</strong>{" "}
+          <strong>📊 {t("my_reports.label_review_status")}</strong>{" "}
           {flagInfo ? (
             <span style={{ ...styles.flagBadge, background: flagInfo.bg, color: flagInfo.color }}>
               {flagInfo.label}
@@ -321,7 +336,7 @@ export default function MyReportsPage() {
           )}
         </p>
         {report.photo_count > 0 && (
-          <p style={styles.detailField}><strong>📷 Photos</strong>{" "}{report.photo_count}</p>
+          <p style={styles.detailField}><strong>📷 {t("my_reports.label_photos")}</strong>{" "}{report.photo_count}</p>
         )}
       </div>
     );
@@ -336,17 +351,17 @@ export default function MyReportsPage() {
         : t("my_reports.location_not_recorded"));
 
     const dmgColor  = DAMAGE_COLOR[qr.report.damage_level as string] ?? "#999";
-    const dmgLabel  = DAMAGE_LABEL[qr.report.damage_level as string] ?? qr.report.damage_level;
+    const dmgLbl    = damageLabel(qr.report.damage_level as string);
     const isFailed  = qr.retry_count >= 5;
     const isSyncing = qr.status === "syncing";
     const isDeleting = deletingId === qr.local_id;
     const isRetrying = retryingId === qr.local_id;
 
     const offlineBadge = isFailed
-      ? { bg: "rgba(229,62,62,0.12)", color: "#E53E3E", label: "Upload Failed" }
+      ? { bg: "rgba(229,62,62,0.12)", color: "#E53E3E", label: t("my_reports.offline_upload_failed") }
       : isSyncing
-        ? { bg: "rgba(66,153,225,0.12)", color: "#3182CE", label: "Uploading…" }
-        : { bg: "rgba(245,166,35,0.12)", color: "#F5A623", label: "Offline" };
+        ? { bg: "rgba(66,153,225,0.12)", color: "#3182CE", label: t("my_reports.offline_uploading") }
+        : { bg: "rgba(245,166,35,0.12)", color: "#F5A623", label: t("my_reports.offline_label") };
 
     return (
       <div key={qr.local_id} style={styles.card}>
@@ -356,19 +371,19 @@ export default function MyReportsPage() {
         <div style={styles.cardBody}>
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" as const, alignItems: "center" }}>
             <span style={{ ...styles.damageBadge, background: dmgColor + "22", color: dmgColor }}>
-              {dmgLabel}
+              {dmgLbl}
             </span>
             <span style={{ ...styles.flagBadge, background: offlineBadge.bg, color: offlineBadge.color }}>
               {offlineBadge.label}
             </span>
           </div>
-          <p style={styles.cardDate}>🕐 Created {formatDateTime(qr.created_at)}</p>
+          <p style={styles.cardDate}>🕐 {formatDateTime(qr.created_at)}</p>
           <p style={styles.cardLocation}>📍 {loc}</p>
           {qr.report.infrastructure_type && (
             <p style={styles.cardMeta}>🏗 {qr.report.infrastructure_type}</p>
           )}
           {isFailed && (
-            <p style={styles.cardMeta}>Failed after {qr.retry_count} attempt{qr.retry_count !== 1 ? "s" : ""}. Check connection.</p>
+            <p style={styles.cardMeta}>{t("my_reports.failed_attempts", { count: qr.retry_count })}</p>
           )}
           <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
             {isFailed && (
@@ -377,7 +392,7 @@ export default function MyReportsPage() {
                 onClick={() => handleRetry(qr.local_id)}
                 disabled={isRetrying || isDeleting}
               >
-                {isRetrying ? "Retrying…" : "Retry"}
+                {isRetrying ? t("my_reports.action_retrying") : t("my_reports.action_retry")}
               </button>
             )}
             <button
@@ -385,7 +400,7 @@ export default function MyReportsPage() {
               onClick={() => handleDelete(qr.local_id)}
               disabled={isDeleting || isRetrying || isSyncing}
             >
-              {isDeleting ? "Deleting…" : "Delete"}
+              {isDeleting ? t("my_reports.action_deleting") : t("my_reports.action_delete")}
             </button>
           </div>
         </div>
@@ -430,8 +445,8 @@ export default function MyReportsPage() {
           <div style={styles.loginPrompt}>
             <p style={styles.loginPromptText}>{t("my_reports.login_prompt")}</p>
             <div style={styles.loginPromptBtns}>
-              <button onClick={() => navigate("/login")} style={styles.loginBtn}>Log In</button>
-              <button onClick={() => navigate("/login?mode=register")} style={styles.registerBtn}>Create Account</button>
+              <button onClick={() => navigate("/login")} style={styles.loginBtn}>{t("my_reports.login_btn")}</button>
+              <button onClick={() => navigate("/login?mode=register")} style={styles.registerBtn}>{t("my_reports.register_btn")}</button>
             </div>
           </div>
         )}
@@ -468,11 +483,11 @@ export default function MyReportsPage() {
               <>
                 <p style={styles.sectionLabel}>
                   {offlineReports.some((r) => r.retry_count >= 5)
-                    ? `⚠ Upload Issues (${offlineReports.length})`
-                    : `⏳ Pending Upload (${offlineReports.length})`}
+                    ? `⚠ ${t("my_reports.upload_issues_label", { count: offlineReports.length })}`
+                    : `⏳ ${t("my_reports.pending_upload_label", { count: offlineReports.length })}`}
                 </p>
                 {offlineReports.map(renderOfflineCard)}
-                {hasSubmitted && <p style={styles.sectionLabel}>Submitted</p>}
+                {hasSubmitted && <p style={styles.sectionLabel}>{t("my_reports.submitted_section")}</p>}
               </>
             )}
 
@@ -490,9 +505,9 @@ export default function MyReportsPage() {
 
                 {reports.map((report) => {
                   const color   = DAMAGE_COLOR[report.damage_level] ?? "#999";
-                  const label   = DAMAGE_LABEL[report.damage_level] ?? report.damage_level;
+                  const lbl     = damageLabel(report.damage_level);
                   const st      = statusText(report);
-                  const flagInfo = report.flag_status ? FLAG_BADGE[report.flag_status] : null;
+                  const flagInfo = report.flag_status ? flagBadge(report.flag_status) : null;
 
                   if (isDesktop) {
                     return (
@@ -506,7 +521,7 @@ export default function MyReportsPage() {
                         <span style={styles.desktopCell}>{formatLocation(report, t("my_reports.location_not_recorded"))}</span>
                         <span>
                           <span style={{ ...styles.damageBadge, background: color + "22", color }}>
-                            {label}
+                            {lbl}
                           </span>
                         </span>
                         <span style={styles.desktopCell}>{formatDateTime(report.submitted_at)}</span>
@@ -527,7 +542,7 @@ export default function MyReportsPage() {
                       <div style={styles.cardBody}>
                         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" as const, alignItems: "center" }}>
                           <span style={{ ...styles.damageBadge, background: color + "22", color }}>
-                            {label}
+                            {lbl}
                           </span>
                           {flagInfo && (
                             <span style={{ ...styles.flagBadge, background: flagInfo.bg, color: flagInfo.color }}>
