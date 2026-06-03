@@ -709,7 +709,21 @@ _MIGRATIONS = [
     # Report serial number — simple sequential human-readable ID
     "CREATE SEQUENCE IF NOT EXISTS reports_serial_seq START WITH 1 INCREMENT BY 1",
     "ALTER TABLE reports ADD COLUMN IF NOT EXISTS serial_number INTEGER",
-    "UPDATE reports SET serial_number = nextval('reports_serial_seq') WHERE serial_number IS NULL",
+    # Backfill existing rows in submission chronological order using a window function.
+    # ROW_NUMBER gives #1 to the oldest report, #2 to the next, etc.
+    # WHERE serial_number IS NULL makes this a no-op on subsequent app restarts (idempotent).
+    """UPDATE reports AS r
+SET serial_number = sub.rn
+FROM (
+  SELECT id, ROW_NUMBER() OVER (ORDER BY created_at ASC, id ASC) AS rn
+  FROM reports
+  WHERE serial_number IS NULL
+) sub
+WHERE r.id = sub.id""",
+    # Advance the sequence past the highest assigned value so new reports continue from N+1.
+    # setval(..., value, false) means "next nextval() call returns value" — safe to re-run
+    # because COALESCE(MAX, 0) + 1 will always be ≥ the current sequence position.
+    "SELECT setval('reports_serial_seq', COALESCE((SELECT MAX(serial_number) FROM reports), 0) + 1, false)",
     "ALTER TABLE reports ALTER COLUMN serial_number SET DEFAULT nextval('reports_serial_seq')",
     "CREATE UNIQUE INDEX IF NOT EXISTS uix_reports_serial_number ON reports(serial_number)",
     # Crisis model overhaul — Chapter 9
