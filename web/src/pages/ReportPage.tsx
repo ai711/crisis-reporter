@@ -1044,8 +1044,21 @@ export default function ReportPage() {
   };
 
   // ── Question helpers ──────────────────────────────────────────────────────────
+  //
+  // Resolution order for question text / option labels:
+  //  1. Language package (i18n) via key "Q{n}_LABEL" / "Q{n}_OPT_{VALUE}" — loaded
+  //     when the reporter's selected language is non-English.  These keys are published
+  //     by the backend's language-package system when translators approve them.
+  //  2. Question package API text (question_text / option_text from the backend).
+  //     This is English by default.
+  //  3. Hardcoded English fallback string passed at the call-site.
 
   const qTitle = (n: number, fallback: string): string => {
+    // Try language package first (key: Q1_LABEL, Q2_LABEL, …)
+    const langKey = `Q${n}_LABEL`;
+    const langVal = t(langKey, { defaultValue: "" });
+    if (langVal) return langVal;
+    // Fall back to question package text (English) or hardcoded fallback
     const found = questionPackage?.questions.find((q) => q.order_index === n);
     return found ? found.question_text : fallback;
   };
@@ -1055,9 +1068,15 @@ export default function ReportPage() {
     fallback: Array<{ value: string; label: string }>
   ): Array<{ value: string; label: string }> => {
     const found = questionPackage?.questions.find((q) => q.order_index === n);
-    if (found?.options?.length)
-      return found.options.map((o) => ({ value: o.option_value, label: o.option_text }));
-    return fallback;
+    const source = found?.options?.length
+      ? found.options.map((o) => ({ value: o.option_value, label: o.option_text }))
+      : fallback;
+    // Overlay language-package translation for each option (key: Q1_OPT_MINIMAL, …)
+    return source.map((o) => {
+      const langKey = `Q${n}_OPT_${o.value.toUpperCase()}`;
+      const langVal = t(langKey, { defaultValue: "" });
+      return { value: o.value, label: langVal || o.label };
+    });
   };
 
   // ── Duplicate / submit helpers ────────────────────────────────────────────────
