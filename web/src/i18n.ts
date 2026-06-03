@@ -3,7 +3,10 @@ import { initReactI18next } from "react-i18next";
 
 import en from "./locales/en.json";
 
-// English is the only build-time bundle. All other languages are fetched on-demand.
+// English is the only build-time bundle.
+// All other languages are fetched exclusively from the backend string translation pipeline.
+// Hardcoded locale files are NOT used — the pipeline is the single source of truth for all
+// non-English text. Missing keys fall back to English via fallbackLng.
 i18n.use(initReactI18next).init({
   resources: {
     en: { translation: en },
@@ -22,9 +25,13 @@ export interface LangPackageResult {
 }
 
 /**
- * Loads a language package by fetching from the backend.
+ * Loads a language package from the backend string translation pipeline.
  * Falls back to the localStorage-cached copy if the fetch fails.
  * On success, caches the raw JSON in localStorage and notifies the service worker.
+ *
+ * Non-English translations come exclusively from the backend pipeline — there are no
+ * bundled locale files for non-English languages. Translators publish strings through
+ * the backend dashboard and reporters receive them here.
  */
 export async function loadLanguagePackage(langCode: string): Promise<LangPackageResult> {
   if (langCode === "en") {
@@ -32,19 +39,6 @@ export async function loadLanguagePackage(langCode: string): Promise<LangPackage
     return { success: true, fromCache: false };
   }
 
-  // Step 1: Load UI translations from bundled locale file
-  try {
-    const localeRes = await fetch(`/locales/${langCode}.json`);
-    if (localeRes.ok) {
-      const localeData = await localeRes.json();
-      i18n.addResourceBundle(langCode, "translation", localeData, true, true);
-      try { localStorage.setItem(`cr_locale_${langCode}`, JSON.stringify(localeData)); } catch { /* ignore */ }
-    }
-  } catch {
-    console.warn("[i18n] Could not load locale file for", langCode);
-  }
-
-  // Step 2: Load question/content strings from backend and merge
   const cacheKey = `cr_language_package_${langCode}`;
   const versionKey = `cr_lang_version_${langCode}`;
   const controller = new AbortController();
@@ -88,12 +82,11 @@ export async function loadLanguagePackage(langCode: string): Promise<LangPackage
     // Extract the flat strings dict (backend wraps it in { version, language_code, strings })
     const strings = (data.strings as Record<string, unknown>) ?? data;
     i18n.addResourceBundle(langCode, "translation", strings, true, true);
-    // Step 3: Apply the language
     await i18n.changeLanguage(langCode);
 
     try {
       localStorage.setItem(cacheKey, JSON.stringify(strings));
-      localStorage.setItem(versionKey, (data.version as string) || '');
+      localStorage.setItem(versionKey, (data.version as string) || "");
     } catch { /* ignore */ }
 
     try {
@@ -110,11 +103,6 @@ export async function loadLanguagePackage(langCode: string): Promise<LangPackage
     clearTimeout(timer);
     const loaded = await loadLanguagePackageFromCache(langCode);
     if (loaded) return { success: true, fromCache: true };
-    // Locale file loaded successfully even though backend failed
-    if (i18n.hasResourceBundle(langCode, "translation")) {
-      await i18n.changeLanguage(langCode);
-      return { success: true, fromCache: false };
-    }
     return { success: false, fromCache: false };
   }
 }
@@ -122,6 +110,7 @@ export async function loadLanguagePackage(langCode: string): Promise<LangPackage
 /**
  * Loads a language package from localStorage only — no network call.
  * Used at startup to restore a returning user's language instantly.
+ * Restores only the backend pipeline cache (`cr_language_package_*`).
  */
 export async function loadLanguagePackageFromCache(langCode: string): Promise<boolean> {
   if (langCode === "en") {
@@ -129,25 +118,10 @@ export async function loadLanguagePackageFromCache(langCode: string): Promise<bo
     return true;
   }
   try {
-    let hasData = false;
-
-    // Restore locale UI strings first (cached by loadLanguagePackage)
-    const cachedLocale = localStorage.getItem(`cr_locale_${langCode}`);
-    if (cachedLocale) {
-      const localeData: Record<string, unknown> = JSON.parse(cachedLocale);
-      i18n.addResourceBundle(langCode, "translation", localeData, true, false);
-      hasData = true;
-    }
-
-    // Restore backend question strings on top
     const cached = localStorage.getItem(`cr_language_package_${langCode}`);
     if (cached) {
       const data: Record<string, unknown> = JSON.parse(cached);
       i18n.addResourceBundle(langCode, "translation", data, true, true);
-      hasData = true;
-    }
-
-    if (hasData) {
       await i18n.changeLanguage(langCode);
       return true;
     }
