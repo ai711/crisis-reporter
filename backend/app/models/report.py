@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from sqlalchemy import (
     String, DateTime, Text, Integer, Float,
-    Boolean, ForeignKey, Index, JSON
+    Boolean, ForeignKey, Index, JSON, text
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID, ARRAY
@@ -17,7 +17,11 @@ class Report(Base):
     )
 
     # Human-readable sequential report number (1, 2, 3…)
-    serial_number: Mapped[int | None] = mapped_column(Integer, nullable=True, unique=True, index=True)
+    # server_default tells SQLAlchemy the DB supplies this value — do NOT send NULL on INSERT
+    serial_number: Mapped[int | None] = mapped_column(
+        Integer, nullable=True, unique=True, index=True,
+        server_default=text("nextval('reports_serial_seq')")
+    )
 
     # Local ID from device — used for offline queue merge
     local_id: Mapped[str | None] = mapped_column(

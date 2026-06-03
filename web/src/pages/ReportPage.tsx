@@ -387,6 +387,8 @@ export default function ReportPage() {
 
   // Refs
   const isSubmittedRef = useRef(false);
+  // Synchronous mutex — prevents double-tap submitting two reports before React state updates
+  const isSubmitInFlightRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const replaceInputRef = useRef<HTMLInputElement>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -1542,21 +1544,31 @@ export default function ReportPage() {
   };
 
   const handleSubmit = async () => {
-    // C22 — Timestamp 2: captured at the exact moment the reporter taps Submit
-    const submitTapTime = new Date().toISOString();
-    setSubmissionSubmittedAt(submitTapTime);
+    // Guard: synchronous mutex prevents a second tap from racing through before
+    // React's async state update (preparingPhotos / submitting) reaches the DOM.
+    if (isSubmitInFlightRef.current) return;
+    isSubmitInFlightRef.current = true;
 
-    if (!damageLevel || infrastructureTypes.length === 0 || !infrastructureName.trim() || !disasterType || !debrisBlocking || !electricityCondition || !healthServicesCondition || pressingNeeds.length === 0 || photos.length === 0) {
-      setError(t('report.validation_incomplete'));
-      return;
+    try {
+      // C22 — Timestamp 2: captured at the exact moment the reporter taps Submit
+      const submitTapTime = new Date().toISOString();
+      setSubmissionSubmittedAt(submitTapTime);
+
+      if (!damageLevel || infrastructureTypes.length === 0 || !infrastructureName.trim() || !disasterType || !debrisBlocking || !electricityCondition || !healthServicesCondition || pressingNeeds.length === 0 || photos.length === 0) {
+        setError(t('report.validation_incomplete'));
+        return;
+      }
+      // D26/D27 — async duplicate check (backend for logged-in, sessionStorage for anonymous)
+      const isDupe = await checkDuplicate();
+      if (isDupe) {
+        setShowDupeWarning(true);
+        return;
+      }
+      await doSubmit(submitTapTime);
+    } finally {
+      // Release mutex — doSubmit manages its own submitting state for the button UI
+      isSubmitInFlightRef.current = false;
     }
-    // D26/D27 — async duplicate check (backend for logged-in, sessionStorage for anonymous)
-    const isDupe = await checkDuplicate();
-    if (isDupe) {
-      setShowDupeWarning(true);
-      return;
-    }
-    await doSubmit(submitTapTime);
   };
 
   // ── Success screen ────────────────────────────────────────────────────────────

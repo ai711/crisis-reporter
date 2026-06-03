@@ -726,6 +726,35 @@ WHERE r.id = sub.id""",
     "SELECT setval('reports_serial_seq', COALESCE((SELECT MAX(serial_number) FROM reports), 0) + 1, false)",
     "ALTER TABLE reports ALTER COLUMN serial_number SET DEFAULT nextval('reports_serial_seq')",
     "CREATE UNIQUE INDEX IF NOT EXISTS uix_reports_serial_number ON reports(serial_number)",
+    # Partial unique index on local_id — prevents race-condition duplicate inserts when the
+    # same local_report_id is sent twice before the first INSERT is committed.
+    # Partial (WHERE local_id IS NOT NULL) because anonymous/online reports may have no local_id.
+    "CREATE UNIQUE INDEX IF NOT EXISTS uix_reports_local_id ON reports(local_id) WHERE local_id IS NOT NULL",
+    # Force chronological re-number — fixes out-of-order serial_numbers from the original
+    # backfill that used nextval() with no ORDER BY.  The DO block is idempotent: it only
+    # runs when the chronologically oldest report does NOT have serial_number = 1.
+    """DO $$
+DECLARE
+  first_sn INTEGER;
+BEGIN
+  SELECT serial_number INTO first_sn
+  FROM reports
+  ORDER BY created_at ASC, id ASC
+  LIMIT 1;
+  IF first_sn IS NULL OR first_sn != 1 THEN
+    -- NULL values don't violate unique constraints, so clear first then re-assign
+    UPDATE reports SET serial_number = NULL;
+    UPDATE reports AS r
+    SET serial_number = sub.rn
+    FROM (
+      SELECT id, ROW_NUMBER() OVER (ORDER BY created_at ASC, id ASC) AS rn
+      FROM reports
+    ) sub
+    WHERE r.id = sub.id;
+    PERFORM setval('reports_serial_seq',
+      COALESCE((SELECT MAX(serial_number) FROM reports), 0) + 1, false);
+  END IF;
+END $$""",
     # Crisis model overhaul — Chapter 9
     "ALTER TABLE crises ADD COLUMN IF NOT EXISTS serial_number INTEGER",
     "ALTER TABLE crises ADD COLUMN IF NOT EXISTS serial_id VARCHAR(20)",
