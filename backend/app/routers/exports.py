@@ -462,7 +462,7 @@ async def _gen_geopackage(file_path: pathlib.Path, job: dict) -> None:
 # ── Full Data Report (CSV) ────────────────────────────────────────────────────
 
 _FULL_DATA_HEADERS = [
-    "id",
+    "report_id",
     "timestamp",
     "latitude",
     "longitude",
@@ -537,7 +537,7 @@ async def _gen_full_data_json(file_path: pathlib.Path, job: dict) -> None:
 
     records = [
         {
-            "id": r.serial_number if r.serial_number is not None else str(r.id),
+            "report_id": r.serial_number if r.serial_number is not None else str(r.id),
             "timestamp": _fmt_dt(r.created_at),
             "latitude": r.gps_latitude,
             "longitude": r.gps_longitude,

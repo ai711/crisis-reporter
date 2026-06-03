@@ -268,13 +268,18 @@ async def get_tab1(
         conditions.append(Report.disaster_type == crisis_type)
 
     if search:
-        try:
-            search_uuid = uuid.UUID(search)
-            conditions.append(
-                or_(Report.id == search_uuid, Report.reporter_id == search_uuid)
-            )
-        except ValueError:
-            pass
+        search_stripped = search.lstrip("#").strip()
+        # Try serial number first (e.g. user types "42" or "#42")
+        if search_stripped.isdigit():
+            conditions.append(Report.serial_number == int(search_stripped))
+        else:
+            try:
+                search_uuid = uuid.UUID(search_stripped)
+                conditions.append(
+                    or_(Report.id == search_uuid, Report.reporter_id == search_uuid)
+                )
+            except ValueError:
+                pass
 
     # Cursor: "iso_timestamp_uuid"
     if cursor:
@@ -578,13 +583,18 @@ async def get_tab3(
         conditions.append(Report.platform == platform)
 
     if search:
-        try:
-            search_uuid = uuid.UUID(search)
-            conditions.append(
-                or_(Report.id == search_uuid, Report.reporter_id == search_uuid)
-            )
-        except ValueError:
-            pass
+        search_stripped = search.lstrip("#").strip()
+        # Try serial number first (e.g. user types "42" or "#42")
+        if search_stripped.isdigit():
+            conditions.append(Report.serial_number == int(search_stripped))
+        else:
+            try:
+                search_uuid = uuid.UUID(search_stripped)
+                conditions.append(
+                    or_(Report.id == search_uuid, Report.reporter_id == search_uuid)
+                )
+            except ValueError:
+                pass
 
     if cursor:
         try:

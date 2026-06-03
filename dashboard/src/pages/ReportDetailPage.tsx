@@ -249,6 +249,7 @@ function FlagReasonDetail({
 
     if (reason === "duplicate_image") {
       const matchingReportId = String(meta?.matching_report_id ?? "");
+      const matchingSerialNumber = meta?.matching_report_serial_number;
       return (
         <div style={styles.flagContextCard}>
           <p style={styles.flagContextHeader}>This photo has been submitted before.</p>
@@ -259,7 +260,7 @@ function FlagReasonDetail({
                 style={styles.flagContextLink}
                 onClick={() => window.open(`/reports/${matchingReportId}`, "_blank")}
               >
-                {matchingReportId.slice(0, 8).toUpperCase()}
+                {matchingSerialNumber != null ? `#${matchingSerialNumber}` : matchingReportId.slice(0, 8).toUpperCase()}
               </button>
             </p>
           )}
@@ -659,6 +660,14 @@ export default function ReportDetailPage() {
     for (const reason of ['duplicate_image', 'coordinated_gps_duplicate']) {
       const meta = flagMetadata[reason];
       if (meta?.matching_report_id) return String(meta.matching_report_id);
+    }
+    return null;
+  })();
+
+  const matchedReportSerialNumber: number | null = (() => {
+    for (const reason of ['duplicate_image', 'coordinated_gps_duplicate']) {
+      const meta = flagMetadata[reason];
+      if (meta?.matching_report_serial_number != null) return meta.matching_report_serial_number as number;
     }
     return null;
   })();
@@ -1185,7 +1194,7 @@ export default function ReportDetailPage() {
             <div style={{background: 'var(--c-surface-low)', borderRadius: 'var(--radius-md)',
               padding: '10px 14px', marginBottom: 16, fontSize: 'var(--text-sm)'}}>
               <div><strong>Duplicate (will be discarded):</strong> Report #{report.serial_number ?? report.id.slice(0, 8).toUpperCase()}</div>
-              <div><strong>Canonical (will be kept):</strong> {matchedReportId}</div>
+              <div><strong>Canonical (will be kept):</strong> {matchedReportSerialNumber != null ? `#${matchedReportSerialNumber}` : matchedReportId}</div>
             </div>
             <div style={{marginBottom: 16}}>
               <label className="input-label">Merge Reason (optional)</label>

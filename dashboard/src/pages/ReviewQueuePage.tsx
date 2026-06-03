@@ -421,7 +421,7 @@ function Tab1({ currentUserName }: { currentUserName: string }) {
         <input
           className="input"
           style={s.filterInput}
-          placeholder="Search by Report ID or Reporter ID"
+          placeholder="Search by Report # or Reporter ID"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -1001,7 +1001,7 @@ function Tab3({ currentUserName }: { currentUserName: string }) {
         <input
           className="input"
           style={s.filterInput}
-          placeholder="Search by Report ID or Reporter ID"
+          placeholder="Search by Report # or Reporter ID"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
