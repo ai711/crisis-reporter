@@ -16,6 +16,9 @@ class Report(Base):
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
 
+    # Human-readable sequential report number (1, 2, 3…)
+    serial_number: Mapped[int | None] = mapped_column(Integer, nullable=True, unique=True, index=True)
+
     # Local ID from device — used for offline queue merge
     local_id: Mapped[str | None] = mapped_column(
         String(100), nullable=True, index=True

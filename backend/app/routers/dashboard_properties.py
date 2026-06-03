@@ -860,6 +860,7 @@ async def get_reporter_versions(
 
         versions.append({
             "report_id": str(r.id),
+            "serial_number": r.serial_number,
             "submitted_at": r.submitted_at.isoformat(),
             "damage_level": DAMAGE_LABELS.get(r.damage_level, r.damage_level),
             "flag_status": r.flag_status,

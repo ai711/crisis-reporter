@@ -72,6 +72,7 @@ const PIE_COLORS: Record<string, string> = {
 
 interface ProjectReportItem {
   report_id: string;
+  serial_number?: number | null;
   created_at: string;
   country: string | null;
   damage_level: string;
@@ -896,7 +897,7 @@ export default function ProjectDetailPage() {
                         <tr key={row.report_id} style={ss.tr}>
                           <td style={ss.td}>
                             <span style={ss.idLink} onClick={() => window.open("/reports/" + row.report_id, "_blank")}>
-                              {row.report_id.slice(0, 8).toUpperCase()}
+                              {row.serial_number != null ? `#${row.serial_number}` : row.report_id.slice(0, 8).toUpperCase()}
                             </span>
                           </td>
                           <td style={ss.td}>{formatDateTime(row.created_at)}</td>

@@ -351,7 +351,7 @@ function ReporterVersionRow({
                           tabIndex={0}
                           onKeyDown={(e) => { if (e.key === "Enter") window.open("/reports/" + v.report_id, "_blank"); }}
                         >
-                          {v.report_id.slice(0, 8)}…
+                          {v.serial_number != null ? `#${v.serial_number}` : `${v.report_id.slice(0, 8)}…`}
                         </span>
                       </td>
                       <td style={{ padding: "6px 12px" }}>{formatDateTime(v.submitted_at)}</td>

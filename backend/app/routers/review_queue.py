@@ -346,6 +346,7 @@ async def get_tab1(
 
         items.append({
             "report_id": rid,
+            "serial_number": report.serial_number,
             "flagged_at": flagged_at.isoformat() if flagged_at else None,
             "country": country_code,
             "damage_level": report.damage_level,
@@ -643,6 +644,7 @@ async def get_tab3(
 
         items.append({
             "report_id": str(report.id),
+            "serial_number": report.serial_number,
             "received_at": report.created_at.isoformat(),
             "country": country_code,
             "damage_level": report.damage_level,

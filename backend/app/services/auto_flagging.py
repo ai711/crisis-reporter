@@ -375,9 +375,13 @@ async def auto_flag_report(report_id: str, delay: int = 10) -> None:
                     if dup_photo:
                         new_flag = "red"
                         flag_reason = "duplicate_image"
+                        dup_sn_r = await db.execute(
+                            select(Report.serial_number).where(Report.id == dup_photo.report_id)
+                        )
                         flag_metadata = {
                             "matching_photo_id": str(dup_photo.id),
                             "matching_report_id": str(dup_photo.report_id),
+                            "matching_report_serial_number": dup_sn_r.scalar_one_or_none(),
                         }
                         break
 

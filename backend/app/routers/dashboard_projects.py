@@ -539,7 +539,8 @@ async def list_project_reports(
         ).scalar() or 0
         reporter = r.reporter
         items.append({
-            "id": str(r.id),
+            "report_id": str(r.id),
+            "serial_number": r.serial_number,
             "crisis_id": str(r.crisis_id),
             "reporter_id": str(r.reporter_id) if r.reporter_id else None,
             "reporter_display_id": reporter.display_id if reporter else None,

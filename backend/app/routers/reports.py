@@ -123,6 +123,7 @@ class ReportSubmitRequest(BaseModel):
 
 class ReportSubmitResponse(BaseModel):
     report_id: str
+    serial_number: Optional[int] = None
     flag_status: str
     message: str
 
@@ -162,6 +163,7 @@ class ReportResponse(BaseModel):
 
 class ReporterReportItem(BaseModel):
     id: str
+    serial_number: Optional[int] = None
     damage_level: Optional[str]
     submitted_at: Optional[datetime]
     gps_latitude: Optional[float]
@@ -256,6 +258,7 @@ async def submit_report(
         if existing:
             return ReportSubmitResponse(
                 report_id=str(existing.id),
+                serial_number=existing.serial_number,
                 flag_status=existing.flag_status,
                 message="Report already submitted",
             )
@@ -462,6 +465,7 @@ async def submit_report(
 
     return ReportSubmitResponse(
         report_id=str(report.id),
+        serial_number=report.serial_number,
         flag_status="grey",
         message="Report received — verification in progress",
     )
@@ -559,6 +563,7 @@ async def get_my_reports(
         first_photo_url = storage_service.get_url(photos[0].storage_path) if photos else None
         items.append(ReporterReportItem(
             id=str(r.id),
+            serial_number=r.serial_number,
             damage_level=r.damage_level,
             submitted_at=r.submitted_at,
             gps_latitude=r.gps_latitude,

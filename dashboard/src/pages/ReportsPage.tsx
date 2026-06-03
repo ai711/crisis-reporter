@@ -455,7 +455,7 @@ export default function ReportsPage() {
                     {/* Report ID — clickable */}
                     <td style={styles.td} onClick={(e) => { e.stopPropagation(); openReport(report.id); }}>
                       <span style={styles.idLink} title={report.id}>
-                        {report.id.slice(0, 8).toUpperCase()}
+                        {report.serial_number != null ? `#${report.serial_number}` : report.id.slice(0, 8).toUpperCase()}
                       </span>
                     </td>
 

@@ -526,7 +526,7 @@ function Tab1({ currentUserName }: { currentUserName: string }) {
                           window.open("/reports/" + row.report_id, "_blank")
                         }
                       >
-                        {row.report_id.slice(0, 8)}…
+                        {row.serial_number != null ? `#${row.serial_number}` : `${row.report_id.slice(0, 8)}…`}
                       </button>
                     </td>
                     <td>{formatDateTime(row.flagged_at)}</td>
@@ -1082,7 +1082,7 @@ function Tab3({ currentUserName }: { currentUserName: string }) {
                           window.open("/reports/" + row.report_id, "_blank")
                         }
                       >
-                        {row.report_id.slice(0, 8)}…
+                        {row.serial_number != null ? `#${row.serial_number}` : `${row.report_id.slice(0, 8)}…`}
                       </button>
                     </td>
                     <td>{formatDateTime(row.received_at)}</td>

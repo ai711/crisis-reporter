@@ -667,7 +667,7 @@ export default function ReportDetailPage() {
     <div style={styles.container}>
       <Header
         title="Report Detail"
-        subtitle={`ID: ${report.id.slice(0, 8).toUpperCase()}`}
+        subtitle={`Report #${report.serial_number ?? report.id.slice(0, 8).toUpperCase()}`}
       />
 
       {/* Toast */}
@@ -709,7 +709,7 @@ export default function ReportDetailPage() {
         <div style={styles.reportHeader}>
           <div style={styles.reportHeaderLeft}>
             <div style={styles.reportId} title={report.id}>
-              Report {report.id.slice(0, 8).toUpperCase()}
+              Report #{report.serial_number ?? report.id.slice(0, 8).toUpperCase()}
             </div>
             <div style={styles.reportSubmitted}>
               Submitted {formatDateTime(report.submitted_at)}
@@ -1184,7 +1184,7 @@ export default function ReportDetailPage() {
             </div>
             <div style={{background: 'var(--c-surface-low)', borderRadius: 'var(--radius-md)',
               padding: '10px 14px', marginBottom: 16, fontSize: 'var(--text-sm)'}}>
-              <div><strong>Duplicate (will be discarded):</strong> {report.id}</div>
+              <div><strong>Duplicate (will be discarded):</strong> Report #{report.serial_number ?? report.id.slice(0, 8).toUpperCase()}</div>
               <div><strong>Canonical (will be kept):</strong> {matchedReportId}</div>
             </div>
             <div style={{marginBottom: 16}}>

@@ -46,9 +46,11 @@ function getContextDetail(
     return `${count} matching device${count !== 1 ? "s" : ""} from same IP`;
   }
   if (reason === "duplicate_image") {
-    return meta.matching_report_id
-      ? `Matched report ${String(meta.matching_report_id).slice(0, 8).toUpperCase()}`
-      : null;
+    if (!meta.matching_report_id) return null;
+    const sn = meta.matching_report_serial_number;
+    return sn != null
+      ? `Matched report #${sn}`
+      : `Matched report ${String(meta.matching_report_id).slice(0, 8).toUpperCase()}`;
   }
   if (reason === "coordinated_gps_duplicate") {
     return meta.matching_reporter_id

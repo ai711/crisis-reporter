@@ -396,7 +396,7 @@ async def _gen_shapefile(file_path: pathlib.Path, job: dict) -> None:
     # Shapefile column names are capped at 10 chars by the ESRI format spec
     records = [
         {
-            "rpt_id": str(r.id)[:10],
+            "rpt_id": str(r.serial_number if r.serial_number is not None else r.id)[:10],
             "timestamp": _fmt_dt(r.created_at)[:80],
             "dmg_class": DAMAGE_MAP.get(r.damage_level, r.damage_level),
             "infra_type": _pipe(r.infrastructure_types, r.infrastructure_name)[:80],
@@ -443,7 +443,7 @@ async def _gen_geopackage(file_path: pathlib.Path, job: dict) -> None:
 
     records = [
         {
-            "report_id": str(r.id),
+            "report_id": r.serial_number if r.serial_number is not None else str(r.id),
             "timestamp": _fmt_dt(r.created_at),
             "damage_classification": DAMAGE_MAP.get(r.damage_level, r.damage_level),
             "infrastructure_type": _pipe(r.infrastructure_types, r.infrastructure_name),
@@ -497,7 +497,7 @@ async def _gen_full_data_csv(file_path: pathlib.Path, job: dict) -> None:
 
     rows = [
         [
-            str(r.id),
+            str(r.serial_number) if r.serial_number is not None else str(r.id),
             _fmt_dt(r.created_at),
             _fmt(r.gps_latitude),
             _fmt(r.gps_longitude),
@@ -537,7 +537,7 @@ async def _gen_full_data_json(file_path: pathlib.Path, job: dict) -> None:
 
     records = [
         {
-            "id": str(r.id),
+            "id": r.serial_number if r.serial_number is not None else str(r.id),
             "timestamp": _fmt_dt(r.created_at),
             "latitude": r.gps_latitude,
             "longitude": r.gps_longitude,

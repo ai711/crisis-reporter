@@ -86,6 +86,7 @@ export type Platform = "android" | "pwa" | "web";
 
 export interface ReportListItem {
   id: string;
+  serial_number?: number | null;
   crisis_id: string;
   reporter_id: string | null;
   reporter_display_id: number | null;
@@ -125,6 +126,7 @@ export interface FlagEvent {
 
 export interface VersionHistoryItem {
   id: string;
+  serial_number?: number | null;
   submitted_at: string;
   damage_level: string;
   flag_status: string;
@@ -351,6 +353,7 @@ export interface PropertyComment {
 
 export interface VersionHistoryEntry {
   report_id: string;
+  serial_number?: number | null;
   submitted_at: string;
   damage_level: string;
   flag_status: string;
@@ -375,6 +378,7 @@ export interface ReviewQueueCounts {
 
 export interface Tab1Row {
   report_id: string;
+  serial_number?: number | null;
   flagged_at: string;
   country: string | null;
   damage_level: string | null;
@@ -402,6 +406,7 @@ export interface Tab2Row {
 
 export interface Tab3Row {
   report_id: string;
+  serial_number?: number | null;
   received_at: string;
   country: string | null;
   damage_level: string | null;

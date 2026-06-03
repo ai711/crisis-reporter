@@ -47,6 +47,7 @@ class FlagEventSummary(BaseModel):
 
 class VersionHistoryItem(BaseModel):
     id: str
+    serial_number: Optional[int] = None
     submitted_at: datetime
     damage_level: str
     flag_status: str
@@ -55,6 +56,7 @@ class VersionHistoryItem(BaseModel):
 
 class ReportDetail(BaseModel):
     id: str
+    serial_number: Optional[int] = None
     crisis_id: str
     reporter_id: Optional[str]
     reporter_display_id: Optional[int]
@@ -92,6 +94,7 @@ class ReportDetail(BaseModel):
 
 class ReportListItem(BaseModel):
     id: str
+    serial_number: Optional[int] = None
     crisis_id: str
     reporter_id: Optional[str]
     reporter_display_id: Optional[int]
@@ -254,6 +257,7 @@ async def list_reports(
 
         items.append(ReportListItem(
             id=str(report.id),
+            serial_number=report.serial_number,
             crisis_id=str(report.crisis_id),
             reporter_id=str(report.reporter_id) if report.reporter_id else None,
             reporter_display_id=reporter.display_id if reporter else None,
@@ -343,6 +347,7 @@ async def get_report_detail(
         for v in v_result.scalars().all():
             versions.append(VersionHistoryItem(
                 id=str(v.id),
+                serial_number=v.serial_number,
                 submitted_at=v.submitted_at,
                 damage_level=v.damage_level,
                 flag_status=v.flag_status,
@@ -385,6 +390,7 @@ async def get_report_detail(
 
     return ReportDetail(
         id=str(report.id),
+        serial_number=report.serial_number,
         crisis_id=str(report.crisis_id),
         reporter_id=str(report.reporter_id) if report.reporter_id else None,
         reporter_display_id=reporter.display_id if reporter else None,

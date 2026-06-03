@@ -706,6 +706,12 @@ async def _pause_expiry_loop() -> None:
 
 
 _MIGRATIONS = [
+    # Report serial number — simple sequential human-readable ID
+    "CREATE SEQUENCE IF NOT EXISTS reports_serial_seq START WITH 1 INCREMENT BY 1",
+    "ALTER TABLE reports ADD COLUMN IF NOT EXISTS serial_number INTEGER",
+    "UPDATE reports SET serial_number = nextval('reports_serial_seq') WHERE serial_number IS NULL",
+    "ALTER TABLE reports ALTER COLUMN serial_number SET DEFAULT nextval('reports_serial_seq')",
+    "CREATE UNIQUE INDEX IF NOT EXISTS uix_reports_serial_number ON reports(serial_number)",
     # Crisis model overhaul — Chapter 9
     "ALTER TABLE crises ADD COLUMN IF NOT EXISTS serial_number INTEGER",
     "ALTER TABLE crises ADD COLUMN IF NOT EXISTS serial_id VARCHAR(20)",
