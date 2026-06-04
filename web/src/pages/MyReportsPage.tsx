@@ -27,7 +27,6 @@ interface ReporterReport {
   photo_count: number;
   first_photo_url: string | null;
   status?: string;
-  flag_status?: string;
   disaster_type?: string | null;
   infrastructure_name?: string | null;
   infrastructure_type?: string | null;
@@ -62,10 +61,8 @@ interface ReportDetailFull {
   pressing_needs?: string[] | null;
   pressing_needs_other?: string | null;
   description?: string | null;
-  flag_status: string;
   photo_urls: string[];
   photo_count: number;
-  was_queued: boolean;
 }
 
 // Shape saved to localStorage by ReportPage (cr_local_reports)

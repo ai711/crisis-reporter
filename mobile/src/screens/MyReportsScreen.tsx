@@ -35,7 +35,6 @@ interface SubmittedReport {
   building_name: string | null;
   photo_count: number;
   first_photo_url: string | null;
-  flag_status?: string | null;
   disaster_type?: string | null;
   infrastructure_type?: string | null;
   infrastructure_name?: string | null;

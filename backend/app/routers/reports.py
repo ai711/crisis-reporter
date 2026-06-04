@@ -124,15 +124,18 @@ class ReportSubmitRequest(BaseModel):
 class ReportSubmitResponse(BaseModel):
     report_id: str
     serial_number: Optional[int] = None
-    flag_status: str
     message: str
 
 
 class ReportResponse(BaseModel):
+    """Reporter-facing report detail.
+
+    Intentionally omits flag_status, was_queued, platform, language_code,
+    crisis_id and reporter_id — those are internal/dashboard-only fields that
+    must not appear in a reporter's browser DevTools.
+    """
     id: str
     serial_number: Optional[int] = None
-    crisis_id: str
-    reporter_id: Optional[str]
     building_id: Optional[str]
     building_name: Optional[str]
     damage_level: str
@@ -147,9 +150,6 @@ class ReportResponse(BaseModel):
     pressing_needs: Optional[List[str]]
     pressing_needs_other: Optional[str]
     description: Optional[str] = None
-    flag_status: str
-    platform: str
-    language_code: str
     gps_latitude: Optional[float]
     gps_longitude: Optional[float]
     gps_accuracy_meters: Optional[float] = None
@@ -160,7 +160,6 @@ class ReportResponse(BaseModel):
     location_note: Optional[str] = None
     building_name_reporter: Optional[str] = None
     building_name_osm: Optional[str] = None
-    was_queued: bool
     submitted_at: datetime
     created_at: datetime
     photo_urls: List[str] = []
@@ -171,6 +170,11 @@ class ReportResponse(BaseModel):
 
 
 class ReporterReportItem(BaseModel):
+    """One row in the reporter's "My Reports" list.
+
+    flag_status is intentionally omitted — review flags are internal and must
+    not appear in a reporter's browser Network tab.
+    """
     id: str
     serial_number: Optional[int] = None
     damage_level: Optional[str]
@@ -182,7 +186,6 @@ class ReporterReportItem(BaseModel):
     building_name: Optional[str]
     photo_count: int = 0
     first_photo_url: Optional[str] = None
-    flag_status: Optional[str]
     disaster_type: Optional[str] = None
     infrastructure_type: Optional[str] = None
     infrastructure_name: Optional[str] = None
@@ -268,7 +271,6 @@ async def submit_report(
             return ReportSubmitResponse(
                 report_id=str(existing.id),
                 serial_number=existing.serial_number,
-                flag_status=existing.flag_status,
                 message="Report already submitted",
             )
 
@@ -475,8 +477,7 @@ async def submit_report(
     return ReportSubmitResponse(
         report_id=str(report.id),
         serial_number=report.serial_number,
-        flag_status="grey",
-        message="Report received — verification in progress",
+        message="Report received",
     )
 
 @router.get("", response_model=List[ReportResponse])
@@ -495,8 +496,6 @@ async def list_reports(
     return [
         ReportResponse(
             id=str(r.id),
-            crisis_id=str(r.crisis_id),
-            reporter_id=str(r.reporter_id) if r.reporter_id else None,
             building_id=r.building_id,
             building_name=r.building_name,
             damage_level=r.damage_level,
@@ -510,15 +509,11 @@ async def list_reports(
             health_services_condition=r.health_services_condition,
             pressing_needs=r.pressing_needs,
             pressing_needs_other=r.pressing_needs_other,
-            flag_status=r.flag_status,
-            platform=r.platform,
-            language_code=r.language_code,
             gps_latitude=r.gps_latitude,
             gps_longitude=r.gps_longitude,
             gps_available=r.gps_available,
             location_address=r.location_address,
             location_landmark=r.location_landmark,
-            was_queued=r.was_queued,
             submitted_at=r.submitted_at,
             created_at=r.created_at,
         )
@@ -582,7 +577,6 @@ async def get_my_reports(
             building_name=r.building_name,
             photo_count=photo_count,
             first_photo_url=first_photo_url,
-            flag_status=r.flag_status,
             disaster_type=r.disaster_type,
             infrastructure_type=r.infrastructure_type,
             infrastructure_name=r.infrastructure_name,
@@ -879,8 +873,6 @@ async def get_report(
     return ReportResponse(
         id=str(report.id),
         serial_number=report.serial_number,
-        crisis_id=str(report.crisis_id),
-        reporter_id=str(report.reporter_id) if report.reporter_id else None,
         building_id=report.building_id,
         building_name=report.building_name,
         damage_level=report.damage_level,
@@ -895,9 +887,6 @@ async def get_report(
         pressing_needs=report.pressing_needs,
         pressing_needs_other=report.pressing_needs_other,
         description=report.description,
-        flag_status=report.flag_status,
-        platform=report.platform,
-        language_code=report.language_code,
         gps_latitude=report.gps_latitude,
         gps_longitude=report.gps_longitude,
         gps_accuracy_meters=report.gps_accuracy_meters,
@@ -908,7 +897,6 @@ async def get_report(
         location_note=report.location_note,
         building_name_reporter=report.building_name_reporter,
         building_name_osm=report.building_name_osm,
-        was_queued=report.was_queued,
         submitted_at=report.submitted_at,
         created_at=report.created_at,
         photo_urls=photo_urls,
