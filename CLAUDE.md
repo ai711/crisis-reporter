@@ -275,6 +275,44 @@ Token refresh MUST happen silently at the HTTP client layer (axios interceptor).
 - Sensitive PII: Fernet-encrypted at application level. Always stored as `*_encrypted` (bytes) + `*_hash` (SHA-256 hex) column pair — query on hash, decrypt to read.
 - Encrypted fields: reporter email, reporter name, device ID, IP address
 
+### CRITICAL — API Response Data Boundary
+
+Every API response must contain **only the fields the calling client actually needs**. This was audited and enforced in June 2026 — do not regress it.
+
+**The rule in one sentence:** if a field is not rendered or used by the client that calls the endpoint, it must not be in that endpoint's response schema.
+
+#### What belongs where
+
+| Data | Reporter app / Android | Dashboard |
+|---|---|---|
+| Crisis UUID (`id`) | ✅ needed for submission | ✅ |
+| Crisis name, `serial_id` (PR-XXXX) | ❌ never shown | ✅ |
+| Crisis dates, status, timestamps | ❌ never shown | ✅ |
+| `flag_status` (green/orange/red/grey) | ❌ internal review concept | ✅ |
+| `was_queued`, `platform`, `language_code` | ❌ internal pipeline detail | ✅ |
+| `crisis_id`, `reporter_id` FK references | ❌ not needed in detail view | ✅ |
+| Map coordinates, radius, countries | ✅ map centering / validation | ✅ |
+| Report damage, location, photos, Q1-Q8 | ✅ reporter's own data | ✅ |
+
+#### Implemented split (reference)
+
+- `GET /api/crises/active` → `ReporterCrisisRef` (id + map coords + geography only).
+  `GET /api/crises` → `PublicCrisisItem` (full record, used by dashboard Header/Export/etc.).
+- `ReporterReportItem` (`GET /api/reports/my`) and `ReportResponse` (`GET /api/reports/{id}`) — no `flag_status`, `was_queued`, `platform`, `language_code`, `crisis_id`, `reporter_id`.
+- `ReportSubmitResponse` (`POST /api/reports`) — no `flag_status`.
+
+#### Checklist — apply whenever adding a field to any response schema
+
+1. **Which clients call this endpoint?** List them (reporter web, Android, dashboard, mobile).
+2. **Does each client render or use this field?** If no client uses it, do not add it.
+3. **Is this field an internal/admin concept?** `flag_status`, serial IDs, internal FKs, pipeline flags → dashboard only.
+4. **Are there two audiences sharing one endpoint?** Split into two schemas (slim reporter schema + full dashboard schema) rather than returning the union.
+5. **After adding:** open browser DevTools → Network tab and verify the response contains no unexpected fields.
+
+#### Dashboard equivalent rule
+
+The dashboard fetches data that reporters must never see, but it should equally avoid loading data it does not use. Before adding a field to a dashboard API call, confirm the page actually renders it. Unused fields in dashboard responses waste bandwidth and make responses harder to audit.
+
 ## Environment Variables
 ```
 DATABASE_URL        postgresql+asyncpg://...
