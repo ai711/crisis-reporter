@@ -130,6 +130,7 @@ class ReportSubmitResponse(BaseModel):
 
 class ReportResponse(BaseModel):
     id: str
+    serial_number: Optional[int] = None
     crisis_id: str
     reporter_id: Optional[str]
     building_id: Optional[str]
@@ -145,17 +146,25 @@ class ReportResponse(BaseModel):
     health_services_condition: Optional[str]
     pressing_needs: Optional[List[str]]
     pressing_needs_other: Optional[str]
+    description: Optional[str] = None
     flag_status: str
     platform: str
     language_code: str
     gps_latitude: Optional[float]
     gps_longitude: Optional[float]
+    gps_accuracy_meters: Optional[float] = None
     gps_available: bool
     location_address: Optional[str]
     location_landmark: Optional[str]
+    location_building_name: Optional[str] = None
+    location_note: Optional[str] = None
+    building_name_reporter: Optional[str] = None
+    building_name_osm: Optional[str] = None
     was_queued: bool
     submitted_at: datetime
     created_at: datetime
+    photo_urls: List[str] = []
+    photo_count: int = 0
 
     class Config:
         from_attributes = True
@@ -848,18 +857,28 @@ async def get_report(
     report_id: str,
     db: AsyncSession = Depends(get_db),
 ):
-    """Get a single report by ID."""
+    """Get a single report by ID — includes all Q1-Q8 fields and photo URLs."""
+    from sqlalchemy.orm import joinedload
+    from app.services.storage import storage_service
+
     result = await db.execute(
-        select(Report).where(Report.id == report_id)
+        select(Report)
+        .options(joinedload(Report.photos))
+        .where(Report.id == report_id)
     )
-    report = result.scalar_one_or_none()
+    report = result.unique().scalar_one_or_none()
     if not report:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Report not found",
         )
+
+    photos = sorted(report.photos, key=lambda p: p.display_order)
+    photo_urls = [storage_service.get_url(p.storage_path) for p in photos]
+
     return ReportResponse(
         id=str(report.id),
+        serial_number=report.serial_number,
         crisis_id=str(report.crisis_id),
         reporter_id=str(report.reporter_id) if report.reporter_id else None,
         building_id=report.building_id,
@@ -875,15 +894,23 @@ async def get_report(
         health_services_condition=report.health_services_condition,
         pressing_needs=report.pressing_needs,
         pressing_needs_other=report.pressing_needs_other,
+        description=report.description,
         flag_status=report.flag_status,
         platform=report.platform,
         language_code=report.language_code,
         gps_latitude=report.gps_latitude,
         gps_longitude=report.gps_longitude,
+        gps_accuracy_meters=report.gps_accuracy_meters,
         gps_available=report.gps_available,
         location_address=report.location_address,
         location_landmark=report.location_landmark,
+        location_building_name=report.location_building_name,
+        location_note=report.location_note,
+        building_name_reporter=report.building_name_reporter,
+        building_name_osm=report.building_name_osm,
         was_queued=report.was_queued,
         submitted_at=report.submitted_at,
         created_at=report.created_at,
+        photo_urls=photo_urls,
+        photo_count=len(photos),
     )

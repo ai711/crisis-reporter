@@ -348,7 +348,12 @@
     "action_deleting": "Deleting…",
     "action_retrying": "Retrying…",
     "login_btn": "Log In",
-    "register_btn": "Create Account"
+    "register_btn": "Create Account",
+    "loading_detail": "Loading report details…",
+    "detail_load_failed": "Could not load full details",
+    "report_number": "Report #{{n}}",
+    "description": "Description",
+    "photos_tap_to_view": "Tap to view full size"
   },
   "menu": {
     "safety_tips": "Safety Tips",
