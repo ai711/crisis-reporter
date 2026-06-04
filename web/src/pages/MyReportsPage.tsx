@@ -418,8 +418,7 @@ export default function MyReportsPage() {
                   onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
                 />
               );
-            }
-            ))}
+            })}
           </div>
         )}
 
