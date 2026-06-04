@@ -112,14 +112,6 @@ const getDamagePill = (level: string | null | undefined) => {
   return { bg: 'rgba(56,161,105,0.1)', color: '#38A169' };
 };
 
-const getFlagPill = (flag: string | null | undefined) => {
-  if (!flag) return null;
-  if (flag === 'green')  return { bg: 'rgba(56,161,105,0.1)',  color: '#38A169', label: '✓ Verified' };
-  if (flag === 'orange') return { bg: 'rgba(242,153,74,0.1)',  color: '#F2994A', label: '⚠ Under Review' };
-  if (flag === 'red')    return { bg: 'rgba(229,62,62,0.1)',   color: '#E53E3E', label: '✗ Flagged' };
-  return                        { bg: 'rgba(156,163,175,0.1)', color: '#9CA3AF', label: '◉ Processing' };
-};
-
 // ── Component ──────────────────────────────────────────────────────────────────
 
 export default function MyReportsScreen() {
@@ -491,7 +483,6 @@ export default function MyReportsScreen() {
 
             {submittedReports.map((report) => {
               const damagePill = getDamagePill(report.damage_level);
-              const flagPill = getFlagPill(report.flag_status);
               return (
                 <TouchableOpacity
                   key={report.id}
@@ -501,9 +492,9 @@ export default function MyReportsScreen() {
                 >
                   {/* ROW 1: Status pill + date */}
                   <View style={styles.cardRow1}>
-                    <View style={[styles.statusPill, { backgroundColor: flagPill?.bg ?? 'rgba(56,161,105,0.12)' }]}>
-                      <Text style={[styles.statusPillText, { color: flagPill?.color ?? '#38A169' }]}>
-                        {flagPill?.label ?? 'Submitted'}
+                    <View style={[styles.statusPill, { backgroundColor: 'rgba(56,161,105,0.12)' }]}>
+                      <Text style={[styles.statusPillText, { color: '#38A169' }]}>
+                        ✓ Submitted
                       </Text>
                     </View>
                     <Text style={styles.cardDate}>{formatTime(report.submitted_at)}</Text>

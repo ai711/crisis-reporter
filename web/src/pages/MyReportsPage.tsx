@@ -102,13 +102,6 @@ const DAMAGE_COLOR: Record<string, string> = {
   minimal:  "#388e3c",
 };
 
-const FLAG_BG_COLOR: Record<string, { bg: string; color: string }> = {
-  green:  { bg: "rgba(56,161,105,0.12)",  color: "#38A169" },
-  orange: { bg: "rgba(242,153,74,0.12)",  color: "#F2994A" },
-  red:    { bg: "rgba(229,62,62,0.12)",   color: "#E53E3E" },
-  grey:   { bg: "rgba(156,163,175,0.12)", color: "#9CA3AF" },
-};
-
 // ── Converter helpers ─────────────────────────────────────────────────────────
 
 function convertLocalReport(r: LocalReport): ReporterReport {
@@ -182,6 +175,16 @@ function useWindowWidth(): number {
 const PAGE_SIZE = 20;
 const API_BASE = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
+/**
+ * Ensure a photo URL is absolute.
+ * LocalFileSystemStorage returns relative paths ("/api/uploads/photos/…")
+ * which break when the API runs on a different origin than the web app.
+ */
+function absolutePhotoUrl(url: string): string {
+  if (url.startsWith("/")) return `${API_BASE}${url}`;
+  return url;
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function MyReportsPage() {
@@ -197,17 +200,6 @@ export default function MyReportsPage() {
       minimal:  t("my_reports.damage_minimal"),
     };
     return map[level] ?? level;
-  };
-
-  const flagBadge = (status: string) => {
-    const colors = FLAG_BG_COLOR[status] ?? { bg: "rgba(156,163,175,0.12)", color: "#9CA3AF" };
-    const labelMap: Record<string, string> = {
-      green:  t("my_reports.status_verified"),
-      orange: t("my_reports.status_review"),
-      red:    t("my_reports.status_flagged"),
-      grey:   t("my_reports.status_pending"),
-    };
-    return { ...colors, label: labelMap[status] ?? status };
   };
 
   const width = useWindowWidth();
@@ -392,7 +384,6 @@ export default function MyReportsPage() {
    * Mirrors the review step of the submission flow exactly.
    */
   const renderFullDetail = (d: ReportDetailFull) => {
-    const flagInfo = flagBadge(d.flag_status);
     const buildingName =
       d.building_name || d.building_name_reporter || d.building_name_osm || d.location_building_name;
 
@@ -403,33 +394,34 @@ export default function MyReportsPage() {
 
     return (
       <div>
-        {/* ── Header: serial number + status badge ── */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" as const, marginBottom: 4 }}>
-          {d.serial_number ? (
+        {/* ── Header: serial number ── */}
+        {d.serial_number ? (
+          <div style={{ marginBottom: 4 }}>
             <span style={styles.serialNumber}>
               {t("my_reports.report_number", { n: d.serial_number })}
             </span>
-          ) : null}
-          <span style={{ ...styles.flagBadge, background: flagInfo.bg, color: flagInfo.color }}>
-            {flagInfo.label}
-          </span>
-        </div>
+          </div>
+        ) : null}
         <p style={styles.detailTimestamp}>🕐 {formatDateTime(d.submitted_at)}</p>
 
         {/* ── Photos ── */}
         {d.photo_urls?.length > 0 && renderSection(
           `📷 ${t("report.review_photos")}`,
           <div style={styles.photoStrip}>
-            {d.photo_urls.map((url, i) => (
-              <img
-                key={i}
-                src={url}
-                alt={`Photo ${i + 1}`}
-                style={styles.detailPhoto}
-                title={t("my_reports.photos_tap_to_view")}
-                onClick={() => window.open(url, "_blank")}
-                onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
-              />
+            {d.photo_urls.map((url, i) => {
+              const absUrl = absolutePhotoUrl(url);
+              return (
+                <img
+                  key={i}
+                  src={absUrl}
+                  alt={`Photo ${i + 1}`}
+                  style={styles.detailPhoto}
+                  title={t("my_reports.photos_tap_to_view")}
+                  onClick={() => window.open(absUrl, "_blank")}
+                  onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+                />
+              );
+            }
             ))}
           </div>
         )}
@@ -498,7 +490,6 @@ export default function MyReportsPage() {
    * Uses data already available from the list endpoint.
    */
   const renderBasicDetail = (report: ReporterReport) => {
-    const flagInfo = report.flag_status ? flagBadge(report.flag_status) : null;
     return (
       <div style={styles.detailFields}>
         <p style={styles.detailField}>
@@ -532,14 +523,8 @@ export default function MyReportsPage() {
           {formatDateTime(report.submitted_at)}
         </p>
         <p style={styles.detailField}>
-          <strong>📊 {t("my_reports.label_review_status")}</strong>{" "}
-          {flagInfo ? (
-            <span style={{ ...styles.flagBadge, background: flagInfo.bg, color: flagInfo.color }}>
-              {flagInfo.label}
-            </span>
-          ) : (
-            statusText(report)
-          )}
+          <strong>📊 {t("my_reports.label_status")}</strong>{" "}
+          {statusText(report)}
         </p>
         {report.photo_count > 0 && (
           <p style={styles.detailField}>
@@ -726,7 +711,6 @@ export default function MyReportsPage() {
                   const color    = DAMAGE_COLOR[report.damage_level] ?? "#999";
                   const lbl      = damageLabel(report.damage_level);
                   const st       = statusText(report);
-                  const flagInfo = report.flag_status ? flagBadge(report.flag_status) : null;
                   const isActive = selectedReport?.id === report.id;
 
                   if (isDesktop) {
@@ -761,7 +745,7 @@ export default function MyReportsPage() {
                   return (
                     <div key={report.id} style={styles.card} onClick={() => handleReportClick(report)}>
                       {report.first_photo_url ? (
-                        <img src={report.first_photo_url} alt="Report photo" style={styles.thumbnail} />
+                        <img src={absolutePhotoUrl(report.first_photo_url)} alt="Report photo" style={styles.thumbnail} />
                       ) : (
                         <div style={styles.thumbnailPlaceholder}>
                           <span style={{ fontSize: 28 }}>📷</span>
@@ -770,11 +754,6 @@ export default function MyReportsPage() {
                       <div style={styles.cardBody}>
                         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" as const, alignItems: "center" }}>
                           <span style={{ ...styles.damageBadge, background: color + "22", color }}>{lbl}</span>
-                          {flagInfo && (
-                            <span style={{ ...styles.flagBadge, background: flagInfo.bg, color: flagInfo.color }}>
-                              {flagInfo.label}
-                            </span>
-                          )}
                         </div>
                         <p style={styles.cardDate}>🕐 {formatDateTime(report.submitted_at)}</p>
                         <p style={styles.cardLocation}>📍 {formatLocation(report, t("my_reports.location_not_recorded"))}</p>
