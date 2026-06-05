@@ -303,6 +303,7 @@ export default function ReportersPage() {
   const debouncedSearch = useDebounced(search, 400);
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
   const [showFilters, setShowFilters] = useState(false);
+  const [hoveredRow, setHoveredRow] = useState<string | null>(null);
   const filterBtnRef = useRef<HTMLDivElement>(null);
 
   const [allItems, setAllItems] = useState<ReporterListRow[]>([]);
@@ -440,48 +441,80 @@ export default function ReportersPage() {
                     <th style={s.th}>Country</th>
                     <th style={s.th}>IP Address</th>
                     <th style={s.th}>Platform</th>
-                    <th style={s.th}>Total Reports</th>
+                    <th style={{ ...s.th, textAlign: "center" as const }}>Reports</th>
                     <th style={s.th}>Status</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {allItems.map((row) => (
-                    <tr
-                      key={row.reporter_id}
-                      style={s.tr}
-                      onClick={() => openProfile(row.reporter_id)}
-                    >
-                      <td style={s.td}>
-                        <button
-                          style={s.linkBtn}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            openProfile(row.reporter_id);
-                          }}
-                        >
-                          {row.reporter_id}
-                        </button>
-                      </td>
-                      <td style={s.td}>{formatProfileType(row.profile_type)}</td>
-                      <td style={s.td}>{formatDateTime(row.created_at)}</td>
-                      <td style={s.td}>{row.country || "—"}</td>
-                      <td style={{ ...s.td, fontFamily: "monospace", fontSize: 12 }}>
-                        {row.ip_address || "—"}
-                      </td>
-                      <td style={s.td}>{platformCell(row)}</td>
-                      <td style={s.td}>{row.total_reports}</td>
-                      <td style={s.td}>
-                        <StatusPill status={row.profile_status} />
-                      </td>
-                    </tr>
-                  ))}
+                  {allItems.map((row) => {
+                    const isHovered = hoveredRow === row.reporter_id;
+                    return (
+                      <tr
+                        key={row.reporter_id}
+                        style={{
+                          ...s.tr,
+                          background: isHovered
+                            ? "rgba(4,104,177,0.04)"
+                            : "var(--c-surface-lowest)",
+                        }}
+                        onMouseEnter={() => setHoveredRow(row.reporter_id)}
+                        onMouseLeave={() => setHoveredRow(null)}
+                        onClick={() => openProfile(row.reporter_id)}
+                      >
+                        <td style={s.td}>
+                          <button
+                            style={s.linkBtn}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openProfile(row.reporter_id);
+                            }}
+                            title={row.reporter_id}
+                          >
+                            {row.reporter_id.slice(0, 8)}…
+                          </button>
+                        </td>
+                        <td style={s.td}>{formatProfileType(row.profile_type)}</td>
+                        <td style={s.td}>{formatDateTime(row.created_at)}</td>
+                        <td style={s.td}>{row.country || "—"}</td>
+                        <td style={{ ...s.td, fontFamily: "monospace", fontSize: 12 }}>
+                          {row.ip_address || "—"}
+                        </td>
+                        <td style={s.td}>{platformCell(row)}</td>
+                        <td style={{ ...s.td, textAlign: "center" as const, fontVariantNumeric: "tabular-nums" }}>
+                          {row.total_reports > 0 ? (
+                            <span style={{
+                              display: "inline-block",
+                              background: row.total_reports > 10
+                                ? "rgba(4,104,177,0.10)"
+                                : "var(--c-surface-low)",
+                              color: row.total_reports > 10
+                                ? "var(--c-primary-container)"
+                                : "var(--c-text-secondary)",
+                              borderRadius: "var(--radius-pill)",
+                              padding: "2px 10px",
+                              fontSize: "var(--text-xs)",
+                              fontWeight: 700,
+                              minWidth: 28,
+                            }}>
+                              {row.total_reports}
+                            </span>
+                          ) : (
+                            <span style={{ color: "var(--c-text-subtle)", fontSize: "var(--text-xs)" }}>0</span>
+                          )}
+                        </td>
+                        <td style={s.td}>
+                          <StatusPill status={row.profile_status} />
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
 
               {/* Pagination bar */}
               <div style={s.paginationRow}>
                 <span style={s.paginationInfo}>
-                  Page {page} — {allItems.length} of {total}
+                  Showing <strong>{allItems.length.toLocaleString()}</strong> of <strong>{total.toLocaleString()}</strong> reporters
                 </span>
                 {hasMore && (
                   <button
@@ -493,7 +526,7 @@ export default function ReportersPage() {
                     onClick={handleLoadMore}
                     disabled={loadingMore}
                   >
-                    {loadingMore ? "Loading…" : `Next page (${total - allItems.length} more)`}
+                    {loadingMore ? "Loading…" : `Load next page — ${(total - allItems.length).toLocaleString()} remaining`}
                   </button>
                 )}
               </div>

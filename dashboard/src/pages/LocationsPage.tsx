@@ -540,9 +540,16 @@ export default function LocationsPage() {
 
           {!isLoading && !isError && items.length === 0 && (
             <div style={styles.emptyState}>
-              <div style={styles.emptyIcon}>🏚</div>
+              <svg width={48} height={48} viewBox="0 0 24 24" fill="none" stroke="var(--c-text-subtle)" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                <polyline points="9 22 9 12 15 12 15 22" />
+              </svg>
               <div style={styles.emptyText}>
-                No properties have been reported yet. Properties appear here once reports pass automatic checks.
+                No properties have been reported yet.
+                <br />
+                <span style={{ color: "var(--c-text-subtle)", fontStyle: "italic" }}>
+                  Properties appear here once green or orange reports are received.
+                </span>
               </div>
             </div>
           )}
@@ -592,25 +599,28 @@ export default function LocationsPage() {
                       key={prop.property_id}
                       style={{
                         ...styles.tr,
+                        cursor: "pointer",
                         background: isUnreviewed
                           ? (isHovered ? "rgba(245,166,35,0.10)" : "rgba(245,166,35,0.05)")
-                          : (isHovered ? "rgba(4,104,177,0.03)" : "var(--c-surface-lowest)"),
+                          : (isHovered ? "rgba(4,104,177,0.04)" : "var(--c-surface-lowest)"),
                       }}
                       onMouseEnter={() => setHoveredRow(prop.property_id)}
                       onMouseLeave={() => setHoveredRow(null)}
+                      onClick={() => window.open("/locations/" + prop.property_id, "_blank")}
                     >
                       {/* Property ID */}
                       <td style={styles.td}>
                         <span
                           style={styles.idLink}
-                          onClick={() => window.open("/locations/" + prop.property_id, "_blank")}
+                          onClick={(e) => { e.stopPropagation(); window.open("/locations/" + prop.property_id, "_blank"); }}
                           role="link"
                           tabIndex={0}
+                          title={prop.property_id ?? ""}
                           onKeyDown={(e) => {
                             if (e.key === "Enter") window.open("/locations/" + prop.property_id, "_blank");
                           }}
                         >
-                          {(prop.property_id ?? "").slice(0, 12)}…
+                          {(prop.property_id ?? "").slice(0, 8)}…
                         </span>
                       </td>
 

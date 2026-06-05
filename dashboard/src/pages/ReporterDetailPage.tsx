@@ -699,11 +699,12 @@ export default function ReporterDetailPage() {
     );
   }
 
-  const displayName = reporter.reporter_id;
+  // Show a short readable ID: first 8 chars of UUID + ellipsis
+  const shortId = reporter.reporter_id.slice(0, 8) + "…";
 
   return (
     <div style={s.container}>
-      <Header title="Reporter Profile" subtitle={reporter.reporter_id} />
+      <Header title="Reporter Profile" subtitle={`ID: ${shortId}`} />
 
       {toast && <Toast message={toast} onDone={() => setToast(null)} />}
 
@@ -712,15 +713,40 @@ export default function ReporterDetailPage() {
         {/* Section 1: Profile header */}
         <div style={s.profileHeader}>
           <div style={s.avatarCircle}>
-            <User size={36} color="var(--c-text-subtle)" />
+            <User size={36} color="var(--c-primary-container)" />
           </div>
-          <div style={{ flex: 1 }}>
-            <div style={s.profileName}>{displayName}</div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 4 }}>
+              <div style={s.profileName}>Reporter</div>
+              <span style={{
+                fontFamily: "monospace",
+                fontSize: "var(--text-sm)",
+                color: "var(--c-text-muted)",
+                background: "var(--c-surface-low)",
+                borderRadius: "var(--radius-sm)",
+                padding: "2px 8px",
+                userSelect: "all" as const,
+              }} title={reporter.reporter_id}>
+                {shortId}
+              </span>
+            </div>
             <div style={s.profileType}>{formatProfileType(reporter.profile_type)}</div>
             <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
               <span className={statusChipClass(reporter.profile_status)}>
                 {formatProfileStatus(reporter.profile_status)}
               </span>
+              {reporter.country && (
+                <span style={{
+                  fontSize: "var(--text-xs)",
+                  color: "var(--c-text-muted)",
+                  background: "var(--c-surface-low)",
+                  borderRadius: "var(--radius-sm)",
+                  padding: "2px 8px",
+                  fontWeight: 500,
+                }}>
+                  {reporter.country}
+                </span>
+              )}
               <span style={s.memberSince}>
                 Member since {formatDateTime(reporter.created_at)}
               </span>
@@ -754,20 +780,26 @@ export default function ReporterDetailPage() {
         {/* Section 3: Submission Statistics */}
         <Card title="Submission Statistics">
           <div style={s.statGrid}>
-            <StatBox label="Total Reports Submitted" value={reporter.total_reports} />
+            <StatBox label="Total Submitted" value={reporter.total_reports} />
             <StatBox label="Confirmed (Green + Orange)" value={reporter.green_orange_reports} />
-            <StatBox label="Pending Review (Red)" value={reporter.red_reports} />
+            <StatBox label="Red Flagged" value={reporter.red_reports} />
             <StatBox label="Discarded" value={reporter.discarded_reports} />
-            <StatBox label="Unique Properties Reported" value={reporter.total_unique_properties} />
+            <StatBox label="Unique Properties" value={reporter.total_unique_properties} />
             <StatBox
-              label="Active Since"
-              value={reporter.first_report_at ? formatDateTime(reporter.first_report_at) : "—"}
+              label="Last Active"
+              value={reporter.last_active_at ? formatDateTime(reporter.last_active_at) : "—"}
             />
           </div>
-          <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 8 }}>
-            <DetailRow label="First report" value={formatDateTime(reporter.first_report_at)} />
-            <DetailRow label="Most recent report" value={formatDateTime(reporter.last_report_at)} />
-          </div>
+          {(reporter.first_report_at || reporter.last_report_at) && (
+            <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 4 }}>
+              {reporter.first_report_at && (
+                <DetailRow label="First report" value={formatDateTime(reporter.first_report_at)} />
+              )}
+              {reporter.last_report_at && (
+                <DetailRow label="Most recent report" value={formatDateTime(reporter.last_report_at)} />
+              )}
+            </div>
+          )}
         </Card>
 
         {/* Safety Tips Progress */}
@@ -870,14 +902,14 @@ const s: Record<string, React.CSSProperties> = {
     width: 72,
     height: 72,
     borderRadius: "50%",
-    background: "var(--c-surface-high)",
-    border: "2px solid var(--c-border)",
+    background: "rgba(4,104,177,0.08)",
+    border: "2px solid rgba(4,104,177,0.2)",
     display: "flex",
     alignItems: "center" as const,
     justifyContent: "center" as const,
     flexShrink: 0,
   },
-  profileName: { fontSize: "var(--text-xl)", fontWeight: 700, color: "var(--c-text-primary)", fontFamily: "monospace" },
+  profileName: { fontSize: "var(--text-xl)", fontWeight: 700, color: "var(--c-text-primary)" },
   profileType: { fontSize: "var(--text-sm)", color: "var(--c-text-muted)", marginTop: 4 },
   memberSince: { fontSize: "var(--text-xs)", color: "var(--c-text-subtle)" },
 

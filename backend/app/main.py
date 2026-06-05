@@ -588,6 +588,53 @@ async def _seed_default_roles() -> None:
         logger.error("_seed_default_roles failed: %s", e)
 
 
+async def _seed_default_crisis() -> None:
+    """Create a default active crisis if no active crisis exists.
+
+    The reporter PWA and Android app call GET /api/crises/active on mount.
+    If the list is empty they show a blocking error screen. This seed ensures
+    at least one active crisis exists from first startup so reporters can
+    submit immediately without a dashboard admin having to create one first.
+
+    The default crisis has no country restriction (countries=[]) so any
+    reporter, regardless of selected country, can submit to it.
+
+    Safe to run every startup — no-op once any active crisis exists.
+    """
+    try:
+        from app.models.crisis import Crisis, format_serial_id
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(
+                select(Crisis).where(Crisis.status == "active").limit(1)
+            )
+            if result.scalar_one_or_none():
+                return  # Active crisis already exists — nothing to do
+
+            # Allocate a serial number from the same sequence used by dashboard
+            serial_num_res = await db.execute(text("SELECT nextval('crisis_serial_seq')"))
+            serial_num = serial_num_res.scalar()
+            serial_id = format_serial_id(serial_num)
+
+            crisis = Crisis(
+                serial_number=serial_num,
+                serial_id=serial_id,
+                name="Crisis Response Operation",
+                description=(
+                    "Default operational crisis created at system startup. "
+                    "Replace or supplement with a named crisis from the Projects page."
+                ),
+                countries=[],
+                status="active",
+                is_active=True,
+                map_default_radius_miles=50,
+            )
+            db.add(crisis)
+            await db.commit()
+            logger.info("Default active crisis seeded: %s (%s)", serial_id, crisis.id)
+    except Exception as e:
+        logger.error("_seed_default_crisis failed: %s", e)
+
+
 async def _stuck_report_loop() -> None:
     """Run stuck-grey-report monitor on configurable interval, reading threshold from AppSetting."""
     from app.services.auto_flagging import monitor_stuck_grey_reports
@@ -970,6 +1017,7 @@ async def lifespan(app: FastAPI):
     await seed_countries()
     await seed_first_admin()
     await _seed_default_roles()
+    await _seed_default_crisis()
     await _seed_notification_types()
     await _seed_safety_tips_content()
     # Remove the ZZ placeholder country if it exists
