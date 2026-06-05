@@ -784,8 +784,8 @@ export default function PropertyDetailPage() {
   const partialPct = distPct(dd?.partially_damaged ?? 0);
   const minimalPct = distPct(dd?.minimal_or_no_damage ?? 0);
 
-  const displayLat = property.override_lat ?? property.latitude;
-  const displayLng = property.override_lng ?? property.longitude;
+  const displayLat: number | null = property.override_lat ?? property.latitude ?? null;
+  const displayLng: number | null = property.override_lng ?? property.longitude ?? null;
 
   const dmgColor = property.current_damage_level
     ? DAMAGE_COLORS[property.current_damage_level] ?? "var(--c-text-muted)"
@@ -795,13 +795,14 @@ export default function PropertyDetailPage() {
     ? DAMAGE_COLORS[property.confirmed_status] ?? "#888"
     : null;
 
-  // Static map thumbnail URL
-  const mapThumbUrl = MAPTILER_KEY
+  // Static map thumbnail URL (only when coords are available)
+  const mapThumbUrl = MAPTILER_KEY && displayLat != null && displayLng != null
     ? `https://api.maptiler.com/maps/streets/static/${displayLng.toFixed(5)},${displayLat.toFixed(5)},15/360x200.png?key=${MAPTILER_KEY}`
     : null;
 
-  // Unreviewed count
-  const unreviewedCount = reporter_rows.filter(
+  // Unreviewed count (guard against undefined reporter_rows)
+  const safeReporterRows = reporter_rows ?? [];
+  const unreviewedCount = safeReporterRows.filter(
     (r) => r.flag_status === "grey" || r.flag_status === "red"
   ).length;
 
@@ -907,7 +908,7 @@ export default function PropertyDetailPage() {
                   <div style={s.statChip}>
                     <div style={s.statChipLabel}>GPS Coordinates</div>
                     <div style={{ ...s.statChipVal, fontSize: 11, fontFamily: "monospace", marginTop: 4 }}>
-                      {displayLat.toFixed(4)}° N<br />{displayLng.toFixed(4)}° E
+                      {displayLat != null ? `${displayLat.toFixed(4)}° N` : "—"}<br />{displayLng != null ? `${displayLng.toFixed(4)}° E` : "—"}
                     </div>
                   </div>
                 </div>
@@ -1023,7 +1024,7 @@ export default function PropertyDetailPage() {
                     <div style={s.sectionLabel}>Reporter Assessments</div>
                   </div>
                   <div style={{ fontSize: "var(--text-xs)", color: "var(--c-text-subtle)", marginTop: 2 }}>
-                    {reporter_rows.filter(r => r.flag_status === "green" || r.flag_status === "orange").length} qualifying reports
+                    {safeReporterRows.filter(r => r.flag_status === "green" || r.flag_status === "orange").length} qualifying reports
                     {unreviewedCount > 0 && ` · ${unreviewedCount} unreviewed`}
                   </div>
                 </div>
@@ -1067,14 +1068,14 @@ export default function PropertyDetailPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {reporter_rows.length === 0 ? (
+                    {safeReporterRows.length === 0 ? (
                       <tr>
                         <td colSpan={7} style={{ padding: "32px", textAlign: "center" as const, color: "var(--c-text-muted)", fontSize: "var(--text-sm)", fontStyle: "italic" }}>
                           No reporter assessments yet.
                         </td>
                       </tr>
                     ) : (
-                      reporter_rows.map((row) => (
+                      safeReporterRows.map((row) => (
                         <ReporterVersionRow
                           key={row.reporter_id}
                           propertyId={propertyId!}
@@ -1103,7 +1104,7 @@ export default function PropertyDetailPage() {
                 <div style={s.sectionLabel}>Asset Geospatial Context</div>
                 <button
                   style={s.iconBtn}
-                  onClick={() => window.open(`/map?lat=${displayLat}&lng=${displayLng}&zoom=15`, "_blank")}
+                  onClick={() => { if (displayLat != null && displayLng != null) window.open(`/map?lat=${displayLat}&lng=${displayLng}&zoom=15`, "_blank"); }}
                   title="Open in full map"
                 >
                   <ExternalLinkIcon />
@@ -1124,19 +1125,21 @@ export default function PropertyDetailPage() {
                   </div>
                 )}
                 {/* Coordinate overlay */}
-                <div style={{
-                  position: "absolute" as const, bottom: 8, left: 8,
-                  background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)",
-                  borderRadius: "var(--radius-sm)", padding: "4px 8px",
-                }}>
-                  <span style={{ fontSize: 10, color: "#fff", fontFamily: "monospace" }}>
-                    {displayLat.toFixed(5)}°, {displayLng.toFixed(5)}°
-                  </span>
-                </div>
+                {displayLat != null && displayLng != null && (
+                  <div style={{
+                    position: "absolute" as const, bottom: 8, left: 8,
+                    background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)",
+                    borderRadius: "var(--radius-sm)", padding: "4px 8px",
+                  }}>
+                    <span style={{ fontSize: 10, color: "#fff", fontFamily: "monospace" }}>
+                      {displayLat.toFixed(5)}°, {displayLng.toFixed(5)}°
+                    </span>
+                  </div>
+                )}
               </div>
               <button
                 style={{ ...s.outlineBtn, width: "100%", marginTop: 10, justifyContent: "center" }}
-                onClick={() => window.open(`/map?lat=${displayLat}&lng=${displayLng}&zoom=15`, "_blank")}
+                onClick={() => { if (displayLat != null && displayLng != null) window.open(`/map?lat=${displayLat}&lng=${displayLng}&zoom=15`, "_blank"); }}
               >
                 <ExternalLinkIcon />
                 Open in Map View

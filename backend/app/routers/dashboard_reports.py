@@ -17,7 +17,7 @@ from app.models.photo import Photo
 from app.models.flag_event import FlagEvent
 from app.models.dashboard_user import DashboardUser
 from app.services.dependencies import get_current_dashboard_user, require_superadmin, require_section_access
-from app.services.storage import storage_service
+from app.services.storage import storage_service, LocalFileSystemStorage
 from app.config import settings
 
 router = APIRouter(prefix="/api/dashboard/reports", tags=["Dashboard Reports"])
@@ -486,8 +486,15 @@ async def serve_photo(
 ):
     """Serve a report photo — authenticated. JWT required; photos are not public."""
 
+    # Parse IDs explicitly to uuid.UUID so asyncpg comparison is unambiguous.
+    try:
+        photo_uuid = uuid.UUID(photo_id)
+        report_uuid = uuid.UUID(report_id)
+    except (ValueError, AttributeError):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invalid ID format")
+
     result = await db.execute(
-        select(Photo).where(Photo.id == photo_id, Photo.report_id == report_id)
+        select(Photo).where(Photo.id == photo_uuid, Photo.report_id == report_uuid)
     )
     photo = result.scalar_one_or_none()
     if not photo:
@@ -513,16 +520,23 @@ async def serve_photo(
         from fastapi.responses import RedirectResponse
         return RedirectResponse(url=url)
 
-    # Local storage — read file and stream it
-    file_path = Path(settings.LOCAL_UPLOAD_PATH) / Path(photo.storage_path).name
+    # Local storage — read file and stream it.
+    # Use storage_service.base_path (resolved to absolute at startup) so the
+    # path is correct regardless of which directory uvicorn was launched from.
+    if isinstance(storage_service, LocalFileSystemStorage):
+        file_path = storage_service.base_path / Path(photo.storage_path).name
+    else:
+        # Fallback to settings path (should not reach here for local backend)
+        file_path = Path(settings.LOCAL_UPLOAD_PATH) / Path(photo.storage_path).name
+
     if not file_path.exists():
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Photo file not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Photo file not found on disk: {file_path.name}")
 
     def iterfile():
         with open(file_path, "rb") as f:
             yield from f
 
-    return StreamingResponse(iterfile(), media_type=photo.mime_type)
+    return StreamingResponse(iterfile(), media_type=photo.mime_type or "image/jpeg")
 
 
 @router.patch("/{report_id}/flag", response_model=dict)

@@ -83,7 +83,11 @@ function useAuthPhoto(reportId: string, photoId: string) {
         objectUrl = URL.createObjectURL(res.data as Blob);
         setBlobUrl(objectUrl);
       })
-      .catch(() => { setBlobUrl("error"); });
+      .catch((err) => {
+        const status = err?.response?.status ?? "network error";
+        console.error(`[Photo] Failed to load photo ${photoId} for report ${reportId}: HTTP ${status}`);
+        setBlobUrl("error");
+      });
     return () => { if (objectUrl) URL.revokeObjectURL(objectUrl); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reportId, photoId]);
@@ -533,6 +537,31 @@ export default function ReportDetailPage() {
 
   const reportLabel = `#${report.serial_number ?? report.id.slice(0, 8).toUpperCase()}`;
 
+  // ── Extract Q values from question_answers ─────────────────────────────────
+  // The reporter app stores all answers in question_answers (structured format).
+  // Top-level DB columns (electricity_condition etc.) are null for new submissions.
+  const getQ = (order: number): QuestionAnswer | undefined =>
+    (report.question_answers ?? []).find((qa) => qa.question_order === order);
+
+  const q3 = getQ(3);  // Infrastructure name (free_text)
+  const q5 = getQ(5);  // Debris blocking (option_text)
+  const q6 = getQ(6);  // Electricity condition
+  const q7 = getQ(7);  // Health services condition
+  const q8 = getQ(8);  // Pressing needs (multi-select)
+
+  const infrastructureNameFromQA = q3?.free_text ?? null;
+  const debrisBlockingFromQA = q5?.option_text ?? (q5?.option_value === "yes" ? "Yes" : q5?.option_value === "no" ? "No" : null);
+  const electricityValue = q6?.option_text ?? q6?.option_value ?? null;
+  const healthValue = q7?.option_text ?? q7?.option_value ?? null;
+  const pressingNeedsValue = (() => {
+    if (!q8) return null;
+    const parts: string[] = [];
+    if (q8.option_texts && q8.option_texts.length > 0) parts.push(...q8.option_texts);
+    else if (q8.option_values && q8.option_values.length > 0) parts.push(...q8.option_values);
+    if (q8.other_text) parts.push(q8.other_text);
+    return parts.length > 0 ? parts.join(", ") : null;
+  })();
+
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
@@ -760,14 +789,18 @@ export default function ReportDetailPage() {
                       accentColor={damageLevelColor}
                     />
                     <DamageField label="Infrastructure Type" value={report.infrastructure_type} />
-                    {report.infrastructure_name && (
-                      <DamageField label="Entity Name" value={report.infrastructure_name} />
+                    {(report.infrastructure_name || infrastructureNameFromQA) && (
+                      <DamageField label="Entity Name" value={report.infrastructure_name ?? infrastructureNameFromQA} />
                     )}
                     <DamageField label="Disaster Category" value={report.disaster_type} />
-                    {report.debris_blocking && (
+                    {(report.debris_blocking || debrisBlockingFromQA) && (
                       <DamageField
                         label="Debris Presence"
-                        value={report.debris_blocking === "yes" ? "Yes (Hazardous)" : "No"}
+                        value={
+                          (report.debris_blocking === "yes" || debrisBlockingFromQA === "Yes")
+                            ? "Yes (Hazardous)"
+                            : "No"
+                        }
                       />
                     )}
                     {report.language_code && (
@@ -780,18 +813,9 @@ export default function ReportDetailPage() {
                 <section style={{ ...styles.primarySection, marginBottom: 0, paddingBottom: 0, borderBottom: "none" }}>
                   <SectionTitle>Community Impact Brief</SectionTitle>
                   <div style={styles.impactCard}>
-                    <ImpactRow icon="⚡" title="Electricity" value={report.electricity_condition} />
-                    <ImpactRow icon="🏥" title="Health Services" value={report.health_services_condition} />
-                    <ImpactRow
-                      icon="🆘"
-                      title="Priority Needs"
-                      value={
-                        Array.isArray(report.pressing_needs) && report.pressing_needs.length > 0
-                          ? (report.pressing_needs as string[]).join(", ")
-                          : String(report.pressing_needs || "—")
-                      }
-                      isLast
-                    />
+                    <ImpactRow icon="⚡" title="Electricity" value={electricityValue} />
+                    <ImpactRow icon="🏥" title="Health Services" value={healthValue} />
+                    <ImpactRow icon="🆘" title="Priority Needs" value={pressingNeedsValue} isLast />
                   </div>
                 </section>
 
@@ -802,13 +826,45 @@ export default function ReportDetailPage() {
             {report.question_answers && report.question_answers.length > 0 && (
               <Card title="Responses">
                 <div style={styles.detailRows}>
-                  {report.question_answers.map((qa: QuestionAnswer, i: number) => (
-                    <DetailRow
-                      key={i}
-                      label={String(qa.question)}
-                      value={Array.isArray(qa.answer) ? (qa.answer as unknown[]).join(", ") : String(qa.answer ?? "—")}
-                    />
-                  ))}
+                  {report.question_answers.map((qa: QuestionAnswer, i: number) => {
+                    // New structured format: question_order + option_text / option_texts / free_text
+                    const Q_LABELS: Record<number, string> = {
+                      1: "Damage Level",
+                      2: "Infrastructure Type",
+                      3: "Infrastructure Name",
+                      4: "Disaster Type",
+                      5: "Debris Blocking Access",
+                      6: "Electricity Condition",
+                      7: "Health Services Condition",
+                      8: "Pressing Needs",
+                    };
+                    if (qa.question_order !== undefined) {
+                      const label = Q_LABELS[qa.question_order] ?? (qa.question_text ?? `Question ${qa.question_order}`);
+                      let value: string;
+                      if (qa.free_text) {
+                        value = qa.free_text;
+                      } else if (qa.option_texts && qa.option_texts.length > 0) {
+                        value = qa.option_texts.join(", ");
+                        if (qa.other_text) value += `, ${qa.other_text}`;
+                      } else if (qa.option_text) {
+                        value = qa.option_text;
+                      } else if (qa.option_values && qa.option_values.length > 0) {
+                        value = qa.option_values.join(", ");
+                        if (qa.other_text) value += `, ${qa.other_text}`;
+                      } else if (qa.option_value) {
+                        value = qa.option_value;
+                      } else {
+                        value = "—";
+                      }
+                      return <DetailRow key={i} label={label} value={value} />;
+                    }
+                    // Legacy format: { question, answer }
+                    const legacyLabel = qa.question ? String(qa.question) : `Answer ${i + 1}`;
+                    const legacyValue = Array.isArray(qa.answer)
+                      ? (qa.answer as unknown[]).join(", ")
+                      : String(qa.answer ?? "—");
+                    return <DetailRow key={i} label={legacyLabel} value={legacyValue} />;
+                  })}
                 </div>
               </Card>
             )}
@@ -942,7 +998,7 @@ export default function ReportDetailPage() {
                   </div>
                 </div>
               )}
-              {report.reporter_id && (
+              {report.reporter_id ? (
                 <a
                   href={`/reporters/${report.reporter_id}`}
                   target="_blank" rel="noopener noreferrer"
@@ -951,6 +1007,19 @@ export default function ReportDetailPage() {
                 >
                   VIEW REPORTER PROFILE ↗
                 </a>
+              ) : (
+                <div style={{
+                  display: "flex", alignItems: "center", gap: 7,
+                  padding: "8px 12px",
+                  background: "rgba(113,119,130,0.06)",
+                  borderRadius: 7,
+                  border: "1px solid rgba(193,199,210,0.3)",
+                }}>
+                  <AlertTriangle size={13} color="#9ca3af" style={{ flexShrink: 0 }} />
+                  <span style={{ fontSize: 11, color: "#9ca3af", lineHeight: 1.4 }}>
+                    No reporter record — legacy test submission
+                  </span>
+                </div>
               )}
             </div>
 

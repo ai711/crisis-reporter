@@ -32,7 +32,9 @@ class LocalFileSystemStorage(StorageService):
     """Development storage — saves photos to local filesystem."""
 
     def __init__(self):
-        self.base_path = Path(settings.LOCAL_UPLOAD_PATH)
+        # Resolve to absolute path immediately so it stays correct regardless
+        # of the working directory uvicorn was started from.
+        self.base_path = Path(settings.LOCAL_UPLOAD_PATH).resolve()
         self.base_path.mkdir(parents=True, exist_ok=True)
 
     async def save(self, file_data: bytes, filename: str, content_type: str) -> str:

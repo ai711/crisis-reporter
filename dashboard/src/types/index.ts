@@ -142,8 +142,18 @@ export interface VersionHistoryItem {
 }
 
 export interface QuestionAnswer {
-  question: string;
-  answer: unknown;
+  // New structured format (reporter app v2+)
+  question_order?: number;
+  option_value?: string;
+  option_text?: string;
+  option_values?: string[];
+  option_texts?: string[];
+  free_text?: string;
+  other_text?: string | null;
+  question_text?: string; // additional questions beyond Q8
+  // Legacy format (backend-normalised dict → list of {question, answer})
+  question?: string;
+  answer?: unknown;
 }
 
 export interface ReportDetail extends ReportListItem {

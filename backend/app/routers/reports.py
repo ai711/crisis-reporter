@@ -319,6 +319,23 @@ async def submit_report(
             reporter = matched
             reporter_id = matched.id
 
+    # reporter_id is mandatory — every report must have an owner.
+    # If no reporter could be resolved (no JWT, no valid reporter_id in body),
+    # auto-create an anonymous profile so reporter_id is never NULL.
+    if reporter_id is None:
+        from sqlalchemy import text as sa_text
+        auto_reporter = Reporter(
+            platform=request.platform,
+            country_code=request.reporter_country,
+            language_code=request.language_code,
+        )
+        db.add(auto_reporter)
+        await db.flush()
+        seq_result = await db.execute(sa_text("SELECT nextval('reporter_display_id_seq')"))
+        auto_reporter.display_id = seq_result.scalar()
+        reporter = auto_reporter
+        reporter_id = auto_reporter.id
+
     # Check if reporter is blocked — route directly to red flag
     submission_flag_status = "grey"
     if reporter and getattr(reporter, 'is_blocked', False):
