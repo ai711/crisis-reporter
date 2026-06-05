@@ -1394,7 +1394,7 @@ export default function ReportPage() {
     setSubmitting(true);
 
     const reportPayload = {
-      crisis_id: crisisId!,
+      ...(crisisId ? { crisis_id: crisisId } : {}), // omit if not resolved — backend auto-assigns
       local_report_id: localReportId,
       damage_level: damageLevel as DamageLevel,
       infrastructure_types: infrastructureTypes,
@@ -1686,16 +1686,12 @@ export default function ReportPage() {
     );
   }
 
-  if (crisisError || !crisisId) {
-    return (
-      <div style={styles.container}>
-        <div style={styles.centeredMessage}>
-          <p style={styles.centeredError}>{t('report.no_crisis')}</p>
-          <button style={styles.secondaryButton} onClick={() => navigate(-1)}>{t('common.go_back')}</button>
-        </div>
-      </div>
-    );
-  }
+  // Note: crisisError / missing crisisId does NOT block the form.
+  // The backend resolves crisis automatically (auto-picks first active crisis
+  // when crisis_id is omitted from the payload). If truly no crisis exists,
+  // the submit API call will return a 404 with a clear error at that point.
+  // We still pass crisisId when we have it (better duplicate detection, map
+  // scoping) but the form is never blocked by its absence.
 
   // ── Guidelines ────────────────────────────────────────────────────────────────
   const GUIDELINES = [
