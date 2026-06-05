@@ -110,6 +110,7 @@ export interface PhotoSummary {
   display_order: number;
   was_compressed: boolean;
   created_at: string;
+  exif_timestamp?: string | null;
 }
 
 export interface FlagEvent {
@@ -120,8 +121,15 @@ export interface FlagEvent {
   reason: string | null;
   metadata: Record<string, unknown> | null;
   dashboard_user_id: string | null;
+  dashboard_user_name?: string | null;
   is_emergency_override: boolean;
   created_at: string;
+}
+
+export interface ReportProjectRef {
+  id: string;
+  serial_id: string;
+  name: string;
 }
 
 export interface VersionHistoryItem {
@@ -173,6 +181,10 @@ export interface ReportDetail extends ReportListItem {
   photo_metadata?: string | null;
   infrastructure_name?: string | null;
   debris_blocking?: string | null;
+  // New fields from audit
+  property_id?: string | null;
+  projects?: ReportProjectRef[];
+  submission_ip?: string | null;
 }
 
 export interface ReportListResponse {

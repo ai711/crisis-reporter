@@ -14,9 +14,9 @@ import type { MapPin, DashboardStats, Crisis, SSEEvent } from "../types";
 const MAPTILER_KEY = import.meta.env.VITE_MAPTILER_KEY || "";
 
 const DAMAGE_COLORS: Record<string, string> = {
-  minimal: "#4caf50",
-  partial: "#ff9800",
-  complete: "#f44336",
+  minimal: "#38a169",
+  partial: "#f2994a",
+  complete: "#e53e3e",
 };
 
 const DAMAGE_LABELS: Record<string, string> = {
@@ -25,22 +25,27 @@ const DAMAGE_LABELS: Record<string, string> = {
   complete: "Completely Destroyed",
 };
 
-// ── Funnel icon (inline SVG — filter button) ──────────────────────────────────
+// ── SVG icons ─────────────────────────────────────────────────────────────────
 
-function FunnelIcon({ size = 14 }: { size?: number }) {
+function ChevronDown({ size = 12 }: { size?: number }) {
   return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <polyline points="6 9 12 15 18 9" />
+    </svg>
+  );
+}
+
+function TargetIcon({ size = 20 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="10" />
+      <circle cx="12" cy="12" r="3" />
+      <line x1="12" y1="2" x2="12" y2="5" />
+      <line x1="12" y1="19" x2="12" y2="22" />
+      <line x1="2" y1="12" x2="5" y2="12" />
+      <line x1="19" y1="12" x2="22" y2="12" />
     </svg>
   );
 }
@@ -51,30 +56,28 @@ export default function MainMapPage() {
   // ── Refs ──────────────────────────────────────────────────────────────────
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
-  // Stable ref to setSelectedPin so map click handlers (defined once) always
-  // call the current setter without stale closure issues.
+  // Stable ref so map click handlers (defined once) always call current setter.
   const setSelectedPinRef = useRef<((p: MapPin | null) => void) | null>(null);
-  // Track which crisis we most recently flew to — prevents repeated flyTo.
+  // Prevents repeated flyTo for the same crisis.
   const lastFlyToCrisisRef = useRef<string | null>(null);
+  // Used to detect outside-clicks for chip dropdown close.
+  const pillRef = useRef<HTMLDivElement>(null);
 
   // ── Store ─────────────────────────────────────────────────────────────────
   const queryClient = useQueryClient();
-  const { activeCrisisId, setActiveCrisis } = useAuthStore();
+  const { activeCrisisId, activeCrisisName, setActiveCrisis } = useAuthStore();
 
   // ── State ─────────────────────────────────────────────────────────────────
-  const [liveStatus, setLiveStatus] = useState<"connected" | "disconnected">(
-    "disconnected"
-  );
+  const [liveStatus, setLiveStatus] = useState<"connected" | "disconnected">("disconnected");
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
-  // Tick increments every second to keep the "X seconds ago" display live.
+  // Tick increments every second to keep the "Xs ago" display live.
   const [, setTick] = useState(0);
   const [mapReady, setMapReady] = useState(false);
   const [selectedPin, setSelectedPin] = useState<MapPin | null>(null);
-  const [filterPanelOpen, setFilterPanelOpen] = useState(false);
-  const [flagFilters, setFlagFilters] = useState({
-    green: true,
-    orange: true,
-  });
+  // Which chip's dropdown is currently open (null = none).
+  const [activeChip, setActiveChip] = useState<string | null>(null);
+  // "default" = show green+orange (backend default); or "green"|"orange"|"red" exclusively.
+  const [flagMode, setFlagMode] = useState<string>("default");
   const [damageLevel, setDamageLevel] = useState<string[]>([]);
   const [crisisType, setCrisisType] = useState<string[]>([]);
   const [dateFrom, setDateFrom] = useState("");
@@ -82,7 +85,6 @@ export default function MainMapPage() {
   const [country, setCountry] = useState("");
   const [showRecovered, setShowRecovered] = useState(false);
 
-  // Keep setter ref current every render.
   setSelectedPinRef.current = setSelectedPin;
 
   // ── Seconds ticker ────────────────────────────────────────────────────────
@@ -91,34 +93,30 @@ export default function MainMapPage() {
     return () => clearInterval(id);
   }, []);
 
+  // ── Close chip dropdown on outside click ──────────────────────────────────
+  useEffect(() => {
+    if (!activeChip) return;
+    const handler = (e: MouseEvent) => {
+      if (pillRef.current && !pillRef.current.contains(e.target as Node)) {
+        setActiveChip(null);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [activeChip]);
+
+  // ── Resize map when side panel opens/closes ───────────────────────────────
+  useEffect(() => {
+    const id = setTimeout(() => map.current?.resize(), 50);
+    return () => clearTimeout(id);
+  }, [selectedPin]);
+
   // ── Filter helpers ────────────────────────────────────────────────────────
-  const activeFlags = (
-    [flagFilters.green && "green", flagFilters.orange && "orange"] as (
-      | string
-      | false
-    )[]
-  ).filter(Boolean) as string[];
+  // Backend accepts one flag_status value at a time; omitting it defaults to green+orange.
+  const flagParam = flagMode === "default" ? undefined : flagMode;
 
-  // Pass a single flag_status param only when filtering to one flag;
-  // omit it (use backend default green+orange) when both are active.
-  const flagParam = activeFlags.length === 1 ? activeFlags[0] : undefined;
-  const activeFilterCount = [
-    flagParam ? 1 : 0,
-    damageLevel.length > 0 ? 1 : 0,
-    crisisType.length > 0 ? 1 : 0,
-    (dateFrom || dateTo) ? 1 : 0,
-    country.trim() ? 1 : 0,
-    showRecovered ? 1 : 0,
-  ].reduce((a, b) => a + b, 0);
-
-  const handleFlagFilter = (flag: "green" | "orange") => {
-    setFlagFilters((prev) => {
-      const next = { ...prev, [flag]: !prev[flag] };
-      // Never allow both to be false.
-      if (!next.green && !next.orange) return prev;
-      return next;
-    });
-  };
+  const toggleChip = (name: string) =>
+    setActiveChip((prev) => (prev === name ? null : name));
 
   // ── Data queries ──────────────────────────────────────────────────────────
   const { data: crises } = useQuery<Crisis[]>({
@@ -131,15 +129,9 @@ export default function MainMapPage() {
 
   const { data: pinsData } = useQuery({
     queryKey: [
-      "map-pins",
-      activeCrisisId,
-      flagParam,
-      damageLevel.join(","),
-      crisisType.join(","),
-      dateFrom,
-      dateTo,
-      country,
-      showRecovered,
+      "map-pins", activeCrisisId, flagParam,
+      damageLevel.join(","), crisisType.join(","),
+      dateFrom, dateTo, country, showRecovered,
     ],
     queryFn: async () => {
       if (!activeCrisisId) return { pins: [], total: 0 };
@@ -178,7 +170,7 @@ export default function MainMapPage() {
     }
   }, [crises, activeCrisisId, setActiveCrisis]);
 
-  // Stable ref so SSE handler always sees the current selectedPin without stale closure.
+  // Stable ref so SSE handler always sees the current selectedPin.
   const selectedPinRef = useRef<MapPin | null>(null);
   selectedPinRef.current = selectedPin;
 
@@ -190,16 +182,9 @@ export default function MainMapPage() {
         setLastUpdated(new Date());
       } else if (event.type === "heartbeat") {
         setLastUpdated(new Date());
-      } else if (
-        event.type === "report_confirmed" ||
-        event.type === "flag_changed"
-      ) {
-        queryClient.invalidateQueries({
-          queryKey: ["map-pins", activeCrisisId],
-        });
-        queryClient.invalidateQueries({
-          queryKey: ["dashboard-stats", activeCrisisId],
-        });
+      } else if (event.type === "report_confirmed" || event.type === "flag_changed") {
+        queryClient.invalidateQueries({ queryKey: ["map-pins", activeCrisisId] });
+        queryClient.invalidateQueries({ queryKey: ["dashboard-stats", activeCrisisId] });
         setLastUpdated(new Date());
       } else if (event.type === "property_updated") {
         queryClient.invalidateQueries({ queryKey: ["map-pins"] });
@@ -219,11 +204,7 @@ export default function MainMapPage() {
     [activeCrisisId, queryClient]
   );
 
-  useSSE({
-    crisisId: activeCrisisId,
-    onEvent: handleSSEEvent,
-    enabled: !!activeCrisisId,
-  });
+  useSSE({ crisisId: activeCrisisId, onEvent: handleSSEEvent, enabled: !!activeCrisisId });
 
   // ── Map initialisation ────────────────────────────────────────────────────
   useEffect(() => {
@@ -249,7 +230,7 @@ export default function MainMapPage() {
       zoom: 2,
     });
 
-    m.addControl(new maplibregl.NavigationControl(), "top-right");
+    m.addControl(new maplibregl.NavigationControl(), "bottom-left");
 
     m.on("load", () => {
       // ── GeoJSON source with cluster support ──────────────────────────────
@@ -260,16 +241,9 @@ export default function MainMapPage() {
         clusterMaxZoom: 14,
         clusterRadius: 50,
         clusterProperties: {
-          // Accumulate counts of each damage level across cluster members.
-          // Used to drive cluster colour (most severe wins).
-          any_destroyed: [
-            "+",
-            ["case", ["==", ["get", "damage_level"], "complete"], 1, 0],
-          ],
-          any_partial: [
-            "+",
-            ["case", ["==", ["get", "damage_level"], "partial"], 1, 0],
-          ],
+          // Accumulate counts of each damage level to drive cluster colour.
+          any_destroyed: ["+", ["case", ["==", ["get", "damage_level"], "complete"], 1, 0]],
+          any_partial: ["+", ["case", ["==", ["get", "damage_level"], "partial"], 1, 0]],
         },
       });
 
@@ -280,26 +254,13 @@ export default function MainMapPage() {
         source: "pins",
         filter: ["has", "point_count"],
         paint: {
-          // Colour: red if any Completely Destroyed, orange if any Partially
-          // Damaged, green if all Minimal or No Damage.
           "circle-color": [
             "case",
-            [">", ["get", "any_destroyed"], 0],
-            "#f44336",
-            [">", ["get", "any_partial"], 0],
-            "#ff9800",
-            "#4caf50",
+            [">", ["get", "any_destroyed"], 0], "#e53e3e",
+            [">", ["get", "any_partial"], 0], "#f2994a",
+            "#38a169",
           ],
-          // Radius scales with the number of properties in the cluster.
-          "circle-radius": [
-            "step",
-            ["get", "point_count"],
-            20,
-            10,
-            30,
-            50,
-            40,
-          ],
+          "circle-radius": ["step", ["get", "point_count"], 20, 10, 30, 50, 40],
           "circle-stroke-width": 3,
           "circle-stroke-color": "#fff",
           "circle-opacity": 0.92,
@@ -317,9 +278,7 @@ export default function MainMapPage() {
           "text-font": ["Open Sans Bold", "Arial Unicode MS Bold"],
           "text-size": 13,
         },
-        paint: {
-          "text-color": "#fff",
-        },
+        paint: { "text-color": "#fff" },
       });
 
       // ── Individual (unclustered) pin circle ───────────────────────────────
@@ -330,13 +289,10 @@ export default function MainMapPage() {
         filter: ["!", ["has", "point_count"]],
         paint: {
           "circle-color": [
-            "match",
-            ["get", "damage_level"],
-            "complete",
-            "#f44336",
-            "partial",
-            "#ff9800",
-            "#4caf50",
+            "match", ["get", "damage_level"],
+            "complete", "#e53e3e",
+            "partial", "#f2994a",
+            "#38a169",
           ],
           "circle-radius": 12,
           "circle-stroke-width": 3,
@@ -357,22 +313,17 @@ export default function MainMapPage() {
           "text-size": 10,
           "text-allow-overlap": true,
         },
-        paint: {
-          "text-color": "#fff",
-        },
+        paint: { "text-color": "#fff" },
       });
 
       // ── Click: cluster → zoom in ──────────────────────────────────────────
       m.on("click", "clusters", async (e) => {
-        const features = m.queryRenderedFeatures(e.point, {
-          layers: ["clusters"],
-        });
+        const features = m.queryRenderedFeatures(e.point, { layers: ["clusters"] });
         if (!features.length) return;
         const clusterId = features[0].properties?.cluster_id as number;
         const source = m.getSource("pins") as GeoJSONSource;
         const zoom = await source.getClusterExpansionZoom(clusterId);
-        const coords = (features[0].geometry as GeoJSON.Point)
-          .coordinates as [number, number];
+        const coords = (features[0].geometry as GeoJSON.Point).coordinates as [number, number];
         m.easeTo({ center: coords, zoom });
       });
 
@@ -396,30 +347,19 @@ export default function MainMapPage() {
         const hit = m.queryRenderedFeatures(e.point, {
           layers: ["clusters", "unclustered-pin"],
         });
-        if (!hit.length) {
-          setSelectedPinRef.current?.(null);
-        }
+        if (!hit.length) setSelectedPinRef.current?.(null);
       });
 
       // ── Cursor feedback ───────────────────────────────────────────────────
-      m.on("mouseenter", "clusters", () => {
-        m.getCanvas().style.cursor = "pointer";
-      });
-      m.on("mouseleave", "clusters", () => {
-        m.getCanvas().style.cursor = "";
-      });
-      m.on("mouseenter", "unclustered-pin", () => {
-        m.getCanvas().style.cursor = "pointer";
-      });
-      m.on("mouseleave", "unclustered-pin", () => {
-        m.getCanvas().style.cursor = "";
-      });
+      m.on("mouseenter", "clusters", () => { m.getCanvas().style.cursor = "pointer"; });
+      m.on("mouseleave", "clusters", () => { m.getCanvas().style.cursor = ""; });
+      m.on("mouseenter", "unclustered-pin", () => { m.getCanvas().style.cursor = "pointer"; });
+      m.on("mouseleave", "unclustered-pin", () => { m.getCanvas().style.cursor = ""; });
 
       setMapReady(true);
     });
 
     map.current = m;
-
     return () => {
       m.remove();
       map.current = null;
@@ -427,9 +367,9 @@ export default function MainMapPage() {
     };
   }, []);
 
-  // ── Fly to active crisis centre (Fix 1) ───────────────────────────────────
-  // Runs when crises data loads or active crisis changes. Only flies once per
-  // crisis ID to avoid fighting with the user's manual panning.
+  // ── Fly to active crisis centre ───────────────────────────────────────────
+  // Runs when crises data loads or active crisis changes. Flies once per crisis
+  // ID to avoid fighting with the user's manual panning.
   useEffect(() => {
     if (!map.current || !crises || !activeCrisisId) return;
     if (lastFlyToCrisisRef.current === activeCrisisId) return;
@@ -449,13 +389,9 @@ export default function MainMapPage() {
     if (!map.current || !mapReady || !pinsData?.pins) return;
     const source = map.current.getSource("pins") as GeoJSONSource | undefined;
     if (!source) return;
-
     const features: GeoJSON.Feature[] = pinsData.pins.map((pin: MapPin) => ({
       type: "Feature",
-      geometry: {
-        type: "Point",
-        coordinates: [pin.longitude, pin.latitude],
-      },
+      geometry: { type: "Point", coordinates: [pin.longitude, pin.latitude] },
       properties: {
         building_id: pin.building_id,
         latitude: pin.latitude,
@@ -465,17 +401,45 @@ export default function MainMapPage() {
         flag_status: pin.flag_status,
       },
     }));
-
     source.setData({ type: "FeatureCollection", features });
   }, [pinsData, mapReady]);
 
   // ── Computed display values ───────────────────────────────────────────────
   const secondsSince = Math.floor((Date.now() - lastUpdated.getTime()) / 1000);
 
+  // Active-filter booleans for chip highlight state.
+  const isDamageActive = damageLevel.length > 0;
+  const isCrisisTypeActive = crisisType.length > 0;
+  const isDateActive = !!(dateFrom || dateTo);
+  const isCountryActive = !!country.trim();
+  const isFlagActive = flagMode !== "default";
+
+  // ── Chip style helper ─────────────────────────────────────────────────────
+  const chipSty = (name: string, filterActive: boolean): React.CSSProperties => ({
+    display: "flex",
+    alignItems: "center",
+    gap: 5,
+    padding: "6px 12px",
+    borderRadius: 9999,
+    border: "none",
+    cursor: "pointer",
+    fontSize: 12,
+    fontWeight: 600,
+    whiteSpace: "nowrap",
+    transition: "background 0.15s, color 0.15s",
+    background:
+      activeChip === name
+        ? "#e6e8eb"
+        : filterActive
+        ? "#00508a"
+        : "transparent",
+    color: filterActive && activeChip !== name ? "#fff" : "#191c1e",
+  });
+
   return (
     <div style={styles.container}>
       <Header
-        title="Crisis Map"
+        title="Map View"
         subtitle={`${pinsData?.total ?? 0} location${(pinsData?.total ?? 0) !== 1 ? "s" : ""} reported`}
       />
 
@@ -484,293 +448,294 @@ export default function MainMapPage() {
         <div style={styles.statsBar}>
           <div style={styles.statItem}>
             <span style={styles.statNumber}>{stats.total_reports}</span>
-            <span style={styles.statLabel}>Total</span>
+            <span style={styles.statLabel}>Total Reports</span>
           </div>
-          <div style={{ ...styles.statItem, borderLeft: "3px solid var(--c-flag-green)" }}>
-            <span style={{ ...styles.statNumber, color: "var(--c-flag-green)" }}>
-              {stats.green_count}
-            </span>
+          <div style={{ ...styles.statItem, borderLeft: "3px solid #38a169" }}>
+            <span style={{ ...styles.statNumber, color: "#38a169" }}>{stats.green_count}</span>
             <span style={styles.statLabel}>Verified</span>
           </div>
-          {/* Fix 11: label changed from "Flagged" to "Needs Attention" */}
-          <div style={{ ...styles.statItem, borderLeft: "3px solid var(--c-flag-orange)" }}>
-            <span style={{ ...styles.statNumber, color: "var(--c-flag-orange)" }}>
-              {stats.orange_count}
-            </span>
+          <div style={{ ...styles.statItem, borderLeft: "3px solid #f2994a" }}>
+            <span style={{ ...styles.statNumber, color: "#f2994a" }}>{stats.orange_count}</span>
             <span style={styles.statLabel}>Needs Attention</span>
           </div>
-          <div style={{ ...styles.statItem, borderLeft: "3px solid var(--c-flag-red)" }}>
-            <span style={{ ...styles.statNumber, color: "var(--c-flag-red)" }}>
-              {stats.red_count}
-            </span>
+          <div style={{ ...styles.statItem, borderLeft: "3px solid #e53e3e" }}>
+            <span style={{ ...styles.statNumber, color: "#e53e3e" }}>{stats.red_count}</span>
             <span style={styles.statLabel}>Review</span>
           </div>
-          <div style={{ ...styles.statItem, borderLeft: "3px solid var(--c-flag-grey)" }}>
-            <span style={{ ...styles.statNumber, color: "var(--c-flag-grey)" }}>
-              {stats.grey_count}
-            </span>
+          <div style={{ ...styles.statItem, borderLeft: "3px solid #9e9e9e" }}>
+            <span style={{ ...styles.statNumber, color: "#9e9e9e" }}>{stats.grey_count}</span>
             <span style={styles.statLabel}>Processing</span>
           </div>
         </div>
       )}
 
-      {/* ── Map canvas area ── */}
-      <div style={styles.mapWrapper}>
-        <div ref={mapContainer} style={styles.map} />
+      {/* ── Map row: map area + side panel side-by-side ── */}
+      <div style={styles.mapRow}>
 
-        {/* Fix 2: Live indicator — always on canvas, outside stats conditional */}
-        <div
-          style={{
-            ...styles.liveIndicator,
-            background:
-              liveStatus === "connected"
-                ? "var(--c-surface-lowest)"
-                : "rgba(255,248,240,0.97)",
-          }}
-        >
+        {/* ── Map area ── */}
+        <div style={styles.mapArea}>
+          <div ref={mapContainer} style={styles.map} />
+
+          {/* ── Floating glassmorphism pill toolbar ── */}
+          <div ref={pillRef} style={styles.pillToolbar}>
+
+            {/* Project chip */}
+            <div style={{ position: "relative" }}>
+              <button style={chipSty("project", !!activeCrisisId)} onClick={() => toggleChip("project")}>
+                {activeCrisisName ?? "Select Project"}
+                <ChevronDown />
+              </button>
+              {activeChip === "project" && (
+                <div style={styles.chipDropdown}>
+                  <div style={styles.chipDropdownTitle}>Project</div>
+                  {crises?.map((c) => (
+                    <button
+                      key={c.id}
+                      style={{
+                        ...styles.chipDropdownItem,
+                        fontWeight: c.id === activeCrisisId ? 700 : 400,
+                        color: c.id === activeCrisisId ? "#00508a" : "#191c1e",
+                      }}
+                      onClick={() => { setActiveCrisis(c.id, c.name); setActiveChip(null); }}
+                    >
+                      {c.name}
+                    </button>
+                  ))}
+                  {!crises?.length && (
+                    <div style={{ fontSize: 12, color: "#9e9e9e", padding: "8px 12px" }}>
+                      No projects available
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div style={styles.pillSep} />
+
+            {/* Damage Level chip */}
+            <div style={{ position: "relative" }}>
+              <button style={chipSty("damage", isDamageActive)} onClick={() => toggleChip("damage")}>
+                {isDamageActive ? `Damage (${damageLevel.length})` : "All Damage Levels"}
+                <ChevronDown />
+              </button>
+              {activeChip === "damage" && (
+                <div style={styles.chipDropdown}>
+                  <div style={styles.chipDropdownTitle}>Damage Level</div>
+                  {([ ["complete", "Completely Destroyed"], ["partial", "Partially Damaged"], ["minimal", "Minimal or No Damage"] ] as [string, string][]).map(([v, label]) => (
+                    <label key={v} style={styles.chipCheckLabel}>
+                      <input
+                        type="checkbox"
+                        checked={damageLevel.includes(v)}
+                        onChange={() =>
+                          setDamageLevel((p) =>
+                            p.includes(v) ? p.filter((x) => x !== v) : [...p, v]
+                          )
+                        }
+                        style={styles.chipCheck}
+                      />
+                      <span style={{ width: 10, height: 10, borderRadius: "50%", background: DAMAGE_COLORS[v], flexShrink: 0 }} />
+                      {label}
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Crisis Type chip */}
+            <div style={{ position: "relative" }}>
+              <button style={chipSty("type", isCrisisTypeActive)} onClick={() => toggleChip("type")}>
+                {isCrisisTypeActive ? `Type (${crisisType.length})` : "All Crisis Types"}
+                <ChevronDown />
+              </button>
+              {activeChip === "type" && (
+                <div style={styles.chipDropdown}>
+                  <div style={styles.chipDropdownTitle}>Crisis Type</div>
+                  {["earthquake", "flood", "cyclone", "wildfire", "landslide", "tsunami", "conflict", "drought", "other"].map((t) => (
+                    <label key={t} style={styles.chipCheckLabel}>
+                      <input
+                        type="checkbox"
+                        checked={crisisType.includes(t)}
+                        onChange={() =>
+                          setCrisisType((p) =>
+                            p.includes(t) ? p.filter((x) => x !== t) : [...p, t]
+                          )
+                        }
+                        style={styles.chipCheck}
+                      />
+                      {t.charAt(0).toUpperCase() + t.slice(1)}
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div style={styles.pillSep} />
+
+            {/* Date Range chip */}
+            <div style={{ position: "relative" }}>
+              <button style={chipSty("date", isDateActive)} onClick={() => toggleChip("date")}>
+                {isDateActive ? `${dateFrom || "…"} → ${dateTo || "…"}` : "Date Range"}
+                <ChevronDown />
+              </button>
+              {activeChip === "date" && (
+                <div style={{ ...styles.chipDropdown, width: 220 }}>
+                  <div style={styles.chipDropdownTitle}>Date Range</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    <div>
+                      <div style={styles.chipInputLabel}>From</div>
+                      <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} style={styles.chipInput} />
+                    </div>
+                    <div>
+                      <div style={styles.chipInputLabel}>To</div>
+                      <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} style={styles.chipInput} />
+                    </div>
+                  </div>
+                  {(dateFrom || dateTo) && (
+                    <button style={styles.chipClearBtn} onClick={() => { setDateFrom(""); setDateTo(""); }}>
+                      Clear dates
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Country chip */}
+            <div style={{ position: "relative" }}>
+              <button style={chipSty("country", isCountryActive)} onClick={() => toggleChip("country")}>
+                {isCountryActive ? country.toUpperCase() : "All Countries"}
+                <ChevronDown />
+              </button>
+              {activeChip === "country" && (
+                <div style={{ ...styles.chipDropdown, width: 190 }}>
+                  <div style={styles.chipDropdownTitle}>Country Code</div>
+                  <input
+                    type="text"
+                    value={country}
+                    onChange={(e) => setCountry(e.target.value)}
+                    placeholder="e.g. TR, UA"
+                    style={styles.chipInput}
+                    autoFocus
+                  />
+                  {country && (
+                    <button style={styles.chipClearBtn} onClick={() => setCountry("")}>Clear</button>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Flag Status chip */}
+            <div style={{ position: "relative" }}>
+              <button style={chipSty("flag", isFlagActive)} onClick={() => toggleChip("flag")}>
+                {flagMode === "default" ? "Flag Status" :
+                 flagMode === "green" ? "Green only" :
+                 flagMode === "orange" ? "Orange only" : "Red only"}
+                <ChevronDown />
+              </button>
+              {activeChip === "flag" && (
+                <div style={styles.chipDropdown}>
+                  <div style={styles.chipDropdownTitle}>Flag Status</div>
+                  {([
+                    ["default", "#9e9e9e", "Green + Orange (Default)"],
+                    ["green", "#38a169", "Green only — Verified"],
+                    ["orange", "#f2994a", "Orange only — Needs Attention"],
+                    ["red", "#e53e3e", "Red only — Supervisor View"],
+                  ] as [string, string, string][]).map(([mode, color, label]) => (
+                    <button
+                      key={mode}
+                      style={{
+                        ...styles.chipDropdownItem,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                        fontWeight: flagMode === mode ? 700 : 400,
+                        color: flagMode === mode ? color : "#191c1e",
+                      }}
+                      onClick={() => { setFlagMode(mode); setActiveChip(null); }}
+                    >
+                      <span style={{ width: 10, height: 10, borderRadius: "50%", background: color, flexShrink: 0 }} />
+                      {label}
+                      {flagMode === mode && <span style={{ marginLeft: "auto", fontSize: 11 }}>✓</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div style={styles.pillSep} />
+
+            {/* Show Recovered toggle chip — no dropdown */}
+            <button
+              style={{
+                ...chipSty("recovered", showRecovered),
+                background: showRecovered ? "#00508a" : "transparent",
+                color: showRecovered ? "#fff" : "#191c1e",
+              }}
+              onClick={() => setShowRecovered((v) => !v)}
+            >
+              {showRecovered ? "✓ Recovered" : "Show Recovered"}
+            </button>
+
+          </div>
+
+          {/* ── Live indicator — glassmorphism pill, top-right ── */}
           <div
             style={{
-              ...styles.liveDot,
-              background:
-                liveStatus === "connected" ? "var(--c-flag-green)" : "var(--c-flag-orange)",
-              boxShadow:
-                liveStatus === "connected"
-                  ? "0 0 0 3px rgba(56,161,105,0.25)"
-                  : "0 0 0 3px rgba(242,153,74,0.25)",
+              ...styles.liveIndicator,
+              background: liveStatus === "connected"
+                ? "rgba(255,255,255,0.88)"
+                : "rgba(255,248,240,0.92)",
             }}
-          />
-          <span style={styles.liveText}>
-            {liveStatus === "connected"
-              ? `LIVE — LAST UPDATED ${secondsSince}s ago`
-              : "CONNECTION LOST — MAP DATA MAY BE OUTDATED"}
-          </span>
-        </div>
-
-        {/* Fix 9: Filter button + panel */}
-        <div style={styles.filterArea}>
-          <button
-            style={styles.filterBtn}
-            onClick={() => setFilterPanelOpen((o) => !o)}
-            aria-expanded={filterPanelOpen}
           >
-            <FunnelIcon />
-            <span>Filters</span>
-            {activeFilterCount > 0 && (
-              <span style={styles.filterBadge}>
-                {activeFilterCount} active
-              </span>
-            )}
-          </button>
-
-          {filterPanelOpen && (
-            <div style={styles.filterPanel}>
-              <div style={styles.filterPanelTitle}>Filter map pins</div>
-
-              {/* ── Flag status (active — backend supported) ── */}
-              <div style={styles.filterGroup}>
-                <div style={styles.filterGroupLabel}>Flag Status</div>
-                <label style={styles.filterCheckLabel}>
-                  <input
-                    type="checkbox"
-                    checked={flagFilters.green}
-                    onChange={() => handleFlagFilter("green")}
-                    style={styles.filterCheck}
-                  />
-                  <span
-                    style={{
-                      ...styles.filterFlagDot,
-                      background: "#4caf50",
-                    }}
-                  />
-                  Green (Verified)
-                </label>
-                <label style={styles.filterCheckLabel}>
-                  <input
-                    type="checkbox"
-                    checked={flagFilters.orange}
-                    onChange={() => handleFlagFilter("orange")}
-                    style={styles.filterCheck}
-                  />
-                  <span
-                    style={{
-                      ...styles.filterFlagDot,
-                      background: "#ff9800",
-                    }}
-                  />
-                  Orange (Needs Attention)
-                </label>
-              </div>
-
-              {/* ── Damage Level ── */}
-              <div style={styles.filterGroup}>
-                <div style={styles.filterGroupLabel}>Damage Level</div>
-                {[
-                  { value: "complete", label: "Completely Destroyed" },
-                  { value: "partial", label: "Partially Damaged" },
-                  { value: "minimal", label: "Minimal or No Damage" },
-                ].map(({ value, label }) => (
-                  <label key={value} style={styles.filterCheckLabel}>
-                    <input
-                      type="checkbox"
-                      checked={damageLevel.includes(value)}
-                      onChange={() =>
-                        setDamageLevel((prev) =>
-                          prev.includes(value)
-                            ? prev.filter((v) => v !== value)
-                            : [...prev, value]
-                        )
-                      }
-                      style={styles.filterCheck}
-                    />
-                    <span
-                      style={{
-                        ...styles.filterFlagDot,
-                        background: DAMAGE_COLORS[value],
-                      }}
-                    />
-                    {label}
-                  </label>
-                ))}
-              </div>
-
-              {/* ── Crisis Type ── */}
-              <div style={styles.filterGroup}>
-                <div style={styles.filterGroupLabel}>Crisis Type</div>
-                {[
-                  "earthquake",
-                  "flood",
-                  "cyclone",
-                  "wildfire",
-                  "landslide",
-                  "tsunami",
-                  "conflict",
-                  "drought",
-                  "other",
-                ].map((type) => (
-                  <label key={type} style={styles.filterCheckLabel}>
-                    <input
-                      type="checkbox"
-                      checked={crisisType.includes(type)}
-                      onChange={() =>
-                        setCrisisType((prev) =>
-                          prev.includes(type)
-                            ? prev.filter((t) => t !== type)
-                            : [...prev, type]
-                        )
-                      }
-                      style={styles.filterCheck}
-                    />
-                    {type.charAt(0).toUpperCase() + type.slice(1)}
-                  </label>
-                ))}
-              </div>
-
-              {/* ── Date Range ── */}
-              <div style={styles.filterGroup}>
-                <div style={styles.filterGroupLabel}>Date Range</div>
-                <div style={styles.filterDateRow}>
-                  <div style={{ flex: 1 }}>
-                    <div style={styles.filterDateLabel}>From</div>
-                    <input
-                      type="date"
-                      value={dateFrom}
-                      onChange={(e) => setDateFrom(e.target.value)}
-                      style={styles.filterInput}
-                    />
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={styles.filterDateLabel}>To</div>
-                    <input
-                      type="date"
-                      value={dateTo}
-                      onChange={(e) => setDateTo(e.target.value)}
-                      style={styles.filterInput}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* ── Country ── */}
-              <div style={styles.filterGroup}>
-                <div style={styles.filterGroupLabel}>Country</div>
-                <input
-                  type="text"
-                  value={country}
-                  onChange={(e) => setCountry(e.target.value)}
-                  placeholder="e.g. TR, UA"
-                  style={styles.filterInput}
-                />
-              </div>
-
-              {/* ── Show Recovered Properties ── */}
-              <div style={styles.filterGroup}>
-                <div style={styles.filterGroupLabel}>Recovered Properties</div>
-                <label style={{ ...styles.filterCheckLabel, alignItems: "flex-start", gap: 10 }}>
-                  <div
-                    style={{
-                      ...styles.filterToggle,
-                      background: showRecovered ? "var(--c-primary-container)" : "var(--c-surface-high)",
-                      marginTop: 2,
-                      flexShrink: 0,
-                    }}
-                    onClick={() => setShowRecovered((v) => !v)}
-                    role="switch"
-                    aria-checked={showRecovered}
-                    tabIndex={0}
-                    onKeyDown={(e) => {
-                      if (e.key === " " || e.key === "Enter")
-                        setShowRecovered((v) => !v);
-                    }}
-                  >
-                    <div
-                      style={{
-                        ...styles.filterToggleThumb,
-                        transform: showRecovered
-                          ? "translateX(18px)"
-                          : "translateX(2px)",
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 13, color: "var(--c-text-primary)" }}>
-                      Show recovered properties
-                    </div>
-                    <div style={{ fontSize: 11, color: "var(--c-text-muted)", marginTop: 2 }}>
-                      Recovered properties are hidden by default.
-                    </div>
-                  </div>
-                </label>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Fix 3: Legend with full damage level labels + count badge note */}
-        <div style={styles.legend}>
-          <div style={styles.legendTitle}>Damage Level</div>
-          {(
-            [
-              ["complete", "Completely Destroyed"],
-              ["partial", "Partially Damaged"],
-              ["minimal", "Minimal or No Damage"],
-            ] as [string, string][]
-          ).map(([level, label]) => (
-            <div key={level} style={styles.legendItem}>
-              <div
-                style={{
-                  ...styles.legendDot,
-                  background: DAMAGE_COLORS[level],
-                }}
-              />
-              <span style={styles.legendLabel}>{label}</span>
-            </div>
-          ))}
-          <div style={styles.legendNote}>
-            Number on pin = report count for that property
+            <div
+              style={{
+                ...styles.liveDot,
+                background: liveStatus === "connected" ? "#38a169" : "#f2994a",
+                boxShadow:
+                  liveStatus === "connected"
+                    ? "0 0 0 3px rgba(56,161,105,0.25)"
+                    : "0 0 0 3px rgba(242,153,74,0.25)",
+              }}
+            />
+            <span style={styles.liveText}>
+              {liveStatus === "connected"
+                ? `LIVE · ${secondsSince}s ago`
+                : "OFFLINE · DATA MAY BE OUTDATED"}
+            </span>
           </div>
+
+          {/* ── Legend — bottom-left, above zoom controls ── */}
+          <div style={styles.legend}>
+            <div style={styles.legendTitle}>Damage Level</div>
+            {([ ["complete", "Completely Destroyed"], ["partial", "Partially Damaged"], ["minimal", "Minimal or No Damage"] ] as [string, string][]).map(([level, label]) => (
+              <div key={level} style={styles.legendItem}>
+                <div style={{ ...styles.legendDot, background: DAMAGE_COLORS[level] }} />
+                <span style={styles.legendLabel}>{label}</span>
+              </div>
+            ))}
+            <div style={styles.legendNote}>Number = report count per property</div>
+          </div>
+
+          {/* ── FAB — zoom to active crisis ── */}
+          <button
+            style={styles.fab}
+            title="Zoom to active crisis"
+            onClick={() => {
+              if (!activeCrisisId || !crises) return;
+              const crisis = crises.find((c) => c.id === activeCrisisId);
+              if (crisis?.map_center_lat && crisis?.map_center_lng) {
+                map.current?.flyTo({
+                  center: [crisis.map_center_lng, crisis.map_center_lat],
+                  zoom: 10,
+                  duration: 1200,
+                });
+              }
+            }}
+          >
+            <TargetIcon size={22} />
+          </button>
         </div>
 
-        {/* Fix 7: Property summary panel — slides in from right */}
+        {/* ── Property summary panel — flex sibling, not absolute overlay ── */}
         {selectedPin && (
           <PropertySummaryPanel
             pin={selectedPin}
@@ -792,12 +757,13 @@ const styles: Record<string, React.CSSProperties> = {
   },
   statsBar: {
     background: "var(--c-surface-lowest)",
-    borderBottom: "1px solid var(--c-border)",
+    boxShadow: "0 2px 8px rgba(8,27,57,0.06)",
     padding: "12px 32px",
     display: "flex",
     alignItems: "center",
     gap: 32,
     flexShrink: 0,
+    zIndex: 1,
   },
   statItem: {
     display: "flex",
@@ -817,196 +783,175 @@ const styles: Record<string, React.CSSProperties> = {
     letterSpacing: 0.5,
     marginTop: 2,
   },
-  mapWrapper: {
+  // Flex row holding the map area and the side panel.
+  mapRow: {
+    flex: 1,
+    display: "flex",
+    flexDirection: "row",
+    overflow: "hidden",
+  },
+  // Map canvas container. No overflow:hidden so chip dropdowns are visible.
+  mapArea: {
     flex: 1,
     position: "relative",
-    overflow: "hidden",
   },
   map: {
     width: "100%",
     height: "100%",
   },
-  // Live indicator — always on the canvas, top-right below nav controls
+  // Floating pill toolbar — glassmorphism, horizontally centered on the map.
+  pillToolbar: {
+    position: "absolute",
+    top: 14,
+    left: "50%",
+    transform: "translateX(-50%)",
+    zIndex: 10,
+    display: "flex",
+    alignItems: "center",
+    gap: 2,
+    padding: "5px 8px",
+    background: "rgba(255,255,255,0.88)",
+    backdropFilter: "blur(12px)",
+    borderRadius: 9999,
+    boxShadow: "0 4px 20px rgba(8,27,57,0.12)",
+    whiteSpace: "nowrap",
+  },
+  pillSep: {
+    width: 1,
+    height: 20,
+    background: "rgba(0,0,0,0.1)",
+    margin: "0 4px",
+    flexShrink: 0,
+  },
+  // Chip dropdown panel
+  chipDropdown: {
+    position: "absolute",
+    top: "calc(100% + 8px)",
+    left: 0,
+    background: "var(--c-surface-lowest)",
+    borderRadius: 12,
+    boxShadow: "0 8px 24px rgba(8,27,57,0.14)",
+    zIndex: 50,
+    minWidth: 180,
+    padding: "8px 0",
+    overflow: "hidden",
+  },
+  chipDropdownTitle: {
+    fontSize: 10,
+    fontWeight: 700,
+    color: "#9e9e9e",
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+    padding: "4px 12px 8px",
+  },
+  chipDropdownItem: {
+    display: "block",
+    width: "100%",
+    padding: "8px 12px",
+    background: "none",
+    border: "none",
+    textAlign: "left",
+    fontSize: 13,
+    cursor: "pointer",
+  },
+  chipCheckLabel: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    padding: "7px 12px",
+    fontSize: 13,
+    color: "#191c1e",
+    cursor: "pointer",
+    userSelect: "none",
+  },
+  chipCheck: {
+    accentColor: "#00508a",
+    width: 14,
+    height: 14,
+    flexShrink: 0,
+  },
+  chipInputLabel: {
+    fontSize: 10,
+    fontWeight: 600,
+    color: "#9e9e9e",
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+    marginBottom: 3,
+    padding: "0 12px",
+  },
+  chipInput: {
+    width: "100%",
+    padding: "6px 12px",
+    border: "none",
+    borderTop: "1px solid #f2f4f7",
+    borderBottom: "1px solid #f2f4f7",
+    fontSize: 12,
+    color: "#191c1e",
+    outline: "none",
+    background: "#f2f4f7",
+    boxSizing: "border-box" as const,
+  },
+  chipClearBtn: {
+    width: "100%",
+    padding: "6px 12px",
+    background: "none",
+    border: "none",
+    color: "#e53e3e",
+    fontSize: 12,
+    fontWeight: 600,
+    cursor: "pointer",
+    textAlign: "left" as const,
+    marginTop: 4,
+  },
+  // Live indicator — glassmorphism pill, top-right of map area
   liveIndicator: {
     position: "absolute",
-    top: 52,
-    right: 12,
+    top: 14,
+    right: 14,
     zIndex: 10,
     display: "flex",
     alignItems: "center",
     gap: 7,
-    padding: "6px 13px",
-    borderRadius: 20,
-    boxShadow: "var(--shadow-sm)",
-    border: "1px solid var(--c-border)",
+    padding: "6px 12px",
+    borderRadius: 9999,
+    backdropFilter: "blur(12px)",
+    boxShadow: "0 2px 8px rgba(8,27,57,0.1)",
     pointerEvents: "none",
   },
   liveDot: {
-    width: 9,
-    height: 9,
+    width: 8,
+    height: 8,
     borderRadius: "50%",
     flexShrink: 0,
     transition: "background 0.3s, box-shadow 0.3s",
   },
   liveText: {
-    fontSize: 11,
-    fontWeight: 600,
-    color: "var(--c-text-secondary)",
-    letterSpacing: 0.2,
-    whiteSpace: "nowrap",
-  },
-  // Filter button — top-left of canvas
-  filterArea: {
-    position: "absolute",
-    top: 14,
-    left: 14,
-    zIndex: 10,
-  },
-  filterBtn: {
-    display: "flex",
-    alignItems: "center",
-    gap: 7,
-    padding: "8px 14px",
-    background: "var(--c-surface-lowest)",
-    border: "1.5px solid var(--c-surface-high)",
-    borderRadius: 8,
-    fontSize: 13,
-    fontWeight: 600,
-    color: "var(--c-text-primary)",
-    cursor: "pointer",
-    boxShadow: "var(--shadow-sm)",
-    whiteSpace: "nowrap",
-  },
-  filterBadge: {
-    background: "var(--c-primary-container)",
-    color: "#fff",
-    fontSize: 11,
-    fontWeight: 700,
-    padding: "2px 8px",
-    borderRadius: 10,
-    marginLeft: 2,
-  },
-  filterPanel: {
-    marginTop: 6,
-    background: "var(--c-surface-lowest)",
-    border: "1px solid var(--c-surface-high)",
-    borderRadius: 10,
-    boxShadow: "var(--shadow-float)",
-    padding: "14px 16px",
-    width: 300,
-    maxHeight: "calc(100vh - 180px)",
-    overflowY: "auto",
-  },
-  filterPanelTitle: {
-    fontSize: 12,
-    fontWeight: 700,
-    color: "var(--c-text-subtle)",
-    textTransform: "uppercase",
-    letterSpacing: 0.6,
-    marginBottom: 12,
-  },
-  filterGroup: {
-    marginBottom: 14,
-  },
-  filterGroupLabel: {
-    fontSize: 12,
-    fontWeight: 600,
-    color: "var(--c-text-primary)",
-    marginBottom: 6,
-  },
-  filterCheckLabel: {
-    display: "flex",
-    alignItems: "center",
-    gap: 7,
-    fontSize: 13,
-    color: "var(--c-text-primary)",
-    cursor: "pointer",
-    marginBottom: 5,
-    userSelect: "none",
-  },
-  filterCheck: {
-    accentColor: "var(--c-primary-container)",
-    width: 14,
-    height: 14,
-    flexShrink: 0,
-  },
-  filterFlagDot: {
-    width: 10,
-    height: 10,
-    borderRadius: "50%",
-    flexShrink: 0,
-  },
-  filterDisabled: {
-    fontSize: 12,
-    color: "var(--c-text-subtle)",
-    fontStyle: "italic",
-    padding: "4px 8px",
-    background: "var(--c-surface-lowest)",
-    borderRadius: 6,
-    border: "1px dashed var(--c-surface-high)",
-    cursor: "not-allowed",
-  },
-  filterInput: {
-    width: "100%",
-    padding: "6px 8px",
-    border: "1.5px solid var(--c-surface-high)",
-    borderRadius: 6,
-    fontSize: 12,
-    color: "var(--c-text-primary)",
-    outline: "none",
-    background: "var(--c-surface-lowest)",
-    boxSizing: "border-box" as const,
-  },
-  filterDateRow: {
-    display: "flex",
-    gap: 8,
-  },
-  filterDateLabel: {
     fontSize: 10,
-    color: "var(--c-text-subtle)",
-    fontWeight: 600,
-    textTransform: "uppercase" as const,
-    letterSpacing: 0.4,
-    marginBottom: 3,
+    fontWeight: 700,
+    color: "#414751",
+    letterSpacing: 0.3,
+    whiteSpace: "nowrap",
   },
-  filterToggle: {
-    width: 36,
-    height: 20,
-    borderRadius: 10,
-    position: "relative" as const,
-    cursor: "pointer",
-    transition: "background 0.2s",
-  },
-  filterToggleThumb: {
-    position: "absolute" as const,
-    top: 2,
-    width: 16,
-    height: 16,
-    borderRadius: "50%",
-    background: "#fff",
-    boxShadow: "0 1px 3px rgba(0,0,0,0.25)",
-    transition: "transform 0.2s",
-  },
-  // Legend — bottom-left of canvas
+  // Legend — bottom-left, above MapLibre zoom controls (which sit at ~80px)
   legend: {
     position: "absolute",
-    bottom: 32,
+    bottom: 100,
     left: 14,
-    background: "var(--c-surface-lowest)",
-    borderRadius: 10,
-    padding: "12px 16px",
-    boxShadow: "var(--shadow-card)",
+    zIndex: 10,
+    background: "rgba(255,255,255,0.88)",
+    backdropFilter: "blur(12px)",
+    borderRadius: 12,
+    padding: "12px 14px",
+    boxShadow: "0 4px 16px rgba(8,27,57,0.08)",
     display: "flex",
     flexDirection: "column",
     gap: 7,
-    zIndex: 10,
-    border: "1px solid var(--c-border)",
     pointerEvents: "none",
   },
   legendTitle: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: 700,
-    color: "var(--c-text-subtle)",
+    color: "#9e9e9e",
     textTransform: "uppercase",
     letterSpacing: 0.6,
     marginBottom: 2,
@@ -1014,29 +959,48 @@ const styles: Record<string, React.CSSProperties> = {
   legendItem: {
     display: "flex",
     alignItems: "center",
-    gap: 9,
+    gap: 8,
   },
   legendDot: {
-    width: 13,
-    height: 13,
+    width: 12,
+    height: 12,
     borderRadius: "50%",
     flexShrink: 0,
-    border: "2px solid var(--c-surface-lowest)",
-    boxShadow: "0 0 0 1px rgba(0,0,0,0.12)",
+    border: "2px solid rgba(255,255,255,0.8)",
+    boxShadow: "0 0 0 1px rgba(0,0,0,0.1)",
   },
   legendLabel: {
     fontSize: 12,
-    color: "var(--c-text-primary)",
+    color: "#191c1e",
     fontWeight: 500,
   },
   legendNote: {
-    fontSize: 11,
-    color: "var(--c-text-subtle)",
+    fontSize: 10,
+    color: "#9e9e9e",
     fontStyle: "italic",
-    marginTop: 5,
+    marginTop: 3,
     lineHeight: 1.4,
+  },
+  // FAB — zoom-to-crisis, bottom-right of map area
+  fab: {
+    position: "absolute",
+    bottom: 24,
+    right: 16,
+    zIndex: 10,
+    width: 52,
+    height: 52,
+    borderRadius: "50%",
+    border: "none",
+    cursor: "pointer",
+    background: "linear-gradient(135deg, #00508a 0%, #0468b1 100%)",
+    color: "#fff",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    boxShadow: "0 4px 16px rgba(0,80,138,0.35)",
+    transition: "opacity 0.15s, transform 0.15s",
   },
 };
 
-// Suppress unused import warning — DAMAGE_LABELS used in legend via inline array
+// Suppress unused-import warning — DAMAGE_LABELS kept for future legend expansion.
 void DAMAGE_LABELS;

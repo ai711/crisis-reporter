@@ -162,7 +162,7 @@ npx expo run:android   # Run on connected Android device/emulator
 ### Services (backend/app/services/)
 - `encryption.py` — `encrypt_field(str)→bytes`, `decrypt_field(bytes)→str`, `hash_field(str)→str` (SHA-256). All PII stored as `*_encrypted` + `*_hash` column pairs.
 - `storage.py` — `StorageService` ABC with `LocalFileSystemStorage` and `CloudflareR2Storage`. Factory `get_storage_service()` reads `STORAGE_BACKEND` env var. A singleton `storage_service` is created at import time.
-- `auto_flagging.py` — Runs as a BackgroundTask. Thresholds are a module-level dict updated via `PATCH /api/flag-rules`. Flagging order: blocked device → blocked IP → same-IP device farm → rapid submission → duplicate → green.
+- `auto_flagging.py` — Runs as a BackgroundTask immediately after each report submission. Thresholds are a module-level dict (`_thresholds`) updated at runtime via `PATCH /api/flag-rules`. Full 9-rule evaluation order documented in the Auto-Flagging Order section below. On Green/Orange outcome, calls `get_or_create_property` to link the report to its property record and sets `report.property_id`.
 - `dependencies.py` — FastAPI dependency injectors: `get_current_dashboard_user`, `get_current_reporter`, `get_optional_reporter`, `require_admin`, `require_superadmin`, `require_section_access(section_key, require_edit)`.
 - `auth.py` — JWT encode/decode. Tokens carry a `ctx` claim (`"dashboard"` or `"reporter"`) to prevent cross-context token reuse.
 
@@ -249,18 +249,27 @@ Token refresh MUST happen silently at the HTTP client layer (axios interceptor).
 - Events: `report_confirmed`, `flag_changed`, `reporter_status_changed`, `review_queue_updated`, `heartbeat`
 
 ### Flag System
-- `grey` → received, auto-checks in progress (excluded from exports by default)
-- `green` → passed all checks (included)
-- `orange` → passed with notes (included)
-- `red` → requires human review (excluded by default)
+- `grey` → received, auto-checks in progress; excluded from exports by default; excluded from the Reports list by default (must explicitly filter to see)
+- `green` → passed all checks; included in map and exports
+- `orange` → manually approved from Red; included in map and exports
+- `red` → one or more auto-checks failed; requires human review; excluded from map and exports by default
+- `discarded` → manually marked as spam/invalid; permanently excluded from map, exports, and statistics; hidden from Reports list by default (must explicitly select Discarded filter to see); never deleted from the database
 
 ### Auto-Flagging Order
-1. Blocked device ID → Red
-2. Blocked IP → Red
-3. Same IP, multiple devices in 24 h → Red
-4. Rapid submission (5+ in 1 h) → Orange
-5. Duplicate (same device + building within 24 h) → Orange
-6. All pass → Green
+Runs in `backend/app/services/auto_flagging.py` as a FastAPI `BackgroundTask` (not ARQ) immediately after every report submission. Rules are evaluated in order; the first match that sets the flag to Red stops further evaluation. Thresholds are configurable at runtime via `PATCH /api/flag-rules`.
+
+1. **Blocked device ID** → Red — reporter's `device_id_hash` matches a manually-blocked reporter profile; also auto-blocks the submitting reporter with a pending confirmation window
+2. **IP blocked reporter match** → Red — ⚠️ **DISABLED**: requires `ip_address_hash` column on `Reporter` model which does not yet exist; TODO tracked in repo issues
+3. **No photo** → Red — report has zero photos attached (with a 20-second grace window for slow uploads on non-queued reports)
+4. **No location** → Red — report has neither GPS coordinates nor a text address
+5. **Coordinated GPS duplicate** → Red — a *different* reporter submitted from within ~100 m (configurable via `duplicate_radius_degrees`) in the last 24 h (configurable via `duplicate_window_hours`)
+6. **Rapid submission** → Red + 24 h device pause — same reporter submitted ≥ 5 reports (configurable via `rapid_submission_count`) in the last 1 h (configurable via `rapid_submission_window_hours`); also applies a 24-hour submission pause to that reporter profile
+7. **IP country mismatch** → Red — submission IP geolocates to a different country than the reporter's selected country; only runs when `ip_address_encrypted` is set; stores `submission_ip`, `geolocated_country`, `reporter_selected_country` in flag metadata for reviewer context; VPN usage may produce false positives
+8. **Same IP, multiple device IDs** → Red — ≥ `SAME_IP_DEVICE_THRESHOLD` distinct reporter IDs submitted from the same IP hash in the last 24 h; stores `other_reporter_ids` list in flag metadata so reviewers can assess coordinated spam vs. legitimate shared network
+9. **Duplicate image** → Red — a photo attached to this report has the same SHA-256 hash as a photo on a previous report; stores `matching_report_id` and `matching_report_serial_number` in flag metadata for reviewer comparison
+10. **All pass** → Green — report appears on the map immediately and is included in all exports
+
+**Property creation** — when a report reaches Green or Orange (either automatically or via manual approval), `get_or_create_property` runs in a separate session to create or update the property record and set `report.property_id`. This links the report to its Location Page.
 
 ### Multilingual
 - 6 UN languages: ar, zh, en, fr, ru, es (all `is_protected=TRUE`, cannot be deleted)
@@ -337,6 +346,18 @@ ALLOWED_ORIGINS     JSON array of allowed CORS origins
 - Dev: local FastAPI + PostgreSQL + Redis (Docker or native)
 - Production: Railway (managed PostgreSQL + Redis + TLS auto-provisioned)
 - Photos: Cloudflare R2 in production
+
+## Known Data Model Gaps — Pending Future Work
+
+These are confirmed gaps between the Chapter 3 design document and the current implementation. Do not implement without discussion.
+
+1. **`question_answers` — no required/appendix distinction**: The `question_answers` JSON column on `Report` is a flat list of `{question, answer}` pairs. There is no `is_required` or `is_appendix` field on each entry. Chapter 3 specifies that required Q1–Q4 answers and optional appendix answers should be shown in separate UI sections. This split is not currently possible without a data model change — either a schema change to the JSON column or a separate `appendix_answers` column. Skip this until the question model is extended.
+
+2. **Rule 2 (IP blocked reporter match) — disabled**: `auto_flagging.py` has a TODO comment at Rule 2. It requires `Reporter.ip_address_hash` which does not yet exist on the `reporters` table. When this column is added (requires migration), Rule 2 can be re-enabled.
+
+3. **Reporter-level IP address**: The `Reporter` model stores no IP. Submission IP is stored on the `Report` record (`ip_address_encrypted`, base64 Fernet-encoded). Displayed in the dashboard report detail view via decryption at read time. If per-reporter IP history is ever needed, a separate encrypted column must be added to `reporters`.
+
+4. **Photo EXIF fields**: `Photo` model stores `exif_timestamp`, `exif_latitude`, `exif_longitude`, `exif_device_make`, `exif_device_model`. These are extracted from photo EXIF at upload time. `exif_timestamp` is exposed in the dashboard report detail API (`PhotoSummary.exif_timestamp`). The others are stored but not currently surfaced in any API response.
 
 ## Documented Prototype Exceptions
 1. iOS native app: NOT built — Xcode requires macOS

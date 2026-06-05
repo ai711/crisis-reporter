@@ -31,6 +31,7 @@ class PhotoSummary(BaseModel):
     display_order: int
     was_compressed: bool
     created_at: datetime
+    exif_timestamp: Optional[datetime] = None
 
 
 class FlagEventSummary(BaseModel):
@@ -41,8 +42,15 @@ class FlagEventSummary(BaseModel):
     reason: Optional[str]
     metadata: Optional[dict]
     dashboard_user_id: Optional[str]
+    dashboard_user_name: Optional[str] = None
     is_emergency_override: bool = False
     created_at: datetime
+
+
+class ProjectRef(BaseModel):
+    id: str
+    serial_id: str
+    name: str
 
 
 class VersionHistoryItem(BaseModel):
@@ -90,6 +98,10 @@ class ReportDetail(BaseModel):
     photos: list[PhotoSummary]
     flag_events: list[FlagEventSummary]
     versions: list[VersionHistoryItem]
+    # New fields
+    property_id: Optional[str] = None
+    projects: list[ProjectRef] = []
+    submission_ip: Optional[str] = None
 
 
 class ReportListItem(BaseModel):
@@ -192,7 +204,13 @@ async def list_reports(
     if crisis_id:
         conditions.append(Report.crisis_id == crisis_id)
     if flag_status:
-        conditions.append(Report.flag_status == flag_status)
+        # Support comma-separated list of statuses (e.g. "red,orange")
+        statuses = [s.strip() for s in flag_status.split(",") if s.strip()]
+        if statuses:
+            conditions.append(Report.flag_status.in_(statuses))
+    else:
+        # Default: exclude discarded — must be explicitly filtered to see
+        conditions.append(Report.flag_status != "discarded")
     if platform:
         conditions.append(Report.platform == platform)
     if damage_level:
@@ -364,6 +382,7 @@ async def get_report_detail(
             display_order=p.display_order,
             was_compressed=p.was_compressed,
             created_at=p.created_at,
+            exif_timestamp=p.exif_timestamp,
         )
         for p in photos
     ]
@@ -377,11 +396,39 @@ async def get_report_detail(
             reason=f.reason,
             metadata=f.flag_metadata,
             dashboard_user_id=str(f.dashboard_user_id) if f.dashboard_user_id else None,
+            dashboard_user_name=user.full_name if user else None,
             is_emergency_override=f.is_emergency_override,
             created_at=f.created_at,
         )
-        for f, _ in flag_rows
+        for f, user in flag_rows
     ]
+
+    # Fetch linked projects (Crisis records via report_projects join table)
+    from app.models.report_project import ReportProject
+    from app.models.crisis import Crisis as CrisisModel
+    proj_result = await db.execute(
+        select(CrisisModel)
+        .join(ReportProject, ReportProject.crisis_id == CrisisModel.id)
+        .where(ReportProject.report_id == report.id)
+    )
+    projects = [
+        ProjectRef(
+            id=str(c.id),
+            serial_id=c.serial_id or "",
+            name=c.name,
+        )
+        for c in proj_result.scalars().all()
+    ]
+
+    # Decrypt submission IP (Fernet-encrypted, base64-stored)
+    submission_ip: str | None = None
+    if report.ip_address_encrypted:
+        try:
+            import base64
+            from app.services.encryption import decrypt_field
+            submission_ip = decrypt_field(base64.b64decode(report.ip_address_encrypted))
+        except Exception:
+            pass
 
     # Normalise question_answers — stored as list or dict in JSON column
     qa = report.question_answers
@@ -424,6 +471,9 @@ async def get_report_detail(
         photos=photo_list,
         flag_events=flag_event_list,
         versions=versions,
+        property_id=str(report.property_id) if report.property_id else None,
+        projects=projects,
+        submission_ip=submission_ip,
     )
 
 

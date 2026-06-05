@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "../stores/authStore";
 import api from "../services/api";
 import type { Crisis } from "../types";
@@ -22,21 +23,64 @@ interface NotificationsResponse {
   unread_count: number;
 }
 
+// ── Notification type metadata ────────────────────────────────────────────────
+
+const NOTIF_META: Record<string, { title: string; link: string; icon: React.ReactNode }> = {
+  review_queue_threshold: {
+    title: "Review Queue Alert",
+    link: "/review-queue",
+    icon: (
+      <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+        <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+      </svg>
+    ),
+  },
+  new_red_flagged_report: {
+    title: "New Red-Flagged Report",
+    link: "/review-queue",
+    icon: (
+      <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+        <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/>
+      </svg>
+    ),
+  },
+  reporter_auto_paused: {
+    title: "Reporter Auto-Paused",
+    link: "/reporters",
+    icon: (
+      <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+        <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="18" y1="8" x2="23" y2="13"/><line x1="23" y1="8" x2="18" y2="13"/>
+      </svg>
+    ),
+  },
+  high_volume_processing_delay: {
+    title: "Processing Delay",
+    link: "/map",
+    icon: (
+      <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+      </svg>
+    ),
+  },
+};
+
+function getNotifMeta(type_key: string) {
+  return NOTIF_META[type_key] ?? {
+    title: type_key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+    link: "/map",
+    icon: (
+      <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+        <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/>
+      </svg>
+    ),
+  };
+}
+
 // ── Bell SVG ──────────────────────────────────────────────────────────────────
 
 function BellIcon() {
   return (
-    <svg
-      width={20}
-      height={20}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
+    <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
       <path d="M13.73 21a2 2 0 0 1-3.46 0" />
     </svg>
@@ -57,22 +101,29 @@ function NotificationDropdown({
   onMarkRead,
   onMarkAllRead,
   onClose,
+  onNavigate,
 }: {
   notifications: Notification[];
   onMarkRead: (id: number) => void;
   onMarkAllRead: () => void;
   onClose: () => void;
+  onNavigate: (link: string) => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        onClose();
-      }
+    function handleOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
     }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
+    function handleEsc(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("mousedown", handleOutside);
+    document.addEventListener("keydown", handleEsc);
+    return () => {
+      document.removeEventListener("mousedown", handleOutside);
+      document.removeEventListener("keydown", handleEsc);
+    };
   }, [onClose]);
 
   function timeAgo(iso: string | null): string {
@@ -83,60 +134,119 @@ function NotificationDropdown({
     if (mins < 60) return `${mins}m ago`;
     const hours = Math.floor(mins / 60);
     if (hours < 24) return `${hours}h ago`;
-    return `${Math.floor(hours / 24)}d ago`;
+    const days = Math.floor(hours / 24);
+    if (days === 1) return "Yesterday";
+    return `${days}d ago`;
   }
 
   return (
     <div
       ref={ref}
+      role="dialog"
+      aria-label="Notifications"
       style={{
         position: "absolute",
         top: "calc(100% + 8px)",
         right: 0,
         width: 380,
-        maxHeight: 480,
-        background: "#fff",
-        border: "1px solid #e2e8f0",
-        borderRadius: 12,
-        boxShadow: "0 8px 32px rgba(0,0,0,0.12)",
+        maxHeight: 500,
+        background: "#ffffff",
+        borderRadius: 8,
+        boxShadow: "0 4px 20px rgba(8,27,57,0.06), 0 12px 40px rgba(8,27,57,0.10)",
+        outline: "1px solid rgba(193,199,210,0.2)",
         zIndex: 200,
         display: "flex",
         flexDirection: "column",
         overflow: "hidden",
+        fontFamily: "'Inter', sans-serif",
       }}
     >
-      <div style={{ padding: "14px 16px", borderBottom: "1px solid #e2e8f0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div style={{ fontSize: 14, fontWeight: 700, color: "#1A2B4A" }}>Notifications</div>
+      {/* Header */}
+      <div style={{ padding: "14px 16px", background: "#f2f4f7", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <span style={{ fontSize: 13, fontWeight: 700, color: "#191c1e", letterSpacing: "0.04em" }}>NOTIFICATIONS</span>
         {notifications.length > 0 && (
           <button
             onClick={onMarkAllRead}
-            style={{ fontSize: 12, color: "#0468B1", background: "none", border: "none", cursor: "pointer", padding: 0 }}
+            style={{ fontSize: 11, fontWeight: 600, color: "#00508a", background: "none", border: "none", cursor: "pointer", padding: 0, letterSpacing: "0.02em" }}
           >
             Mark all as read
           </button>
         )}
       </div>
+
+      {/* List */}
       <div style={{ overflowY: "auto", flex: 1 }}>
         {notifications.length === 0 ? (
-          <div style={{ padding: "32px 16px", textAlign: "center", fontSize: 13, color: "#a0aec0" }}>
+          <div style={{ padding: "36px 20px", textAlign: "center", fontSize: 13, color: "#717782" }}>
             No unread notifications
           </div>
         ) : (
-          notifications.map((n) => (
-            <div key={n.id} style={{ padding: "12px 16px", borderBottom: "1px solid #f0f4f8", display: "flex", gap: 12 }}>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 13, color: "#2d3748", lineHeight: 1.5 }}>{n.message}</div>
-                <div style={{ fontSize: 11, color: "#a0aec0", marginTop: 4 }}>{timeAgo(n.triggered_at)}</div>
-              </div>
-              <button
-                onClick={() => onMarkRead(n.id)}
-                style={{ fontSize: 11, color: "#0468B1", background: "none", border: "none", cursor: "pointer", padding: 0, flexShrink: 0, alignSelf: "flex-start" }}
+          notifications.map((n) => {
+            const meta = getNotifMeta(n.type_key);
+            return (
+              <div
+                key={n.id}
+                style={{
+                  display: "flex",
+                  gap: 12,
+                  padding: "12px 16px",
+                  borderLeft: "3px solid #00508a",
+                  background: "rgba(0,80,138,0.03)",
+                  marginBottom: 1,
+                  cursor: "pointer",
+                  transition: "background 0.12s",
+                }}
+                onClick={() => { onNavigate(meta.link); onClose(); }}
               >
-                Dismiss
-              </button>
-            </div>
-          ))
+                {/* Type icon */}
+                <div style={{
+                  width: 32, height: 32, borderRadius: 8,
+                  background: "rgba(0,80,138,0.08)",
+                  color: "#00508a",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  flexShrink: 0,
+                }}>
+                  {meta.icon}
+                </div>
+
+                {/* Content */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "#191c1e", marginBottom: 2 }}>{meta.title}</div>
+                  <div style={{ fontSize: 12, color: "#414751", lineHeight: 1.5 }}>{n.message}</div>
+                  <div style={{ fontSize: 11, color: "#717782", marginTop: 4 }}>{timeAgo(n.triggered_at)}</div>
+                </div>
+
+                {/* Mark as read */}
+                <button
+                  onClick={(e) => { e.stopPropagation(); onMarkRead(n.id); }}
+                  title="Mark as read"
+                  style={{
+                    background: "none", border: "none", cursor: "pointer",
+                    color: "#717782", padding: 4, flexShrink: 0,
+                    alignSelf: "flex-start", borderRadius: 4,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    transition: "color 0.12s",
+                  }}
+                  aria-label="Mark as read"
+                >
+                  <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="20 6 9 17 4 12"/>
+                  </svg>
+                </button>
+              </div>
+            );
+          })
         )}
+      </div>
+
+      {/* Footer — View all */}
+      <div style={{ padding: "10px 16px", background: "#f2f4f7", textAlign: "center" }}>
+        <button
+          onClick={() => { onNavigate("/notifications"); onClose(); }}
+          style={{ fontSize: 12, fontWeight: 600, color: "#00508a", background: "none", border: "none", cursor: "pointer", padding: 0 }}
+        >
+          View all notifications →
+        </button>
       </div>
     </div>
   );
@@ -147,6 +257,7 @@ function NotificationDropdown({
 export default function Header({ title, subtitle }: HeaderProps) {
   const { user, activeCrisisId, setActiveCrisis, clearActiveCrisis } =
     useAuthStore();
+  const navigate = useNavigate();
 
   const [profileOpen, setProfileOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
@@ -236,10 +347,11 @@ export default function Header({ title, subtitle }: HeaderProps) {
                   position: "absolute",
                   top: 2,
                   right: 2,
-                  width: 16,
+                  minWidth: 16,
                   height: 16,
-                  borderRadius: "50%",
-                  background: "#e53e3e",
+                  padding: "0 3px",
+                  borderRadius: 999,
+                  background: "#ba1a1a",
                   color: "#fff",
                   fontSize: 10,
                   fontWeight: 700,
@@ -247,8 +359,9 @@ export default function Header({ title, subtitle }: HeaderProps) {
                   alignItems: "center",
                   justifyContent: "center",
                   lineHeight: 1,
+                  boxSizing: "border-box",
                 }}>
-                  {unreadCount > 9 ? "9+" : unreadCount}
+                  {unreadCount > 99 ? "99+" : unreadCount}
                 </span>
               )}
             </button>
@@ -258,6 +371,7 @@ export default function Header({ title, subtitle }: HeaderProps) {
                 onMarkRead={(id) => { markReadMutation.mutate(id); }}
                 onMarkAllRead={() => markAllReadMutation.mutate()}
                 onClose={() => setNotifOpen(false)}
+                onNavigate={(link) => navigate(link)}
               />
             )}
           </div>

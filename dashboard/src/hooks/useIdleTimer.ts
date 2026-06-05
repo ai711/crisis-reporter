@@ -23,7 +23,7 @@ export function useIdleTimer(timeoutMinutes: number): void {
       // to prevent circular dependency risks.
       localStorage.removeItem("dash_access_token");
       localStorage.removeItem("dash_refresh_token");
-      window.location.href = "/login?reason=expired";
+      window.location.href = "/login?reason=session_expired";
     };
 
     const reset = () => {
