@@ -3,7 +3,6 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "../stores/authStore";
 import api from "../services/api";
-import type { Crisis } from "../types";
 import ProfilePanel from "./ProfilePanel";
 
 interface HeaderProps {
@@ -85,13 +84,6 @@ function BellIcon() {
       <path d="M13.73 21a2 2 0 0 1-3.46 0" />
     </svg>
   );
-}
-
-// ── Crises fetcher ────────────────────────────────────────────────────────────
-
-async function fetchCrises(): Promise<Crisis[]> {
-  const response = await api.get<Crisis[]>("/api/crises");
-  return response.data;
 }
 
 // ── Notification dropdown ─────────────────────────────────────────────────────
@@ -255,19 +247,12 @@ function NotificationDropdown({
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function Header({ title, subtitle }: HeaderProps) {
-  const { user, activeCrisisId, setActiveCrisis, clearActiveCrisis } =
-    useAuthStore();
+  const { user } = useAuthStore();
   const navigate = useNavigate();
 
   const [profileOpen, setProfileOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const queryClient = useQueryClient();
-
-  const { data: crises = [] } = useQuery<Crisis[]>({
-    queryKey: ["crises-header"],
-    queryFn: fetchCrises,
-    staleTime: 1000 * 60 * 5,
-  });
 
   const { data: notifData } = useQuery<NotificationsResponse>({
     queryKey: ["notifications"],
@@ -294,16 +279,6 @@ export default function Header({ title, subtitle }: HeaderProps) {
   const unreadCount = notifData?.unread_count ?? 0;
   const notifications = notifData?.notifications ?? [];
 
-  const handleCrisisChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const val = e.target.value;
-    if (!val) {
-      clearActiveCrisis();
-    } else {
-      const crisis = crises.find((c) => c.id === val);
-      if (crisis) setActiveCrisis(crisis.id, crisis.name);
-    }
-  };
-
   const avatarLetter = user?.full_name?.charAt(0)?.toUpperCase() ?? "U";
 
   return (
@@ -313,23 +288,6 @@ export default function Header({ title, subtitle }: HeaderProps) {
         <div style={styles.left}>
           <h1 style={styles.title}>{title}</h1>
           {subtitle && <p style={styles.subtitle}>{subtitle}</p>}
-        </div>
-
-        {/* Centre-right: project / crisis dropdown */}
-        <div style={styles.centre}>
-          <select
-            style={styles.crisisDropdown}
-            value={activeCrisisId ?? ""}
-            onChange={handleCrisisChange}
-            aria-label="Select active project"
-          >
-            <option value="">All Projects</option>
-            {crises.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
         </div>
 
         {/* Right: bell + full name + avatar */}
@@ -421,7 +379,7 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 16,
   },
   left: {
-    flex: "0 0 auto",
+    flex: "1 1 auto",
     minWidth: 0,
   },
   title: {
@@ -435,25 +393,6 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 12,
     color: "#666",
     margin: "2px 0 0",
-  },
-  centre: {
-    flex: "1 1 auto",
-    display: "flex",
-    justifyContent: "flex-end",
-    paddingRight: 8,
-  },
-  crisisDropdown: {
-    border: "1.5px solid #d0dce8",
-    borderRadius: 8,
-    padding: "6px 32px 6px 12px",
-    fontSize: 13,
-    fontWeight: 500,
-    color: "#1A2B4A",
-    background: "#f4f8fc",
-    cursor: "pointer",
-    outline: "none",
-    maxWidth: 260,
-    appearance: "auto" as React.CSSProperties["appearance"],
   },
   right: {
     flex: "0 0 auto",

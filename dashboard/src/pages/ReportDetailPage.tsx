@@ -20,6 +20,8 @@ import { useHasAccess } from "../hooks/useHasAccess";
 import type { ReportDetail, FlagStatus, FlagEvent, VersionHistoryItem, QuestionAnswer, ReportProjectRef } from "../types";
 import { formatDamageLevel, formatDateTime } from "../utils/formatters";
 
+const MAPTILER_KEY = import.meta.env.VITE_MAPTILER_KEY || "";
+
 // ── Colour maps (design system) ───────────────────────────────────────────────
 
 const FLAG_COLORS: Record<FlagStatus, string> = {
@@ -69,18 +71,19 @@ const CLOSED_MODAL: ModalState = {
 
 // ── Authenticated photo ───────────────────────────────────────────────────────
 
-function useAuthPhoto(reportId: string, photoId: string, photoUrl: string) {
+function useAuthPhoto(reportId: string, photoId: string) {
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
 
   useEffect(() => {
     let objectUrl: string | null = null;
+    setBlobUrl(null);
     api
       .get(`/api/dashboard/reports/${reportId}/photos/${photoId}`, { responseType: "blob" })
       .then((res) => {
         objectUrl = URL.createObjectURL(res.data as Blob);
         setBlobUrl(objectUrl);
       })
-      .catch(() => { setBlobUrl(photoUrl); });
+      .catch(() => { setBlobUrl("error"); });
     return () => { if (objectUrl) URL.revokeObjectURL(objectUrl); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reportId, photoId]);
@@ -88,12 +91,26 @@ function useAuthPhoto(reportId: string, photoId: string, photoUrl: string) {
   return blobUrl;
 }
 
-function AuthPhoto({ reportId, photoId, photoUrl }: { reportId: string; photoId: string; photoUrl: string }) {
-  const blobUrl = useAuthPhoto(reportId, photoId, photoUrl);
+function AuthPhoto({ reportId, photoId }: { reportId: string; photoId: string }) {
+  const blobUrl = useAuthPhoto(reportId, photoId);
   if (!blobUrl) {
     return (
-      <div style={{ width: "100%", height: "100%", background: "#f2f4f7", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: "#9ca3af" }}>
-        Loading…
+      <div style={{ width: "100%", height: "100%", background: "#f2f4f7", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6 }}>
+        <svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="#c1c7d2" strokeWidth={1.5}>
+          <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/>
+          <path d="m21 15-5-5L5 21"/>
+        </svg>
+        <span style={{ fontSize: 10, color: "#9ca3af" }}>Loading…</span>
+      </div>
+    );
+  }
+  if (blobUrl === "error") {
+    return (
+      <div style={{ width: "100%", height: "100%", background: "#fef2f2", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6 }}>
+        <svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="#fca5a5" strokeWidth={1.5}>
+          <circle cx="12" cy="12" r="9"/><path d="m15 9-6 6M9 9l6 6"/>
+        </svg>
+        <span style={{ fontSize: 10, color: "#ef4444" }}>Photo unavailable</span>
       </div>
     );
   }
@@ -625,7 +642,7 @@ export default function ReportDetailPage() {
                     <div style={styles.photoGrid}>
                       {report.photos.map((photo, i) => (
                         <div key={photo.id} style={styles.photoWrapper}>
-                          <AuthPhoto reportId={report.id} photoId={photo.id} photoUrl={photo.url} />
+                          <AuthPhoto reportId={report.id} photoId={photo.id} />
                           <div style={styles.photoOverlay}>
                             <span style={styles.photoLabel}>Photo {i + 1}</span>
                             {photo.exif_timestamp && (
@@ -662,34 +679,41 @@ export default function ReportDetailPage() {
                 <section style={styles.primarySection}>
                   <SectionTitle>Geospatial Intelligence</SectionTitle>
                   <div style={styles.mapArea}>
-                    {/* Styled map placeholder */}
-                    <div style={styles.mapPlaceholder}>
-                      <MapPin size={36} color="#c1c7d2" />
-                      <span style={{ fontSize: 11, color: "#9ca3af", marginTop: 6 }}>
-                        {report.gps_latitude ? "Location recorded" : "No location data"}
-                      </span>
-                    </div>
-                    {/* Coordinate overlay card */}
-                    {report.gps_latitude && report.gps_longitude && (
-                      <div style={styles.mapOverlayCard}>
-                        <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
-                          <MapPin size={16} color="#ba1a1a" style={{ flexShrink: 0, marginTop: 2 }} />
-                          <div>
-                            {report.infrastructure_name && (
-                              <p style={{ fontSize: 12, fontWeight: 700, color: "#191c1e", margin: "0 0 3px" }}>
-                                {report.infrastructure_name}
+                    {report.gps_latitude && report.gps_longitude && MAPTILER_KEY ? (
+                      <>
+                        <img
+                          src={`https://api.maptiler.com/maps/streets/static/${report.gps_longitude.toFixed(5)},${report.gps_latitude.toFixed(5)},15/680x220.png?key=${MAPTILER_KEY}`}
+                          alt="Location map"
+                          style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                        />
+                        {/* Coordinate overlay card */}
+                        <div style={styles.mapOverlayCard}>
+                          <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+                            <MapPin size={16} color="#ba1a1a" style={{ flexShrink: 0, marginTop: 2 }} />
+                            <div>
+                              {report.infrastructure_name && (
+                                <p style={{ fontSize: 12, fontWeight: 700, color: "#191c1e", margin: "0 0 3px" }}>
+                                  {report.infrastructure_name}
+                                </p>
+                              )}
+                              {report.location_address && (
+                                <p style={{ fontSize: 11, color: "#717782", margin: "0 0 6px", lineHeight: 1.4 }}>
+                                  {report.location_address}
+                                </p>
+                              )}
+                              <p style={{ fontSize: 10, fontFamily: "monospace", color: "#00508a", fontWeight: 700, margin: 0 }}>
+                                {report.gps_latitude.toFixed(5)}°, {report.gps_longitude.toFixed(5)}°
                               </p>
-                            )}
-                            {report.location_address && (
-                              <p style={{ fontSize: 11, color: "#717782", margin: "0 0 6px", lineHeight: 1.4 }}>
-                                {report.location_address}
-                              </p>
-                            )}
-                            <p style={{ fontSize: 10, fontFamily: "monospace", color: "#00508a", fontWeight: 700, margin: 0 }}>
-                              {report.gps_latitude.toFixed(4)}° N, {report.gps_longitude.toFixed(4)}° E
-                            </p>
+                            </div>
                           </div>
                         </div>
+                      </>
+                    ) : (
+                      <div style={styles.mapPlaceholder}>
+                        <MapPin size={36} color="#c1c7d2" />
+                        <span style={{ fontSize: 11, color: "#9ca3af", marginTop: 6 }}>
+                          {report.gps_latitude ? "Location recorded" : "No GPS coordinates"}
+                        </span>
                       </div>
                     )}
                   </div>
@@ -816,7 +840,7 @@ export default function ReportDetailPage() {
               <h2 style={styles.cardTitle}>Technical Metadata</h2>
               <MetaRow label="Report ID" value={reportLabel} mono />
               <MetaRow
-                label="Validation Status"
+                label="Flag Status"
                 value={
                   <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
                     <span style={{ width: 6, height: 6, borderRadius: "50%", background: flagColor, display: "inline-block" }} />
@@ -824,17 +848,20 @@ export default function ReportDetailPage() {
                   </span>
                 }
               />
-              <MetaRow label="Reception Time" value={formatDateTime(report.created_at)} />
+              <MetaRow label="Received At" value={formatDateTime(report.created_at)} />
+              <MetaRow label="Submitted At" value={formatDateTime(report.submitted_at)} />
               <MetaRow
-                label="Submission Mode"
-                value={report.reporter_platform || "—"}
-                noBorder={!report.was_queued && !report.question_package_version}
+                label="Platform"
+                value={report.platform || "—"}
               />
+              {report.app_version && (
+                <MetaRow label="App Version" value={report.app_version} mono />
+              )}
               {report.was_queued && (
-                <MetaRow label="Was Queued" value="Yes (offline sync)" />
+                <MetaRow label="Offline Queue" value="Yes — synced from device" />
               )}
               {report.question_package_version && (
-                <MetaRow label="Package Version" value={report.question_package_version} mono noBorder />
+                <MetaRow label="Q Package" value={report.question_package_version} mono noBorder />
               )}
             </div>
 
@@ -869,12 +896,15 @@ export default function ReportDetailPage() {
                 </div>
                 <div>
                   <p style={{ fontSize: 13, fontWeight: 700, color: "#191c1e", margin: 0 }}>
-                    {report.reporter_id
-                      ? (report.reporter_display_id != null ? `Reporter #${report.reporter_display_id}` : "Anonymous User")
-                      : "Anonymous User"}
+                    {report.reporter_display_id != null
+                      ? `Reporter #${report.reporter_display_id}`
+                      : report.reporter_id
+                        ? `Reporter ${report.reporter_id.slice(0, 8).toUpperCase()}`
+                        : "Unknown Reporter"}
                   </p>
                   <p style={{ fontSize: 10, color: "#717782", textTransform: "uppercase", letterSpacing: 0.5, margin: "3px 0 0" }}>
-                    {report.reporter_id ? report.reporter_id.slice(0, 8).toUpperCase() : "Device only"}
+                    {report.reporter_is_verified ? "Verified profile" : "Anonymous profile"}
+                    {report.reporter_id ? ` · ${report.reporter_id.slice(0, 12).toUpperCase()}` : ""}
                   </p>
                 </div>
               </div>

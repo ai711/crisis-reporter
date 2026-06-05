@@ -192,7 +192,35 @@ export default function ReportsPage() {
       const response = await api.get("/api/dashboard/reports", { params: queryParams() });
       return response.data;
     },
-    enabled: !!activeCrisisId,
+  });
+
+  // Fetch status-level counts for the stat cards (no pagination, just counts per flag)
+  const { data: statsData } = useQuery<{ counts: Record<string, number>; total: number }>({
+    queryKey: ["reports-stats", activeCrisisId, filters],
+    queryFn: async () => {
+      const baseParams: Record<string, string> = { limit: "1" };
+      if (activeCrisisId) baseParams.crisis_id = activeCrisisId;
+      if (filters.search) baseParams.q = filters.search;
+      if (filters.country) baseParams.country = filters.country;
+      if (filters.dateFrom) baseParams.date_from = filters.dateFrom;
+      if (filters.dateTo) baseParams.date_to = filters.dateTo;
+      if (filters.damageLevels.length > 0) baseParams.damage_level = filters.damageLevels.join(",");
+      if (filters.infrastructureTypes.length > 0) baseParams.infrastructure_type = filters.infrastructureTypes.join(",");
+      if (filters.crisisTypes.length > 0) baseParams.crisis_type = filters.crisisTypes.join(",");
+
+      const statuses = ["green", "orange", "red", "grey", "discarded"];
+      const results = await Promise.all(
+        statuses.map(async (s) => {
+          const res = await api.get<ReportListResponse>("/api/dashboard/reports", {
+            params: { ...baseParams, flag_status: s },
+          });
+          return [s, res.data.total] as [string, number];
+        })
+      );
+      const counts: Record<string, number> = Object.fromEntries(results);
+      return { counts, total: Object.values(counts).reduce((a, b) => a + b, 0) };
+    },
+    staleTime: 1000 * 30,
   });
 
   // ── Pagination handlers ────────────────────────────────────────────────────
@@ -403,21 +431,6 @@ export default function ReportsPage() {
                 )}
               </div>
 
-              {/* Project */}
-              <div style={{ position: "relative" }}>
-                <button style={styles.chip} onClick={() => openChip("project")}>
-                  Project <ChevronDown size={12} />
-                </button>
-                {activeFilterChip === "project" && (
-                  <div style={{ ...styles.chipDropdown, minWidth: 256 }}>
-                    <div style={styles.dropdownTitle}>Project Filter</div>
-                    <p style={{ fontSize: 12, color: "#717782", margin: 0, lineHeight: 1.6 }}>
-                      Use the project dropdown in the header to filter reports by project.
-                    </p>
-                  </div>
-                )}
-              </div>
-
               {/* Damage Level */}
               <div style={{ position: "relative" }}>
                 <button
@@ -598,38 +611,39 @@ export default function ReportsPage() {
         <div style={styles.statsGrid}>
           <div style={{ ...styles.statCard, borderLeft: "4px solid #00508a" }}>
             <p style={styles.statLabel}>Total Reports</p>
-            <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
-              <span style={styles.statValue}>{data ? data.total.toLocaleString() : "—"}</span>
-            </div>
+            <span style={styles.statValue}>{statsData ? statsData.total.toLocaleString() : (data ? data.total.toLocaleString() : "—")}</span>
+            <p style={styles.statSub}>All statuses</p>
           </div>
           <div style={{ ...styles.statCard, borderLeft: "4px solid #005a2c" }}>
             <p style={styles.statLabel}>Green Flagged</p>
-            <span style={{ ...styles.statValue, color: "#005a2c" }}>—</span>
-            <p style={styles.statSub}>Verified &amp; Safe</p>
+            <span style={{ ...styles.statValue, color: "#005a2c" }}>
+              {statsData ? statsData.counts.green.toLocaleString() : "—"}
+            </span>
+            <p style={styles.statSub}>Verified &amp; safe</p>
           </div>
           <div style={{ ...styles.statCard, borderLeft: "4px solid #f97316" }}>
             <p style={styles.statLabel}>Orange Flagged</p>
-            <span style={{ ...styles.statValue, color: "#f97316" }}>—</span>
-            <p style={styles.statSub}>Caution Advised</p>
+            <span style={{ ...styles.statValue, color: "#f97316" }}>
+              {statsData ? statsData.counts.orange.toLocaleString() : "—"}
+            </span>
+            <p style={styles.statSub}>Manually approved</p>
           </div>
           <div style={{ ...styles.statCard, borderLeft: "4px solid #ba1a1a", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
             <div>
               <p style={styles.statLabel}>Red Flagged</p>
-              <span style={{ ...styles.statValue, color: "#ba1a1a" }}>—</span>
+              <span style={{ ...styles.statValue, color: "#ba1a1a" }}>
+                {statsData ? statsData.counts.red.toLocaleString() : "—"}
+              </span>
             </div>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 10 }}>
-              <span style={styles.statSub}>Pending Review</span>
+              <span style={styles.statSub}>Pending review</span>
               <a href="/review-queue" style={styles.reviewNowLink}>Review Now</a>
             </div>
           </div>
         </div>
 
         {/* ── Table + pagination ───────────────────────────────────────── */}
-        {!activeCrisisId ? (
-          <div style={styles.emptyState}>
-            Select a project from the header to view reports.
-          </div>
-        ) : isLoading ? (
+        {isLoading ? (
           <div style={styles.loading}>Loading reports…</div>
         ) : (
           <div style={styles.tableCard}>
@@ -765,7 +779,7 @@ export default function ReportsPage() {
                                 : report.reporter_id.slice(0, 8).toUpperCase()}
                             </span>
                           ) : (
-                            <span style={styles.anonymousCell}>Anonymous</span>
+                            <span style={{ fontSize: 13, color: "#9ca3af" }}>—</span>
                           )}
                         </td>
 
