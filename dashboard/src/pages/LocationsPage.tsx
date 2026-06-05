@@ -88,9 +88,20 @@ const PAGE_SIZES = [100, 200, 300, 400, 500];
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
+function SearchIcon() {
+  return (
+    <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }} aria-hidden="true">
+      <circle cx="11" cy="11" r="8" />
+      <line x1="21" y1="21" x2="16.65" y2="16.65" />
+    </svg>
+  );
+}
+
 export default function LocationsPage() {
   const [search, setSearch] = useState("");
   const [showUnreviewed, setShowUnreviewed] = useState(false);
+  const [hoveredRow, setHoveredRow] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<SortField>("most_recent_report_at");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [pageSize, setPageSize] = useState(100);
@@ -230,18 +241,38 @@ export default function LocationsPage() {
 
   return (
     <div style={styles.page}>
-      <Header title="Location Page" subtitle="Building and area-level location data" />
+      <Header title="Location Page" subtitle="Building and area-level damage data" />
 
       <div style={styles.body}>
+        {/* ── Page context strip ── */}
+        <div style={styles.contextStrip}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={styles.contextText}>
+              Properties with qualifying (green/orange) reports
+            </span>
+            {activeFilterCount > 0 && (
+              <span style={styles.activeFiltersChip}>
+                {activeFilterCount} filter{activeFilterCount !== 1 ? "s" : ""} active
+              </span>
+            )}
+          </div>
+          <span style={styles.contextCount}>
+            {total > 0 ? `${total.toLocaleString()} properties` : ""}
+          </span>
+        </div>
+
         {/* ── Toolbar ── */}
         <div style={styles.toolbar}>
-          <input
-            style={styles.searchInput}
-            type="text"
-            placeholder="Search by property name, address, or Property ID"
-            value={search}
-            onChange={(e) => { setSearch(e.target.value); resetPagination(); }}
-          />
+          <div style={styles.searchWrap}>
+            <span style={styles.searchIcon}><SearchIcon /></span>
+            <input
+              style={styles.searchInput}
+              type="text"
+              placeholder="Search by property name, address, or Property ID…"
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); resetPagination(); }}
+            />
+          </div>
 
           <div style={{ position: "relative" }} ref={filterRef}>
             <button
@@ -268,9 +299,17 @@ export default function LocationsPage() {
               <div style={styles.filterPanel}>
                 <div style={styles.filterTitle}>Filter Properties</div>
 
-                {/* Conflict warning */}
-                <div style={styles.filterSection}>
-                  <label style={styles.filterCheckLabel}>
+                {/* Conflict warning — highlighted as primary QA filter */}
+                <div style={{
+                  ...styles.filterSection,
+                  background: pendingFilters.conflict_only
+                    ? "rgba(245,166,35,0.10)"
+                    : "rgba(245,166,35,0.05)",
+                  border: `1.5px solid ${pendingFilters.conflict_only ? "rgba(245,166,35,0.5)" : "rgba(245,166,35,0.2)"}`,
+                  borderRadius: "var(--radius-md)",
+                  padding: "10px 12px",
+                }}>
+                  <label style={{ ...styles.filterCheckLabel, marginBottom: 0 }}>
                     <input
                       type="checkbox"
                       checked={pendingFilters.conflict_only}
@@ -279,9 +318,15 @@ export default function LocationsPage() {
                       }
                       style={{ marginRight: 8 }}
                     />
-                    <span style={{ color: "var(--c-flag-orange)", fontWeight: 500 }}>
-                      Properties with conflicting assessments
-                    </span>
+                    <div>
+                      <div style={{ color: "#92400e", fontWeight: 700, fontSize: "var(--text-sm)" }}>
+                        <AlertTriangleIcon size={13} />
+                        {" "}Properties with conflicting assessments
+                      </div>
+                      <div style={{ fontSize: "var(--text-xs)", color: "var(--c-text-muted)", marginTop: 3 }}>
+                        Show only properties where reporters disagree on damage level (≥25% minority)
+                      </div>
+                    </div>
                   </label>
                 </div>
 
@@ -534,6 +579,7 @@ export default function LocationsPage() {
               <tbody>
                 {items.map((prop) => {
                   const isUnreviewed = showUnreviewed && !prop.confirmed_status;
+                  const isHovered = hoveredRow === prop.property_id;
                   const dmgColor = prop.current_damage_level
                     ? DAMAGE_COLORS[prop.current_damage_level] ?? "var(--c-text-muted)"
                     : null;
@@ -546,8 +592,12 @@ export default function LocationsPage() {
                       key={prop.property_id}
                       style={{
                         ...styles.tr,
-                        background: isUnreviewed ? "rgba(245,166,35,0.06)" : "var(--c-surface-lowest)",
+                        background: isUnreviewed
+                          ? (isHovered ? "rgba(245,166,35,0.10)" : "rgba(245,166,35,0.05)")
+                          : (isHovered ? "rgba(4,104,177,0.03)" : "var(--c-surface-lowest)"),
                       }}
+                      onMouseEnter={() => setHoveredRow(prop.property_id)}
+                      onMouseLeave={() => setHoveredRow(null)}
                     >
                       {/* Property ID */}
                       <td style={styles.td}>
@@ -560,7 +610,7 @@ export default function LocationsPage() {
                             if (e.key === "Enter") window.open("/locations/" + prop.property_id, "_blank");
                           }}
                         >
-                          {prop.property_id.slice(0, 8)}…
+                          {prop.property_id.slice(0, 12)}…
                         </span>
                       </td>
 
@@ -697,27 +747,69 @@ const styles: Record<string, React.CSSProperties> = {
     flexDirection: "column",
     gap: 0,
   },
+  contextStrip: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: "8px 4px",
+    marginBottom: 12,
+  },
+  contextText: {
+    fontSize: "var(--text-xs)",
+    fontWeight: 600,
+    color: "var(--c-text-muted)",
+    textTransform: "uppercase" as const,
+    letterSpacing: "0.08em",
+  },
+  contextCount: {
+    fontSize: "var(--text-xs)",
+    color: "var(--c-text-subtle)",
+  },
+  activeFiltersChip: {
+    background: "rgba(4,104,177,0.1)",
+    color: "var(--c-primary-container)",
+    borderRadius: "var(--radius-pill)",
+    padding: "2px 10px",
+    fontSize: 10,
+    fontWeight: 700,
+    letterSpacing: "0.04em",
+  },
   toolbar: {
     background: "var(--c-surface-lowest)",
     borderRadius: "var(--radius-lg)",
-    padding: "12px 20px",
+    padding: "12px 16px",
     boxShadow: "var(--shadow-sm)",
-    marginBottom: 24,
+    marginBottom: 16,
     display: "flex",
     alignItems: "center",
-    gap: 12,
+    gap: 10,
     flexWrap: "wrap" as const,
+    border: "1px solid var(--c-border-ghost)",
+  },
+  searchWrap: {
+    flex: 1,
+    position: "relative" as const,
+    minWidth: 280,
+    display: "flex",
+    alignItems: "center",
+  },
+  searchIcon: {
+    position: "absolute" as const,
+    left: 10,
+    color: "var(--c-text-subtle)",
+    display: "flex",
+    alignItems: "center",
+    pointerEvents: "none" as const,
   },
   searchInput: {
-    flex: 1,
-    padding: "9px 14px",
+    width: "100%",
+    padding: "9px 14px 9px 32px",
     border: "1.5px solid var(--c-border)",
     borderRadius: "var(--radius-md)",
     fontSize: "var(--text-sm)",
     color: "var(--c-text-primary)",
     outline: "none",
     background: "var(--c-surface-lowest)",
-    minWidth: 280,
   },
   filterBtn: {
     display: "flex",
