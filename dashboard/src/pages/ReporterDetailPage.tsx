@@ -432,9 +432,13 @@ function ReportsSection({ reporterId }: { reporterId: string }) {
                     <td style={s.subTd}>
                       <button
                         style={s.linkBtn}
-                        onClick={() => window.open("/reports/" + r.id, "_blank")}
+                        onClick={() => r.id && window.open("/reports/" + r.id, "_blank")}
                       >
-                        {r.serial_number != null ? `#${r.serial_number}` : `${r.id.slice(0, 8)}…`}
+                        {r.serial_number != null
+                          ? `#${r.serial_number}`
+                          : r.id
+                            ? `${r.id.slice(0, 8)}…`
+                            : "Unknown"}
                       </button>
                     </td>
                     <td style={s.subTd}>{formatDateTime(r.created_at)}</td>
