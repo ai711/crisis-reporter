@@ -447,8 +447,10 @@ function ReportsSection({ reporterId }: { reporterId: string }) {
                     <td style={s.subTd}>{r.infrastructure_type || "—"}</td>
                     <td style={s.subTd}>{r.disaster_type || "—"}</td>
                     <td style={s.subTd}>
-                      <span className={flagChipClass(r.flag_status)}>
-                        {r.flag_status.charAt(0).toUpperCase() + r.flag_status.slice(1)}
+                      <span className={flagChipClass(r.flag_status ?? "")}>
+                        {r.flag_status
+                          ? r.flag_status.charAt(0).toUpperCase() + r.flag_status.slice(1)
+                          : "—"}
                       </span>
                     </td>
                   </tr>

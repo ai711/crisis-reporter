@@ -610,7 +610,7 @@ export default function LocationsPage() {
                             if (e.key === "Enter") window.open("/locations/" + prop.property_id, "_blank");
                           }}
                         >
-                          {prop.property_id.slice(0, 12)}…
+                          {(prop.property_id ?? "").slice(0, 12)}…
                         </span>
                       </td>
 
@@ -621,7 +621,9 @@ export default function LocationsPage() {
                       <td style={styles.td}>
                         {prop.address
                           ? prop.address
-                          : `${prop.latitude.toFixed(5)}, ${prop.longitude.toFixed(5)}`}
+                          : prop.latitude != null && prop.longitude != null
+                            ? `${prop.latitude.toFixed(5)}, ${prop.longitude.toFixed(5)}`
+                            : <span style={styles.muted}>No coordinates</span>}
                       </td>
 
                       {/* Country */}
