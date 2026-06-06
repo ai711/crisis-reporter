@@ -42,6 +42,7 @@ from app.routers import (
     countries,
     review_queue,
     notifications as notifications_router,
+    dashboard_sse,
 )
 from app.routers.question_packages import seed_initial_package
 from app.routers.language_packages import seed_string_keys
@@ -1179,3 +1180,4 @@ app.include_router(review_queue.router)
 app.include_router(dashboard_projects.router, prefix="/api")
 app.include_router(dashboard_users.router, prefix="/api")
 app.include_router(notifications_router.router)
+app.include_router(dashboard_sse.router)
