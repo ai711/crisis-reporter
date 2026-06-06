@@ -296,8 +296,13 @@ export default function ProjectDetailPage() {
     },
   });
 
-  const effectiveImportStatus =
-    importStatus?.import_status ?? project?.import_status ?? "complete";
+  // Guard: don't assume "complete" while project is still loading.
+  // Defaulting to "complete" too early causes the pins query to fire before
+  // we know the real status, which produces a 422 (crisis_id missing).
+  const effectiveImportStatus: string =
+    projectLoading || !project
+      ? "pending"
+      : (importStatus?.import_status ?? project.import_status ?? "complete");
 
   // ── Map refs & state ───────────────────────────────────────────────────
   const mapContainer = useRef<HTMLDivElement>(null);
@@ -317,16 +322,23 @@ export default function ProjectDetailPage() {
   }, []);
 
   const { data: pinsData } = useQuery({
-    queryKey: ["project-map-pins", serialId],
+    // Include project.id in key so the query re-runs once the project UUID is known.
+    queryKey: ["project-map-pins", serialId, project?.id],
     queryFn: async () => {
+      // crisis_id is required by the backend endpoint; project_serial_id is
+      // optional and used to scope pins to this project only.
       const res = await api.get("/api/dashboard/map/pins", {
-        params: { project_serial_id: serialId },
+        params: {
+          crisis_id: project!.id,
+          project_serial_id: serialId,
+        },
       });
       setLiveStatus("connected");
       setLastUpdated(new Date());
       return res.data as { pins: MapPin[]; total: number };
     },
-    enabled: !!serialId && effectiveImportStatus === "complete",
+    // Only fire once we have both the project UUID and a confirmed "complete" status.
+    enabled: !!serialId && !!project?.id && effectiveImportStatus === "complete",
     refetchInterval: 20000,
   });
 
@@ -845,25 +857,47 @@ export default function ProjectDetailPage() {
 
                   {effectiveImportStatus !== "complete" && (
                     <div style={ss.mapOverlay}>
-                      Map will populate once report import is complete.
+                      <div style={ss.mapOverlayInner}>
+                        <span
+                          className="material-symbols-outlined"
+                          style={{ fontSize: 36, color: "#9aa5b4", marginBottom: 10 }}
+                        >
+                          map
+                        </span>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: "#4a5568", marginBottom: 6 }}>
+                          {effectiveImportStatus === "running"
+                            ? "Import in progress…"
+                            : effectiveImportStatus === "failed"
+                            ? "Import failed"
+                            : "Import pending"}
+                        </div>
+                        <div style={{ fontSize: 13, color: "#9aa5b4" }}>
+                          {effectiveImportStatus === "failed"
+                            ? "Contact your administrator."
+                            : "The map will populate once report import is complete."}
+                        </div>
+                      </div>
                     </div>
                   )}
 
-                  <div
-                    style={{
-                      ...ss.liveIndicator,
-                      background: liveStatus === "connected"
-                        ? "rgba(255,255,255,0.97)"
-                        : "rgba(255,248,240,0.97)",
-                    }}
-                  >
-                    <div style={{ ...ss.liveDot, background: liveStatus === "connected" ? "#4caf50" : "#ff9800" }} />
-                    <span style={ss.liveText}>
-                      {liveStatus === "connected"
-                        ? `LIVE — LAST UPDATED ${secondsSince}s ago`
-                        : "LOADING MAP DATA"}
-                    </span>
-                  </div>
+                  {/* Only show the live indicator when import is complete */}
+                  {effectiveImportStatus === "complete" && (
+                    <div
+                      style={{
+                        ...ss.liveIndicator,
+                        background: liveStatus === "connected"
+                          ? "rgba(255,255,255,0.97)"
+                          : "rgba(255,248,240,0.97)",
+                      }}
+                    >
+                      <div style={{ ...ss.liveDot, background: liveStatus === "connected" ? "#4caf50" : "#ff9800" }} />
+                      <span style={ss.liveText}>
+                        {liveStatus === "connected"
+                          ? `LIVE — LAST UPDATED ${secondsSince}s ago`
+                          : "LOADING MAP DATA"}
+                      </span>
+                    </div>
+                  )}
 
                   <div style={ss.legend}>
                     <div style={ss.legendTitle}>Damage Level</div>
@@ -1417,15 +1451,25 @@ const ss: Record<string, React.CSSProperties> = {
   mapOverlay: {
     position: "absolute",
     inset: 0,
-    background: "rgba(255,255,255,0.82)",
+    // Fully opaque — hides the blank MapLibre canvas completely while import is pending
+    background: "#f0f4f8",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    fontSize: 14,
-    color: "#718096",
-    fontStyle: "italic",
     zIndex: 15,
     borderRadius: 4,
+  },
+  mapOverlayInner: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    textAlign: "center",
+    padding: "20px 32px",
+    background: "#fff",
+    borderRadius: 12,
+    border: "1px solid #e0e8f0",
+    boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
+    maxWidth: 320,
   },
   liveIndicator: {
     position: "absolute",
