@@ -1069,6 +1069,30 @@ async def lifespan(app: FastAPI):
     # Shared Redis connection on app state (used by soft-lock service and review queue)
     import redis.asyncio as aioredis
     app.state.redis = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
+    # Translation config diagnostic — logged every startup so misconfiguration
+    # is visible immediately rather than silently falling back to LibreTranslate.
+    if settings.TRANSLATION_PRIMARY == "google":
+        if settings.GOOGLE_TRANSLATE_API_KEY:
+            logger.info(
+                "Translation: primary=Google (key configured), fallback=LibreTranslate (%s)",
+                settings.LIBRETRANSLATE_URL or "(not set)",
+            )
+        else:
+            logger.error(
+                "Translation MISCONFIGURED: TRANSLATION_PRIMARY=google but "
+                "GOOGLE_TRANSLATE_API_KEY is not set — all translations will fall "
+                "back to LibreTranslate. Set GOOGLE_TRANSLATE_API_KEY in Railway env vars."
+            )
+    else:
+        logger.info(
+            "Translation: primary=LibreTranslate (%s)",
+            settings.LIBRETRANSLATE_URL or "(not set — will use public instance)",
+        )
+    if settings.LIBRETRANSLATE_URL and "libretranslate.com" in settings.LIBRETRANSLATE_URL:
+        logger.warning(
+            "Translation: LIBRETRANSLATE_URL points to public libretranslate.com — "
+            "severe rate limits apply. Set LIBRETRANSLATE_URL to your HF Space URL."
+        )
     # Background monitors
     task_stuck = asyncio.create_task(_stuck_report_loop())
     task_autoblock = asyncio.create_task(_auto_block_confirmation_loop())
