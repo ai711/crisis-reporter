@@ -158,7 +158,7 @@ function DamageField({ label, value, accentColor = "#e6e8eb" }: { label: string;
 function ImpactRow({ icon, title, value, isLast = false }: { icon: string; title: string; value: React.ReactNode; isLast?: boolean }) {
   return (
     <div style={{ display: "flex", gap: 14, paddingBottom: isLast ? 0 : 14, marginBottom: isLast ? 0 : 14, borderBottom: isLast ? "none" : "1px solid rgba(193,199,210,0.2)" }}>
-      <span style={{ fontSize: 18, flexShrink: 0, lineHeight: 1.4 }}>{icon}</span>
+      <span className="material-symbols-outlined" style={{ fontSize: 18, flexShrink: 0, color: "var(--c-primary-container)", fontVariationSettings: "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 20" }}>{icon}</span>
       <div>
         <p style={{ fontSize: 12, fontWeight: 700, color: "#191c1e", margin: "0 0 3px" }}>{title}</p>
         <p style={{ fontSize: 12, color: "#717782", lineHeight: 1.55, margin: 0 }}>{value || "—"}</p>
@@ -813,9 +813,9 @@ export default function ReportDetailPage() {
                 <section style={{ ...styles.primarySection, marginBottom: 0, paddingBottom: 0, borderBottom: "none" }}>
                   <SectionTitle>Community Impact Brief</SectionTitle>
                   <div style={styles.impactCard}>
-                    <ImpactRow icon="⚡" title="Electricity" value={electricityValue} />
-                    <ImpactRow icon="🏥" title="Health Services" value={healthValue} />
-                    <ImpactRow icon="🆘" title="Priority Needs" value={pressingNeedsValue} isLast />
+                    <ImpactRow icon="bolt" title="Electricity" value={electricityValue} />
+                    <ImpactRow icon="local_hospital" title="Health Services" value={healthValue} />
+                    <ImpactRow icon="priority_high" title="Priority Needs" value={pressingNeedsValue} isLast />
                   </div>
                 </section>
 
@@ -1107,7 +1107,7 @@ export default function ReportDetailPage() {
                           <div style={styles.reviewEntryHeader}>
                             <span style={styles.reviewAction}>
                               {e.is_emergency_override && (
-                                <span style={styles.emergencyOverrideBadge}>⚠ Emergency Override</span>
+                                <span style={styles.emergencyOverrideBadge}><span className="material-symbols-outlined" style={{ fontSize: 12, verticalAlign: "middle", marginRight: 3, fontVariationSettings: "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 20" }}>warning</span>Emergency Override</span>
                               )}
                               {e.flag_from
                                 ? `${FLAG_LABELS[e.flag_from] ?? e.flag_from} → ${FLAG_LABELS[e.flag_to] ?? e.flag_to}`
@@ -1197,7 +1197,7 @@ export default function ReportDetailPage() {
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center" }}>
           <div className="card card-padded" style={{ width: 480, borderRadius: "var(--radius-xl)" }}>
             <div style={{ fontSize: "var(--text-xl)", fontWeight: 700, marginBottom: 8, color: "var(--c-flag-red)" }}>
-              ⚠ Merge Duplicate Reports
+              <span className="material-symbols-outlined" style={{ fontSize: 20, verticalAlign: "middle", marginRight: 6, fontVariationSettings: "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 20" }}>warning</span>Merge Duplicate Reports
             </div>
             <div style={{ fontSize: "var(--text-sm)", color: "var(--c-text-secondary)", marginBottom: 16 }}>
               This will mark the current report as discarded and transfer its photos to the canonical report. This action cannot be undone.

@@ -450,14 +450,16 @@ async def get_reporter_reports(
 
     items = [
         {
-            "report_id": str(r.id),
+            "id": str(r.id),                        # frontend uses r.id
+            "serial_number": r.serial_number,
             "created_at": r.created_at.isoformat(),
             "country": reporter.country_code,
             "damage_level": r.damage_level,
+            "infrastructure_type": r.infrastructure_type,
             "infrastructure_types": r.infrastructure_types or (
                 [r.infrastructure_type] if r.infrastructure_type else []
             ),
-            "crisis_type": r.disaster_type,
+            "disaster_type": r.disaster_type,       # frontend uses r.disaster_type
             "flag_status": r.flag_status,
         }
         for r in reports

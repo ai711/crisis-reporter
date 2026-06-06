@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet, Dimensions,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet, Dimensions, Linking,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { MaterialIcons } from '@expo/vector-icons';
+import api from '../services/api';
 
 const { width: screenWidth } = Dimensions.get('window');
 const scale = (size: number) => Math.round(screenWidth / 375 * size);
@@ -31,12 +32,24 @@ const FAQ_ITEMS = [
     a: 'After submission you will see a confirmation screen with your report reference number. You can also view all your submitted reports in the My Reports section.',
   },
   {
+    q: 'How do I earn a Safety Training badge?',
+    a: 'Complete all three parts of Safety Tips — Part A covers all 9 disaster types, Part B covers reporting guidelines, Part C covers first aid. Then add an email or phone number to your profile. The badge is awarded automatically.',
+  },
+  {
+    q: 'What if my country is not in the list?',
+    a: 'Crisis Reporter is currently operational in countries where UNDP is actively responding to a crisis. If your country is not listed it means UNDP has not yet activated it. Check back during an active crisis event.',
+  },
+  {
     q: 'Can I edit a report after submitting it?',
     a: 'Reports cannot be edited after submission. If you need to update information, you can submit a new report for the same location. UNDP staff will see all reports for a location and consider the most recent.',
   },
   {
     q: 'What do the damage levels mean?',
     a: 'Minimal or No Damage: the building is structurally sound with only cosmetic damage. Partially Damaged: the building is repairable but should be used with caution. Completely Destroyed: the building is structurally unsafe.',
+  },
+  {
+    q: 'Is my data secure?',
+    a: 'Yes. All data is transmitted over encrypted connections and stored securely. Photos are anonymised before storage. Your personal details are never shared with third parties.',
   },
   {
     q: 'How do I contact UNDP about a report?',
@@ -48,6 +61,13 @@ export default function FAQScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const [openIndex, setOpenIndex] = useState<number | null>(null);
+  const [supportEmail, setSupportEmail] = useState('support@crisisreporter.org');
+
+  useEffect(() => {
+    api.get('/api/settings/public')
+      .then((r) => { if (r.data?.support_email) setSupportEmail(r.data.support_email); })
+      .catch(() => {});
+  }, []);
 
   return (
     <View style={styles.container}>
@@ -83,6 +103,17 @@ export default function FAQScreen() {
             )}
           </TouchableOpacity>
         ))}
+
+        {/* Contact Support */}
+        <View style={styles.contactSection}>
+          <Text style={styles.contactPrompt}>Still have questions?</Text>
+          <TouchableOpacity
+            onPress={() => Linking.openURL(`mailto:${supportEmail}`)}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.contactLink}>Contact Support</Text>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
     </View>
   );
@@ -128,5 +159,21 @@ const styles = StyleSheet.create({
     fontSize: scale(14),
     color: '#414751',
     lineHeight: scale(14) * 1.6,
+  },
+  contactSection: {
+    alignItems: 'center',
+    paddingVertical: 24,
+    paddingHorizontal: screenWidth * 0.05,
+  },
+  contactPrompt: {
+    fontSize: scale(13),
+    color: '#717782',
+    marginBottom: 6,
+  },
+  contactLink: {
+    fontSize: scale(14),
+    fontWeight: '700',
+    color: '#0468B1',
+    textDecorationLine: 'underline',
   },
 });

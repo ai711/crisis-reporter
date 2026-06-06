@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle, AlertTriangle, Lock } from "lucide-react";
+import { CheckCircle, AlertTriangle, Lock, ShieldAlert } from "lucide-react";
 import Header from "../components/Header";
 import { useAuthStore } from "../stores/authStore";
 import {
@@ -39,15 +39,15 @@ const PAGE_SIZE = 25;
 
 const FLAG_REASON_LABELS: Record<string, string> = {
   ip_country_mismatch:        "IP Country Mismatch",
-  same_ip_multiple_devices:   "Same IP Multiple Devices",
+  same_ip_multiple_devices:   "Multi-Device IP",
   duplicate_image:            "Duplicate Image",
-  coordinated_gps_duplicate:  "Coordinated GPS Duplicate",
-  high_submission_rate:       "High Submission Rate",
+  coordinated_gps_duplicate:  "GPS Duplicate",
+  high_submission_rate:       "High Rate",
   no_photos:                  "No Photos",
   no_location:                "No Location",
   blocked_device:             "Blocked Device",
   blocked_ip:                 "Blocked IP",
-  duplicate_submission:       "Duplicate Submission",
+  duplicate_submission:       "Duplicate",
 };
 
 const KNOWN_FLAG_REASONS = [
@@ -93,6 +93,18 @@ function damagePillColors(level: string | null): { bg: string; color: string } {
   return map[level ?? ""] ?? { bg: "var(--c-surface-low)", color: "var(--c-text-secondary)" };
 }
 
+function damageDotColor(level: string | null): string {
+  const map: Record<string, string> = {
+    complete:              "#DC2626",
+    completely_destroyed:  "#DC2626",
+    partial:               "#D97706",
+    partially_damaged:     "#D97706",
+    minimal:               "#16A34A",
+    minimal_or_no_damage:  "#16A34A",
+  };
+  return map[level ?? ""] ?? "#9CA3AF";
+}
+
 // ── Spinner ────────────────────────────────────────────────────────────────────
 
 function Spinner({ size = 28 }: { size?: number }) {
@@ -110,6 +122,26 @@ function Spinner({ size = 28 }: { size?: number }) {
   );
 }
 
+// ── DamageDot ─────────────────────────────────────────────────────────────────
+
+function DamageDot({ level }: { level: string | null }) {
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+      <span
+        style={{
+          width: 8,
+          height: 8,
+          borderRadius: "50%",
+          background: damageDotColor(level),
+          flexShrink: 0,
+          display: "inline-block",
+        }}
+      />
+      <span>{formatDamageLevel(level)}</span>
+    </span>
+  );
+}
+
 // ── SoftLockBadge ──────────────────────────────────────────────────────────────
 
 function SoftLockBadge({
@@ -121,16 +153,21 @@ function SoftLockBadge({
   return (
     <span
       style={{
-        color: AMBER,
-        fontSize: 12,
-        display: "flex",
+        color: "#92400E",
+        fontSize: 11,
+        display: "inline-flex",
         alignItems: "center",
         gap: 4,
+        background: "#FEF3C7",
+        border: "1px solid #FDE68A",
+        borderRadius: 20,
+        padding: "2px 8px",
         whiteSpace: "nowrap" as const,
+        fontWeight: 500,
       }}
     >
-      <Lock size={12} />
-      In review by {softLock.reviewer_name}
+      <Lock size={10} />
+      {softLock.reviewer_name}
     </span>
   );
 }
@@ -171,14 +208,57 @@ function ConfirmActionModal({
     }
   }
 
+  const isRed    = actionColor === RED   || actionColor === "var(--c-flag-red)";
+  const isGreen  = actionColor === GREEN || actionColor === "var(--c-flag-green)";
+  const iconBg   = isRed ? "#FEF2F2" : isGreen ? "#F0FDF4" : "#FEF3C7";
+  const iconClr  = isRed ? "#DC2626" : isGreen ? "#16A34A" : "#D97706";
+  const ctxBg    = "var(--c-surface-low)";
+  const ctxBd    = "var(--c-border)";
+
   return (
     <div style={ms.backdrop}>
       <div style={ms.dialog}>
-        <h3 style={ms.title}>{title}</h3>
-        <p style={ms.desc}>{description}</p>
+        {/* Colored icon header */}
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, paddingBottom: 2 }}>
+          <div style={{
+            width: 52,
+            height: 52,
+            borderRadius: "50%",
+            background: iconBg,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            boxShadow: `0 0 0 6px ${iconBg}`,
+            border: `1.5px solid ${iconClr}22`,
+          }}>
+            {isRed ? (
+              <AlertTriangle size={24} color={iconClr} />
+            ) : isGreen ? (
+              <CheckCircle size={24} color={iconClr} />
+            ) : (
+              <ShieldAlert size={24} color={iconClr} />
+            )}
+          </div>
+          <h3 style={ms.title}>{title}</h3>
+        </div>
+
+        {/* Context card */}
+        <div style={{
+          background: ctxBg,
+          border: `1px solid ${ctxBd}`,
+          borderRadius: 8,
+          padding: "10px 14px",
+          fontSize: 13,
+          color: "var(--c-text-secondary)",
+          lineHeight: 1.6,
+        }}>
+          {description}
+        </div>
+
+        {/* Comment field */}
         <div style={ms.field}>
           <label style={ms.label}>
-            Comment{" "}
+            Review Comment{" "}
             <span style={{ color: "var(--c-text-muted)", fontWeight: 400 }}>
               (required, min 10 chars)
             </span>
@@ -189,10 +269,13 @@ function ConfirmActionModal({
             onChange={(e) => setComment(e.target.value)}
             rows={3}
             placeholder="Enter reason or notes…"
+            autoFocus
           />
           <span style={ms.charCount}>{comment.trim().length} / 10 min</span>
         </div>
+
         {error && <div style={ms.error}>{error}</div>}
+
         <div style={ms.actions}>
           <button style={ms.cancelBtn} onClick={onCancel} disabled={loading}>
             Cancel
@@ -201,7 +284,7 @@ function ConfirmActionModal({
             style={{
               ...ms.confirmBtn,
               background: actionColor,
-              opacity: canSubmit ? 1 : 0.5,
+              opacity: canSubmit ? 1 : 0.45,
               cursor: canSubmit ? "pointer" : "not-allowed",
             }}
             onClick={handleConfirm}
@@ -250,24 +333,97 @@ function ForceResolutionModal({
   return (
     <div style={ms.backdrop}>
       <div style={ms.dialog}>
-        <h3 style={ms.title}>Force Resolution</h3>
-        <p style={ms.desc}>
-          Manually resolve this stuck report to a final status. This cannot be
-          undone.
-        </p>
+        {/* Icon header */}
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, paddingBottom: 2 }}>
+          <div style={{
+            width: 52,
+            height: 52,
+            borderRadius: "50%",
+            background: "#EFF6FF",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            border: "1.5px solid rgba(4,104,177,0.15)",
+          }}>
+            <ShieldAlert size={24} color={BLUE} />
+          </div>
+          <h3 style={ms.title}>Force Resolution</h3>
+        </div>
+
+        {/* Warning context */}
+        <div style={{
+          background: "#FFFBEB",
+          border: "1px solid #FDE68A",
+          borderRadius: 8,
+          padding: "10px 14px",
+          fontSize: 13,
+          color: "#92400E",
+          lineHeight: 1.6,
+          display: "flex",
+          gap: 8,
+          alignItems: "flex-start",
+        }}>
+          <AlertTriangle size={14} color="#D97706" style={{ marginTop: 1, flexShrink: 0 }} />
+          <span>
+            Manually resolve this stuck report to a final status. This cannot be undone and will be recorded in the audit log.
+          </span>
+        </div>
+
+        {/* Status selector — card style */}
         <div style={ms.field}>
           <label style={ms.label}>Target Status</label>
-          <select
-            style={ms.select}
-            value={targetStatus}
-            onChange={(e) =>
-              setTargetStatus(e.target.value as "green" | "red")
-            }
-          >
-            <option value="green">Green — Verified</option>
-            <option value="red">Red — Rejected</option>
-          </select>
+          <div style={{ display: "flex", gap: 10 }}>
+            <label style={{
+              flex: 1,
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "10px 14px",
+              border: targetStatus === "green" ? `2px solid #16A34A` : "1.5px solid var(--c-border)",
+              borderRadius: 8,
+              cursor: "pointer",
+              background: targetStatus === "green" ? "#F0FDF4" : "var(--c-surface-lowest)",
+              transition: "all 0.12s",
+            }}>
+              <input
+                type="radio"
+                name="targetStatus"
+                value="green"
+                checked={targetStatus === "green"}
+                onChange={() => setTargetStatus("green")}
+                style={{ accentColor: "#16A34A" }}
+              />
+              <span style={{ fontSize: 13, fontWeight: 600, color: "#16A34A" }}>
+                Green — Verified
+              </span>
+            </label>
+            <label style={{
+              flex: 1,
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "10px 14px",
+              border: targetStatus === "red" ? `2px solid #DC2626` : "1.5px solid var(--c-border)",
+              borderRadius: 8,
+              cursor: "pointer",
+              background: targetStatus === "red" ? "#FEF2F2" : "var(--c-surface-lowest)",
+              transition: "all 0.12s",
+            }}>
+              <input
+                type="radio"
+                name="targetStatus"
+                value="red"
+                checked={targetStatus === "red"}
+                onChange={() => setTargetStatus("red")}
+                style={{ accentColor: "#DC2626" }}
+              />
+              <span style={{ fontSize: 13, fontWeight: 600, color: "#DC2626" }}>
+                Red — Rejected
+              </span>
+            </label>
+          </div>
         </div>
+
         <div style={ms.field}>
           <label style={ms.label}>
             Reason{" "}
@@ -281,10 +437,13 @@ function ForceResolutionModal({
             onChange={(e) => setReason(e.target.value)}
             rows={3}
             placeholder="Enter reason for force resolution…"
+            autoFocus
           />
           <span style={ms.charCount}>{reason.trim().length} / 10 min</span>
         </div>
+
         {error && <div style={ms.error}>{error}</div>}
+
         <div style={ms.actions}>
           <button style={ms.cancelBtn} onClick={onClose} disabled={loading}>
             Cancel
@@ -293,7 +452,7 @@ function ForceResolutionModal({
             style={{
               ...ms.confirmBtn,
               background: BLUE,
-              opacity: canSubmit ? 1 : 0.5,
+              opacity: canSubmit ? 1 : 0.45,
               cursor: canSubmit ? "pointer" : "not-allowed",
             }}
             onClick={handleConfirm}
@@ -383,7 +542,7 @@ function Tab1({ currentUserName }: { currentUserName: string }) {
     if (!row.soft_lock) {
       return (
         <button
-          className="btn btn-primary"
+          style={s.reviewBtn}
           onClick={() =>
             window.open("/reports/" + row.report_id + "?from=queue", "_blank")
           }
@@ -395,7 +554,7 @@ function Tab1({ currentUserName }: { currentUserName: string }) {
     if (row.soft_lock.reviewer_name === currentUserName) {
       return (
         <button
-          className="btn btn-primary"
+          style={{ ...s.reviewBtn, background: "var(--c-primary)" }}
           onClick={() =>
             window.open("/reports/" + row.report_id + "?from=queue", "_blank")
           }
@@ -405,11 +564,7 @@ function Tab1({ currentUserName }: { currentUserName: string }) {
       );
     }
     return (
-      <button
-        className="btn btn-secondary"
-        style={{ cursor: "not-allowed", opacity: 0.6 }}
-        disabled
-      >
+      <button style={s.lockedBtn} disabled>
         Locked
       </button>
     );
@@ -417,23 +572,31 @@ function Tab1({ currentUserName }: { currentUserName: string }) {
 
   return (
     <div>
+      {/* Filter bar */}
       <div style={s.filterBar}>
+        <span style={s.filterLabel}>Filters:</span>
         <input
           className="input"
           style={s.filterInput}
-          placeholder="Search by Report # or Reporter ID"
+          placeholder="Search Report # or Reporter ID"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
         <div style={{ position: "relative" }}>
           <button
-            className="input"
-            style={s.filterSelectBtn}
+            style={{
+              ...s.filterPill,
+              background: selectedReasons.length > 0 ? "rgba(4,104,177,0.08)" : "var(--c-surface-low)",
+              borderColor: selectedReasons.length > 0 ? BLUE : "var(--c-border)",
+              color: selectedReasons.length > 0 ? BLUE : "var(--c-text-secondary)",
+            }}
             onClick={() => setShowReasonDropdown((v) => !v)}
           >
             Flag Reasons
-            {selectedReasons.length > 0 ? ` (${selectedReasons.length})` : ""}{" "}
-            ▾
+            {selectedReasons.length > 0 && (
+              <span style={s.pillBadge}>{selectedReasons.length}</span>
+            )}
+            {" ▾"}
           </button>
           {showReasonDropdown && (
             <div style={s.dropdownMenu}>
@@ -476,12 +639,9 @@ function Tab1({ currentUserName }: { currentUserName: string }) {
           />
         </div>
         {filtersActive > 0 && (
-          <>
-            <span className="chip chip-blue">Filters active: {filtersActive}</span>
-            <button style={s.clearFiltersBtn} onClick={clearFilters}>
-              Clear all
-            </button>
-          </>
+          <button style={s.clearFiltersBtn} onClick={clearFilters}>
+            ✕ Clear filters ({filtersActive})
+          </button>
         )}
       </div>
 
@@ -491,106 +651,122 @@ function Tab1({ currentUserName }: { currentUserName: string }) {
         </div>
       ) : allItems.length === 0 ? (
         <div style={s.emptyState}>
-          <CheckCircle size={48} color={GREEN} />
+          <div style={s.emptyIconWrap}>
+            <CheckCircle size={32} color="#16A34A" />
+          </div>
+          <p style={s.emptyTitle}>All clear — no reports pending review</p>
           <p style={s.emptyText}>
-            No reports pending review. All Red-flagged reports have been
-            actioned.
+            Red-flagged reports will appear here as they are submitted.
           </p>
         </div>
       ) : (
         <>
-          <div className="card" style={{ overflow: "hidden" }}>
-            <table className="data-table">
+          <div style={s.tableWrap}>
+            <table className="data-table rq-table">
               <thead>
                 <tr>
-                  <th>Report ID</th>
+                  <th style={{ paddingLeft: 16 }}>Report</th>
                   <th>Flagged At</th>
                   <th>Country</th>
-                  <th>Damage Level</th>
+                  <th>Damage</th>
                   <th>Infrastructure</th>
                   <th>Crisis Type</th>
                   <th>Flag Reasons</th>
                   <th>Reporter</th>
                   <th>Time in Queue</th>
-                  <th>Status</th>
-                  <th>Review</th>
+                  <th>Lock</th>
+                  <th>Action</th>
                 </tr>
               </thead>
               <tbody>
-                {allItems.map((row) => (
-                  <tr key={row.report_id}>
-                    <td>
-                      <button
-                        style={s.linkBtn}
-                        onClick={() =>
-                          window.open("/reports/" + row.report_id, "_blank")
-                        }
-                      >
-                        {row.serial_number != null ? `#${row.serial_number}` : `${row.report_id.slice(0, 8)}…`}
-                      </button>
-                    </td>
-                    <td>{formatDateTime(row.flagged_at)}</td>
-                    <td>{row.country ?? "—"}</td>
-                    <td>{formatDamageLevel(row.damage_level)}</td>
-                    <td>
-                      {row.infrastructure_types.join(", ") || "—"}
-                    </td>
-                    <td>{row.crisis_type ?? "—"}</td>
-                    <td>
-                      <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                        {row.flag_reasons.map((r) => (
-                          <span key={r} className="chip chip-amber">
-                            {flagReasonLabel(r)}
-                          </span>
-                        ))}
-                      </div>
-                    </td>
-                    <td>
-                      <button
-                        style={s.linkBtn}
-                        onClick={() =>
-                          window.open("/reporters/" + row.reporter_id, "_blank")
-                        }
-                      >
-                        {row.reporter_display_id}
-                      </button>
-                    </td>
-                    <td
-                      style={{
-                        color: timeQueueColor(row.time_in_queue),
-                        fontWeight: row.time_in_queue > 3600 ? 700 : 400,
-                      }}
+                {allItems.map((row) => {
+                  const isUrgent = row.time_in_queue > 3600;
+                  return (
+                    <tr
+                      key={row.report_id}
+                      className={isUrgent ? "rq-row-urgent" : "rq-row-normal"}
                     >
-                      {formatTimeInQueue(row.time_in_queue)}
-                    </td>
-                    <td>
-                      <SoftLockBadge softLock={row.soft_lock} />
-                    </td>
-                    <td>{getReviewBtn(row)}</td>
-                  </tr>
-                ))}
+                      <td style={{ paddingLeft: 16 }}>
+                        <button
+                          style={s.linkBtn}
+                          onClick={() =>
+                            window.open("/reports/" + row.report_id, "_blank")
+                          }
+                        >
+                          {row.serial_number != null
+                            ? `#${row.serial_number}`
+                            : `${row.report_id.slice(0, 8)}…`}
+                        </button>
+                      </td>
+                      <td style={{ fontSize: 12, color: "var(--c-text-secondary)" }}>
+                        {formatDateTime(row.flagged_at)}
+                      </td>
+                      <td>{row.country ?? "—"}</td>
+                      <td>
+                        <DamageDot level={row.damage_level} />
+                      </td>
+                      <td style={{ fontSize: 12 }}>
+                        {row.infrastructure_types.join(", ") || "—"}
+                      </td>
+                      <td style={{ fontSize: 12 }}>{row.crisis_type ?? "—"}</td>
+                      <td>
+                        <div style={{ display: "flex", gap: 4, flexWrap: "wrap", maxWidth: 260 }}>
+                          {row.flag_reasons.map((r) => (
+                            <span key={r} style={s.flagPill}>
+                              {flagReasonLabel(r)}
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+                      <td>
+                        <button
+                          style={s.linkBtn}
+                          onClick={() =>
+                            window.open("/reporters/" + row.reporter_id, "_blank")
+                          }
+                        >
+                          {row.reporter_display_id}
+                        </button>
+                      </td>
+                      <td
+                        style={{
+                          color: timeQueueColor(row.time_in_queue),
+                          fontWeight: row.time_in_queue > 3600 ? 700 : 400,
+                          fontSize: 13,
+                        }}
+                      >
+                        {formatTimeInQueue(row.time_in_queue)}
+                      </td>
+                      <td>
+                        <SoftLockBadge softLock={row.soft_lock} />
+                      </td>
+                      <td>{getReviewBtn(row)}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
-          {hasMore && (
-            <div style={s.loadMoreRow}>
+
+          {/* Pagination / load more */}
+          <div style={s.paginationRow}>
+            <span style={s.paginationInfo}>
+              Showing {allItems.length} of {total} reports
+            </span>
+            {hasMore && (
               <button
-                className="btn btn-secondary"
                 style={{
-                  padding: "10px 28px",
-                  height: "auto",
+                  ...s.loadMoreBtn,
                   opacity: loadingMore ? 0.6 : 1,
                   cursor: loadingMore ? "default" : "pointer",
                 }}
                 onClick={handleLoadMore}
                 disabled={loadingMore}
               >
-                {loadingMore
-                  ? "Loading…"
-                  : `Load More (${total - allItems.length} remaining)`}
+                {loadingMore ? "Loading…" : `Load next ${Math.min(PAGE_SIZE, total - allItems.length)} →`}
               </button>
-            </div>
-          )}
+            )}
+          </div>
         </>
       )}
     </div>
@@ -645,10 +821,7 @@ function Tab2({ currentUserName }: { currentUserName: string }) {
     if (!nextCursor || loadingMore) return;
     setLoadingMore(true);
     try {
-      const res = await getTab2Properties({
-        ...filterParams,
-        cursor: nextCursor,
-      });
+      const res = await getTab2Properties({ ...filterParams, cursor: nextCursor });
       const d = res.data as ReviewQueueListResponse<Tab2Row>;
       setAllItems((prev) => [...prev, ...d.items]);
       setNextCursor(d.cursor);
@@ -665,14 +838,7 @@ function Tab2({ currentUserName }: { currentUserName: string }) {
     setModal(null);
   }
 
-  const filtersActive = [
-    search,
-    reviewReason,
-    country,
-    damageLevel,
-    dateFrom,
-    dateTo,
-  ].filter(Boolean).length;
+  const filtersActive = [search, reviewReason, country, damageLevel, dateFrom, dateTo].filter(Boolean).length;
 
   function clearFilters() {
     setSearch("");
@@ -685,11 +851,13 @@ function Tab2({ currentUserName }: { currentUserName: string }) {
 
   return (
     <div>
+      {/* Filter bar */}
       <div style={s.filterBar}>
+        <span style={s.filterLabel}>Filters:</span>
         <input
           className="input"
           style={s.filterInput}
-          placeholder="Search by Property ID or name"
+          placeholder="Search Property ID or name"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -739,12 +907,9 @@ function Tab2({ currentUserName }: { currentUserName: string }) {
           />
         </div>
         {filtersActive > 0 && (
-          <>
-            <span className="chip chip-blue">Filters active: {filtersActive}</span>
-            <button style={s.clearFiltersBtn} onClick={clearFilters}>
-              Clear all
-            </button>
-          </>
+          <button style={s.clearFiltersBtn} onClick={clearFilters}>
+            ✕ Clear filters ({filtersActive})
+          </button>
         )}
       </div>
 
@@ -754,45 +919,49 @@ function Tab2({ currentUserName }: { currentUserName: string }) {
         </div>
       ) : allItems.length === 0 ? (
         <div style={s.emptyState}>
-          <CheckCircle size={48} color={GREEN} />
-          <p style={s.emptyText}>No properties pending review.</p>
+          <div style={s.emptyIconWrap}>
+            <CheckCircle size={32} color="#16A34A" />
+          </div>
+          <p style={s.emptyTitle}>No properties pending review</p>
+          <p style={s.emptyText}>Properties with conflicting reports will appear here.</p>
         </div>
       ) : (
         <>
-          <div className="card" style={{ overflow: "hidden" }}>
-            <table className="data-table">
+          <div style={s.tableWrap}>
+            <table className="data-table rq-table">
               <thead>
                 <tr>
-                  <th>Property ID</th>
-                  <th>Property Name</th>
+                  <th style={{ paddingLeft: 16 }}>Property ID</th>
+                  <th>Name</th>
                   <th>Country</th>
-                  <th>Damage Level</th>
+                  <th>Damage</th>
                   <th>Review Reason</th>
                   <th>Conflict Details</th>
                   <th>Time in Queue</th>
-                  <th>Status</th>
+                  <th>Lock</th>
                   <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {allItems.map((row) => {
                   const dmg = damagePillColors(row.current_damage_level);
+                  const isUrgent = row.time_in_queue > 3600;
                   return (
-                    <tr key={row.property_id}>
-                      <td>
+                    <tr
+                      key={row.property_id}
+                      className={isUrgent ? "rq-row-urgent" : "rq-row-normal"}
+                    >
+                      <td style={{ paddingLeft: 16 }}>
                         <button
                           style={s.linkBtn}
                           onClick={() =>
-                            window.open(
-                              "/locations?search=" + row.property_id,
-                              "_blank"
-                            )
+                            window.open("/locations?search=" + row.property_id, "_blank")
                           }
                         >
                           {row.property_id.slice(0, 8)}…
                         </button>
                       </td>
-                      <td>{row.display_name}</td>
+                      <td style={{ fontSize: 13 }}>{row.display_name}</td>
                       <td>{row.country ?? "—"}</td>
                       <td>
                         <span
@@ -802,53 +971,49 @@ function Tab2({ currentUserName }: { currentUserName: string }) {
                             color: dmg.color,
                           }}
                         >
+                          <span style={{
+                            width: 6, height: 6, borderRadius: "50%",
+                            background: dmg.color,
+                            display: "inline-block", marginRight: 5,
+                          }} />
                           {formatDamageLevel(row.current_damage_level)}
                         </span>
                       </td>
                       <td>
                         <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
                           {row.has_conflict_warning && (
-                            <span
-                              className="chip chip-amber"
-                              style={{
-                                display: "inline-flex",
-                                alignItems: "center",
-                                gap: 4,
-                              }}
-                            >
-                              <AlertTriangle size={11} />
-                              Conflict Warning
+                            <span style={{ ...s.flagPill, display: "inline-flex", alignItems: "center", gap: 4 }}>
+                              <AlertTriangle size={10} />
+                              Conflict
                             </span>
                           )}
                           {row.is_flagged_for_review && (
-                            <span className="chip chip-blue">Manually Flagged</span>
+                            <span style={{
+                              ...s.flagPill,
+                              background: "rgba(4,104,177,0.08)",
+                              color: BLUE,
+                              borderColor: "rgba(4,104,177,0.2)",
+                            }}>
+                              Flagged
+                            </span>
                           )}
-                          {!row.has_conflict_warning &&
-                            !row.is_flagged_for_review && (
-                              <span style={{ fontSize: 12, color: "var(--c-text-muted)" }}>
-                                {row.review_reason}
-                              </span>
-                            )}
+                          {!row.has_conflict_warning && !row.is_flagged_for_review && (
+                            <span style={{ fontSize: 12, color: "var(--c-text-muted)" }}>
+                              {row.review_reason}
+                            </span>
+                          )}
                         </div>
                       </td>
-                      <td
-                        style={{
-                          fontSize: 12,
-                          color: "var(--c-text-secondary)",
-                          maxWidth: 200,
-                        }}
-                      >
+                      <td style={{ fontSize: 12, color: "var(--c-text-secondary)", maxWidth: 180 }}>
                         {row.has_conflict_warning
-                          ? row.flagged_for_review_note ??
-                            "Conflicting damage reports"
+                          ? row.flagged_for_review_note ?? "Conflicting damage reports"
                           : "—"}
                       </td>
-                      <td
-                        style={{
-                          color: timeQueueColor(row.time_in_queue),
-                          fontWeight: row.time_in_queue > 3600 ? 700 : 400,
-                        }}
-                      >
+                      <td style={{
+                        color: timeQueueColor(row.time_in_queue),
+                        fontWeight: row.time_in_queue > 3600 ? 700 : 400,
+                        fontSize: 13,
+                      }}>
                         {formatTimeInQueue(row.time_in_queue)}
                       </td>
                       <td>
@@ -856,31 +1021,22 @@ function Tab2({ currentUserName }: { currentUserName: string }) {
                       </td>
                       <td>
                         <div style={{ display: "flex", gap: 6 }}>
-                          {!row.soft_lock ||
-                          row.soft_lock.reviewer_name === currentUserName ? (
+                          {!row.soft_lock || row.soft_lock.reviewer_name === currentUserName ? (
                             <button
-                              className="btn btn-primary"
+                              style={s.reviewBtn}
                               onClick={() =>
-                                window.open(
-                                  "/locations/" + row.property_id,
-                                  "_blank"
-                                )
+                                window.open("/locations/" + row.property_id, "_blank")
                               }
                             >
                               Review →
                             </button>
                           ) : (
-                            <button
-                              className="btn btn-secondary"
-                              style={{ cursor: "not-allowed", opacity: 0.6 }}
-                              disabled
-                            >
+                            <button style={s.lockedBtn} disabled>
                               Locked
                             </button>
                           )}
                           <button
-                            className="btn btn-secondary"
-                            style={{ border: "1.5px solid var(--c-flag-amber)", color: "var(--c-flag-amber)", background: "transparent" }}
+                            style={s.dismissBtn}
                             onClick={() => setModal({ type: "dismiss", row })}
                           >
                             Dismiss
@@ -893,32 +1049,32 @@ function Tab2({ currentUserName }: { currentUserName: string }) {
               </tbody>
             </table>
           </div>
-          {hasMore && (
-            <div style={s.loadMoreRow}>
+
+          <div style={s.paginationRow}>
+            <span style={s.paginationInfo}>
+              Showing {allItems.length} of {total} properties
+            </span>
+            {hasMore && (
               <button
-                className="btn btn-secondary"
                 style={{
-                  padding: "10px 28px",
-                  height: "auto",
+                  ...s.loadMoreBtn,
                   opacity: loadingMore ? 0.6 : 1,
                   cursor: loadingMore ? "default" : "pointer",
                 }}
                 onClick={handleLoadMore}
                 disabled={loadingMore}
               >
-                {loadingMore
-                  ? "Loading…"
-                  : `Load More (${total - allItems.length} remaining)`}
+                {loadingMore ? "Loading…" : `Load next ${Math.min(PAGE_SIZE, total - allItems.length)} →`}
               </button>
-            </div>
-          )}
+            )}
+          </div>
         </>
       )}
 
       {modal?.type === "dismiss" && (
         <ConfirmActionModal
           title="Dismiss Property from Review"
-          description={`Remove "${modal.row.display_name}" from the review queue. It will no longer appear here.`}
+          description={`Remove "${modal.row.display_name}" from the review queue. It will no longer appear here until it is re-flagged.`}
           actionLabel="Dismiss"
           actionColor={AMBER}
           onConfirm={(comment) => handleDismiss(modal.row, comment)}
@@ -971,10 +1127,7 @@ function Tab3({ currentUserName }: { currentUserName: string }) {
     if (!nextCursor || loadingMore) return;
     setLoadingMore(true);
     try {
-      const res = await getTab3StuckReports({
-        ...filterParams,
-        cursor: nextCursor,
-      });
+      const res = await getTab3StuckReports({ ...filterParams, cursor: nextCursor });
       const d = res.data as ReviewQueueListResponse<Tab3Row>;
       setAllItems((prev) => [...prev, ...d.items]);
       setNextCursor(d.cursor);
@@ -984,9 +1137,7 @@ function Tab3({ currentUserName }: { currentUserName: string }) {
     }
   }
 
-  const filtersActive = [search, country, platform, minStuck].filter(
-    Boolean
-  ).length;
+  const filtersActive = [search, country, platform, minStuck].filter(Boolean).length;
 
   function clearFilters() {
     setSearch("");
@@ -997,11 +1148,13 @@ function Tab3({ currentUserName }: { currentUserName: string }) {
 
   return (
     <div>
+      {/* Filter bar */}
       <div style={s.filterBar}>
+        <span style={s.filterLabel}>Filters:</span>
         <input
           className="input"
           style={s.filterInput}
-          placeholder="Search by Report # or Reporter ID"
+          placeholder="Search Report # or Reporter ID"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -1035,12 +1188,9 @@ function Tab3({ currentUserName }: { currentUserName: string }) {
           <option value="21600">&gt; 6 hours</option>
         </select>
         {filtersActive > 0 && (
-          <>
-            <span className="chip chip-blue">Filters active: {filtersActive}</span>
-            <button style={s.clearFiltersBtn} onClick={clearFilters}>
-              Clear all
-            </button>
-          </>
+          <button style={s.clearFiltersBtn} onClick={clearFilters}>
+            ✕ Clear filters ({filtersActive})
+          </button>
         )}
       </div>
 
@@ -1050,45 +1200,64 @@ function Tab3({ currentUserName }: { currentUserName: string }) {
         </div>
       ) : allItems.length === 0 ? (
         <div style={s.emptyState}>
-          <CheckCircle size={48} color={GREEN} />
-          <p style={s.emptyText}>
-            No stuck reports. Background processing is running normally.
-          </p>
+          <div style={s.emptyIconWrap}>
+            <CheckCircle size={32} color="#16A34A" />
+          </div>
+          <p style={s.emptyTitle}>No stuck reports</p>
+          <p style={s.emptyText}>Background processing is running normally.</p>
         </div>
       ) : (
         <>
-          <div className="card" style={{ overflow: "hidden" }}>
-            <table className="data-table">
+          <div style={s.tableWrap}>
+            <table className="data-table rq-table">
               <thead>
                 <tr>
-                  <th>Report ID</th>
+                  <th style={{ paddingLeft: 16 }}>Report</th>
                   <th>Received At</th>
                   <th>Country</th>
-                  <th>Damage Level</th>
+                  <th>Damage</th>
                   <th>Platform</th>
                   <th>Reporter</th>
                   <th>Time Stuck</th>
-                  <th>Status</th>
+                  <th>Lock</th>
                   <th>Action</th>
                 </tr>
               </thead>
               <tbody>
                 {allItems.map((row) => (
-                  <tr key={row.report_id}>
-                    <td>
+                  <tr key={row.report_id} className="rq-row-urgent">
+                    <td style={{ paddingLeft: 16 }}>
                       <button
                         style={s.linkBtn}
                         onClick={() =>
                           window.open("/reports/" + row.report_id, "_blank")
                         }
                       >
-                        {row.serial_number != null ? `#${row.serial_number}` : `${row.report_id.slice(0, 8)}…`}
+                        {row.serial_number != null
+                          ? `#${row.serial_number}`
+                          : `${row.report_id.slice(0, 8)}…`}
                       </button>
                     </td>
-                    <td>{formatDateTime(row.received_at)}</td>
+                    <td style={{ fontSize: 12, color: "var(--c-text-secondary)" }}>
+                      {formatDateTime(row.received_at)}
+                    </td>
                     <td>{row.country ?? "—"}</td>
-                    <td>{formatDamageLevel(row.damage_level)}</td>
-                    <td>{row.platform ?? "—"}</td>
+                    <td>
+                      <DamageDot level={row.damage_level} />
+                    </td>
+                    <td>
+                      <span style={{
+                        background: "var(--c-surface-low)",
+                        border: "1px solid var(--c-border)",
+                        borderRadius: 4,
+                        padding: "1px 6px",
+                        fontSize: 11,
+                        fontFamily: "monospace",
+                        color: "var(--c-text-secondary)",
+                      }}>
+                        {row.platform ?? "—"}
+                      </span>
+                    </td>
                     <td>
                       <button
                         style={s.linkBtn}
@@ -1099,7 +1268,7 @@ function Tab3({ currentUserName }: { currentUserName: string }) {
                         {row.reporter_display_id}
                       </button>
                     </td>
-                    <td style={{ color: "var(--c-flag-red)", fontWeight: 700 }}>
+                    <td style={{ color: "var(--c-flag-red)", fontWeight: 700, fontSize: 13 }}>
                       {formatTimeInQueue(row.time_stuck_seconds)}
                     </td>
                     <td>
@@ -1109,18 +1278,13 @@ function Tab3({ currentUserName }: { currentUserName: string }) {
                       {!row.soft_lock ||
                       row.soft_lock.reviewer_name === currentUserName ? (
                         <button
-                          className="btn btn-danger"
-                          style={{ border: "1.5px solid var(--c-flag-red)", background: "transparent" }}
+                          style={s.forceBtn}
                           onClick={() => setForceModal(row)}
                         >
-                          Force Resolution
+                          Force Resolve
                         </button>
                       ) : (
-                        <button
-                          className="btn btn-secondary"
-                          style={{ cursor: "not-allowed", opacity: 0.6 }}
-                          disabled
-                        >
+                        <button style={s.lockedBtn} disabled>
                           Locked
                         </button>
                       )}
@@ -1130,25 +1294,25 @@ function Tab3({ currentUserName }: { currentUserName: string }) {
               </tbody>
             </table>
           </div>
-          {hasMore && (
-            <div style={s.loadMoreRow}>
+
+          <div style={s.paginationRow}>
+            <span style={s.paginationInfo}>
+              Showing {allItems.length} of {total} stuck reports
+            </span>
+            {hasMore && (
               <button
-                className="btn btn-secondary"
                 style={{
-                  padding: "10px 28px",
-                  height: "auto",
+                  ...s.loadMoreBtn,
                   opacity: loadingMore ? 0.6 : 1,
                   cursor: loadingMore ? "default" : "pointer",
                 }}
                 onClick={handleLoadMore}
                 disabled={loadingMore}
               >
-                {loadingMore
-                  ? "Loading…"
-                  : `Load More (${total - allItems.length} remaining)`}
+                {loadingMore ? "Loading…" : `Load next ${Math.min(PAGE_SIZE, total - allItems.length)} →`}
               </button>
-            </div>
-          )}
+            )}
+          </div>
         </>
       )}
 
@@ -1209,10 +1373,7 @@ function Tab4({ currentUserName: _currentUserName }: { currentUserName: string }
     if (!nextCursor || loadingMore) return;
     setLoadingMore(true);
     try {
-      const res = await getTab4AutoBlocked({
-        ...filterParams,
-        cursor: nextCursor,
-      });
+      const res = await getTab4AutoBlocked({ ...filterParams, cursor: nextCursor });
       const d = res.data as ReviewQueueListResponse<Tab4Row>;
       setAllItems((prev) => [...prev, ...d.items]);
       setNextCursor(d.cursor);
@@ -1246,11 +1407,13 @@ function Tab4({ currentUserName: _currentUserName }: { currentUserName: string }
 
   return (
     <div>
+      {/* Filter bar */}
       <div style={s.filterBar}>
+        <span style={s.filterLabel}>Filters:</span>
         <input
           className="input"
           style={s.filterInput}
-          placeholder="Search by Reporter ID or device ID"
+          placeholder="Search Reporter ID or device ID"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -1273,12 +1436,9 @@ function Tab4({ currentUserName: _currentUserName }: { currentUserName: string }
           <option value="3600">&lt; 1 hour</option>
         </select>
         {filtersActive > 0 && (
-          <>
-            <span className="chip chip-blue">Filters active: {filtersActive}</span>
-            <button style={s.clearFiltersBtn} onClick={clearFilters}>
-              Clear all
-            </button>
-          </>
+          <button style={s.clearFiltersBtn} onClick={clearFilters}>
+            ✕ Clear filters ({filtersActive})
+          </button>
         )}
       </div>
 
@@ -1288,126 +1448,125 @@ function Tab4({ currentUserName: _currentUserName }: { currentUserName: string }
         </div>
       ) : allItems.length === 0 ? (
         <div style={s.emptyState}>
-          <CheckCircle size={48} color={GREEN} />
-          <p style={s.emptyText}>No auto-blocked profiles pending review.</p>
+          <div style={s.emptyIconWrap}>
+            <CheckCircle size={32} color="#16A34A" />
+          </div>
+          <p style={s.emptyTitle}>No auto-blocked profiles pending review</p>
+          <p style={s.emptyText}>Auto-blocked reporter profiles will appear here for confirmation.</p>
         </div>
       ) : (
         <>
-          <div className="card" style={{ overflow: "hidden" }}>
-            <table className="data-table">
+          <div style={s.tableWrap}>
+            <table className="data-table rq-table">
               <thead>
                 <tr>
-                  <th>Reporter ID</th>
+                  <th style={{ paddingLeft: 16 }}>Reporter ID</th>
                   <th>Auto-blocked At</th>
                   <th>Device ID</th>
                   <th>Matched Profile</th>
                   <th>Time Remaining</th>
-                  <th>Status</th>
+                  <th>Lock</th>
                   <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {allItems.map((row) => (
-                  <tr key={row.reporter_id}>
-                    <td>
-                      <button
-                        style={s.linkBtn}
-                        onClick={() =>
-                          window.open("/reporters/" + row.reporter_id, "_blank")
-                        }
-                      >
-                        {row.reporter_id.slice(0, 8)}…
-                      </button>
-                    </td>
-                    <td>{formatDateTime(row.auto_blocked_at)}</td>
-                    <td
-                      style={{
-                        fontFamily: "monospace",
-                        fontSize: 12,
-                      }}
+                {allItems.map((row) => {
+                  const isExpiringSoon = row.time_remaining_seconds < 86400;
+                  return (
+                    <tr
+                      key={row.reporter_id}
+                      className={isExpiringSoon ? "rq-row-urgent" : "rq-row-normal"}
                     >
-                      {row.device_id
-                        ? row.device_id.slice(0, 16) +
-                          (row.device_id.length > 16 ? "…" : "")
-                        : "—"}
-                    </td>
-                    <td>
-                      {row.matched_blocked_reporter_id ? (
+                      <td style={{ paddingLeft: 16 }}>
                         <button
                           style={s.linkBtn}
                           onClick={() =>
-                            window.open(
-                              "/reporters/" + row.matched_blocked_reporter_id,
-                              "_blank"
-                            )
+                            window.open("/reporters/" + row.reporter_id, "_blank")
                           }
                         >
-                          {row.matched_blocked_reporter_id.slice(0, 8)}…
+                          {row.reporter_id.slice(0, 8)}…
                         </button>
-                      ) : (
-                        "—"
-                      )}
-                    </td>
-                    <td
-                      style={{
+                      </td>
+                      <td style={{ fontSize: 12, color: "var(--c-text-secondary)" }}>
+                        {formatDateTime(row.auto_blocked_at)}
+                      </td>
+                      <td style={{ fontFamily: "monospace", fontSize: 12, color: "var(--c-text-secondary)" }}>
+                        {row.device_id
+                          ? row.device_id.slice(0, 16) + (row.device_id.length > 16 ? "…" : "")
+                          : "—"}
+                      </td>
+                      <td>
+                        {row.matched_blocked_reporter_id ? (
+                          <button
+                            style={s.linkBtn}
+                            onClick={() =>
+                              window.open("/reporters/" + row.matched_blocked_reporter_id, "_blank")
+                            }
+                          >
+                            {row.matched_blocked_reporter_id.slice(0, 8)}…
+                          </button>
+                        ) : (
+                          <span style={{ color: "var(--c-text-muted)", fontSize: 12 }}>—</span>
+                        )}
+                      </td>
+                      <td style={{
                         color: timeRemainingColor(row.time_remaining_seconds),
                         fontWeight: 700,
-                        fontSize: "var(--text-xs)" as string,
-                      }}
-                    >
-                      {formatCountdown(row.time_remaining_seconds)}
-                    </td>
-                    <td>
-                      <SoftLockBadge softLock={row.soft_lock} />
-                    </td>
-                    <td>
-                      <div style={{ display: "flex", gap: 6 }}>
-                        <button
-                          className="btn btn-success"
-                          onClick={() => setModal({ type: "confirm", row })}
-                        >
-                          Confirm Block
-                        </button>
-                        <button
-                          className="btn btn-danger"
-                          style={{ border: "1.5px solid var(--c-flag-red)", background: "transparent" }}
-                          onClick={() => setModal({ type: "reverse", row })}
-                        >
-                          Reverse Block
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                        fontSize: 13,
+                      }}>
+                        {formatCountdown(row.time_remaining_seconds)}
+                      </td>
+                      <td>
+                        <SoftLockBadge softLock={row.soft_lock} />
+                      </td>
+                      <td>
+                        <div style={{ display: "flex", gap: 6 }}>
+                          <button
+                            style={s.confirmBlockBtn}
+                            onClick={() => setModal({ type: "confirm", row })}
+                          >
+                            Confirm Block
+                          </button>
+                          <button
+                            style={s.reverseBlockBtn}
+                            onClick={() => setModal({ type: "reverse", row })}
+                          >
+                            Reverse
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
-          {hasMore && (
-            <div style={s.loadMoreRow}>
+
+          <div style={s.paginationRow}>
+            <span style={s.paginationInfo}>
+              Showing {allItems.length} of {total} blocked profiles
+            </span>
+            {hasMore && (
               <button
-                className="btn btn-secondary"
                 style={{
-                  padding: "10px 28px",
-                  height: "auto",
+                  ...s.loadMoreBtn,
                   opacity: loadingMore ? 0.6 : 1,
                   cursor: loadingMore ? "default" : "pointer",
                 }}
                 onClick={handleLoadMore}
                 disabled={loadingMore}
               >
-                {loadingMore
-                  ? "Loading…"
-                  : `Load More (${total - allItems.length} remaining)`}
+                {loadingMore ? "Loading…" : `Load next ${Math.min(PAGE_SIZE, total - allItems.length)} →`}
               </button>
-            </div>
-          )}
+            )}
+          </div>
         </>
       )}
 
       {modal?.type === "confirm" && (
         <ConfirmActionModal
           title="Confirm Auto-Block"
-          description={`Permanently confirm the auto-block for reporter ${modal.row.reporter_id.slice(0, 8)}…. The block will be made permanent.`}
+          description={`Make the auto-block permanent for reporter ${modal.row.reporter_id.slice(0, 8)}…. This reporter will be blocked indefinitely and will not be able to submit reports.`}
           actionLabel="Confirm Block"
           actionColor={GREEN}
           onConfirm={(comment) => handleConfirmBlock(modal.row, comment)}
@@ -1417,7 +1576,7 @@ function Tab4({ currentUserName: _currentUserName }: { currentUserName: string }
       {modal?.type === "reverse" && (
         <ConfirmActionModal
           title="Reverse Auto-Block"
-          description={`Remove the auto-block for reporter ${modal.row.reporter_id.slice(0, 8)}…. The reporter will be able to submit reports again.`}
+          description={`Remove the auto-block for reporter ${modal.row.reporter_id.slice(0, 8)}…. The reporter will be able to submit reports again immediately.`}
           actionLabel="Reverse Block"
           actionColor={RED}
           onConfirm={(comment) => handleReverseBlock(modal.row, comment)}
@@ -1452,38 +1611,61 @@ export default function ReviewQueuePage() {
     tab4_count: 0,
   };
 
+  const totalPending =
+    counts.tab1_count + counts.tab2_count + counts.tab3_count + counts.tab4_count;
+
   const TABS = [
-    { id: 1, label: "Reports",      count: counts.tab1_count },
-    { id: 2, label: "Properties",   count: counts.tab2_count },
-    { id: 3, label: "Stuck",        count: counts.tab3_count },
-    { id: 4, label: "Auto-blocked", count: counts.tab4_count },
+    { id: 1, label: "Red-flagged Reports", count: counts.tab1_count },
+    { id: 2, label: "Properties",          count: counts.tab2_count },
+    { id: 3, label: "Stuck Reports",       count: counts.tab3_count },
+    { id: 4, label: "Auto-blocked",        count: counts.tab4_count },
   ];
 
   return (
     <div style={s.page}>
-      <style>{`@keyframes rq-spin { to { transform: rotate(360deg); } }`}</style>
+      <style>{`
+        @keyframes rq-spin { to { transform: rotate(360deg); } }
+        .rq-table tbody tr { transition: background 0.1s; }
+        .rq-table tbody tr:hover td { background: rgba(4,104,177,0.025) !important; }
+        .rq-row-urgent td:first-child { border-left: 3px solid #D97706; }
+        .rq-row-normal td:first-child { border-left: 3px solid transparent; }
+      `}</style>
 
       <Header title="Review Queue" />
+
+      {/* Urgency banner */}
+      {totalPending > 0 && (
+        <div style={s.urgencyBanner}>
+          <AlertTriangle size={16} color="#D97706" />
+          <span style={{ fontWeight: 700, fontSize: 14, color: "#92400E" }}>
+            {totalPending} item{totalPending !== 1 ? "s" : ""} need attention
+          </span>
+          <span style={{ fontSize: 13, color: "#B45309" }}>
+            — review flagged reports and blocked profiles before they auto-expire.
+          </span>
+        </div>
+      )}
 
       {/* Tab bar */}
       <div style={s.tabBar}>
         {TABS.map((tab) => {
           const isActive = activeTab === tab.id;
+          const hasItems = tab.count > 0;
           return (
             <button
               key={tab.id}
               style={{
                 background: isActive ? "var(--c-primary-container)" : "transparent",
-                color: isActive ? "white" : "var(--c-text-muted)",
-                fontSize: "var(--text-sm)" as string,
+                color: isActive ? "white" : hasItems ? "var(--c-text-primary)" : "var(--c-text-muted)",
+                fontSize: 13,
                 fontWeight: isActive ? 600 : 500,
-                padding: "8px 16px",
+                padding: "7px 16px",
                 borderRadius: "var(--radius-md)" as string,
                 border: "none",
                 cursor: "pointer",
                 display: "flex",
                 alignItems: "center",
-                gap: 6,
+                gap: 7,
                 whiteSpace: "nowrap" as const,
                 transition: "background 0.15s, color 0.15s",
               }}
@@ -1493,13 +1675,18 @@ export default function ReviewQueuePage() {
               <span
                 style={{
                   display: "inline-block",
-                  background: "rgba(229,62,62,0.15)",
-                  color: "var(--c-flag-red)",
-                  fontSize: 10,
+                  background: isActive
+                    ? "rgba(255,255,255,0.2)"
+                    : hasItems
+                    ? "rgba(217,119,6,0.12)"
+                    : "var(--c-surface-low)",
+                  color: isActive ? "white" : hasItems ? "#D97706" : "var(--c-text-muted)",
+                  fontSize: 11,
                   fontWeight: 700,
-                  padding: "1px 6px",
-                  borderRadius: "var(--radius-pill)" as string,
-                  marginLeft: 2,
+                  padding: "1px 7px",
+                  borderRadius: 20,
+                  minWidth: 20,
+                  textAlign: "center",
                 }}
               >
                 {tab.count}
@@ -1516,6 +1703,31 @@ export default function ReviewQueuePage() {
         {activeTab === 3 && <Tab3 currentUserName={currentUserName} />}
         {activeTab === 4 && <Tab4 currentUserName={currentUserName} />}
       </div>
+
+      {/* Footer stats strip */}
+      {countsData && (
+        <div style={s.footerStrip}>
+          <span style={s.footerStat}>
+            <span style={{ ...s.footerDot, background: "var(--c-flag-red)" }} />
+            {counts.tab1_count} flagged report{counts.tab1_count !== 1 ? "s" : ""}
+          </span>
+          <span style={s.footerDivider} />
+          <span style={s.footerStat}>
+            <span style={{ ...s.footerDot, background: "#D97706" }} />
+            {counts.tab2_count} propert{counts.tab2_count !== 1 ? "ies" : "y"} in review
+          </span>
+          <span style={s.footerDivider} />
+          <span style={s.footerStat}>
+            <span style={{ ...s.footerDot, background: "var(--c-text-muted)" }} />
+            {counts.tab3_count} stuck
+          </span>
+          <span style={s.footerDivider} />
+          <span style={s.footerStat}>
+            <span style={{ ...s.footerDot, background: "var(--c-primary-container)" }} />
+            {counts.tab4_count} auto-blocked
+          </span>
+        </div>
+      )}
     </div>
   );
 }
@@ -1529,75 +1741,103 @@ const s: Record<string, React.CSSProperties> = {
     height: "100vh",
     background: "var(--c-surface-low)",
   },
+  urgencyBanner: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    background: "#FFFBEB",
+    borderLeft: "4px solid #D97706",
+    padding: "11px 24px",
+    margin: "14px 32px 0",
+    borderRadius: "0 8px 8px 0",
+    boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
+  },
   tabBar: {
     display: "flex",
     background: "var(--c-surface-lowest)",
     borderRadius: "var(--radius-lg)" as string,
     padding: 4,
-    gap: 4,
-    margin: "16px 32px 0",
+    gap: 2,
+    margin: "14px 32px 0",
     boxShadow: "var(--shadow-sm)" as string,
     alignSelf: "flex-start",
   },
   content: {
     flex: 1,
-    padding: "20px 32px",
+    padding: "18px 32px 0",
     overflowY: "auto",
+    paddingBottom: 8,
   },
   filterBar: {
     display: "flex",
     alignItems: "center",
-    gap: 10,
-    marginBottom: 20,
+    gap: 8,
+    marginBottom: 16,
     flexWrap: "wrap",
     background: "var(--c-surface-lowest)",
     borderRadius: "var(--radius-lg)" as string,
-    padding: "12px 20px",
+    padding: "10px 16px",
     boxShadow: "var(--shadow-sm)" as string,
+    border: "1px solid var(--c-border)",
+  },
+  filterLabel: {
+    fontSize: 12,
+    fontWeight: 600,
+    color: "var(--c-text-muted)",
+    marginRight: 2,
+    whiteSpace: "nowrap",
   },
   filterInput: {
     border: "1.5px solid var(--c-border)",
     borderRadius: 7,
-    padding: "7px 12px",
+    padding: "6px 12px",
     fontSize: 13,
     color: "var(--c-text-primary)",
     background: "var(--c-surface-low)",
     outline: "none",
-    width: 260,
-    borderBottom: "1.5px solid var(--c-border)",
+    width: 250,
   },
   filterInputSm: {
     border: "1.5px solid var(--c-border)",
     borderRadius: 7,
-    padding: "7px 10px",
+    padding: "6px 10px",
     fontSize: 13,
     color: "var(--c-text-primary)",
     background: "var(--c-surface-low)",
     outline: "none",
-    width: 130,
-    borderBottom: "1.5px solid var(--c-border)",
+    width: 120,
   },
   filterSelect: {
     border: "1.5px solid var(--c-border)",
     borderRadius: 7,
-    padding: "7px 10px",
+    padding: "6px 10px",
     fontSize: 13,
     color: "var(--c-text-primary)",
     background: "var(--c-surface-low)",
     outline: "none",
     cursor: "pointer",
-    borderBottom: "1.5px solid var(--c-border)",
   },
-  filterSelectBtn: {
+  filterPill: {
     border: "1.5px solid var(--c-border)",
-    borderRadius: 7,
-    padding: "7px 12px",
+    borderRadius: 20,
+    padding: "5px 12px",
     fontSize: 13,
-    color: "var(--c-text-primary)",
-    background: "var(--c-surface-low)",
     cursor: "pointer",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 5,
+    fontWeight: 500,
+    transition: "all 0.12s",
     whiteSpace: "nowrap",
-    borderBottom: "1.5px solid var(--c-border)",
+  },
+  pillBadge: {
+    background: "var(--c-primary-container)",
+    color: "#fff",
+    borderRadius: 10,
+    padding: "0 5px",
+    fontSize: 10,
+    fontWeight: 700,
+    lineHeight: "16px",
   },
   dropdownMenu: {
     position: "absolute",
@@ -1621,12 +1861,21 @@ const s: Record<string, React.CSSProperties> = {
   },
   clearFiltersBtn: {
     background: "none",
-    border: "none",
-    color: "var(--c-text-muted)",
+    border: "1px solid var(--c-border)",
+    color: "var(--c-text-secondary)",
     fontSize: 12,
     cursor: "pointer",
-    textDecoration: "underline",
-    padding: 0,
+    borderRadius: 20,
+    padding: "4px 10px",
+    fontWeight: 500,
+    whiteSpace: "nowrap",
+  },
+  tableWrap: {
+    background: "var(--c-surface-lowest)",
+    borderRadius: "var(--radius-lg)" as string,
+    border: "1px solid var(--c-border)",
+    overflow: "hidden",
+    boxShadow: "var(--shadow-sm)" as string,
   },
   centred: {
     display: "flex",
@@ -1637,15 +1886,31 @@ const s: Record<string, React.CSSProperties> = {
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
-    padding: "60px 0",
-    gap: 16,
+    padding: "64px 0",
+    gap: 12,
+  },
+  emptyIconWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: "50%",
+    background: "#F0FDF4",
+    border: "1.5px solid #BBF7D0",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  emptyTitle: {
+    fontSize: 15,
+    fontWeight: 600,
+    color: "var(--c-text-primary)",
+    margin: 0,
   },
   emptyText: {
-    fontSize: "var(--text-sm)" as string,
+    fontSize: 13,
     color: "var(--c-text-muted)",
     margin: 0,
     textAlign: "center",
-    maxWidth: 480,
+    maxWidth: 420,
   },
   damagePill: {
     borderRadius: 12,
@@ -1653,6 +1918,21 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: 11,
     fontWeight: 700,
     whiteSpace: "nowrap",
+    display: "inline-flex",
+    alignItems: "center",
+  },
+  flagPill: {
+    background: "#FEF3C7",
+    color: "#92400E",
+    border: "1px solid #FDE68A",
+    borderRadius: 12,
+    padding: "2px 8px",
+    fontSize: 11,
+    fontWeight: 600,
+    whiteSpace: "nowrap",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 3,
   },
   linkBtn: {
     background: "none",
@@ -1664,11 +1944,126 @@ const s: Record<string, React.CSSProperties> = {
     fontFamily: "monospace",
     textDecoration: "underline",
   },
-  loadMoreRow: {
+  reviewBtn: {
+    background: "var(--c-primary-container)",
+    color: "#fff",
+    border: "none",
+    borderRadius: 7,
+    padding: "6px 14px",
+    fontSize: 12,
+    fontWeight: 600,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+    letterSpacing: 0.2,
+  },
+  lockedBtn: {
+    background: "transparent",
+    color: "var(--c-text-muted)",
+    border: "1.5px solid var(--c-border)",
+    borderRadius: 7,
+    padding: "6px 14px",
+    fontSize: 12,
+    fontWeight: 500,
+    cursor: "not-allowed",
+    opacity: 0.6,
+    whiteSpace: "nowrap",
+  },
+  dismissBtn: {
+    background: "transparent",
+    color: "#D97706",
+    border: "1.5px solid #FDE68A",
+    borderRadius: 7,
+    padding: "6px 12px",
+    fontSize: 12,
+    fontWeight: 600,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+  },
+  forceBtn: {
+    background: "transparent",
+    color: "var(--c-flag-red)",
+    border: "1.5px solid var(--c-flag-red)",
+    borderRadius: 7,
+    padding: "6px 12px",
+    fontSize: 12,
+    fontWeight: 600,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+  },
+  confirmBlockBtn: {
+    background: "#16A34A",
+    color: "#fff",
+    border: "none",
+    borderRadius: 7,
+    padding: "6px 12px",
+    fontSize: 12,
+    fontWeight: 600,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+  },
+  reverseBlockBtn: {
+    background: "transparent",
+    color: "var(--c-flag-red)",
+    border: "1.5px solid var(--c-flag-red)",
+    borderRadius: 7,
+    padding: "6px 12px",
+    fontSize: 12,
+    fontWeight: 600,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+  },
+  paginationRow: {
     display: "flex",
-    justifyContent: "center",
-    paddingTop: 8,
-    marginBottom: 16,
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: "10px 4px",
+    marginBottom: 8,
+  },
+  paginationInfo: {
+    fontSize: 12,
+    color: "var(--c-text-muted)",
+  },
+  loadMoreBtn: {
+    background: "transparent",
+    color: "var(--c-primary-container)",
+    border: "1.5px solid var(--c-primary-container)",
+    borderRadius: 7,
+    padding: "7px 18px",
+    fontSize: 13,
+    fontWeight: 600,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+  },
+  footerStrip: {
+    display: "flex",
+    alignItems: "center",
+    gap: 0,
+    padding: "10px 32px",
+    background: "var(--c-surface-lowest)",
+    borderTop: "1px solid var(--c-border)",
+    flexShrink: 0,
+  },
+  footerStat: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    fontSize: 12,
+    color: "var(--c-text-secondary)",
+    fontWeight: 500,
+  },
+  footerDot: {
+    width: 7,
+    height: 7,
+    borderRadius: "50%",
+    display: "inline-block",
+    flexShrink: 0,
+  },
+  footerDivider: {
+    width: 1,
+    height: 14,
+    background: "var(--c-border)",
+    margin: "0 16px",
+    display: "inline-block",
   },
 };
 
@@ -1678,7 +2073,7 @@ const ms: Record<string, React.CSSProperties> = {
   backdrop: {
     position: "fixed",
     inset: 0,
-    background: "rgba(0,0,0,0.45)",
+    background: "rgba(0,0,0,0.48)",
     zIndex: 1000,
     display: "flex",
     alignItems: "center",
@@ -1686,26 +2081,21 @@ const ms: Record<string, React.CSSProperties> = {
   },
   dialog: {
     background: "var(--c-surface-lowest)",
-    borderRadius: 12,
+    borderRadius: 14,
     padding: "28px 32px",
-    width: 460,
-    maxWidth: "90vw",
-    boxShadow: "var(--shadow-float)" as string,
+    width: 520,
+    maxWidth: "92vw",
+    boxShadow: "0 20px 60px rgba(0,0,0,0.18), 0 4px 16px rgba(0,0,0,0.08)",
     display: "flex",
     flexDirection: "column",
     gap: 16,
   },
   title: {
-    fontSize: "var(--text-lg)" as string,
+    fontSize: 17,
     fontWeight: 700,
     color: "var(--c-text-primary)",
     margin: 0,
-  },
-  desc: {
-    fontSize: "var(--text-sm)" as string,
-    color: "var(--c-text-secondary)",
-    margin: 0,
-    lineHeight: 1.5,
+    textAlign: "center",
   },
   field: {
     display: "flex",
@@ -1713,25 +2103,26 @@ const ms: Record<string, React.CSSProperties> = {
     gap: 6,
   },
   label: {
-    fontSize: "var(--text-sm)" as string,
+    fontSize: 13,
     fontWeight: 600,
     color: "var(--c-text-primary)",
   },
   textarea: {
     border: "1.5px solid var(--c-border)",
-    borderRadius: 7,
-    padding: "8px 12px",
+    borderRadius: 8,
+    padding: "9px 12px",
     fontSize: 13,
     color: "var(--c-text-primary)",
     resize: "vertical",
     outline: "none",
     fontFamily: "inherit",
     background: "var(--c-surface-low)",
+    lineHeight: 1.5,
   },
   select: {
     border: "1.5px solid var(--c-border)",
-    borderRadius: 7,
-    padding: "8px 12px",
+    borderRadius: 8,
+    padding: "9px 12px",
     fontSize: 13,
     color: "var(--c-text-primary)",
     background: "var(--c-surface-lowest)",
@@ -1756,11 +2147,13 @@ const ms: Record<string, React.CSSProperties> = {
     justifyContent: "flex-end",
     gap: 10,
     marginTop: 4,
+    paddingTop: 4,
+    borderTop: "1px solid var(--c-border)",
   },
   cancelBtn: {
-    padding: "8px 18px",
+    padding: "9px 22px",
     border: "1.5px solid var(--c-border)",
-    borderRadius: 7,
+    borderRadius: 8,
     background: "var(--c-surface-lowest)",
     color: "var(--c-text-secondary)",
     fontSize: 13,
@@ -1768,11 +2161,12 @@ const ms: Record<string, React.CSSProperties> = {
     cursor: "pointer",
   },
   confirmBtn: {
-    padding: "8px 18px",
+    padding: "9px 22px",
     border: "none",
-    borderRadius: 7,
+    borderRadius: 8,
     color: "#fff",
     fontSize: 13,
     fontWeight: 700,
+    letterSpacing: 0.2,
   },
 };

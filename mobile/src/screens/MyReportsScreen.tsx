@@ -13,6 +13,8 @@ import {
   removeFromQueue,
   onQueueChange,
   syncQueue,
+  getLocalSubmittedReports,
+  type LocalSubmittedRecord,
 } from '../utils/offlineQueue';
 import type { QueuedReport } from '../types';
 import NetInfo from '@react-native-community/netinfo';
@@ -121,6 +123,7 @@ export default function MyReportsScreen() {
   const [reporterId, setReporterId] = useState<string | null | undefined>(undefined);
   const [queuedReports, setQueuedReports] = useState<QueuedReport[]>([]);
   const [submittedReports, setSubmittedReports] = useState<SubmittedReport[]>([]);
+  const [localSubmittedReports, setLocalSubmittedReports] = useState<LocalSubmittedRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -197,6 +200,10 @@ export default function MyReportsScreen() {
       await loadQueue();
       if (!isAnonymousId(reporterId)) {
         await loadSubmitted();
+      } else {
+        // Anonymous — load any locally-saved submitted records.
+        const local = await getLocalSubmittedReports();
+        setLocalSubmittedReports(local);
       }
       setLoading(false);
     };
@@ -220,6 +227,9 @@ export default function MyReportsScreen() {
     if (!isAnonymousId(reporterId)) {
       setNextCursor(null);
       await loadSubmitted();
+    } else {
+      const local = await getLocalSubmittedReports();
+      setLocalSubmittedReports(local);
     }
     setRefreshing(false);
   };
@@ -443,8 +453,50 @@ export default function MyReportsScreen() {
           </View>
         )}
 
-        {/* Empty state for anonymous with no queue */}
-        {isAnonymousId(reporterId) && queuedReports.length === 0 && (
+        {/* Anonymous: locally-saved submitted report history */}
+        {isAnonymousId(reporterId) && localSubmittedReports.length > 0 && (
+          <View>
+            <Text style={styles.sectionHeader}>SUBMITTED (THIS DEVICE)</Text>
+            {localSubmittedReports.map((report) => {
+              const damagePill = getDamagePill(report.damage_level);
+              const locationLabel =
+                report.building_name ||
+                report.location_address ||
+                report.location_landmark ||
+                (report.gps_latitude != null
+                  ? `${report.gps_latitude.toFixed(4)}, ${(report.gps_longitude ?? 0).toFixed(4)}`
+                  : 'Unknown location');
+              return (
+                <TouchableOpacity
+                  key={report.id}
+                  style={styles.reportCard}
+                  onPress={() => navigation.navigate('ReportDetailScreen', { reportId: report.id })}
+                  activeOpacity={0.75}
+                >
+                  <View style={styles.cardRow1}>
+                    <View style={[styles.statusPill, { backgroundColor: 'rgba(56,161,105,0.12)' }]}>
+                      <Text style={[styles.statusPillText, { color: '#38A169' }]}>✓ Submitted</Text>
+                    </View>
+                    <Text style={styles.cardDate}>{formatTime(report.submitted_at)}</Text>
+                  </View>
+                  <View style={styles.cardRow2}>
+                    <MaterialIcons name="location-on" color="#0468B1" size={scale(16)} />
+                    <Text style={styles.locationText} numberOfLines={1}>{locationLabel}</Text>
+                    <MaterialIcons name="chevron-right" color="#C1C7D2" size={scale(18)} />
+                  </View>
+                  <View style={[styles.damagePill, { backgroundColor: damagePill.bg }]}>
+                    <Text style={[styles.damagePillText, { color: damagePill.color }]}>
+                      {formatDamageLevel(report.damage_level)}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
+
+        {/* Empty state for anonymous with no queue AND no local history */}
+        {isAnonymousId(reporterId) && queuedReports.length === 0 && localSubmittedReports.length === 0 && (
           <View style={styles.emptyState}>
             <MaterialIcons name="assignment" color="#C1C7D2" size={scale(56)} />
             <Text style={styles.emptyTitle}>No reports yet</Text>

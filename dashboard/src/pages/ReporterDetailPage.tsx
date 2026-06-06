@@ -15,7 +15,6 @@ import type {
   ReporterDetail,
   ReporterActivityEntry,
   ReporterBadgesResponse,
-  ReportListItem,
 } from "../types";
 import {
   formatDateTime,
@@ -143,7 +142,21 @@ function StatusChangeModal({ newStatus, onConfirm, onCancel, isSubmitting, error
           {newStatus === "blocked" && (
             <p style={s.modalWarning}>
               Blocked reporters can still submit reports — their submissions will be automatically
-              Red-flagged and routed to the Review Queue.
+              Red-flagged and discarded without entering the Review Queue. The reporter has no
+              indication their reports are being discarded.
+            </p>
+          )}
+          {newStatus === "flagged" && (
+            <p style={{ ...s.modalWarning, background: "#FFF8E1", borderColor: "#FFB74D", color: "#7B4F00" }}>
+              All future reports from this reporter will be automatically Red-flagged and routed
+              to the Review Queue for human review. Individual reports can still be approved.
+              The reporter has no indication their profile has been Flagged.
+            </p>
+          )}
+          {newStatus === "active" && (
+            <p style={{ ...s.modalWarning, background: "#F1F8E9", borderColor: "#AED581", color: "#33691E" }}>
+              The reporter will return to normal submission — reports go through the standard
+              automatic flag checks. Record the reason for reinstating this profile.
             </p>
           )}
           <div style={{ marginBottom: 16 }}>
@@ -367,27 +380,74 @@ function PauseSection({
   );
 }
 
+// ── Reporter report row shape (what the backend actually returns) ──────────────
+
+interface ReporterReportRow {
+  id: string;
+  serial_number: number | null;
+  created_at: string;
+  country: string | null;
+  damage_level: string;
+  infrastructure_type: string | null;
+  disaster_type: string | null;
+  flag_status: string;
+}
+
+interface ReporterReportsResponse {
+  items: ReporterReportRow[];
+  total: number;
+  cursor: string | null;
+  has_more: boolean;
+}
+
 // ── Section 6: Reports list ────────────────────────────────────────────────────
 
 function ReportsSection({ reporterId }: { reporterId: string }) {
   const [flagFilter, setFlagFilter] = useState("");
-  const [page, setPage] = useState(1);
+  // Cursor-based pagination — stack of previous cursors for ← Previous support
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [cursorStack, setCursorStack] = useState<(string | null)[]>([]);
+  const [pageDisplay, setPageDisplay] = useState(1);
   const PAGE_SIZE = 50;
 
-  const params: Record<string, string | number> = { page, page_size: PAGE_SIZE };
+  const params: Record<string, string | number> = { limit: PAGE_SIZE };
   if (flagFilter) params.flag_status = flagFilter;
+  if (cursor) params.cursor = cursor;
 
   const { data, isLoading } = useQuery({
     queryKey: ["reporter-reports", reporterId, params],
     queryFn: async () => {
       const res = await getReporterReports(reporterId, params);
-      return res.data as { items: ReportListItem[]; total: number };
+      return res.data as ReporterReportsResponse;
     },
   });
 
   const items = data?.items ?? [];
   const total = data?.total ?? 0;
-  const totalPages = Math.ceil(total / PAGE_SIZE);
+  const hasMore = data?.has_more ?? false;
+  const nextCursor = data?.cursor ?? null;
+  const hasPrev = cursorStack.length > 0;
+
+  function handleFilterChange(v: string) {
+    setFlagFilter(v);
+    setCursor(null);
+    setCursorStack([]);
+    setPageDisplay(1);
+  }
+
+  function handleNext() {
+    setCursorStack((prev) => [...prev, cursor]);
+    setCursor(nextCursor);
+    setPageDisplay((p) => p + 1);
+  }
+
+  function handlePrev() {
+    const stack = [...cursorStack];
+    const prevCursor = stack.pop() ?? null;
+    setCursorStack(stack);
+    setCursor(prevCursor);
+    setPageDisplay((p) => p - 1);
+  }
 
   return (
     <Card title="Submitted Reports">
@@ -395,7 +455,7 @@ function ReportsSection({ reporterId }: { reporterId: string }) {
         <select
           style={s.filterSelect}
           value={flagFilter}
-          onChange={(e) => { setFlagFilter(e.target.value); setPage(1); }}
+          onChange={(e) => handleFilterChange(e.target.value)}
         >
           <option value="">All statuses</option>
           <option value="grey">Grey</option>
@@ -404,7 +464,9 @@ function ReportsSection({ reporterId }: { reporterId: string }) {
           <option value="red">Red</option>
           <option value="discarded">Discarded</option>
         </select>
-        <span style={{ fontSize: "var(--text-xs)", color: "var(--c-text-muted)" }}>{total} reports</span>
+        <span style={{ fontSize: "var(--text-xs)", color: "var(--c-text-muted)" }}>
+          {total} report{total !== 1 ? "s" : ""} total
+        </span>
       </div>
 
       {isLoading ? (
@@ -432,13 +494,11 @@ function ReportsSection({ reporterId }: { reporterId: string }) {
                     <td style={s.subTd}>
                       <button
                         style={s.linkBtn}
-                        onClick={() => r.id && window.open("/reports/" + r.id, "_blank")}
+                        onClick={() => window.open("/reports/" + r.id, "_blank")}
                       >
                         {r.serial_number != null
                           ? `#${r.serial_number}`
-                          : r.id
-                            ? `${r.id.slice(0, 8)}…`
-                            : "Unknown"}
+                          : `${r.id.slice(0, 8)}…`}
                       </button>
                     </td>
                     <td style={s.subTd}>{formatDateTime(r.created_at)}</td>
@@ -451,10 +511,8 @@ function ReportsSection({ reporterId }: { reporterId: string }) {
                     <td style={s.subTd}>{r.infrastructure_type || "—"}</td>
                     <td style={s.subTd}>{r.disaster_type || "—"}</td>
                     <td style={s.subTd}>
-                      <span className={flagChipClass(r.flag_status ?? "")}>
-                        {r.flag_status
-                          ? r.flag_status.charAt(0).toUpperCase() + r.flag_status.slice(1)
-                          : "—"}
+                      <span className={flagChipClass(r.flag_status)}>
+                        {r.flag_status.charAt(0).toUpperCase() + r.flag_status.slice(1)}
                       </span>
                     </td>
                   </tr>
@@ -462,25 +520,27 @@ function ReportsSection({ reporterId }: { reporterId: string }) {
               </tbody>
             </table>
           </div>
-          {totalPages > 1 && (
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 12 }}>
-              <button
-                style={{ ...s.pageBtn, opacity: page <= 1 ? 0.4 : 1 }}
-                disabled={page <= 1}
-                onClick={() => setPage((p) => p - 1)}
-              >
-                ← Previous
-              </button>
-              <span style={{ fontSize: "var(--text-xs)", color: "var(--c-text-muted)", alignSelf: "center" }}>
-                Page {page} of {totalPages}
+          {(hasPrev || hasMore) && (
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 12 }}>
+              <span style={{ fontSize: "var(--text-xs)", color: "var(--c-text-muted)" }}>
+                Page {pageDisplay} · showing {items.length} of {total}
               </span>
-              <button
-                style={{ ...s.pageBtn, opacity: page >= totalPages ? 0.4 : 1 }}
-                disabled={page >= totalPages}
-                onClick={() => setPage((p) => p + 1)}
-              >
-                Next →
-              </button>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  style={{ ...s.pageBtn, opacity: hasPrev ? 1 : 0.4 }}
+                  disabled={!hasPrev}
+                  onClick={handlePrev}
+                >
+                  ← Previous
+                </button>
+                <button
+                  style={{ ...s.pageBtn, opacity: hasMore ? 1 : 0.4 }}
+                  disabled={!hasMore}
+                  onClick={handleNext}
+                >
+                  Next →
+                </button>
+              </div>
             </div>
           )}
         </>
@@ -699,12 +759,17 @@ export default function ReporterDetailPage() {
     );
   }
 
-  // Show a short readable ID: first 8 chars of UUID + ellipsis
+  // Short readable ID: first 8 chars of UUID + ellipsis
   const shortId = reporter.reporter_id.slice(0, 8) + "…";
+  // Display name: decrypted name if available, else "Reporter #<shortId>"
+  const displayName = reporter.name || null;
 
   return (
     <div style={s.container}>
-      <Header title="Reporter Profile" subtitle={`ID: ${shortId}`} />
+      <Header
+        title="Reporter Profile"
+        subtitle={displayName ? displayName : `ID: ${shortId}`}
+      />
 
       {toast && <Toast message={toast} onDone={() => setToast(null)} />}
 
@@ -717,19 +782,30 @@ export default function ReporterDetailPage() {
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 4 }}>
-              <div style={s.profileName}>Reporter</div>
-              <span style={{
-                fontFamily: "monospace",
-                fontSize: "var(--text-sm)",
-                color: "var(--c-text-muted)",
-                background: "var(--c-surface-low)",
-                borderRadius: "var(--radius-sm)",
-                padding: "2px 8px",
-                userSelect: "all" as const,
-              }} title={reporter.reporter_id}>
-                {shortId}
-              </span>
+              {displayName ? (
+                <div style={s.profileName}>{displayName}</div>
+              ) : (
+                <>
+                  <div style={s.profileName}>Reporter</div>
+                  <span style={{
+                    fontFamily: "monospace",
+                    fontSize: "var(--text-sm)",
+                    color: "var(--c-text-muted)",
+                    background: "var(--c-surface-low)",
+                    borderRadius: "var(--radius-sm)",
+                    padding: "2px 8px",
+                    userSelect: "all" as const,
+                  }} title={reporter.reporter_id}>
+                    {shortId}
+                  </span>
+                </>
+              )}
             </div>
+            {displayName && (
+              <div style={{ fontFamily: "monospace", fontSize: 12, color: "var(--c-text-muted)", marginBottom: 4 }}>
+                ID: {shortId}
+              </div>
+            )}
             <div style={s.profileType}>{formatProfileType(reporter.profile_type)}</div>
             <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
               <span className={statusChipClass(reporter.profile_status)}>
@@ -748,7 +824,7 @@ export default function ReporterDetailPage() {
                 </span>
               )}
               <span style={s.memberSince}>
-                Member since {formatDateTime(reporter.created_at)}
+                First seen {formatDateTime(reporter.created_at)}
               </span>
             </div>
           </div>
@@ -762,10 +838,9 @@ export default function ReporterDetailPage() {
               <DetailRow label="Device ID" value={reporter.device_id ? <span style={{ fontFamily: "monospace", fontSize: 12 }}>{reporter.device_id}</span> : "—"} />
               <DetailRow label="IP Address" value={reporter.ip_address ? <span style={{ fontFamily: "monospace" }}>{reporter.ip_address}</span> : "—"} />
               <DetailRow label="Country" value={reporter.country || "—"} />
-              <DetailRow label="MCC (cell tower country)" value={reporter.mcc || "—"} />
+              <DetailRow label="MCC (cell tower)" value={reporter.mcc || "—"} />
               <DetailRow label="Device Model" value={reporter.device_model || "—"} />
               <DetailRow label="Device Brand" value={reporter.device_brand || "—"} />
-              <DetailRow label="OS Device ID" value={reporter.os_device_id || "—"} />
               <DetailRow label="Network Type" value={reporter.network_type || "—"} />
             </div>
             <div>
@@ -773,6 +848,32 @@ export default function ReporterDetailPage() {
               <DetailRow label="Language" value={reporter.language_code || "—"} />
               <DetailRow label="First Seen" value={formatDateTime(reporter.created_at)} />
               <DetailRow label="Last Active" value={formatDateTime(reporter.last_active_at)} />
+              <DetailRow
+                label="Email"
+                value={
+                  reporter.email ? (
+                    <span>
+                      {reporter.email}{" "}
+                      <em style={{ fontSize: 11, color: "var(--c-text-muted)", fontStyle: "normal", fontWeight: 500 }}>
+                        (Unverified)
+                      </em>
+                    </span>
+                  ) : null
+                }
+              />
+              <DetailRow
+                label="Name"
+                value={
+                  reporter.name ? (
+                    <span>
+                      {reporter.name}{" "}
+                      <em style={{ fontSize: 11, color: "var(--c-text-muted)", fontStyle: "normal", fontWeight: 500 }}>
+                        (Unverified)
+                      </em>
+                    </span>
+                  ) : null
+                }
+              />
             </div>
           </div>
         </Card>

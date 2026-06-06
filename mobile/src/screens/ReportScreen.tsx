@@ -1430,13 +1430,8 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
         setSubmittedReportId(reportId as string);
         setWasQueued(false);
         setSubmitted(true);
-      } catch (error: any) {
+      } catch {
         clearTimeout(timeoutId);
-        const isTimeout = error.code === 'ERR_CANCELED' || error.name === 'AbortError';
-        if (isTimeout) {
-          setSubmitTimedOut(true);
-          return;
-        }
         await queueReport();
       }
     } finally {
@@ -1715,16 +1710,10 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
     );
   }
 
-  if (crisisError || !crisisId) {
-    return (
-      <View style={styles.successContainer}>
-        <Text style={styles.errorText}>No active crisis found. Please try again later.</Text>
-        <TouchableOpacity style={styles.homeButton} onPress={() => navigation.goBack()}>
-          <Text style={styles.primaryButtonText}>Go Back</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
+  // crisisError / missing crisisId does NOT block the form.
+  // The backend resolves crisis automatically (auto-picks first active crisis
+  // when crisis_id is omitted from the payload). If truly no crisis exists,
+  // the submit API call returns a 404 at that point with a clear error.
 
   const getStepNumber = (s: string): number => {
     switch (s) {

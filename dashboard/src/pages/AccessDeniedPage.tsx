@@ -5,7 +5,12 @@ export default function AccessDeniedPage() {
 
   return (
     <div style={styles.container}>
-      <div style={styles.icon}>🔒</div>
+      <div style={styles.icon}>
+        <span
+          className="material-symbols-outlined"
+          style={{ fontSize: 56, color: "#0468B1", fontVariationSettings: "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 48" }}
+        >lock</span>
+      </div>
       <h1 style={styles.heading}>Access Denied</h1>
       <p style={styles.message}>
         You do not have permission to access this section.

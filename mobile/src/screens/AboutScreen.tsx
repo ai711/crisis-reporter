@@ -30,7 +30,7 @@ export default function AboutScreen() {
             <MaterialIcons name="security" size={scale(36)} color="#FFFFFF" />
           </View>
           <Text style={styles.appTitle}>Crisis Reporter</Text>
-          <Text style={styles.appSubtitle}>By UNDP</Text>
+          <Text style={styles.appSubtitle}>Powered by UNDP</Text>
         </View>
 
         {/* Card 1 — About */}

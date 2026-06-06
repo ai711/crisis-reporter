@@ -267,7 +267,7 @@ export default function SettingsPage() {
             <div style={s.divider} />
             <button
               style={s.row}
-              onClick={() => alert("Privacy Policy coming soon")}
+              onClick={() => window.open('https://www.undp.org/privacy-policy', '_blank', 'noopener,noreferrer')}
             >
               <span style={s.rowLabel}>{t('settings.privacy_policy')}</span>
               <IconChevron />

@@ -13,7 +13,7 @@ import NetInfo from "@react-native-community/netinfo";
 import * as SecureStore from "expo-secure-store";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import SideMenu from "../components/SideMenu";
-import { loadDynamicLanguagePackage } from "../i18n";
+import { fetchLanguagePackageFromBackend } from "../i18n";
 
 const { width: screenWidth } = Dimensions.get("window");
 const scale = (size: number) => Math.round((screenWidth / 375) * size);
@@ -39,17 +39,28 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [showCrisisModal, setShowCrisisModal] = useState(false);
   const [showWelcomeCard, setShowWelcomeCard] = useState(false);
-  const [activeCrisis, setActiveCrisis] = useState<{ name: string; crisis_type: string } | null>(null);
+  const [recentReports, setRecentReports] = useState<any[]>([]);
 
   const reportBtnScale = useRef(new Animated.Value(1)).current;
 
-  // Login popup — show once until reporter_id exists
+  // Login popup — show once until reporter_id exists; also fetch recent reports.
   useEffect(() => {
     const checkPopup = async () => {
       const reporterId = await SecureStore.getItemAsync("cr_reporter_id");
       const popupShown = await AsyncStorage.getItem("cr_popup_shown");
       if (!reporterId && !popupShown) {
         setShowLoginPopup(true);
+      }
+      // Fetch recent reports for logged-in (non-anonymous) reporters.
+      const isAnon = !reporterId || reporterId.startsWith("CR-PENDING-");
+      if (!isAnon) {
+        try {
+          const res = await api.get("/api/reports/my", { params: { limit: 3 } });
+          const items = res.data?.items ?? res.data?.reports ?? res.data ?? [];
+          setRecentReports(Array.isArray(items) ? items.slice(0, 3) : []);
+        } catch {
+          // Non-critical — silently ignore
+        }
       }
     };
     checkPopup();
@@ -109,40 +120,13 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
         // Non-blocking — cached package will be used
       }
 
-      // Language package: version-gate on lang version
+      // Language package: delegate to shared version-aware fetch (version-gated, non-blocking)
       if (langCode !== "en") {
-        try {
-          const langVerRes = await api.get(`/api/language-packages/${langCode}/version`);
-          const latestLangVer = String(langVerRes.data.version ?? "");
-          const cachedLangVer = await AsyncStorage.getItem(`cr_lang_version_${langCode}`);
-          if (latestLangVer && latestLangVer !== cachedLangVer) {
-            const langPkgRes = await api.get(`/api/language-packages/active/${langCode}`);
-            const langStrings = langPkgRes.data?.strings ?? langPkgRes.data;
-            await AsyncStorage.setItem(`cr_lang_package_${langCode}`, JSON.stringify(langStrings));
-            await AsyncStorage.setItem(`cr_lang_version_${langCode}`, latestLangVer);
-            await loadDynamicLanguagePackage(langCode);
-          }
-        } catch {
-          // Non-blocking — cached language package will be used
-        }
+        fetchLanguagePackageFromBackend(langCode).catch(() => {});
       }
     };
 
     checkVersionsAndSync();
-  }, []);
-
-  // Active crisis banner — best-effort, no loading state
-  useEffect(() => {
-    api
-      .get("/api/crises/active")
-      .then((res) => {
-        if (Array.isArray(res.data) && res.data.length > 0) {
-          setActiveCrisis(res.data[0]);
-        }
-      })
-      .catch(() => {
-        // Offline or no active crisis — no banner shown
-      });
   }, []);
 
   // ── Handlers ──────────────────────────────────────────────────────────────────
@@ -223,16 +207,6 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
           <Text style={styles.settingsIcon}>⚙</Text>
         </TouchableOpacity>
       </View>
-
-      {/* Active crisis banner */}
-      {activeCrisis && (
-        <View style={styles.crisisBanner}>
-          <Text style={styles.crisisBannerEmoji}>🚨</Text>
-          <Text style={styles.crisisBannerText}>
-            Active crisis: {activeCrisis.name} ({activeCrisis.crisis_type})
-          </Text>
-        </View>
-      )}
 
       <ScrollView
         style={styles.scroll}
@@ -323,6 +297,45 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
             </Text>
           </TouchableOpacity>
         </View>
+
+        {/* Recent reports — shown for logged-in reporters with at least 1 report */}
+        {recentReports.length > 0 && (
+          <View style={styles.recentSection}>
+            <View style={styles.recentHeader}>
+              <Text style={styles.recentLabel}>RECENT REPORTS</Text>
+              <TouchableOpacity onPress={() => navigation.navigate("MyReports")}>
+                <Text style={styles.recentSeeAll}>See all</Text>
+              </TouchableOpacity>
+            </View>
+            {recentReports.map((report: any) => {
+              const loc =
+                report.building_name ||
+                report.location_address ||
+                report.location_landmark ||
+                (report.gps_latitude != null
+                  ? `${Number(report.gps_latitude).toFixed(4)}, ${Number(report.gps_longitude ?? 0).toFixed(4)}`
+                  : "Unknown location");
+              return (
+                <TouchableOpacity
+                  key={report.id}
+                  style={styles.recentCard}
+                  onPress={() => navigation.navigate("ReportDetailScreen", { reportId: report.id })}
+                  activeOpacity={0.75}
+                >
+                  <Text style={styles.recentLocation} numberOfLines={1}>{loc}</Text>
+                  <Text style={styles.recentMeta}>
+                    {report.disaster_type
+                      ? `${report.disaster_type}  ·  `
+                      : ""}
+                    {report.submitted_at
+                      ? new Date(report.submitted_at).toLocaleDateString([], { month: "short", day: "numeric" })
+                      : ""}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
 
       </ScrollView>
 
@@ -464,28 +477,6 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#1B1C1C",
     textAlign: "center",
-  },
-
-  // ── Active crisis banner ──────────────────────────────────────────────────────
-  crisisBanner: {
-    backgroundColor: "rgba(245,166,35,0.12)",
-    paddingHorizontal: screenWidth * 0.06,
-    paddingVertical: 10,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "rgba(245,166,35,0.3)",
-  },
-  crisisBannerEmoji: {
-    fontSize: scale(14),
-  },
-  crisisBannerText: {
-    flex: 1,
-    fontSize: scale(13),
-    color: "#92400E",
-    fontWeight: "500",
-    lineHeight: scale(13) * 1.5,
   },
 
   // ── Scroll area ───────────────────────────────────────────────────────────────
@@ -650,6 +641,50 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#717782",
     letterSpacing: 1.5,
+  },
+
+  // ── Recent reports section ───────────────────────────────────────────────────
+  recentSection: {
+    width: "100%",
+    marginTop: 16,
+  },
+  recentHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  recentLabel: {
+    fontSize: scale(10),
+    fontWeight: "700",
+    color: "#717782",
+    letterSpacing: 1.5,
+    textTransform: "uppercase",
+  },
+  recentSeeAll: {
+    fontSize: scale(13),
+    fontWeight: "600",
+    color: "#0468B1",
+  },
+  recentCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: "#0468B1",
+  },
+  recentLocation: {
+    fontSize: scale(14),
+    fontWeight: "600",
+    color: "#1B1C1C",
+    marginBottom: 3,
+  },
+  recentMeta: {
+    fontSize: scale(12),
+    color: "#717782",
+    textTransform: "capitalize",
   },
 
   // ── "What can I report?" link ─────────────────────────────────────────────────

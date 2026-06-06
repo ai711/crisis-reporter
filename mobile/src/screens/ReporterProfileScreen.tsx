@@ -50,8 +50,8 @@ export default function ReporterProfileScreen() {
     phone: "", phoneCountryCode: "+1",
   });
 
-  const completionCount = [firstName, lastName, email, phone].filter(Boolean).length;
-  const completion = Math.round((completionCount / 4) * 100);
+  const completionCount = [firstName, lastName, email, phone, photoUrl].filter(Boolean).length;
+  const completion = Math.round((completionCount / 5) * 100);
 
   // ── Load reporter ID + profile ───────────────────────────────────────────────
 
@@ -253,7 +253,7 @@ export default function ReporterProfileScreen() {
         >
           <MaterialIcons name="arrow-back" size={scale(24)} color="#0468B1" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Reporter Profile</Text>
+        <Text style={styles.headerTitle}>Profile</Text>
         <View style={styles.headerBtn} />
       </View>
 
@@ -279,8 +279,10 @@ export default function ReporterProfileScreen() {
           <TouchableOpacity onPress={handlePickPhoto} activeOpacity={0.7}>
             <Text style={styles.photoLabel}>{photoUrl ? "Change Photo" : "Add Profile Photo"}</Text>
           </TouchableOpacity>
-          {reporterId && (
-            <Text style={styles.reporterIdText}>{reporterId}</Text>
+          {reporterId && !reporterId.startsWith('CR-PENDING-') && (
+            <Text style={styles.reporterIdText}>
+              ID: {reporterId.replace(/-/g, '').slice(0, 3).toUpperCase()}-{reporterId.replace(/-/g, '').slice(3, 6).toUpperCase()}
+            </Text>
           )}
         </View>
 

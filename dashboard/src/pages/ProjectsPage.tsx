@@ -208,88 +208,109 @@ function CreateProjectModal({ onClose, countries }: CreateProjectModalProps) {
   return (
     <div style={overlayStyle} onClick={mutation.isPending ? undefined : onClose}>
       <div style={modalStyle} onClick={(e) => e.stopPropagation()}>
-        <div style={modalHeaderStyle}>
-          <span style={{ fontWeight: 700, fontSize: 16 }}>Create Project</span>
-          <button onClick={onClose} disabled={mutation.isPending} style={iconBtnStyle}><X size={18} /></button>
-        </div>
-        <div style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 16 }}>
-          {/* Name */}
+
+        {/* Header */}
+        <div style={{ padding: "24px 28px 18px", borderBottom: "1px solid #f0f4f8", display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
           <div>
-            <label style={labelStyle}>Project Name <span style={{ color: "red" }}>*</span></label>
+            <div style={{ fontWeight: 800, fontSize: 18, color: "#1A2B4A" }}>Create New Project</div>
+            <div style={{ fontSize: 12, color: "#718096", marginTop: 2 }}>Initialize a new crisis monitoring project</div>
+          </div>
+          <button onClick={onClose} disabled={mutation.isPending} style={iconBtnStyle}>
+            <X size={18} />
+          </button>
+        </div>
+
+        <div style={{ padding: "20px 28px", display: "flex", flexDirection: "column", gap: 18 }}>
+
+          {/* Important Notice box */}
+          <div style={{
+            background: "rgba(4,104,177,0.06)", border: "1px solid rgba(4,104,177,0.15)",
+            borderRadius: 8, padding: "12px 14px", display: "flex", gap: 10, alignItems: "flex-start",
+          }}>
+            <span className="material-symbols-outlined" style={{ fontSize: 20, color: "#0468B1", flexShrink: 0, fontVariationSettings: "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20" }}>info</span>
+            <p style={{ fontSize: 12, color: "#00497f", lineHeight: 1.6, margin: 0 }}>
+              <strong>Important Notice:</strong> Country selection and start date cannot be changed once the project has been initialized. Please verify all details before creation.
+            </p>
+          </div>
+
+          {/* Project Name */}
+          <div>
+            <label style={modalLabelStyle}>Project Name <span style={{ color: "#e53e3e" }}>*</span></label>
             <input
               value={name}
               onChange={(e) => { setName(e.target.value); setInlineError(null); }}
-              placeholder="e.g. 2026 Turkey Earthquake"
-              style={inputStyle}
+              placeholder="e.g. Sudan Humanitarian Response 2026"
+              style={modalInputStyle}
             />
           </div>
 
           {/* Countries */}
           <div>
-            <label style={labelStyle}>Countries <span style={{ color: "red" }}>*</span></label>
+            <label style={modalLabelStyle}>Countries <span style={{ color: "#e53e3e" }}>*</span></label>
             <CountrySelect
               selected={selectedCountries}
               onChange={setSelectedCountries}
               countries={countries}
               placeholder="Select at least one country"
             />
-            {selectedCountries.length === 0 && inlineError === null && (
-              <span style={{ fontSize: 11, color: "#aaa" }}>At least one country required</span>
+            {selectedCountries.length === 0 && !inlineError && (
+              <span style={{ fontSize: 11, color: "#9aa5b4", marginTop: 3, display: "block" }}>At least one country is required</span>
             )}
           </div>
 
-          {/* Start Date */}
-          <div>
-            <label style={labelStyle}>
-              Start Date <span style={{ color: "red" }}>*</span>
-              <span style={{ fontWeight: 400, color: "#B45309", fontSize: 11, marginLeft: 6 }}>
-                Cannot be changed after creation
-              </span>
-            </label>
-            <input
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              max={today}
-              style={inputStyle}
-            />
-            <div style={{ fontSize: 11, color: "#B45309", marginTop: 2 }}>
-              This field cannot be edited after the project is created.
+          {/* Start Date + End Date — side by side */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+            <div>
+              <label style={modalLabelStyle}>Start Date <span style={{ color: "#e53e3e" }}>*</span></label>
+              <div style={{ position: "relative" }}>
+                <span className="material-symbols-outlined" style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", fontSize: 16, color: "#9aa5b4", pointerEvents: "none", fontVariationSettings: "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20" }}>calendar_today</span>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  max={today}
+                  style={{ ...modalInputStyle, paddingLeft: 34 }}
+                />
+              </div>
+              <div style={{ fontSize: 11, color: "#B45309", marginTop: 3 }}>Cannot be changed after creation.</div>
             </div>
-          </div>
-
-          {/* End Date */}
-          <div>
-            <label style={labelStyle}>End Date <span style={{ color: "red" }}>*</span></label>
-            <input
-              type="date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              min={startDate || undefined}
-              style={inputStyle}
-            />
+            <div>
+              <label style={modalLabelStyle}>End Date <span style={{ color: "#e53e3e" }}>*</span></label>
+              <div style={{ position: "relative" }}>
+                <span className="material-symbols-outlined" style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", fontSize: 16, color: "#9aa5b4", pointerEvents: "none", fontVariationSettings: "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20" }}>calendar_today</span>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  min={startDate || undefined}
+                  style={{ ...modalInputStyle, paddingLeft: 34 }}
+                />
+              </div>
+            </div>
           </div>
 
           {/* Description */}
           <div>
-            <label style={labelStyle}>Description <span style={{ color: "#aaa", fontWeight: 400 }}>(optional)</span></label>
+            <label style={modalLabelStyle}>Description <span style={{ fontSize: 10, color: "#9aa5b4", fontWeight: 400 }}>(optional)</span></label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value.slice(0, 1000))}
-              placeholder="Optional — describe the crisis event or project scope."
+              placeholder="Describe the crisis event or project scope."
               rows={3}
-              style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }}
+              style={{ ...modalInputStyle, resize: "vertical", fontFamily: "inherit", lineHeight: 1.5 }}
             />
-            <div style={{ fontSize: 11, color: "#aaa", textAlign: "right" }}>{description.length}/1000</div>
+            <div style={{ fontSize: 11, color: "#9aa5b4", textAlign: "right", marginTop: 2 }}>{description.length}/1000</div>
           </div>
 
           {inlineError && (
-            <div style={{ background: "#FDECEA", color: "#C62828", borderRadius: 6, padding: "8px 12px", fontSize: 13 }}>
+            <div style={{ background: "#FDECEA", color: "#C62828", borderRadius: 8, padding: "10px 14px", fontSize: 13 }}>
               {inlineError}
             </div>
           )}
         </div>
-        <div style={modalFooterStyle}>
+
+        {/* Footer */}
+        <div style={{ padding: "16px 28px", background: "#f7f9fc", borderTop: "1px solid #f0f4f8", display: "flex", justifyContent: "flex-end", gap: 10 }}>
           <button onClick={onClose} disabled={mutation.isPending} style={cancelBtnStyle}>Cancel</button>
           <button
             onClick={() => mutation.mutate()}
@@ -476,15 +497,13 @@ interface FilterState {
   country: string;
   dateFrom: string;
   dateTo: string;
-  createdBy: string;
 }
 
 const DEFAULT_FILTERS: FilterState = {
-  status: ["active", "closed"],
+  status: ["active"],
   country: "",
   dateFrom: "",
   dateTo: "",
-  createdBy: "",
 };
 
 interface FilterPanelProps {
@@ -506,35 +525,22 @@ function FilterPanel({ filters, onChange, onClose, countries }: FilterPanelProps
     return () => document.removeEventListener("mousedown", handler);
   }, [onClose]);
 
-  const toggleStatus = (s: string) => {
-    setLocal((prev) => ({
-      ...prev,
-      status: prev.status.includes(s) ? prev.status.filter((x) => x !== s) : [...prev.status, s],
-    }));
-  };
-
   const apply = () => { onChange(local); onClose(); };
-  const clear = () => { setLocal({ ...DEFAULT_FILTERS }); onChange({ ...DEFAULT_FILTERS }); onClose(); };
+  const clear = () => {
+    // Preserve current status (controlled by tabs); reset only country/date
+    const reset: FilterState = { ...DEFAULT_FILTERS, status: filters.status };
+    setLocal(reset); onChange(reset); onClose();
+  };
 
   return (
     <div ref={ref} style={{
-      position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 300,
-      background: "#fff", border: "1px solid #ddd", borderRadius: 8,
-      boxShadow: "0 8px 24px rgba(0,0,0,0.12)", padding: 20, width: 320,
+      position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 300,
+      background: "#fff", border: "1px solid #e0e8f0", borderRadius: 10,
+      boxShadow: "0 8px 32px rgba(8,27,57,0.12)", padding: 20, width: 300,
     }}>
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 14 }}>
-        <span style={{ fontWeight: 600, fontSize: 14 }}>Filters</span>
-        <button onClick={clear} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "#0468B1" }}>Clear all</button>
-      </div>
-
-      <div style={{ marginBottom: 14 }}>
-        <div style={{ fontSize: 12, fontWeight: 600, color: "#555", marginBottom: 6 }}>Project Status</div>
-        {["active", "closed", "archived"].map((s) => (
-          <label key={s} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, marginBottom: 4, cursor: "pointer" }}>
-            <input type="checkbox" checked={local.status.includes(s)} onChange={() => toggleStatus(s)} />
-            {s.charAt(0).toUpperCase() + s.slice(1)}
-          </label>
-        ))}
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
+        <span style={{ fontWeight: 700, fontSize: 13, color: "#1A2B4A" }}>Advanced Filters</span>
+        <button onClick={clear} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "#0468B1", fontWeight: 600 }}>Clear</button>
       </div>
 
       <div style={{ marginBottom: 14 }}>
@@ -563,16 +569,6 @@ function FilterPanel({ filters, onChange, onClose, countries }: FilterPanelProps
         </div>
       </div>
 
-      <div style={{ marginBottom: 16 }}>
-        <div style={{ fontSize: 12, fontWeight: 600, color: "#555", marginBottom: 6 }}>Created By</div>
-        <input
-          value={local.createdBy}
-          onChange={(e) => setLocal((p) => ({ ...p, createdBy: e.target.value }))}
-          placeholder="Search by user name"
-          style={{ ...inputStyle, fontSize: 13 }}
-        />
-      </div>
-
       <button onClick={apply} style={{ ...primaryBtnStyle, width: "100%" }}>Apply Filters</button>
     </div>
   );
@@ -583,7 +579,10 @@ function FilterPanel({ filters, onChange, onClose, countries }: FilterPanelProps
 export default function ProjectsPage() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
-  const canEdit = user?.role === "admin" || user?.role === "superadmin";
+  const canEdit =
+    user?.role === "admin" ||
+    user?.role === "superadmin" ||
+    user?.role_permissions?.["projects"]?.edit === true;
 
   const [searchInput, setSearchInput] = useState("");
   const search = useDebounce(searchInput, 400);
@@ -600,7 +599,7 @@ export default function ProjectsPage() {
   const [countries, setCountries] = useState<string[]>([]);
   useEffect(() => { fetchCountries().then(setCountries); }, []);
 
-  const isGuest = user?.role === "Guest";
+  const isGuest = user?.role === "guest";
 
   // Build query params
   const queryParams: Record<string, string | number> = { limit: 50 };
@@ -609,7 +608,6 @@ export default function ProjectsPage() {
   if (filters.country) queryParams.country = filters.country;
   if (filters.dateFrom) queryParams.date_from = filters.dateFrom;
   if (filters.dateTo) queryParams.date_to = filters.dateTo;
-  if (filters.createdBy) queryParams.created_by = filters.createdBy;
   if (cursor) queryParams.cursor = cursor;
   if (isGuest && user?.id) queryParams.assigned_to_user = user.id;
 
@@ -644,69 +642,125 @@ export default function ProjectsPage() {
     setPage((p) => p - 1);
   }, [page, cursorStack]);
 
+  // Status is controlled by tabs — only country/date count as "active filters"
   const filtersActive =
-    filters.status.join(",") !== DEFAULT_FILTERS.status.join(",") ||
     filters.country !== "" ||
     filters.dateFrom !== "" ||
-    filters.dateTo !== "" ||
-    filters.createdBy !== "";
+    filters.dateTo !== "";
 
   const items = data?.items ?? [];
   const total = data?.total ?? 0;
 
+  // Status tab colours (border left on active row)
+  const STATUS_ROW_BORDER: Record<string, string> = {
+    active: "#005a2c",
+    closed: "transparent",
+    archived: "transparent",
+  };
+
   return (
     <div>
-      <Header title="Projects" />
-      <div style={{ padding: "0 32px 32px" }}>
+      <Header title="Projects" subtitle="Manage crisis response projects by country and date range" />
+      <div style={{ padding: "24px 32px 40px" }}>
 
-        {/* Top bar */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12, paddingTop: 8 }}>
-          <input
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            placeholder="Search by project name, ID, or country"
-            style={{ ...inputStyle, width: 340, fontSize: 13 }}
-          />
-          <button onClick={() => setShowCreate(true)} style={primaryBtnStyle}>
-            + Create Project
-          </button>
-        </div>
+        {/* ── Controls row ── */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
 
-        {/* Filter bar */}
-        <div style={{ position: "relative", marginBottom: 16 }}>
-          <button
-            onClick={() => setFilterOpen((o) => !o)}
-            style={{
-              display: "flex", alignItems: "center", gap: 6, padding: "6px 14px",
-              border: "1px solid #ccc", borderRadius: 6, background: filtersActive ? "#E3F2FD" : "#fff",
-              cursor: "pointer", fontSize: 13, fontWeight: 500, color: filtersActive ? "#0468B1" : "#444",
-            }}
-          >
-            <Filter size={14} />
-            Filters
-            {filtersActive && (
-              <span style={{ background: "#0468B1", color: "#fff", borderRadius: 10, fontSize: 11, padding: "1px 7px", fontWeight: 700 }}>
-                Active
-              </span>
-            )}
-          </button>
-          {filterOpen && (
-            <FilterPanel
-              filters={filters}
-              onChange={setFilters}
-              onClose={() => setFilterOpen(false)}
-              countries={countries}
+          {/* Search */}
+          <div style={{ position: "relative", flex: "1 1 280px", maxWidth: 380 }}>
+            <span className="material-symbols-outlined" style={{
+              position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)",
+              fontSize: 18, color: "#9aa5b4", pointerEvents: "none",
+              fontVariationSettings: "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20",
+            }}>search</span>
+            <input
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              placeholder="Search by project name, ID, or country…"
+              style={{ ...inputStyle, paddingLeft: 36, fontSize: 13, background: "#fff", boxShadow: "0 1px 4px rgba(8,27,57,0.05)" }}
             />
-          )}
+          </div>
+
+          {/* Status tabs */}
+          <div style={{ display: "flex", background: "#fff", border: "1px solid #e0e8f0", borderRadius: 8, padding: 3, gap: 2, boxShadow: "0 1px 4px rgba(8,27,57,0.05)" }}>
+            {(["active", "closed", "archived"] as const).map((tab) => {
+              const isTab = filters.status.length === 1 && filters.status[0] === tab;
+              return (
+                <button
+                  key={tab}
+                  onClick={() => {
+                    setFilters((prev) => ({ ...prev, status: [tab] }));
+                    setCursor(null); setCursorStack([null]); setPage(0);
+                  }}
+                  style={{
+                    padding: "6px 18px", borderRadius: 6, border: "none", cursor: "pointer",
+                    fontSize: 12, fontWeight: 700, lineHeight: 1,
+                    background: isTab ? "#0468B1" : "transparent",
+                    color: isTab ? "#fff" : "#718096",
+                    transition: "all 0.15s",
+                  }}
+                >
+                  {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Advanced filter button */}
+          <div style={{ position: "relative" }}>
+            <button
+              onClick={() => setFilterOpen((o) => !o)}
+              style={{
+                display: "flex", alignItems: "center", gap: 6, padding: "8px 14px",
+                border: "1px solid #e0e8f0", borderRadius: 8,
+                background: filtersActive ? "#EBF5FB" : "#fff",
+                cursor: "pointer", fontSize: 12, fontWeight: 600,
+                color: filtersActive ? "#0468B1" : "#555",
+                boxShadow: "0 1px 4px rgba(8,27,57,0.05)",
+              }}
+            >
+              <Filter size={13} />
+              Filters
+              {filtersActive && (
+                <span style={{ background: "#0468B1", color: "#fff", borderRadius: 10, fontSize: 10, padding: "1px 6px", fontWeight: 700 }}>
+                  On
+                </span>
+              )}
+            </button>
+            {filterOpen && (
+              <FilterPanel
+                filters={filters}
+                onChange={setFilters}
+                onClose={() => setFilterOpen(false)}
+                countries={countries}
+              />
+            )}
+          </div>
+
+          {/* New Project button */}
+          <button
+            onClick={() => setShowCreate(true)}
+            style={{ ...primaryBtnStyle, display: "flex", alignItems: "center", gap: 6, marginLeft: "auto" }}
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: 18, fontVariationSettings: "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20" }}>add</span>
+            New Project
+          </button>
         </div>
 
-        {/* Table */}
-        <div style={{ border: "1px solid #E5E7EB", borderRadius: 8, overflow: "hidden" }}>
+        {/* ── Table ── */}
+        <div style={{ background: "#fff", border: "1px solid #e0e8f0", borderRadius: 12, overflow: "hidden", boxShadow: "0 2px 12px rgba(8,27,57,0.05)" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
             <thead>
-              <tr style={{ background: "#F9FAFB", borderBottom: "1px solid #E5E7EB" }}>
-                {["Project ID", "Project Name", "Countries", "Date Range", "Reports", "Status", "Created", "Created By", ""].map((h) => (
-                  <th key={h} style={{ padding: "10px 14px", textAlign: "left", fontWeight: 600, fontSize: 12, color: "#6B7280", whiteSpace: "nowrap" }}>
+              <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e0e8f0" }}>
+                {["Project Name", "Country", "Date Range", "Total Reports", "Status", "Created By", "Actions"].map((h) => (
+                  <th
+                    key={h}
+                    style={{
+                      padding: "12px 16px", textAlign: h === "Total Reports" ? "right" : "left",
+                      fontWeight: 700, fontSize: 11, color: "#6b7280",
+                      letterSpacing: "0.05em", textTransform: "uppercase", whiteSpace: "nowrap",
+                    }}
+                  >
                     {h}
                   </th>
                 ))}
@@ -715,137 +769,165 @@ export default function ProjectsPage() {
             <tbody>
               {isLoading && (
                 <tr>
-                  <td colSpan={9} style={{ padding: 40, textAlign: "center", color: "#aaa" }}>Loading…</td>
+                  <td colSpan={7} style={{ padding: 48, textAlign: "center", color: "#9aa5b4", fontSize: 14 }}>Loading projects…</td>
                 </tr>
               )}
               {isError && (
                 <tr>
-                  <td colSpan={9} style={{ padding: 40, textAlign: "center", color: "#C62828" }}>Failed to load projects.</td>
+                  <td colSpan={7} style={{ padding: 48, textAlign: "center", color: "#C62828", fontSize: 14 }}>Failed to load projects.</td>
                 </tr>
               )}
               {!isLoading && !isError && items.length === 0 && (
                 <tr>
-                  <td colSpan={9}>
-                    <div style={{ padding: 60, textAlign: "center" }}>
-                      <Folder size={40} color="#ccc" style={{ marginBottom: 12 }} />
-                      <p style={{ color: "#888", marginBottom: 16 }}>
+                  <td colSpan={7}>
+                    <div style={{ padding: "60px 0", textAlign: "center" }}>
+                      <span className="material-symbols-outlined" style={{ fontSize: 40, color: "#d0dce8", display: "block", marginBottom: 12, fontVariationSettings: "'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 48" }}>inventory_2</span>
+                      <p style={{ color: "#9aa5b4", marginBottom: 20, fontSize: 14 }}>
                         No projects found. Create your first project to start organising crisis reports.
                       </p>
                       <button onClick={() => setShowCreate(true)} style={primaryBtnStyle}>
-                        + Create Project
+                        + New Project
                       </button>
                     </div>
                   </td>
                 </tr>
               )}
-              {items.map((row, idx) => (
-                <tr key={row.id} style={{ borderBottom: "1px solid #F3F4F6", background: idx % 2 === 0 ? "#fff" : "#FAFAFA" }}>
-                  {/* Project ID */}
-                  <td style={{ padding: "10px 14px", fontFamily: "monospace", color: "#555", whiteSpace: "nowrap" }}>
-                    {row.serial_id}
-                  </td>
-                  {/* Project Name */}
-                  <td style={{ padding: "10px 14px" }}>
-                    <button
-                      onClick={() => navigate(`/projects/${row.serial_id}`)}
-                      style={{ background: "none", border: "none", cursor: "pointer", color: "#0468B1", fontWeight: 500, fontSize: 13, padding: 0, textAlign: "left" }}
-                    >
-                      {row.name}
-                    </button>
-                  </td>
-                  {/* Countries */}
-                  <td style={{ padding: "10px 14px" }}>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
-                      {row.countries.slice(0, 3).map((c) => (
-                        <span key={c} style={{ background: "#F3F4F6", color: "#555", borderRadius: 4, padding: "2px 7px", fontSize: 11 }}>{c}</span>
-                      ))}
-                      {row.countries.length > 3 && (
-                        <span style={{ background: "#F3F4F6", color: "#555", borderRadius: 4, padding: "2px 7px", fontSize: 11 }}>
-                          +{row.countries.length - 3} more
+              {items.map((row) => {
+                const isArchived = row.status === "archived";
+                const borderColor = STATUS_ROW_BORDER[row.status] ?? "transparent";
+                const statusColors = PROJECT_STATUS_COLOURS[row.status] ?? { bg: "#f5f5f5", text: "#666" };
+                return (
+                  <tr
+                    key={row.id}
+                    style={{
+                      borderBottom: "1px solid #f0f4f8",
+                      borderLeft: `4px solid ${borderColor}`,
+                      opacity: isArchived ? 0.6 : 1,
+                    }}
+                  >
+                    {/* Project Name + ID */}
+                    <td style={{ padding: "14px 16px", maxWidth: 260 }}>
+                      <button
+                        onClick={() => navigate(`/projects/${row.serial_id}`)}
+                        style={{ background: "none", border: "none", cursor: "pointer", padding: 0, textAlign: "left" }}
+                      >
+                        <span style={{ display: "block", fontWeight: 700, fontSize: 13, color: "#1A2B4A" }}>{row.name}</span>
+                        <span style={{ display: "block", fontSize: 10, fontWeight: 600, color: "#9aa5b4", textTransform: "uppercase", letterSpacing: "0.05em", marginTop: 2 }}>
+                          ID: {row.serial_id}
+                        </span>
+                      </button>
+                    </td>
+
+                    {/* Country */}
+                    <td style={{ padding: "14px 16px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                        <span className="material-symbols-outlined" style={{ fontSize: 14, color: "#718096", fontVariationSettings: "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20" }}>flag</span>
+                        <span style={{ fontSize: 13, color: "#1A2B4A", fontWeight: 500 }}>
+                          {row.countries.slice(0, 2).join(", ")}
+                          {row.countries.length > 2 && (
+                            <span style={{ color: "#9aa5b4", fontSize: 11 }}> +{row.countries.length - 2} more</span>
+                          )}
+                        </span>
+                      </div>
+                    </td>
+
+                    {/* Date Range */}
+                    <td style={{ padding: "14px 16px", whiteSpace: "nowrap" }}>
+                      <span style={{ fontSize: 12, color: "#555" }}>{formatDateRange(row.start_date, row.end_date)}</span>
+                      {isEndDatePassed(row.end_date) && (
+                        <span style={{ marginLeft: 6, background: "#FFF3E0", color: "#B45309", borderRadius: 4, padding: "1px 6px", fontSize: 10, fontWeight: 600 }}>
+                          Past end date
                         </span>
                       )}
-                    </div>
-                  </td>
-                  {/* Date Range */}
-                  <td style={{ padding: "10px 14px", whiteSpace: "nowrap" }}>
-                    <span>{formatDateRange(row.start_date, row.end_date)}</span>
-                    {isEndDatePassed(row.end_date) && (
-                      <span style={{ marginLeft: 6, background: "#FFF3E0", color: "#B45309", borderRadius: 4, padding: "1px 6px", fontSize: 11, fontWeight: 500 }}>
-                        Past end date
+                    </td>
+
+                    {/* Total Reports */}
+                    <td style={{ padding: "14px 16px", textAlign: "right" }}>
+                      <span style={{ fontWeight: 700, fontSize: 13, color: "#1A2B4A" }}>{row.total_reports.toLocaleString()}</span>
+                    </td>
+
+                    {/* Status pill */}
+                    <td style={{ padding: "14px 16px" }}>
+                      <span style={{
+                        display: "inline-flex", alignItems: "center",
+                        background: statusColors.bg, color: statusColors.text,
+                        borderRadius: 20, padding: "3px 10px",
+                        fontSize: 10, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase",
+                      }}>
+                        {formatProjectStatus(row.status)}
                       </span>
-                    )}
-                  </td>
-                  {/* Total Reports */}
-                  <td style={{ padding: "10px 14px", color: "#444" }}>{row.total_reports.toLocaleString()}</td>
-                  {/* Status */}
-                  <td style={{ padding: "10px 14px" }}>
-                    <span style={{
-                      background: PROJECT_STATUS_COLOURS[row.status]?.bg ?? "#eee",
-                      color: PROJECT_STATUS_COLOURS[row.status]?.text ?? "#555",
-                      borderRadius: 12, padding: "3px 10px", fontSize: 12, fontWeight: 500,
-                    }}>
-                      {formatProjectStatus(row.status)}
-                    </span>
-                  </td>
-                  {/* Created */}
-                  <td style={{ padding: "10px 14px", whiteSpace: "nowrap", color: "#666" }}>
-                    {formatDateTime(row.created_at)}
-                  </td>
-                  {/* Created By */}
-                  <td style={{ padding: "10px 14px" }}>
-                    {row.created_by_name && row.created_by_user_id ? (
-                      <button
-                        onClick={() => window.open(`/users/${row.created_by_user_id}`, "_blank")}
-                        style={{ background: "none", border: "none", cursor: "pointer", color: "#0468B1", fontSize: 13, padding: 0 }}
-                      >
-                        {row.created_by_name}
-                      </button>
-                    ) : (
-                      <span style={{ color: "#aaa" }}>—</span>
-                    )}
-                  </td>
-                  {/* Edit */}
-                  <td style={{ padding: "10px 14px" }}>
-                    {canEdit && (
-                      <button
-                        onClick={() => setEditProject(row)}
-                        style={{ background: "none", border: "none", cursor: "pointer", padding: 4, color: "#666", borderRadius: 4 }}
-                        title="Edit project"
-                      >
-                        <Pencil size={15} />
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
+                    </td>
+
+                    {/* Created By + date */}
+                    <td style={{ padding: "14px 16px" }}>
+                      {row.created_by_name ? (
+                        <>
+                          <button
+                            onClick={() => row.created_by_user_id && window.open(`/users/${row.created_by_user_id}`, "_blank")}
+                            style={{ background: "none", border: "none", cursor: row.created_by_user_id ? "pointer" : "default", padding: 0, display: "block", fontSize: 13, fontWeight: 600, color: "#1A2B4A", textAlign: "left" }}
+                          >
+                            {row.created_by_name}
+                          </button>
+                          <span style={{ fontSize: 10, color: "#9aa5b4" }}>{formatDateTime(row.created_at)}</span>
+                        </>
+                      ) : (
+                        <span style={{ color: "#ccc" }}>—</span>
+                      )}
+                    </td>
+
+                    {/* Actions */}
+                    <td style={{ padding: "14px 16px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <button
+                          onClick={() => navigate(`/projects/${row.serial_id}`)}
+                          style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, fontWeight: 700, color: "#0468B1", padding: 0 }}
+                        >
+                          View
+                        </button>
+                        {canEdit && (
+                          <button
+                            onClick={() => setEditProject(row)}
+                            style={{ background: "none", border: "none", cursor: "pointer", padding: "3px 5px", color: "#9aa5b4", borderRadius: 4, display: "flex", alignItems: "center" }}
+                            title="Edit project"
+                          >
+                            <Pencil size={13} />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
-        </div>
 
-        {/* Pagination */}
-        {!isLoading && (total > 0 || page > 0) && (
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 16 }}>
-            <span style={{ fontSize: 13, color: "#666" }}>
-              {total.toLocaleString()} project{total !== 1 ? "s" : ""} total
-            </span>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button
-                onClick={goPrev}
-                disabled={page === 0}
-                style={{ ...paginationBtnStyle, opacity: page === 0 ? 0.4 : 1 }}
-              >
-                <ChevronLeft size={16} /> Previous
-              </button>
-              <button
-                onClick={goNext}
-                disabled={!data?.has_more}
-                style={{ ...paginationBtnStyle, opacity: !data?.has_more ? 0.4 : 1 }}
-              >
-                Next <ChevronRight size={16} />
-              </button>
+          {/* Pagination */}
+          {!isLoading && (total > 0 || page > 0) && (
+            <div style={{ padding: "14px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", borderTop: "1px solid #f0f4f8", background: "#f8fafc" }}>
+              <span style={{ fontSize: 12, fontWeight: 500, color: "#718096" }}>
+                {total.toLocaleString()} project{total !== 1 ? "s" : ""} total
+              </span>
+              <div style={{ display: "flex", gap: 6 }}>
+                <button
+                  onClick={goPrev}
+                  disabled={page === 0}
+                  style={{ ...paginationBtnStyle, opacity: page === 0 ? 0.35 : 1 }}
+                  title="Previous page"
+                >
+                  <ChevronLeft size={15} />
+                </button>
+                <button
+                  onClick={goNext}
+                  disabled={!data?.has_more}
+                  style={{ ...paginationBtnStyle, opacity: !data?.has_more ? 0.35 : 1 }}
+                  title="Next page"
+                >
+                  <ChevronRight size={15} />
+                </button>
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* Modals */}
@@ -965,4 +1047,27 @@ const iconBtnStyle: React.CSSProperties = {
   padding: 4,
   color: "#666",
   borderRadius: 4,
+};
+
+// Modal-specific label/input — lighter background, no border (matches mockup)
+const modalLabelStyle: React.CSSProperties = {
+  display: "block",
+  fontSize: 11,
+  fontWeight: 700,
+  color: "#718096",
+  textTransform: "uppercase",
+  letterSpacing: "0.06em",
+  marginBottom: 6,
+};
+
+const modalInputStyle: React.CSSProperties = {
+  width: "100%",
+  padding: "10px 12px",
+  background: "#f2f4f7",
+  border: "none",
+  borderRadius: 8,
+  fontSize: 13,
+  color: "#1A2B4A",
+  boxSizing: "border-box",
+  outline: "none",
 };

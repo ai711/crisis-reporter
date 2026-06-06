@@ -674,7 +674,7 @@ function EditQuestionsWarningModal({
         </div>
         <div style={{ padding: "24px" }}>
           <div style={s.warningBanner}>
-            <span style={{ fontSize: 22 }}>⚠️</span>
+            <span className="material-symbols-outlined" style={{ fontSize: 22, color: "#92400e", flexShrink: 0, fontVariationSettings: "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}>warning</span>
             <div>
               <div style={{ fontWeight: 700, fontSize: 14, color: "#92400e", marginBottom: 4 }}>
                 This will create a new question package version
@@ -768,7 +768,7 @@ function CountriesTab() {
         <div style={s.loadingText}>Loading countries…</div>
       ) : filtered.length === 0 ? (
         <div style={s.emptyState}>
-          <div style={{ fontSize: 40 }}>🌍</div>
+          <span className="material-symbols-outlined" style={{ fontSize: 40, color: "var(--c-text-muted)", fontVariationSettings: "'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 48" }}>public</span>
           <div style={{ color: "var(--c-text-muted)", fontSize: 14 }}>
             {search ? "No countries match your search." : "No countries configured yet."}
           </div>
@@ -2273,7 +2273,7 @@ function LanguagesTab() {
             </div>
             <div style={{ padding: "20px 24px" }}>
               <div style={s.warningBanner}>
-                <span style={{ fontSize: 20 }}>⚠️</span>
+                <span className="material-symbols-outlined" style={{ fontSize: 20, color: "#92400e", flexShrink: 0, fontVariationSettings: "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}>warning</span>
                 <div>
                   <div style={{ fontWeight: 700, fontSize: 14, color: "#92400e", marginBottom: 4 }}>Deactivating {deprecateModal.name}</div>
                   <div style={{ fontSize: 13, color: "#92400e", lineHeight: 1.5 }}>You are about to deactivate {deprecateModal.name}. Reporters currently using this language will be notified to switch on their next app open. Translation updates will be paused for this language.</div>
@@ -2702,7 +2702,7 @@ function QuestionsTab({ isAdmin, onSwitchToLanguages: _onSwitchToLanguages }: { 
           title={`Translations missing in: ${blockingNames} — run Auto-translate first`}
         >
           <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-            <span>⚠</span>
+            <span className="material-symbols-outlined" style={{ fontSize: 15, fontVariationSettings: "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 20" }}>warning</span>
             Publish Questions
           </span>
         </button>
@@ -2795,7 +2795,7 @@ function QuestionsTab({ isAdmin, onSwitchToLanguages: _onSwitchToLanguages }: { 
                 {/* Translation missing pill */}
                 {missingLangs && missingLangs.length > 0 && (
                   <div style={{ fontSize: 12, background: "rgba(245,166,35,0.12)", color: "#92400e", borderRadius: 8, padding: "3px 8px", display: "inline-block", marginBottom: 6 }}>
-                    ⚠ Translations missing — {missingLangs.length} language{missingLangs.length !== 1 ? "s" : ""}
+                    <span className="material-symbols-outlined" style={{ fontSize: 12, verticalAlign: "middle", marginRight: 3, fontVariationSettings: "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 20" }}>warning</span>Translations missing — {missingLangs.length} language{missingLangs.length !== 1 ? "s" : ""}
                   </div>
                 )}
                 {q.question_type !== "text" && (
@@ -2882,7 +2882,7 @@ function QuestionsTab({ isAdmin, onSwitchToLanguages: _onSwitchToLanguages }: { 
               )}
               {activeCrisis && (
                 <div style={{ background: "#fffbeb", border: "1px solid #fcd34d", borderRadius: 6, padding: "10px 14px", fontSize: 13, color: "#92400e", display: "flex", alignItems: "flex-start", gap: 8 }}>
-                  <span style={{ flexShrink: 0 }}>⚠</span>
+                  <span className="material-symbols-outlined" style={{ fontSize: 16, flexShrink: 0, color: "#92400e", fontVariationSettings: "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 20" }}>warning</span>
                   <span>Active crisis detected. Publishing mid-crisis may affect data comparability across reports.</span>
                 </div>
               )}
@@ -3495,7 +3495,7 @@ function TextSection({
     <div style={{ padding: "20px 24px" }}>
       {tcWarning && (
         <div style={{ ...s.warningBanner, marginBottom: 16 }}>
-          <span style={{ fontSize: 18 }}>⚠️</span>
+          <span className="material-symbols-outlined" style={{ fontSize: 18, color: "#92400e", flexShrink: 0, fontVariationSettings: "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 20" }}>warning</span>
           <span style={{ fontSize: 13, color: "#92400e" }}>
             Changing Terms and Conditions will require all reporters to re-accept on their next app open.
           </span>

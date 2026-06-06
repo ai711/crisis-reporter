@@ -73,6 +73,8 @@ function Navigation() {
             <Stack.Screen name="FAQScreen" component={FAQScreen} options={{ headerShown: false }} />
             <Stack.Screen name="AboutScreen" component={AboutScreen} options={{ headerShown: false }} />
             <Stack.Screen name="ReportDetailScreen" component={ReportDetailScreen} options={{ headerShown: false }} />
+            {/* Reuse OnboardingScreen for viewing T&C from Settings (step 3 only). */}
+            <Stack.Screen name="TermsScreen" component={OnboardingScreen} initialParams={{ initialStep: 3 }} options={{ headerShown: false }} />
           </>
         )}
       </Stack.Navigator>

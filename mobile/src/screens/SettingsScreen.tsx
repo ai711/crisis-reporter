@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView,
-  Modal, FlatList, TextInput, Alert, Dimensions,
+  Modal, FlatList, TextInput, Alert, Dimensions, Linking,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
@@ -225,15 +225,31 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
             <View style={styles.rowContent}>
               <Text style={styles.rowLabel}>App Version</Text>
             </View>
-            <Text style={styles.staticValue}>v1.0</Text>
+            <Text style={styles.staticValue}>1.0.0</Text>
           </View>
+
+          <View style={styles.separator} />
+
+          {/* Terms and Conditions */}
+          <TouchableOpacity
+            style={styles.settingRow}
+            onPress={() => navigation.navigate('TermsScreen')}
+          >
+            <View style={styles.iconContainerGray}>
+              <MaterialIcons name="description" size={scale(20)} color="#717782" />
+            </View>
+            <View style={styles.rowContent}>
+              <Text style={styles.rowLabel}>Terms and Conditions</Text>
+            </View>
+            <MaterialIcons name="chevron-right" size={scale(20)} color="#C1C7D2" />
+          </TouchableOpacity>
 
           <View style={styles.separator} />
 
           {/* Privacy Policy */}
           <TouchableOpacity
             style={styles.settingRow}
-            onPress={() => Alert.alert("Privacy Policy", "Privacy policy coming soon.")}
+            onPress={() => Linking.openURL('https://www.undp.org/privacy-policy')}
           >
             <View style={styles.iconContainerGray}>
               <MaterialIcons name="security" size={scale(20)} color="#717782" />

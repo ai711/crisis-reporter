@@ -24,11 +24,12 @@ function useDebounced<T>(value: T, delay: number): T {
 // ── Platform label ────────────────────────────────────────────────────────────
 
 function platformCell(row: ReporterListRow): string {
-  if (!row.platform) return "—";
-  let label = row.platform;
-  if (row.app_version) label += ` — v${row.app_version}`;
-  else if (row.browser_version) label += ` — ${row.browser_version}`;
-  return label;
+  // Use platform_label (human-readable) if available; fall back to raw platform value
+  const base = row.platform_label || row.platform;
+  if (!base) return "—";
+  if (row.app_version) return `${base} — v${row.app_version}`;
+  if (row.browser_version) return `${base} — ${row.browser_version}`;
+  return base;
 }
 
 // ── Filter panel ──────────────────────────────────────────────────────────────
@@ -311,7 +312,6 @@ export default function ReportersPage() {
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [page, setPage] = useState(1);
 
   const PAGE_SIZE = 100;
 
@@ -341,7 +341,6 @@ export default function ReportersPage() {
     setTotal(data.total);
     setNextCursor(data.cursor);
     setHasMore(data.has_more);
-    setPage(1);
   }, [data]);
 
   const handleLoadMore = useCallback(async () => {
@@ -353,7 +352,6 @@ export default function ReportersPage() {
       setAllItems((prev) => [...prev, ...d.items]);
       setNextCursor(d.cursor);
       setHasMore(d.has_more);
-      setPage((p) => p + 1);
     } finally {
       setLoadingMore(false);
     }

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useRoute, useNavigation } from "@react-navigation/native";
 import {
   View, Text, TouchableOpacity, TextInput,
   FlatList, ActivityIndicator, Alert, ScrollView,
@@ -63,8 +64,14 @@ const H_PAD = screenWidth * 0.06;
 export default function OnboardingScreen() {
   const { t, i18n } = useTranslation();
   const insets = useSafeAreaInsets();
+  const navigation = useNavigation<any>();
+  // Allow deep-linking to a specific step (e.g. step=3 from Settings → T&C).
+  const route = useRoute<any>();
+  const initialStep: 1 | 2 | 3 = (route.params?.initialStep as 1 | 2 | 3) ?? 1;
+  // True when opened from Settings to re-read T&C (user is already onboarded).
+  const isTermsViewOnly = initialStep === 3;
 
-  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [step, setStep] = useState<1 | 2 | 3>(initialStep);
   const [countries, setCountries] = useState<Country[]>([]);
   const [countriesLoading, setCountriesLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -106,35 +113,6 @@ export default function OnboardingScreen() {
       });
   }, []);
 
-  async function checkLanguagePackageVersion(storedLangCode: string) {
-    try {
-      const storedVersion = await AsyncStorage.getItem("cr_lang_package_version");
-      if (!storedVersion || storedVersion !== storedLangCode) return;
-
-      // Check if a newer package exists
-      const response = await api.get("/api/language-packages/available");
-      const packages: { code: string; name: string }[] = response.data;
-      const hasPackage = packages.some((p) => p.code === storedLangCode);
-
-      if (hasPackage) {
-        // Silently re-fetch the package to get latest published strings
-        const pkgResponse = await api.get(
-          `/api/language-packages/active/${storedLangCode}`
-        );
-        const translationMap: Record<string, string> = pkgResponse.data;
-        if (translationMap && Object.keys(translationMap).length > 0) {
-          await AsyncStorage.setItem(
-            `cr_lang_package_${storedLangCode}`,
-            JSON.stringify(translationMap)
-          );
-        }
-      }
-    } catch (e) {
-      // Silent fail — version check is non-blocking
-      console.warn("Language version check failed", e);
-    }
-  }
-
   async function checkIfSelectedLanguageDeactivated(storedLangCode: string) {
     try {
       const UN_CODES = ["en", "fr", "ar", "zh", "ru", "es"];
@@ -160,7 +138,6 @@ export default function OnboardingScreen() {
     const startup = async () => {
       const storedLang = await AsyncStorage.getItem("cr_language");
       if (storedLang && storedLang !== "en") {
-        checkLanguagePackageVersion(storedLang); // fire-and-forget, no await
         checkIfSelectedLanguageDeactivated(storedLang); // fire-and-forget, no await
       }
 
@@ -198,31 +175,28 @@ export default function OnboardingScreen() {
   const handleLanguageNext = async () => {
     if (!selectedLang) return;
 
-    const isNonBundled = !["en"].includes(selectedLang);
-    if (isNonBundled) {
+    // Only non-UN languages need a backend download — UN languages are bundled
+    if (!UN_LANG_CODES.includes(selectedLang)) {
       try {
         const pkgResponse = await api.get(
           `/api/language-packages/active/${selectedLang}`
         );
-        const translationMap: Record<string, string> =
-          pkgResponse.data?.strings ?? pkgResponse.data;
+        const data = pkgResponse.data;
+        const translationMap: Record<string, string> = data?.strings ?? data;
         if (translationMap && Object.keys(translationMap).length > 0) {
           await AsyncStorage.setItem(
             `cr_lang_package_${selectedLang}`,
             JSON.stringify(translationMap)
           );
-          await AsyncStorage.setItem(
-            `cr_lang_package_version`,
-            selectedLang
-          );
+          // Use the per-language version key so HomeScreen's version check skips a redundant download
+          if (data?.version) {
+            await AsyncStorage.setItem(`cr_lang_version_${selectedLang}`, String(data.version));
+          }
         }
       } catch (e) {
         console.warn("Language package fetch failed, using bundled fallback", e);
       }
-    }
-
-    // Load the package into i18n immediately so T&C renders in selected language
-    if (!UN_LANG_CODES.includes(selectedLang)) {
+      // Load the downloaded package into i18n immediately so T&C renders in the selected language
       const { loadDynamicLanguagePackage } = await import("../i18n");
       await loadDynamicLanguagePackage(selectedLang);
     }
@@ -238,6 +212,9 @@ export default function OnboardingScreen() {
     await AsyncStorage.setItem("cr_tandc_accepted_at", ts);
     useAuthStore.getState().setTAndCAcceptedAt(ts);
     useAuthStore.getState().setOnboarded();
+    // If we arrived here from Settings (view-only), go back instead of
+    // re-triggering the onboarding completion nav flow.
+    if (isTermsViewOnly) navigation.goBack();
   };
 
   const handleDecline = () => {
@@ -673,7 +650,7 @@ export default function OnboardingScreen() {
     <SafeAreaView style={styles.container} edges={["top"]}>
       <View style={styles.navRow}>
         <TouchableOpacity
-          onPress={() => setStep(2)}
+          onPress={() => isTermsViewOnly ? navigation.goBack() : setStep(2)}
           style={styles.navBackBtn}
           hitSlop={{ top: 12, right: 12, bottom: 12, left: 12 }}
         >

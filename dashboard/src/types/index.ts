@@ -216,6 +216,7 @@ export interface ReporterListRow {
   country: string | null;
   ip_address: string | null;
   platform: string | null;
+  platform_label: string | null;   // human-readable e.g. "Native App Android"
   app_version: string | null;
   browser_version: string | null;
   total_reports: number;
@@ -227,6 +228,8 @@ export interface ReporterDetail extends ReporterListRow {
   device_id: string | null;
   mcc: string | null;
   language_code: string | null;
+  name: string | null;             // decrypted from name_encrypted; null if anonymous
+  email: string | null;            // decrypted from email_encrypted; null if anonymous
   green_orange_reports: number;
   red_reports: number;
   discarded_reports: number;

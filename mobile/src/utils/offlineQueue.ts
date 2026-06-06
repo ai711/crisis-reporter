@@ -85,6 +85,66 @@ export async function removeFromQueue(local_id: string): Promise<void> {
   await saveQueue(filtered);
 }
 
+// ── Local submitted-report history (anonymous fallback) ───────────────────────
+// When a queued report is submitted successfully we save a lightweight record
+// so anonymous users can still browse their report history in My Reports.
+
+const ANON_SUBMITTED_KEY = "cr_anon_submitted_reports";
+
+export interface LocalSubmittedRecord {
+  id: string;
+  damage_level: string | null;
+  submitted_at: string;
+  gps_latitude: number | null;
+  gps_longitude: number | null;
+  location_address: string | null;
+  location_landmark: string | null;
+  building_name: string | null;
+  photo_count: number;
+  first_photo_url: null;
+  disaster_type: null;
+  infrastructure_type: string | null;
+  infrastructure_name: string | null;
+}
+
+export async function getLocalSubmittedReports(): Promise<LocalSubmittedRecord[]> {
+  try {
+    const data = await AsyncStorage.getItem(ANON_SUBMITTED_KEY);
+    return data ? JSON.parse(data) : [];
+  } catch {
+    return [];
+  }
+}
+
+async function saveLocalSubmittedRecord(
+  item: QueuedReport,
+  reportId: string
+): Promise<void> {
+  try {
+    const existing = await getLocalSubmittedReports();
+    const record: LocalSubmittedRecord = {
+      id: reportId,
+      damage_level: item.report.damage_level,
+      submitted_at: new Date().toISOString(),
+      gps_latitude: item.report.location.gps_latitude,
+      gps_longitude: item.report.location.gps_longitude,
+      location_address: item.report.location.location_address,
+      location_landmark: item.report.location.location_landmark,
+      building_name: item.report.location.location_building_name,
+      photo_count: item.photos.length,
+      first_photo_url: null,
+      disaster_type: null,
+      infrastructure_type: item.report.infrastructure_types?.[0] ?? null,
+      infrastructure_name: null,
+    };
+    // Prepend new record; keep max 50 to avoid storage bloat.
+    const updated = [record, ...existing].slice(0, 50);
+    await AsyncStorage.setItem(ANON_SUBMITTED_KEY, JSON.stringify(updated));
+  } catch {
+    // Non-critical — silent failure.
+  }
+}
+
 // ── Sync engine ───────────────────────────────────────────────────────────────
 
 let isSyncing = false;
@@ -148,6 +208,9 @@ export async function syncQueue(apiBaseUrl: string): Promise<void> {
           });
         }
 
+        // Persist a local record before removing so anonymous users can
+        // still see the report in My Reports history.
+        await saveLocalSubmittedRecord(item, reportId);
         await removeFromQueue(item.local_id);
         await notifyQueueChange();
       } catch {

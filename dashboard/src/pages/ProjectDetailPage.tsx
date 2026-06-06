@@ -141,9 +141,9 @@ interface ProjectStatsResponse {
 }
 
 interface ImportStatusResponse {
-  status: string;
-  progress: number;
-  total: number;
+  import_status: string;
+  import_progress: number;
+  import_total: number;
 }
 
 interface DashboardUserSearchItem {
@@ -290,14 +290,14 @@ export default function ProjectDetailPage() {
     },
     enabled: !!serialId,
     refetchInterval: (query) => {
-      const status = query.state.data?.status;
+      const status = query.state.data?.import_status;
       if (status === "complete" || status === "failed") return false;
       return 3000;
     },
   });
 
   const effectiveImportStatus =
-    importStatus?.status ?? project?.import_status ?? "complete";
+    importStatus?.import_status ?? project?.import_status ?? "complete";
 
   // ── Map refs & state ───────────────────────────────────────────────────
   const mapContainer = useRef<HTMLDivElement>(null);
@@ -767,7 +767,7 @@ export default function ProjectDetailPage() {
                       <>
                         <span style={{ ...ss.importDot, background: "#ff9800", animation: "pd-pulse 1.5s infinite" }} />
                         <span style={ss.importText}>
-                          Importing reports — {importStatus?.progress ?? 0} of {importStatus?.total ?? 0} complete
+                          Importing reports — {importStatus?.import_progress ?? 0} of {importStatus?.import_total ?? 0} complete
                         </span>
                       </>
                     )}
@@ -955,7 +955,7 @@ export default function ProjectDetailPage() {
                           <td style={ss.td}><DamagePill level={row.current_damage_level} /></td>
                           <td style={ss.td}>
                             {row.confirmed_status
-                              ? <span style={ss.confirmedPill}>🔒 {formatDamageLevel(row.confirmed_status)}</span>
+                              ? <span style={ss.confirmedPill}><span className="material-symbols-outlined" style={{ fontSize: 12, verticalAlign: "middle", marginRight: 3, fontVariationSettings: "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 20" }}>lock</span>{formatDamageLevel(row.confirmed_status)}</span>
                               : null}
                           </td>
                           <td style={ss.td}>

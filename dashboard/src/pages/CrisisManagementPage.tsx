@@ -285,14 +285,21 @@ function CrisisCard({ crisis, onSetActive, onArchive, mutating }: CrisisCardProp
           <div style={s.crisisName}>{crisis.name}</div>
           <div style={s.crisisMeta}>
             <span style={s.metaItem}>
-              🌍 {Array.isArray(crisis.countries) && crisis.countries.length > 0
+              <span className="material-symbols-outlined" style={{ fontSize: 14, verticalAlign: "middle", marginRight: 3 }}>public</span>
+              {Array.isArray(crisis.countries) && crisis.countries.length > 0
                 ? crisis.countries.join(", ")
                 : "—"}
             </span>
             <span style={s.metaDot}>·</span>
-            <span style={s.metaItem}>⚡ {crisis.crisis_type}</span>
+            <span style={s.metaItem}>
+              <span className="material-symbols-outlined" style={{ fontSize: 14, verticalAlign: "middle", marginRight: 3 }}>bolt</span>
+              {crisis.crisis_type}
+            </span>
             <span style={s.metaDot}>·</span>
-            <span style={s.metaItem}>📅 {fmtDate(crisis.start_date)}</span>
+            <span style={s.metaItem}>
+              <span className="material-symbols-outlined" style={{ fontSize: 14, verticalAlign: "middle", marginRight: 3 }}>calendar_today</span>
+              {fmtDate(crisis.start_date)}
+            </span>
           </div>
           <div style={s.reportCount}>
             {crisis.report_count.toLocaleString()} report{crisis.report_count !== 1 ? "s" : ""} submitted
@@ -418,7 +425,9 @@ export default function CrisisManagementPage() {
           <div style={s.loading}>Loading crises…</div>
         ) : crises.length === 0 ? (
           <div style={s.empty}>
-            <div style={s.emptyIcon}>🌐</div>
+            <div style={s.emptyIcon}>
+              <span className="material-symbols-outlined" style={{ fontSize: 40, color: "var(--c-text-muted)", fontVariationSettings: "'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 48" }}>public</span>
+            </div>
             <div style={s.emptyText}>No crises yet.</div>
             <div style={s.emptyHint}>Click "Create New Crisis" to get started.</div>
           </div>

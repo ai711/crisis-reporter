@@ -6,7 +6,7 @@ import { useHasAccess } from "../hooks/useHasAccess";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
-const BLUE = "#0468B1";
+const BLUE = "#0468b1";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -15,7 +15,6 @@ interface ReportTypeConfig {
   name: string;
   description: string;
   formats: string[];
-  icon?: string;
 }
 
 interface Country {
@@ -62,57 +61,60 @@ interface StatusMsg {
 
 // ── Report type definitions ────────────────────────────────────────────────────
 
+// Report types that carry an "internal use only" warning for GeoJSON / GeoPackage
+const INTERNAL_GEO_TYPES = new Set(["full_data", "flagged_reports"]);
+
+// Material Symbols icon name per report type
+const TYPE_ICON: Record<string, string> = {
+  standard_damage:   "analytics",
+  full_data:         "database",
+  reporter_activity: "person_pin",
+  flagged_reports:   "flag",
+  project_summary:   "folder",
+};
+
 const REPORT_TYPES: ReportTypeConfig[] = [
   {
     id: "standard_damage",
     name: "Standard Damage Report",
     description:
-      "Clean summary of confirmed damage reports for external sharing. Includes location, damage level, infrastructure type, and RAPIDA-compliant field names.",
-    formats: ["CSV", "GeoJSON", "Shapefile", "GeoPackage"],
+      "Location, damage level, infrastructure type, and RAPIDA-compatible field names. No reporter identity data — safe for sharing with external partners and humanitarian organisations.",
+    formats: ["CSV", "GeoJSON", "GeoPackage", "Shapefile"],
   },
   {
     id: "full_data",
     name: "Full Data Report",
     description:
-      "Complete dataset for internal analysis including all fields, flag history, and metadata.",
-    formats: ["CSV", "JSON"],
+      "All core fields plus device ID, IP address, flag history, and submission metadata. For internal UNDP analysis only — must not be shared externally.",
+    formats: ["CSV", "GeoJSON", "GeoPackage"],
   },
   {
     id: "reporter_activity",
     name: "Reporter Activity Report",
     description:
-      "Reporter engagement and submission statistics aggregated by reporter.",
+      "One row per unique reporter — submission counts, profile status, and badge data. No personal information by default. For UNDP programme and adoption analysis.",
     formats: ["CSV"],
   },
   {
     id: "flagged_reports",
     name: "Flagged Reports Report",
     description:
-      "Reports flagged for review, discarded, or marked red/orange. For audit and quality assurance.",
-    formats: ["CSV", "JSON"],
-  },
-  {
-    id: "rapida",
-    name: "RAPIDA-Compatible Export",
-    description:
-      "Structured damage data mapped to RAPIDA field names for direct integration with UNDP assessment workflows.",
-    formats: ["CSV", "GeoJSON", "Shapefile"],
-    icon: "📋",
+      "All reports that triggered automatic flag checks, including review outcomes and reviewer comments. For quality assurance and internal audit only.",
+    formats: ["CSV", "GeoJSON", "GeoPackage"],
   },
   {
     id: "project_summary",
     name: "Project Summary Report",
     description:
-      "Summary statistics and damage breakdown for a specific project. Project selection is required.",
-    formats: ["CSV", "GeoJSON"],
+      "Damage breakdown, distribution statistics, and submission timeline scoped to a specific project. For donor updates and stakeholder reporting. Project selection is required.",
+    formats: ["CSV", "GeoJSON", "GeoPackage", "Shapefile"],
   },
 ];
 
 const FORMAT_VALUE: Record<string, string> = {
-  CSV: "csv",
-  JSON: "json",
-  GeoJSON: "geojson",
-  Shapefile: "shapefile",
+  CSV:        "csv",
+  GeoJSON:    "geojson",
+  Shapefile:  "shapefile",
   GeoPackage: "geopackage",
 };
 
@@ -123,35 +125,36 @@ const TYPE_LABEL: Record<string, string> = Object.fromEntries(
 // ── Filter option definitions ──────────────────────────────────────────────────
 
 const FLAG_STATUS_OPTIONS = [
-  { value: "green", label: "Green" },
-  { value: "orange", label: "Orange" },
-  { value: "grey", label: "Grey" },
-  { value: "red", label: "Red" },
+  { value: "green",     label: "Green"     },
+  { value: "orange",    label: "Orange"    },
+  { value: "grey",      label: "Grey"      },
+  { value: "red",       label: "Red"       },
   { value: "discarded", label: "Discarded" },
 ];
 
 const DAMAGE_LEVEL_OPTIONS = [
-  { value: "complete", label: "Completely Destroyed" },
-  { value: "partial", label: "Partially Damaged" },
-  { value: "minimal", label: "Minimal or No Damage" },
+  { value: "complete", label: "Completely Destroyed"  },
+  { value: "partial",  label: "Partially Damaged"     },
+  { value: "minimal",  label: "Minimal or No Damage"  },
 ];
 
 const CRISIS_TYPE_OPTIONS = [
-  { value: "Earthquake", label: "Earthquake" },
-  { value: "Flood", label: "Flood" },
-  { value: "Tsunami", label: "Tsunami" },
+  { value: "Earthquake",           label: "Earthquake"           },
+  { value: "Flood",                label: "Flood"                },
+  { value: "Tsunami",              label: "Tsunami"              },
   { value: "Hurricane or Cyclone", label: "Hurricane or Cyclone" },
-  { value: "Wildfire", label: "Wildfire" },
-  { value: "Explosion", label: "Explosion" },
-  { value: "Chemical Incident", label: "Chemical Incident" },
-  { value: "Conflict", label: "Conflict" },
-  { value: "Civil Unrest", label: "Civil Unrest" },
+  { value: "Wildfire",             label: "Wildfire"             },
+  { value: "Explosion",            label: "Explosion"            },
+  { value: "Chemical Incident",    label: "Chemical Incident"    },
+  { value: "Conflict",             label: "Conflict"             },
+  { value: "Civil Unrest",         label: "Civil Unrest"         },
 ];
 
 const PLATFORM_OPTIONS = [
-  { value: "android", label: "Android App" },
-  { value: "pwa", label: "PWA" },
-  { value: "web", label: "Plain Web" },
+  { value: "ios",     label: "Native App iOS"     },
+  { value: "android", label: "Native App Android" },
+  { value: "pwa",     label: "PWA"                },
+  { value: "web",     label: "Plain Web"          },
 ];
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -506,10 +509,7 @@ export default function ExportPage() {
             pollRef.current = null;
             setGenerating(false);
             triggerDownload(data.download_url);
-            setStatusMsg({
-              kind: "success",
-              text: "Export ready — download started.",
-            });
+            setStatusMsg({ kind: "success", text: "Export ready — download started." });
             fetchHistory();
           } else if (data.status === "failed") {
             clearInterval(pollRef.current!);
@@ -517,9 +517,7 @@ export default function ExportPage() {
             setGenerating(false);
             setStatusMsg({
               kind: "error",
-              text:
-                data.error ||
-                "Export generation failed. Please try again or reduce the date range and retry.",
+              text: data.error || "Export generation failed. Please try again or reduce the date range and retry.",
             });
           }
         } catch {
@@ -566,10 +564,7 @@ export default function ExportPage() {
             clearInterval(redownloadPollRef.current!);
             redownloadPollRef.current = null;
             setRedownloadingId(null);
-            setStatusMsg({
-              kind: "error",
-              text: "Re-download failed. Please try again.",
-            });
+            setStatusMsg({ kind: "error", text: "Re-download failed. Please try again." });
           }
         } catch {
           clearInterval(redownloadPollRef.current!);
@@ -601,9 +596,20 @@ export default function ExportPage() {
 
   return (
     <div style={s.page}>
-      <style>{`@keyframes ex-spin { to { transform: rotate(360deg); } }`}</style>
+      <style>{`
+        @keyframes ex-spin  { to { transform: rotate(360deg); } }
+        @keyframes ex-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+        .ex-type-card { transition: box-shadow 0.15s, transform 0.15s, border-color 0.15s; }
+        .ex-type-card:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(4,104,177,0.13) !important; }
+        .ex-format-btn { transition: box-shadow 0.15s, filter 0.15s; }
+        .ex-format-btn:hover { filter: brightness(0.93); }
+        .ex-history-row { transition: background 0.12s; }
+        .ex-history-row:hover { background: var(--c-surface-low) !important; }
+        .ex-history-row .ex-dl-btn { opacity: 0; transition: opacity 0.12s; }
+        .ex-history-row:hover .ex-dl-btn { opacity: 1 !important; }
+      `}</style>
 
-      <Header title="Export" subtitle="Generate and download crisis reports" />
+      <Header title="Export" subtitle="Download structured data reports on demand" />
 
       <div style={s.content}>
 
@@ -622,26 +628,52 @@ export default function ExportPage() {
                 return (
                   <button
                     key={rt.id}
+                    className="ex-type-card"
                     onClick={() => selectType(rt.id)}
                     style={{
                       ...s.card,
+                      position: "relative",
                       border: active
-                        ? "2px solid var(--c-primary-container)"
+                        ? `2px solid ${BLUE}`
                         : "2px solid transparent",
                       background: active
                         ? "rgba(4,104,177,0.04)"
                         : "var(--c-surface-lowest)",
-                      boxShadow: active ? "none" : "var(--shadow-sm)",
+                      boxShadow: active
+                        ? `0 0 0 4px rgba(4,104,177,0.08), var(--shadow-sm)`
+                        : "var(--shadow-sm)",
                     }}
                   >
+                    {/* Active checkmark badge */}
+                    {active && (
+                      <div style={s.cardCheck}>✓</div>
+                    )}
+
+                    {/* Material Symbol icon */}
+                    <span
+                      className="material-symbols-outlined"
+                      style={{
+                        fontSize: 28,
+                        color: active ? BLUE : "var(--c-text-muted)",
+                        fontVariationSettings: active
+                          ? "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 28"
+                          : "'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 28",
+                        transition: "color 0.15s, font-variation-settings 0.15s",
+                        marginBottom: 4,
+                        display: "block",
+                      }}
+                    >
+                      {TYPE_ICON[rt.id] ?? "description"}
+                    </span>
+
                     <div style={s.cardName}>{rt.name}</div>
+
                     <div style={s.cardFormats}>
                       {rt.formats.map((f) => (
-                        <span key={f} style={s.formatPill}>
-                          {f}
-                        </span>
+                        <span key={f} style={s.formatPill}>{f}</span>
                       ))}
                     </div>
+
                     <div style={s.cardDesc}>{rt.description}</div>
                   </button>
                 );
@@ -656,6 +688,7 @@ export default function ExportPage() {
               <span className="section-label">Configure Data Filters</span>
             </div>
             <div style={s.panel}>
+
               {/* Date range */}
               <div style={s.panelRow}>
                 <div style={s.field}>
@@ -716,7 +749,7 @@ export default function ExportPage() {
                 other statuses.
               </div>
 
-              {/* Flag status filter */}
+              {/* Filters */}
               <CheckboxGroup
                 label="Flag Status"
                 options={FLAG_STATUS_OPTIONS}
@@ -724,14 +757,12 @@ export default function ExportPage() {
                 onChange={setFlagStatusFilter}
               />
 
-              {/* Country filter */}
               <CountryMultiSelect
                 countries={countries}
                 selected={countryFilter}
                 onChange={setCountryFilter}
               />
 
-              {/* Damage level filter */}
               <CheckboxGroup
                 label="Damage Level"
                 options={DAMAGE_LEVEL_OPTIONS}
@@ -739,7 +770,6 @@ export default function ExportPage() {
                 onChange={setDamageLevelFilter}
               />
 
-              {/* Crisis type filter */}
               <CheckboxGroup
                 label="Crisis Type"
                 options={CRISIS_TYPE_OPTIONS}
@@ -747,7 +777,6 @@ export default function ExportPage() {
                 onChange={setCrisisTypeFilter}
               />
 
-              {/* Platform filter */}
               <CheckboxGroup
                 label="Platform"
                 options={PLATFORM_OPTIONS}
@@ -797,17 +826,33 @@ export default function ExportPage() {
             {selectedType ? (
               <div style={s.formatSection}>
                 <div style={s.formatBtnRow}>
-                  {selectedType.formats.map((f) => (
-                    <button
-                      key={f}
-                      className={format === FORMAT_VALUE[f] ? "btn btn-primary" : "btn btn-secondary"}
-                      style={{ padding: "8px 20px", height: 40 }}
-                      onClick={() => setFormat(FORMAT_VALUE[f])}
-                    >
-                      {f}
-                    </button>
-                  ))}
+                  {selectedType.formats.map((f) => {
+                    const isActive = format === FORMAT_VALUE[f];
+                    return (
+                      <button
+                        key={f}
+                        className="ex-format-btn"
+                        onClick={() => setFormat(FORMAT_VALUE[f])}
+                        style={{
+                          padding: "10px 28px",
+                          borderRadius: 999,
+                          border: "none",
+                          cursor: "pointer",
+                          fontWeight: 700,
+                          fontSize: 14,
+                          background: isActive ? BLUE : "var(--c-surface-high)",
+                          color: isActive ? "#fff" : "var(--c-text-primary)",
+                          boxShadow: isActive
+                            ? "0 2px 10px rgba(4,104,177,0.28)"
+                            : "none",
+                        }}
+                      >
+                        {f}
+                      </button>
+                    );
+                  })}
                 </div>
+
                 {format === "shapefile" && (
                   <p style={s.formatHint}>
                     Shapefile exports are delivered as a ZIP archive containing
@@ -818,6 +863,17 @@ export default function ExportPage() {
                   <p style={s.formatHint}>
                     GeoPackage exports are delivered as a single .gpkg file
                     compatible with QGIS and ArcGIS.
+                  </p>
+                )}
+                {INTERNAL_GEO_TYPES.has(selectedId) &&
+                  (format === "geojson" || format === "geopackage") && (
+                  <p style={{
+                    ...s.formatHint,
+                    background: "#FFF8E1",
+                    border: "1px solid #FFB74D",
+                    color: "#7B4F00",
+                  }}>
+                    For internal use only — this format includes device and IP data.
                   </p>
                 )}
               </div>
@@ -862,10 +918,9 @@ export default function ExportPage() {
         <div style={s.rightCol}>
 
           {/* EXPORT SUMMARY PANEL */}
-          <div className="card card-padded" style={{ position: "sticky", top: 92, marginBottom: 16 }}>
+          <div style={{ ...s.summaryCard, position: "sticky", top: 92, marginBottom: 16 }}>
             <div className="section-label" style={{ marginBottom: 16 }}>Export Summary</div>
 
-            {/* Summary rows */}
             {[
               {
                 label: "Template",
@@ -884,16 +939,19 @@ export default function ExportPage() {
               },
               {
                 label: "Flag Status",
-                value: flagStatusFilter.length > 0
-                  ? flagStatusFilter.join(", ")
-                  : "All",
+                value:
+                  flagStatusFilter.length > 0
+                    ? flagStatusFilter.join(", ")
+                    : "All",
                 missing: false,
               },
             ].map((row) => (
               <div key={row.label} style={s.summaryRow}>
                 <span style={s.summaryRowLabel}>{row.label}</span>
                 {row.missing ? (
-                  <span className="chip chip-amber">Not set</span>
+                  <span style={s.summaryMissing}>
+                    <span className="material-symbols-outlined" style={{ fontSize: 16, fontVariationSettings: "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 20" }}>warning</span> Not set
+                  </span>
                 ) : (
                   <span style={s.summaryRowValue}>{row.value}</span>
                 )}
@@ -901,12 +959,27 @@ export default function ExportPage() {
             ))}
 
             <button
-              className="btn btn-primary btn-lg"
               style={{
                 width: "100%",
-                marginTop: 16,
-                opacity: canGenerate ? 1 : 0.6,
+                marginTop: 20,
+                padding: "14px 0",
+                background: canGenerate
+                  ? "linear-gradient(135deg, #00508a 0%, #0468b1 100%)"
+                  : "var(--c-surface-high)",
+                color: canGenerate ? "#fff" : "var(--c-text-muted)",
+                border: "none",
+                borderRadius: "var(--radius-lg)",
+                fontWeight: 700,
+                fontSize: 15,
                 cursor: canGenerate ? "pointer" : "not-allowed",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 8,
+                boxShadow: canGenerate
+                  ? "0 4px 16px rgba(4,104,177,0.28)"
+                  : "none",
+                transition: "box-shadow 0.2s",
               }}
               onClick={handleGenerate}
               disabled={!canGenerate}
@@ -917,7 +990,10 @@ export default function ExportPage() {
                   Generating — please wait
                 </>
               ) : (
-                "Generate & Download"
+                <>
+                  <span className="material-symbols-outlined" style={{ fontSize: 20, fontVariationSettings: "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 20" }}>download</span>
+                  Generate &amp; Download
+                </>
               )}
             </button>
             <p style={s.processingNote}>
@@ -929,7 +1005,7 @@ export default function ExportPage() {
           <div className="card card-padded" style={{ marginBottom: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
               <span className="section-label">Recent Exports</span>
-              <span style={{ fontSize: "var(--text-sm)", color: "var(--c-primary-container)", fontWeight: 600, cursor: "pointer", textDecoration: "none" }}>
+              <span style={{ fontSize: "var(--text-sm)", color: BLUE, fontWeight: 600, cursor: "pointer" }}>
                 View All
               </span>
             </div>
@@ -942,9 +1018,9 @@ export default function ExportPage() {
               history.slice(0, 8).map((item) => {
                 const isRedownloading = redownloadingId === item.id;
                 return (
-                  <div key={item.id} style={s.exportItem}>
+                  <div key={item.id} className="ex-history-row" style={s.exportItem}>
                     <div style={s.exportItemIcon}>
-                      <span style={{ fontSize: 15, lineHeight: 1 }}>⬇</span>
+                      <span className="material-symbols-outlined" style={{ fontSize: 18, color: "var(--c-primary-container)", fontVariationSettings: "'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 20" }}>description</span>
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={s.exportItemName}>
@@ -958,32 +1034,35 @@ export default function ExportPage() {
                       </div>
                     </div>
                     <button
+                      className="ex-dl-btn"
                       style={{
-                        ...s.redownloadBtn,
-                        opacity: isRedownloading ? 0.7 : 1,
+                        padding: "5px 10px",
+                        background: "transparent",
+                        color: BLUE,
+                        border: `1.5px solid ${BLUE}`,
+                        borderRadius: "var(--radius-md)",
+                        fontSize: 14,
+                        fontWeight: 700,
                         cursor: isRedownloading ? "not-allowed" : "pointer",
                         display: "flex",
                         alignItems: "center",
+                        flexShrink: 0,
                       }}
                       onClick={() => !isRedownloading && handleRedownload(item.id)}
                       disabled={isRedownloading}
                     >
                       {isRedownloading ? (
-                        <>
-                          <span
-                            style={{
-                              display: "inline-block",
-                              width: 10,
-                              height: 10,
-                              border: `1.5px solid ${BLUE}`,
-                              borderTop: "1.5px solid transparent",
-                              borderRadius: "50%",
-                              animation: "ex-spin 0.7s linear infinite",
-                              marginRight: 6,
-                            }}
-                          />
-                          …
-                        </>
+                        <span
+                          style={{
+                            display: "inline-block",
+                            width: 11,
+                            height: 11,
+                            border: `1.5px solid ${BLUE}`,
+                            borderTop: "1.5px solid transparent",
+                            borderRadius: "50%",
+                            animation: "ex-spin 0.7s linear infinite",
+                          }}
+                        />
                       ) : (
                         "↓"
                       )}
@@ -992,6 +1071,41 @@ export default function ExportPage() {
                 );
               })
             )}
+          </div>
+
+          {/* SYSTEM STATUS */}
+          <div style={s.statusPanel}>
+            <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+              <div style={{ position: "relative", flexShrink: 0, width: 14, height: 14 }}>
+                <div style={{
+                  width: 10,
+                  height: 10,
+                  background: "#00753b",
+                  borderRadius: "50%",
+                  position: "absolute",
+                  top: 2,
+                  left: 2,
+                }} />
+                <div style={{
+                  width: 14,
+                  height: 14,
+                  background: "rgba(0,117,59,0.25)",
+                  borderRadius: "50%",
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  animation: "ex-pulse 2.2s ease-in-out infinite",
+                }} />
+              </div>
+              <div>
+                <p style={{ fontSize: 12, fontWeight: 700, color: "var(--c-text-primary)", margin: 0 }}>
+                  Export Service: Operational
+                </p>
+                <p style={{ fontSize: 11, color: "var(--c-text-muted)", margin: "3px 0 0", lineHeight: 1.45 }}>
+                  Large exports may take up to 2 minutes. Download starts automatically on completion.
+                </p>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -1064,14 +1178,29 @@ const s: Record<string, React.CSSProperties> = {
     gap: 12,
   },
   card: {
-    padding: "18px 16px",
+    padding: "20px 18px",
     borderRadius: "var(--radius-lg)",
     cursor: "pointer",
     textAlign: "left",
-    transition: "border-color 0.15s, background 0.15s, box-shadow 0.15s",
     display: "flex",
     flexDirection: "column",
     gap: 8,
+  },
+  cardCheck: {
+    position: "absolute",
+    top: 12,
+    right: 14,
+    width: 22,
+    height: 22,
+    background: BLUE,
+    borderRadius: "50%",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: 900,
+    lineHeight: "1",
   },
   cardName: {
     fontSize: "var(--text-base)",
@@ -1096,13 +1225,14 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: "var(--text-sm)",
     color: "var(--c-text-muted)",
     lineHeight: 1.5,
+    marginTop: 2,
   },
   // Configuration panel
   panel: {
     background: "var(--c-surface-lowest)",
     border: "1px solid var(--c-surface-high)",
     borderRadius: "var(--radius-lg)",
-    padding: "20px 24px",
+    padding: "24px",
     display: "flex",
     flexDirection: "column",
     gap: 20,
@@ -1253,7 +1383,7 @@ const s: Record<string, React.CSSProperties> = {
     color: "var(--c-text-subtle)",
     margin: 0,
   },
-  // Status
+  // Status message
   statusBox: {
     padding: "13px 16px",
     borderRadius: "var(--radius-md)",
@@ -1261,12 +1391,20 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: 14,
     fontWeight: 500,
   },
-  // Summary panel rows
+  // Summary panel
+  summaryCard: {
+    background: "var(--c-surface-lowest)",
+    border: "1px solid var(--c-surface-high)",
+    borderLeft: "4px solid #FFC107",
+    borderRadius: "var(--radius-lg)",
+    padding: "24px",
+    boxShadow: "var(--shadow-sm)",
+  },
   summaryRow: {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
-    padding: "8px 0",
+    padding: "9px 0",
     borderBottom: "1px solid var(--c-border-ghost)",
   },
   summaryRowLabel: {
@@ -1283,19 +1421,30 @@ const s: Record<string, React.CSSProperties> = {
     textOverflow: "ellipsis",
     whiteSpace: "nowrap",
   },
+  summaryMissing: {
+    display: "flex",
+    alignItems: "center",
+    gap: 5,
+    color: "#D97706",
+    fontSize: 13,
+    fontWeight: 600,
+  },
   processingNote: {
     fontSize: "var(--text-xs)",
     color: "var(--c-text-subtle)",
     textAlign: "center",
-    marginTop: 6,
+    marginTop: 8,
+    marginBottom: 0,
   },
-  // Recent exports compact list
+  // Recent exports list
   exportItem: {
     display: "flex",
     alignItems: "center",
     gap: 12,
-    padding: "10px 0",
+    padding: "10px 6px",
     borderBottom: "1px solid var(--c-border-ghost)",
+    borderRadius: "var(--radius-md)",
+    cursor: "default",
   },
   exportItemIcon: {
     width: 36,
@@ -1305,7 +1454,6 @@ const s: Record<string, React.CSSProperties> = {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    color: "var(--c-text-muted)",
     flexShrink: 0,
   },
   exportItemName: {
@@ -1321,15 +1469,11 @@ const s: Record<string, React.CSSProperties> = {
     color: "var(--c-text-muted)",
     marginTop: 2,
   },
-  redownloadBtn: {
-    padding: "6px 10px",
+  // System status panel
+  statusPanel: {
     background: "var(--c-surface-high)",
-    color: "var(--c-text-primary)",
-    border: "none",
-    borderRadius: "var(--radius-md)",
-    fontSize: 14,
-    fontWeight: 600,
-    whiteSpace: "nowrap" as const,
-    flexShrink: 0,
+    border: "1px solid var(--c-border-ghost)",
+    borderRadius: "var(--radius-lg)",
+    padding: "16px 18px",
   },
 };

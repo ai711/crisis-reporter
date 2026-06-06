@@ -145,7 +145,7 @@ export default function BadgesScreen() {
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
             <MaterialIcons name="arrow-back" size={scale(24)} color="#0468B1" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Badges &amp; Certifications</Text>
+          <Text style={styles.headerTitle}>Badges</Text>
           <View style={styles.backBtn} />
         </View>
         <ActivityIndicator color="#0468B1" style={{ marginTop: 40 }} />
@@ -163,7 +163,7 @@ export default function BadgesScreen() {
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
             <MaterialIcons name="arrow-back" size={scale(24)} color="#0468B1" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Badges &amp; Certifications</Text>
+          <Text style={styles.headerTitle}>Badges</Text>
           <View style={styles.backBtn} />
         </View>
 
@@ -282,7 +282,7 @@ export default function BadgesScreen() {
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <MaterialIcons name="arrow-back" size={scale(24)} color="#0468B1" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Badges &amp; Certifications</Text>
+        <Text style={styles.headerTitle}>Badges</Text>
         <View style={styles.backBtn} />
       </View>
 

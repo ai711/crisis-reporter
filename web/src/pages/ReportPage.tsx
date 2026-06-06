@@ -12,7 +12,8 @@ import { validatePhoto } from "../utils/photoValidation";
 import { compressPhoto } from "../utils/photoCompression";
 import { extractExif } from "../utils/exifExtraction";
 import SubmissionStepper, { type StepperStep } from "../components/SubmissionStepper";
-import type { DamageLevel } from "../types";
+import type { DamageLevel, QueuedPhoto } from "../types";
+import { addToQueue } from "../utils/offlineQueue";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 const MAPTILER_KEY = import.meta.env.VITE_MAPTILER_KEY || "";
@@ -353,7 +354,7 @@ export default function ReportPage() {
   const [error, setError] = useState("");
   const [crisisId, setCrisisId] = useState<string | null>(null);
   const [crisisLoading, setCrisisLoading] = useState(true);
-  const [crisisError, setCrisisError] = useState(false);
+  const [_crisisError, setCrisisError] = useState(false);
   const [questionPackage, setQuestionPackage] = useState<ActivePackage | null>(null);
   const [showAnswerPrompt, setShowAnswerPrompt] = useState(false);
   const [editingFromReview, setEditingFromReview] = useState(false);
@@ -1385,8 +1386,22 @@ export default function ReportPage() {
       }
     })();
     if (!isCurrentlyOnline) {
-      setSubmitError("no_internet");
-      setSubmitting(false);
+      try {
+        const queuedPhotos: QueuedPhoto[] = compressedPhotos.map((file, i) => ({
+          blob: file,
+          filename: `photo_${i}.jpg`,
+          content_type: file.type || "image/jpeg",
+          display_order: i,
+        }));
+        await addToQueue({ ...reportPayload, was_queued: true } as any, queuedPhotos);
+        try { localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ }
+        setWasQueued(true);
+        setSubmitted(true);
+      } catch {
+        setSubmitError("server_error");
+      } finally {
+        setSubmitting(false);
+      }
       return;
     }
 

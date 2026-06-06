@@ -65,6 +65,28 @@ const normaliseDamageLevel = (raw: any): DamageLevel => {
   return 'minimal';
 };
 
+const EMPTY_FC: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
+const BUILDINGS_MIN_ZOOM = 14;
+
+/** Parse `[out:json];way["building"](bbox);out geom;` response into GeoJSON polygons. */
+function overpassToGeoJSON(elements: any[]): GeoJSON.FeatureCollection {
+  const features: GeoJSON.Feature[] = elements
+    .filter((el) => el.type === 'way' && Array.isArray(el.geometry) && el.geometry.length >= 3)
+    .map((el) => {
+      const ring: [number, number][] = el.geometry.map((p: { lon: number; lat: number }) => [p.lon, p.lat]);
+      // Close the ring if needed.
+      if (ring[0][0] !== ring[ring.length - 1][0] || ring[0][1] !== ring[ring.length - 1][1]) {
+        ring.push(ring[0]);
+      }
+      return {
+        type: 'Feature' as const,
+        geometry: { type: 'Polygon' as const, coordinates: [ring] },
+        properties: {},
+      };
+    });
+  return { type: 'FeatureCollection', features };
+}
+
 export default function MapScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
@@ -72,7 +94,11 @@ export default function MapScreen() {
   const [loading, setLoading] = useState(true);
   const [isOnline, setIsOnline] = useState(true);
   const [selectedReport, setSelectedReport] = useState<ReportPin | null>(null);
+  const [crisisRadius, setCrisisRadius] = useState<string>('50 mi');
+  const [buildingsFC, setBuildingsFC] = useState<GeoJSON.FeatureCollection>(EMPTY_FC);
+  const [showZoomHint, setShowZoomHint] = useState(false);
   const cameraRef = useRef<CameraRef | null>(null);
+  const buildingsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const initialFetchDone = useRef(false);
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const btnScale = useRef(new Animated.Value(1)).current;
@@ -105,25 +131,76 @@ export default function MapScreen() {
   const fetchReports = async () => {
     setLoading(true);
     try {
-      const response = await api.get('/api/reports?limit=200');
-      const pins: ReportPin[] = response.data
-        .filter((r: any) => r.gps_latitude && r.gps_longitude)
-        .map((r: any) => ({
-          id: r.id,
-          latitude: parseFloat(r.gps_latitude),
-          longitude: parseFloat(r.gps_longitude),
-          damage_level: normaliseDamageLevel(r.damage_level),
-          infrastructure_type:
-            r.infrastructure_types?.[0] ?? r.infrastructure_type ?? 'Unknown',
-          submitted_at: r.submitted_at ?? r.created_at,
-          photo_url: undefined,
-        }));
-      setReports(pins);
+      const [reportsRes, crisesRes] = await Promise.allSettled([
+        api.get('/api/reports?limit=200'),
+        api.get('/api/crises/active'),
+      ]);
+
+      if (reportsRes.status === 'fulfilled') {
+        const pins: ReportPin[] = reportsRes.value.data
+          .filter((r: any) => r.gps_latitude && r.gps_longitude)
+          .map((r: any) => ({
+            id: r.id,
+            latitude: parseFloat(r.gps_latitude),
+            longitude: parseFloat(r.gps_longitude),
+            damage_level: normaliseDamageLevel(r.damage_level),
+            infrastructure_type:
+              r.infrastructure_types?.[0] ?? r.infrastructure_type ?? 'Unknown',
+            submitted_at: r.submitted_at ?? r.created_at,
+            photo_url: undefined,
+          }));
+        setReports(pins);
+      }
+
+      if (crisesRes.status === 'fulfilled') {
+        const crises: any[] = crisesRes.value.data ?? [];
+        const first = crises[0];
+        if (first?.map_default_radius_miles) {
+          setCrisisRadius(`${first.map_default_radius_miles} mi`);
+        }
+      }
     } catch {
       // Offline or error — pins stay empty
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchBuildings = async (s: number, w: number, n: number, e: number) => {
+    const query = `[out:json][timeout:10];way["building"](${s},${w},${n},${e});out geom;`;
+    try {
+      const res = await fetch('https://overpass-api.de/api/interpreter', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `data=${encodeURIComponent(query)}`,
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      setBuildingsFC(overpassToGeoJSON(data.elements ?? []));
+    } catch { /* Non-critical — Overpass may be slow */ }
+  };
+
+  /** Called when the map camera settles. Triggers building fetch at zoom ≥ 14. */
+  const handleRegionChange = (event: any) => {
+    const zoom: number = event?.properties?.zoomLevel ?? 0;
+    const bounds: [[number, number], [number, number]] | undefined =
+      event?.properties?.visibleBounds;
+
+    if (zoom < BUILDINGS_MIN_ZOOM) {
+      setShowZoomHint(zoom > 10); // hint only when user has started zooming in
+      setBuildingsFC(EMPTY_FC);
+      return;
+    }
+
+    setShowZoomHint(false);
+
+    if (!bounds) return;
+    const [[neLng, neLat], [swLng, swLat]] = bounds;
+
+    if (buildingsTimer.current) clearTimeout(buildingsTimer.current);
+    buildingsTimer.current = setTimeout(() => {
+      fetchBuildings(swLat, swLng, neLat, neLng);
+    }, 800);
   };
 
   const recentreMap = async () => {
@@ -167,7 +244,10 @@ export default function MapScreen() {
       }
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      if (buildingsTimer.current) clearTimeout(buildingsTimer.current);
+    };
   }, []);
 
   const reportsGeoJSON: GeoJSON.FeatureCollection = {
@@ -318,6 +398,7 @@ export default function MapScreen() {
         logo={false}
         attribution={false}
         onPress={() => setSelectedReport(null)}
+        onRegionDidChange={handleRegionChange}
       >
         <Camera
           ref={cameraRef}
@@ -325,6 +406,26 @@ export default function MapScreen() {
         />
 
         <UserLocation />
+
+        {/* Building footprints — rendered below report pins */}
+        <GeoJSONSource id="buildings-source" data={buildingsFC}>
+          <Layer
+            id="buildings-fill"
+            type="fill"
+            paint={{
+              'fill-color': '#CBD5E0',
+              'fill-opacity': 0.45,
+            }}
+          />
+          <Layer
+            id="buildings-outline"
+            type="line"
+            paint={{
+              'line-color': '#718096',
+              'line-width': 0.7,
+            }}
+          />
+        </GeoJSONSource>
 
         {reports.length > 0 && (
           <GeoJSONSource
@@ -362,9 +463,16 @@ export default function MapScreen() {
       <View style={[styles.locationPillWrap, { top: insets.top + 64 }]}>
         <View style={styles.locationPill}>
           <MaterialIcons name="my-location" size={scale(14)} color="#FFFFFF" />
-          <Text style={styles.locationPillText}>Near you — 50 mi radius</Text>
+          <Text style={styles.locationPillText}>Near you — {crisisRadius} radius</Text>
         </View>
       </View>
+
+      {/* "Zoom in to see buildings" hint — shown at zoom 10–13 */}
+      {showZoomHint && (
+        <View style={[styles.zoomHintPill, { top: insets.top + 100 }]}>
+          <Text style={styles.zoomHintText}>Zoom in to see building outlines</Text>
+        </View>
+      )}
 
       {/* GPS recentre FAB — bottom-right */}
       <TouchableOpacity
@@ -416,7 +524,13 @@ export default function MapScreen() {
                   {selectedReport.latitude.toFixed(5)},{' '}
                   {selectedReport.longitude.toFixed(5)}
                 </Text>
-                <TouchableOpacity onPress={() => setSelectedReport(null)}>
+                <TouchableOpacity
+                  onPress={() => {
+                    const id = selectedReport.id;
+                    setSelectedReport(null);
+                    navigation.navigate('ReportDetailScreen', { reportId: id });
+                  }}
+                >
                   <Text style={styles.popupViewDetails}>View Details ›</Text>
                 </TouchableOpacity>
               </>
@@ -602,6 +716,24 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: scale(12),
     fontWeight: '500',
+  },
+  zoomHintPill: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    zIndex: 10,
+    pointerEvents: 'none',
+  },
+  zoomHintText: {
+    backgroundColor: 'rgba(26,43,74,0.82)',
+    color: '#FFFFFF',
+    fontSize: scale(11),
+    fontWeight: '500',
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 20,
+    overflow: 'hidden',
   },
   gpsFab: {
     position: 'absolute',

@@ -183,13 +183,14 @@ async def list_projects(
         except ValueError:
             pass
 
-    # Search — name or serial_id (case-insensitive)
+    # Search — name, serial_id, or any country in the countries array (case-insensitive)
     if search:
         s = f"%{search}%"
         conditions.append(
             or_(
                 Crisis.name.ilike(s),
                 Crisis.serial_id.ilike(s),
+                func.array_to_string(Crisis.countries, ",").ilike(s),
             )
         )
 
@@ -496,7 +497,12 @@ async def list_project_reports(
     conditions = [ReportProject.crisis_id == crisis.id]
 
     if flag_status:
-        conditions.append(Report.flag_status == flag_status)
+        # Frontend may send a comma-joined list e.g. "green,orange"
+        flag_values = [f.strip() for f in flag_status.split(",") if f.strip()]
+        if len(flag_values) == 1:
+            conditions.append(Report.flag_status == flag_values[0])
+        elif flag_values:
+            conditions.append(Report.flag_status.in_(flag_values))
     if damage_level:
         conditions.append(Report.damage_level == damage_level)
     if cursor:
@@ -538,24 +544,20 @@ async def list_project_reports(
             )
         ).scalar() or 0
         reporter = r.reporter
+        # infrastructure_types: prefer the ARRAY column; fall back to wrapping
+        # the legacy singular field so the frontend array join always works.
+        infra_types = r.infrastructure_types
+        if not infra_types and r.infrastructure_type:
+            infra_types = [r.infrastructure_type]
         items.append({
             "report_id": str(r.id),
             "serial_number": r.serial_number,
-            "crisis_id": str(r.crisis_id),
-            "reporter_id": str(r.reporter_id) if r.reporter_id else None,
-            "reporter_display_id": reporter.display_id if reporter else None,
-            "country": reporter.country_code if reporter else None,
-            "building_id": r.building_id,
-            "damage_level": r.damage_level,
-            "infrastructure_type": r.infrastructure_type,
-            "disaster_type": r.disaster_type,
-            "flag_status": r.flag_status,
-            "platform": r.platform,
-            "gps_latitude": r.gps_latitude,
-            "gps_longitude": r.gps_longitude,
-            "submitted_at": r.submitted_at.isoformat() if r.submitted_at else None,
             "created_at": r.created_at.isoformat() if r.created_at else None,
-            "photo_count": photo_count,
+            "country": reporter.country_code if reporter else None,
+            "damage_level": r.damage_level,
+            "infrastructure_types": infra_types or [],
+            "crisis_type": r.disaster_type,
+            "flag_status": r.flag_status,
         })
 
     next_cursor = None
@@ -619,11 +621,15 @@ async def list_project_properties(
     if has_more:
         props = list(props[:limit])
 
-    # Report counts per property (scoped to this project)
+    # Report counts + most recent report timestamp per property (scoped to this project)
     if props:
         proj_prop_ids = [p.id for p in props]
         rc_q = (
-            select(Report.property_id, func.count(Report.id))
+            select(
+                Report.property_id,
+                func.count(Report.id),
+                func.max(Report.created_at),
+            )
             .join(ReportProject, ReportProject.report_id == Report.id)
             .where(
                 ReportProject.crisis_id == crisis.id,
@@ -633,12 +639,18 @@ async def list_project_properties(
             .group_by(Report.property_id)
         )
         rc_res = await db.execute(rc_q)
-        rc_map = {row[0]: row[1] for row in rc_res.all()}
+        rc_map: dict = {}
+        recent_map: dict = {}
+        for row in rc_res.all():
+            rc_map[row[0]] = row[1]
+            recent_map[row[0]] = row[2]
     else:
         rc_map = {}
+        recent_map = {}
 
     items = []
     for p in props:
+        most_recent = recent_map.get(p.id)
         items.append({
             "property_id": p.id,
             "building_id": p.building_id,
@@ -650,6 +662,7 @@ async def list_project_properties(
             "confirmed_status": p.confirmed_status,
             "has_conflict_warning": p.has_conflict_warning,
             "total_reports": rc_map.get(p.id, 0),
+            "most_recent_report_at": most_recent.isoformat() if most_recent else None,
             "is_recovered": p.is_recovered,
             "property_status": "Recovered" if p.is_recovered else "Active",
             "is_flagged_for_review": p.is_flagged_for_review if hasattr(p, "is_flagged_for_review") else False,
@@ -757,14 +770,39 @@ async def get_project_stats(
         for row in crisis_res.all()
     ]
 
+    # Map damage_level DB values (minimal/partial/complete) to frontend keys
+    completely_damaged = damage_distribution.get("complete", 0)
+    partially_damaged = damage_distribution.get("partial", 0)
+    minimal_damage = damage_distribution.get("minimal", 0)
+
     return {
-        "total_reports": total,
-        "damage_distribution": damage_distribution,
-        "reports_over_time": reports_over_time,
+        "summary": {
+            "total_reports": total,
+            "completely_damaged": completely_damaged,
+            "partially_damaged": partially_damaged,
+            "minimal_damage": minimal_damage,
+        },
+        "damage_distribution": {
+            "completely_damaged": completely_damaged,
+            "partially_damaged": partially_damaged,
+            "minimal_damage": minimal_damage,
+        },
+        # Rename "period" → "date" so the XAxis dataKey="date" binding works
+        "time_series": [
+            {"date": row["period"], "count": row["count"]}
+            for row in reports_over_time
+        ],
+        # Rename "type" → "infrastructure_type" for YAxis dataKey binding
+        "infrastructure_breakdown": [
+            {"infrastructure_type": row["type"], "count": row["count"]}
+            for row in infrastructure_breakdown
+        ],
+        # Rename "type" → "crisis_type" for YAxis dataKey binding
+        "crisis_type_breakdown": [
+            {"crisis_type": row["type"], "count": row["count"]}
+            for row in crisis_type_breakdown
+        ],
         "country_breakdown": country_breakdown,
-        "infrastructure_breakdown": infrastructure_breakdown,
-        "crisis_type_breakdown": crisis_type_breakdown,
-        "note": "Includes Green and Orange flagged reports only.",
     }
 
 
