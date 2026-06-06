@@ -1356,22 +1356,34 @@ async def _run_auto_translation(language_code: str) -> None:
                 for i in range(0, total_keys, TRANSLATION_BATCH_SIZE)
             ]
 
+            # Exponential backoff delays for 429/403 responses (seconds).
+            # Concurrent requests flood public rate-limited APIs, so translations
+            # are processed one-at-a-time; batches exist only for DB commit cadence.
+            _BACKOFF = [5.0, 15.0, 45.0]
+
             async def _translate_single(key_id, key_name, english_text, target_lang) -> dict:
-                try:
+                last_exc: Exception | None = None
+                for attempt in range(len(_BACKOFF) + 1):
+                    if attempt > 0:
+                        wait = _BACKOFF[attempt - 1]
+                        log.warning(
+                            "HTTP error translating %s (attempt %d/%d), retrying after %.0fs",
+                            key_name, attempt, len(_BACKOFF), wait,
+                        )
+                        await asyncio.sleep(wait)
                     try:
                         t_text, svc = await translate_text(english_text, target_lang)
-                    except httpx.HTTPStatusError as rate_exc:
-                        if rate_exc.response.status_code == 429:
-                            log.warning("Rate limited (429) translating %s, retrying after 3s", key_name)
-                            await asyncio.sleep(3.0)
-                            t_text, svc = await translate_text(english_text, target_lang)
-                        else:
-                            raise
-                    if svc == "libretranslate":
-                        await asyncio.sleep(0.5)
-                    return {"key_id": key_id, "key_name": key_name, "translated_text": t_text, "service_used": svc, "error": None}
-                except Exception as exc:
-                    return {"key_id": key_id, "key_name": key_name, "translated_text": None, "service_used": None, "error": str(exc)}
+                        if svc == "libretranslate":
+                            await asyncio.sleep(2.0)
+                        return {"key_id": key_id, "key_name": key_name, "translated_text": t_text, "service_used": svc, "error": None}
+                    except httpx.HTTPStatusError as exc:
+                        if exc.response.status_code in (429, 403):
+                            last_exc = exc
+                            continue
+                        return {"key_id": key_id, "key_name": key_name, "translated_text": None, "service_used": None, "error": str(exc)}
+                    except Exception as exc:
+                        return {"key_id": key_id, "key_name": key_name, "translated_text": None, "service_used": None, "error": str(exc)}
+                return {"key_id": key_id, "key_name": key_name, "translated_text": None, "service_used": None, "error": str(last_exc)}
 
             for batch_idx, batch in enumerate(batches):
                 _translation_progress[language_code] = {
@@ -1382,10 +1394,10 @@ async def _run_auto_translation(language_code: str) -> None:
 
                 trans_map_batch = {t.id: t for t, _ in batch}
 
-                results = await asyncio.gather(*[
-                    _translate_single(t.id, sk.key, sk.english_text, language_code)
-                    for t, sk in batch
-                ])
+                # Sequential — not concurrent — to avoid hammering public rate limits
+                results = []
+                for t, sk in batch:
+                    results.append(await _translate_single(t.id, sk.key, sk.english_text, language_code))
 
                 for result in results:
                     if result["error"]:
@@ -1402,9 +1414,6 @@ async def _run_auto_translation(language_code: str) -> None:
                             log.info("Translated key %s via %s", result["key_name"], result["service_used"])
 
                 await db.commit()
-
-                if batch_idx < len(batches) - 1:
-                    await asyncio.sleep(1.0)
 
             _translation_progress.pop(language_code, None)
 
