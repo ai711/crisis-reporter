@@ -1385,29 +1385,6 @@ export default function ReportPage() {
         return false;
       }
     })();
-    if (!isCurrentlyOnline) {
-      try {
-        const queuedPhotos: QueuedPhoto[] = compressedPhotos.map((file, i) => ({
-          blob: file,
-          filename: `photo_${i}.jpg`,
-          content_type: file.type || "image/jpeg",
-          display_order: i,
-        }));
-        await addToQueue({ ...reportPayload, was_queued: true } as any, queuedPhotos);
-        try { localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ }
-        setWasQueued(true);
-        setSubmitted(true);
-      } catch {
-        setSubmitError("server_error");
-      } finally {
-        setSubmitting(false);
-      }
-      return;
-    }
-
-    // Phase 2 — transmit
-    setSubmitting(true);
-
     const reportPayload = {
       ...(crisisId ? { crisis_id: crisisId } : {}), // omit if not resolved — backend auto-assigns
       local_report_id: localReportId,
@@ -1491,6 +1468,30 @@ export default function ReportPage() {
       })(),
       was_queued: false,
     };
+
+    // Offline path — queue the report and exit early before any network call
+    if (!isCurrentlyOnline) {
+      try {
+        const queuedPhotos: QueuedPhoto[] = compressedPhotos.map((file, i) => ({
+          blob: file,
+          filename: `photo_${i}.jpg`,
+          content_type: file.type || "image/jpeg",
+          display_order: i,
+        }));
+        await addToQueue({ ...reportPayload, was_queued: true } as any, queuedPhotos);
+        try { localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ }
+        setWasQueued(true);
+        setSubmitted(true);
+      } catch {
+        setSubmitError("server_error");
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
+
+    // Phase 2 — transmit
+    setSubmitting(true);
 
     // E34 — 30-second hard timeout on the report creation request
     const controller = new AbortController();

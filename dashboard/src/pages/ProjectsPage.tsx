@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Folder, Pencil, Lock, X, ChevronLeft, ChevronRight, Filter } from "lucide-react";
+import { Pencil, Lock, X, ChevronLeft, ChevronRight, Filter } from "lucide-react";
 import Header from "../components/Header";
 import { useAuthStore } from "../stores/authStore";
 import {
