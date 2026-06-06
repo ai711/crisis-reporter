@@ -92,6 +92,46 @@ DEFAULTS: dict[str, Any] = {
                 "delivery_mode": "immediate",
                 "summary_interval_minutes": None,
             },
+            {
+                "key": "grey_flag_processing_delay",
+                "label": "Grey flag processing delay",
+                "description": "Triggers when the background monitoring job identifies reports stuck in Grey flag status beyond the configured threshold.",
+                "active": True,
+                "subscribers": [],
+                "threshold": None,
+                "delivery_mode": "immediate",
+                "summary_interval_minutes": None,
+            },
+            {
+                "key": "translation_auto_translation_complete",
+                "label": "Auto-translation complete",
+                "description": "Triggers when a background auto-translation job completes following an English content change.",
+                "active": True,
+                "subscribers": [],
+                "threshold": None,
+                "delivery_mode": "immediate",
+                "summary_interval_minutes": None,
+            },
+            {
+                "key": "auto_block_confirmation_expiring",
+                "label": "Auto-block confirmation window expiring",
+                "description": "Triggers when a reporter profile in the Review Queue has less than 24 hours remaining in its 72-hour confirmation window.",
+                "active": True,
+                "subscribers": [],
+                "threshold": None,
+                "delivery_mode": "immediate",
+                "summary_interval_minutes": None,
+            },
+            {
+                "key": "language_deprecation_expiring",
+                "label": "Language deprecation window expiring",
+                "description": "Triggers when a deprecated language has less than 7 days remaining before its 90-day hard-removal window expires.",
+                "active": True,
+                "subscribers": [],
+                "threshold": None,
+                "delivery_mode": "immediate",
+                "summary_interval_minutes": None,
+            },
         ]
     },
 }
@@ -239,8 +279,8 @@ async def patch_security_settings(
         raise HTTPException(status_code=400, detail="session_timeout must be 5–480 minutes")
     if "max_login_attempts" in updates and not (3 <= updates["max_login_attempts"] <= 10):
         raise HTTPException(status_code=400, detail="max_login_attempts must be 3–10")
-    if "password_min_length" in updates and not (6 <= updates["password_min_length"] <= 32):
-        raise HTTPException(status_code=400, detail="password_min_length must be 6–32")
+    if "password_min_length" in updates and not (8 <= updates["password_min_length"] <= 64):
+        raise HTTPException(status_code=400, detail="password_min_length must be 8–64")
     if "password_expiry_days" in updates and updates["password_expiry_days"] < 0:
         raise HTTPException(status_code=400, detail="password_expiry_days must be >= 0")
 
@@ -269,7 +309,17 @@ async def get_notification_settings(
     db: AsyncSession = Depends(get_db),
     current_user: DashboardUser = Depends(require_superadmin),
 ):
-    return await _get_setting(db, "notifications")
+    stored = await _get_setting(db, "notifications")
+    if not isinstance(stored, dict) or "types" not in stored:
+        return dict(DEFAULTS["notifications"])
+    # Merge: any new default notification types not yet stored are appended
+    # so existing databases automatically gain newly-added notification keys.
+    stored_keys = {t["key"] for t in stored["types"]}
+    merged = list(stored["types"])
+    for dt in DEFAULTS["notifications"]["types"]:
+        if dt["key"] not in stored_keys:
+            merged.append(dict(dt))
+    return {"types": merged}
 
 
 @router.patch("/notifications")
