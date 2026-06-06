@@ -1022,8 +1022,11 @@ async def lifespan(app: FastAPI):
         await conn.run_sync(Base.metadata.create_all)
         for stmt in _MIGRATIONS:
             try:
+                await conn.execute(text("SAVEPOINT _m"))
                 await conn.execute(text(stmt))
+                await conn.execute(text("RELEASE SAVEPOINT _m"))
             except Exception as e:
+                await conn.execute(text("ROLLBACK TO SAVEPOINT _m"))
                 logger.warning("Migration skipped: %s — %s", stmt, e)
     Path(settings.LOCAL_UPLOAD_PATH).mkdir(parents=True, exist_ok=True)
     await seed_initial_package()
