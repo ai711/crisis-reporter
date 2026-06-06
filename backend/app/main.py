@@ -559,7 +559,7 @@ async def _seed_default_roles() -> None:
         all_sections = [
             "main_map_view", "reports_page", "location_page", "review_queue",
             "analytics_and_statistics", "reporter_profiles", "export", "projects",
-            "manage_users", "manage_roles", "app_configuration",
+            "manage_users", "manage_roles", "app_configuration", "content_management",
         ]
         superadmin_permissions = {s: {"view": True, "edit": True} for s in all_sections}
         guest_permissions = {"projects": {"view": True, "edit": False}}
@@ -999,6 +999,20 @@ ON CONFLICT DO NOTHING""",
     "ALTER TABLE reports ADD COLUMN IF NOT EXISTS synced_at TIMESTAMPTZ",
     # crises — map radius default (NOT NULL in model, missing column would break crisis creation)
     "ALTER TABLE crises ADD COLUMN IF NOT EXISTS map_default_radius_miles INTEGER DEFAULT 50",
+    # content_management section — copy permissions from app_configuration for existing custom roles
+    # so existing role grants don't lose access when the sidebar key changes
+    """UPDATE roles SET permissions = permissions || jsonb_build_object('content_management', COALESCE(permissions->'app_configuration', '{"view": false, "edit": false}'::jsonb)) WHERE is_default = false AND NOT (permissions ? 'content_management')""",
+    # Safety-net: remove StringKey rows that could only have been created by the wrong disaster keys
+    # in the old SystemSettingsPage App Content tab (hurricane→hurricane_cyclone, fire→wildfire, etc.)
+    "DELETE FROM string_keys WHERE key LIKE 'SAFETY_TIP_A_HURRICANE_%' AND key NOT LIKE 'SAFETY_TIP_A_HURRICANE_CYCLONE_%'",
+    "DELETE FROM string_keys WHERE key LIKE 'SAFETY_TIP_A_FIRE_%'",
+    "DELETE FROM string_keys WHERE key LIKE 'SAFETY_TIP_A_LANDSLIDE_%'",
+    "DELETE FROM string_keys WHERE key LIKE 'SAFETY_TIP_A_DROUGHT_%'",
+    "DELETE FROM string_keys WHERE key LIKE 'SAFETY_TIP_A_EPIDEMIC_%'",
+    # reporters.ip_address_hash — SHA-256 hash of the reporter's most-recent submission IP.
+    # Required for Rule 2 auto-flagging (IP blocked reporter match) in auto_flagging.py.
+    "ALTER TABLE reporters ADD COLUMN IF NOT EXISTS ip_address_hash VARCHAR(64)",
+    "CREATE INDEX IF NOT EXISTS ix_reporters_ip_address_hash ON reporters(ip_address_hash)",
 ]
 
 

@@ -79,7 +79,7 @@ router = APIRouter(prefix="/api/dashboard/auth", tags=["Dashboard Auth"])
 _ALL_SECTIONS = [
     "main_map_view", "reports_page", "location_page", "review_queue",
     "analytics_and_statistics", "reporter_profiles", "export", "projects",
-    "manage_users", "manage_roles", "app_configuration",
+    "manage_users", "manage_roles", "app_configuration", "content_management",
 ]
 
 

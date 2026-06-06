@@ -3,7 +3,6 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { Search, ChevronDown, X, ChevronLeft, ChevronRight, Eye, Download } from "lucide-react";
 import Header from "../components/Header";
-import { useAuthStore } from "../stores/authStore";
 import api from "../services/api";
 import type { ReportListItem, FlagStatus, ReportListResponse } from "../types";
 import { formatDamageLevel, formatDateTime } from "../utils/formatters";
@@ -135,7 +134,6 @@ function buildPageRange(current: number, total: number): (number | "...")[] {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function ReportsPage() {
-  const { activeCrisisId } = useAuthStore();
   const navigate = useNavigate();
 
   // Filters
@@ -171,7 +169,6 @@ export default function ReportsPage() {
   // Build query params from current applied filters + pagination state
   const queryParams = useCallback((): Record<string, string> => {
     const p: Record<string, string> = { limit: String(pageSize) };
-    if (activeCrisisId) p.crisis_id = activeCrisisId;
     if (filters.search) p.q = filters.search;
     // Send comma-separated list when multiple statuses selected.
     // When none selected, send nothing — backend excludes discarded by default.
@@ -184,10 +181,10 @@ export default function ReportsPage() {
     if (filters.crisisTypes.length > 0) p.crisis_type = filters.crisisTypes.join(",");
     if (cursor) p.cursor = cursor;
     return p;
-  }, [activeCrisisId, filters, pageSize, cursor]);
+  }, [filters, pageSize, cursor]);
 
   const { data, isLoading } = useQuery<ReportListResponse>({
-    queryKey: ["reports", activeCrisisId, filters, pageSize, cursor],
+    queryKey: ["reports", filters, pageSize, cursor],
     queryFn: async () => {
       const response = await api.get("/api/dashboard/reports", { params: queryParams() });
       return response.data;
@@ -196,10 +193,9 @@ export default function ReportsPage() {
 
   // Fetch status-level counts for the stat cards (no pagination, just counts per flag)
   const { data: statsData } = useQuery<{ counts: Record<string, number>; total: number }>({
-    queryKey: ["reports-stats", activeCrisisId, filters],
+    queryKey: ["reports-stats", filters],
     queryFn: async () => {
       const baseParams: Record<string, string> = { limit: "1" };
-      if (activeCrisisId) baseParams.crisis_id = activeCrisisId;
       if (filters.search) baseParams.q = filters.search;
       if (filters.country) baseParams.country = filters.country;
       if (filters.dateFrom) baseParams.date_from = filters.dateFrom;

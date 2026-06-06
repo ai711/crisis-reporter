@@ -13,6 +13,8 @@ import {
   confirmAutoBlock,
   reverseAutoBlock,
   forceResolution,
+  acquireReviewLock,
+  submitReviewDecision,
 } from "../services/api";
 import {
   formatDateTime,
@@ -466,6 +468,263 @@ function ForceResolutionModal({
   );
 }
 
+// ── Tab1ReviewModal ────────────────────────────────────────────────────────────
+
+interface Tab1ReviewModalProps {
+  row: Tab1Row;
+  onClose: () => void;
+  onSuccess: () => void;
+}
+
+function Tab1ReviewModal({ row, onClose, onSuccess }: Tab1ReviewModalProps) {
+  const qc = useQueryClient();
+  const [comment, setComment] = useState("");
+  const [flagAssessments, setFlagAssessments] = useState<
+    Array<{ reason: string; dismissed: boolean }>
+  >(() => row.flag_reasons.map((r) => ({ reason: r, dismissed: false })));
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const canSubmit = comment.trim().length >= 10 && !loading;
+
+  async function handleDecision(decision: "approve" | "discard") {
+    if (!canSubmit) return;
+    setLoading(true);
+    setError(null);
+    try {
+      await acquireReviewLock(row.report_id);
+      await submitReviewDecision(row.report_id, decision, flagAssessments, comment.trim());
+      qc.invalidateQueries({ queryKey: ["review-queue-tab1"] });
+      qc.invalidateQueries({ queryKey: ["review-queue-counts"] });
+      onSuccess();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Action failed. Please try again.");
+      setLoading(false);
+    }
+  }
+
+  function toggleDismissed(reason: string) {
+    setFlagAssessments((prev) =>
+      prev.map((a) => (a.reason === reason ? { ...a, dismissed: !a.dismissed } : a))
+    );
+  }
+
+  const dmg = damagePillColors(row.damage_level);
+  const reportLabel =
+    row.serial_number != null
+      ? `#${row.serial_number}`
+      : row.report_id.slice(0, 8) + "…";
+
+  return (
+    <div
+      style={rms.backdrop}
+      onClick={(e) => {
+        if (e.target === e.currentTarget && !loading) onClose();
+      }}
+    >
+      <div style={rms.dialog}>
+        {/* Header */}
+        <div style={rms.header}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={rms.headerIcon}>
+              <ShieldAlert size={20} color="#DC2626" />
+            </div>
+            <div>
+              <h3 style={rms.headerTitle}>Review Report</h3>
+              <p style={rms.headerSub}>
+                {reportLabel}
+                {row.country ? ` · ${row.country}` : ""}
+              </p>
+            </div>
+          </div>
+          <button style={rms.closeBtn} onClick={onClose} disabled={loading}>
+            ×
+          </button>
+        </div>
+
+        {/* Body */}
+        <div style={rms.body}>
+          {/* Summary card */}
+          <div style={rms.summaryCard}>
+            <div style={rms.summaryGrid}>
+              <div style={rms.summaryItem}>
+                <span style={rms.summaryLabel}>Damage Level</span>
+                <span
+                  style={{
+                    ...rms.damageBadge,
+                    background: dmg.bg,
+                    color: dmg.color,
+                  }}
+                >
+                  <span
+                    style={{
+                      width: 7,
+                      height: 7,
+                      borderRadius: "50%",
+                      background: dmg.color,
+                      display: "inline-block",
+                      flexShrink: 0,
+                    }}
+                  />
+                  {formatDamageLevel(row.damage_level)}
+                </span>
+              </div>
+              <div style={rms.summaryItem}>
+                <span style={rms.summaryLabel}>Infrastructure</span>
+                <span style={rms.summaryValue}>
+                  {row.infrastructure_types.length > 0
+                    ? row.infrastructure_types.join(", ")
+                    : "—"}
+                </span>
+              </div>
+              <div style={rms.summaryItem}>
+                <span style={rms.summaryLabel}>Time in Queue</span>
+                <span
+                  style={{
+                    ...rms.summaryValue,
+                    color: timeQueueColor(row.time_in_queue),
+                    fontWeight: 600,
+                  }}
+                >
+                  {formatTimeInQueue(row.time_in_queue)}
+                </span>
+              </div>
+              <div style={rms.summaryItem}>
+                <span style={rms.summaryLabel}>Reporter</span>
+                <span style={{ ...rms.summaryValue, fontFamily: "monospace" }}>
+                  {row.reporter_display_id}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Flag Reasons */}
+          <div style={rms.section}>
+            <div style={rms.sectionHeader}>
+              <span style={rms.sectionTitle}>Flag Reasons</span>
+              <span style={rms.sectionHint}>
+                Check "Dismiss" next to any reason you believe is a false positive
+              </span>
+            </div>
+            <div style={rms.reasonsList}>
+              {flagAssessments.map((a) => (
+                <label
+                  key={a.reason}
+                  style={{
+                    ...rms.reasonRow,
+                    opacity: a.dismissed ? 0.6 : 1,
+                    background: a.dismissed
+                      ? "var(--c-surface-lowest)"
+                      : "var(--c-surface-low)",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={s.flagPill}>
+                      <AlertTriangle size={10} />
+                      {flagReasonLabel(a.reason)}
+                    </span>
+                    {a.dismissed && (
+                      <span style={rms.dismissedTag}>✓ dismissed</span>
+                    )}
+                  </div>
+                  <div style={rms.dismissToggle}>
+                    <input
+                      type="checkbox"
+                      checked={a.dismissed}
+                      onChange={() => toggleDismissed(a.reason)}
+                      style={{ accentColor: "#16A34A", cursor: "pointer" }}
+                    />
+                    <span
+                      style={{
+                        fontSize: 12,
+                        color: a.dismissed ? "#16A34A" : "var(--c-text-muted)",
+                        fontWeight: a.dismissed ? 600 : 400,
+                        userSelect: "none",
+                      }}
+                    >
+                      False positive
+                    </span>
+                  </div>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {/* Comment */}
+          <div style={rms.section}>
+            <div style={rms.sectionHeader}>
+              <span style={rms.sectionTitle}>
+                Review Comment{" "}
+                <span style={{ color: "var(--c-text-muted)", fontWeight: 400 }}>
+                  (required — min 10, max 500 characters)
+                </span>
+              </span>
+            </div>
+            <textarea
+              style={rms.textarea}
+              value={comment}
+              onChange={(e) => setComment(e.target.value.slice(0, 500))}
+              rows={4}
+              placeholder="Explain your decision — this will be permanently recorded in the audit log…"
+              autoFocus
+            />
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <span style={{ fontSize: 11, color: "var(--c-text-muted)" }}>
+                Your decision and comment are recorded in the immutable audit log.
+              </span>
+              <span
+                style={{
+                  fontSize: 11,
+                  color:
+                    comment.trim().length < 10
+                      ? "var(--c-flag-red)"
+                      : "var(--c-text-subtle)",
+                  fontWeight: comment.trim().length < 10 ? 600 : 400,
+                }}
+              >
+                {comment.length} / 500
+              </span>
+            </div>
+          </div>
+
+          {error && <div style={ms.error}>{error}</div>}
+        </div>
+
+        {/* Footer */}
+        <div style={rms.footer}>
+          <button style={ms.cancelBtn} onClick={onClose} disabled={loading}>
+            Cancel
+          </button>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              style={{
+                ...rms.discardBtn,
+                opacity: canSubmit ? 1 : 0.45,
+                cursor: canSubmit ? "pointer" : "not-allowed",
+              }}
+              disabled={!canSubmit}
+              onClick={() => handleDecision("discard")}
+            >
+              {loading ? "Processing…" : "Discard Report"}
+            </button>
+            <button
+              style={{
+                ...rms.approveBtn,
+                opacity: canSubmit ? 1 : 0.45,
+                cursor: canSubmit ? "pointer" : "not-allowed",
+              }}
+              disabled={!canSubmit}
+              onClick={() => handleDecision("approve")}
+            >
+              {loading ? "Processing…" : "Approve Report"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Tab 1: Red-flagged Reports ─────────────────────────────────────────────────
 
 function Tab1({ currentUserName }: { currentUserName: string }) {
@@ -480,6 +739,7 @@ function Tab1({ currentUserName }: { currentUserName: string }) {
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [reviewModal, setReviewModal] = useState<Tab1Row | null>(null);
 
   const filterParams: Record<string, string | number> = { limit: PAGE_SIZE };
   if (search) filterParams.search = search;
@@ -543,9 +803,7 @@ function Tab1({ currentUserName }: { currentUserName: string }) {
       return (
         <button
           style={s.reviewBtn}
-          onClick={() =>
-            window.open("/reports/" + row.report_id + "?from=queue", "_blank")
-          }
+          onClick={() => setReviewModal(row)}
         >
           Review →
         </button>
@@ -555,9 +813,7 @@ function Tab1({ currentUserName }: { currentUserName: string }) {
       return (
         <button
           style={{ ...s.reviewBtn, background: "var(--c-primary)" }}
-          onClick={() =>
-            window.open("/reports/" + row.report_id + "?from=queue", "_blank")
-          }
+          onClick={() => setReviewModal(row)}
         >
           Resume →
         </button>
@@ -768,6 +1024,20 @@ function Tab1({ currentUserName }: { currentUserName: string }) {
             )}
           </div>
         </>
+      )}
+
+      {reviewModal && (
+        <Tab1ReviewModal
+          row={reviewModal}
+          onClose={() => setReviewModal(null)}
+          onSuccess={() => {
+            setAllItems((prev) =>
+              prev.filter((r) => r.report_id !== reviewModal.report_id)
+            );
+            setTotal((t) => Math.max(0, t - 1));
+            setReviewModal(null);
+          }}
+        />
       )}
     </div>
   );
@@ -2064,6 +2334,214 @@ const s: Record<string, React.CSSProperties> = {
     background: "var(--c-border)",
     margin: "0 16px",
     display: "inline-block",
+  },
+};
+
+// ── Review Modal Styles (Tab1ReviewModal) ──────────────────────────────────────
+
+const rms: Record<string, React.CSSProperties> = {
+  backdrop: {
+    position: "fixed",
+    inset: 0,
+    background: "rgba(0,0,0,0.52)",
+    zIndex: 1000,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 24,
+  },
+  dialog: {
+    background: "var(--c-surface-lowest)",
+    borderRadius: 16,
+    width: 640,
+    maxWidth: "96vw",
+    maxHeight: "90vh",
+    boxShadow: "0 24px 64px rgba(0,0,0,0.22), 0 4px 16px rgba(0,0,0,0.1)",
+    display: "flex",
+    flexDirection: "column",
+    overflow: "hidden",
+  },
+  header: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: "20px 24px 18px",
+    borderBottom: "1px solid var(--c-border)",
+    flexShrink: 0,
+  },
+  headerIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: "50%",
+    background: "#FEF2F2",
+    border: "1.5px solid rgba(220,38,38,0.2)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  headerTitle: {
+    fontSize: 16,
+    fontWeight: 700,
+    color: "var(--c-text-primary)",
+    margin: 0,
+  },
+  headerSub: {
+    fontSize: 12,
+    color: "var(--c-text-muted)",
+    margin: "3px 0 0",
+    fontFamily: "monospace",
+  },
+  closeBtn: {
+    background: "none",
+    border: "1px solid var(--c-border)",
+    fontSize: 20,
+    color: "var(--c-text-muted)",
+    cursor: "pointer",
+    width: 32,
+    height: 32,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 6,
+    lineHeight: 1,
+    flexShrink: 0,
+  },
+  body: {
+    flex: 1,
+    overflowY: "auto",
+    padding: "20px 24px",
+    display: "flex",
+    flexDirection: "column",
+    gap: 18,
+  },
+  summaryCard: {
+    background: "var(--c-surface-low)",
+    border: "1px solid var(--c-border)",
+    borderRadius: 10,
+    padding: "14px 16px",
+  },
+  summaryGrid: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr 1fr 1fr",
+    gap: "10px 16px",
+  },
+  summaryItem: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 5,
+  },
+  summaryLabel: {
+    fontSize: 10,
+    fontWeight: 700,
+    color: "var(--c-text-muted)",
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
+  },
+  summaryValue: {
+    fontSize: 13,
+    color: "var(--c-text-primary)",
+    fontWeight: 500,
+  },
+  damageBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 5,
+    borderRadius: 12,
+    padding: "3px 9px",
+    fontSize: 12,
+    fontWeight: 700,
+    whiteSpace: "nowrap",
+    alignSelf: "flex-start",
+  },
+  section: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 8,
+  },
+  sectionHeader: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 2,
+  },
+  sectionTitle: {
+    fontSize: 13,
+    fontWeight: 600,
+    color: "var(--c-text-primary)",
+  },
+  sectionHint: {
+    fontSize: 11,
+    color: "var(--c-text-muted)",
+  },
+  reasonsList: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 6,
+  },
+  reasonRow: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: "9px 12px",
+    border: "1px solid var(--c-border)",
+    borderRadius: 8,
+    cursor: "pointer",
+    transition: "opacity 0.15s, background 0.15s",
+  },
+  dismissToggle: {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+  },
+  dismissedTag: {
+    fontSize: 11,
+    color: "#16A34A",
+    fontWeight: 600,
+    background: "#F0FDF4",
+    border: "1px solid #BBF7D0",
+    borderRadius: 10,
+    padding: "1px 6px",
+  },
+  textarea: {
+    border: "1.5px solid var(--c-border)",
+    borderRadius: 8,
+    padding: "10px 12px",
+    fontSize: 13,
+    color: "var(--c-text-primary)",
+    resize: "vertical",
+    outline: "none",
+    fontFamily: "inherit",
+    background: "var(--c-surface-low)",
+    lineHeight: 1.5,
+  },
+  footer: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: "14px 24px",
+    borderTop: "1px solid var(--c-border)",
+    flexShrink: 0,
+    background: "var(--c-surface-low)",
+  },
+  approveBtn: {
+    padding: "9px 20px",
+    border: "none",
+    borderRadius: 8,
+    background: "#16A34A",
+    color: "#fff",
+    fontSize: 13,
+    fontWeight: 700,
+    letterSpacing: 0.2,
+  },
+  discardBtn: {
+    padding: "9px 20px",
+    border: "1.5px solid var(--c-flag-red)",
+    borderRadius: 8,
+    background: "transparent",
+    color: "var(--c-flag-red)",
+    fontSize: 13,
+    fontWeight: 700,
+    letterSpacing: 0.2,
   },
 };
 

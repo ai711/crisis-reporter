@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import Header from "../components/Header";
-import { useAuthStore } from "../stores/authStore";
 import { useSSE } from "../hooks/useSSE";
 import api from "../services/api";
 import type { SSEEvent } from "../types";
@@ -78,8 +77,6 @@ function Spinner({ size = 28 }: { size?: number }) {
 // ── Component ──────────────────────────────────────────────────────────────────
 
 export default function ReportQueuePage() {
-  const { activeCrisisId } = useAuthStore();
-
   const [items, setItems] = useState<QueueReport[]>([]);
   const [total, setTotal] = useState(0);
   const [cursor, setCursor] = useState<string | null>(null);
@@ -96,13 +93,12 @@ export default function ReportQueuePage() {
         flag_status: "grey",
         limit: String(PAGE_SIZE),
       };
-      if (activeCrisisId) params.crisis_id = activeCrisisId;
       if (pageCursor) params.cursor = pageCursor;
 
       const res = await api.get<QueueResponse>("/api/dashboard/reports", { params });
       return res.data;
     },
-    [activeCrisisId]
+    []
   );
 
   // Initial load
@@ -159,7 +155,7 @@ export default function ReportQueuePage() {
     [fetchPage]
   );
 
-  useSSE({ crisisId: activeCrisisId, onEvent: handleSSE });
+  useSSE({ crisisId: null, onEvent: handleSSE });
 
   // Actions
   async function act(reportId: string, flag: string) {

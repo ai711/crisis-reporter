@@ -199,9 +199,31 @@ async def auto_flag_report(report_id: str, delay: int = 10) -> None:
                         )
 
             # ── Rule 2: IP blocked reporter match ────────────────────────────
-            # TODO: Rule 2 (IP match) disabled — Reporter.ip_address_hash field does not exist.
-            # Re-enable when Reporter model has ip_address_hash column added.
-            # Track at: https://github.com/ai711/crisis-reporter (add issue)
+            # Check if the submission IP hash matches any blocked reporter's stored IP hash.
+            # reporter.ip_address_hash is updated on every submission in reports.py,
+            # so it reflects their most-recent IP rather than only the first one.
+            if new_flag == "green" and report.ip_address_hash:
+                blocked_ip_result = await db.execute(
+                    select(Reporter).where(
+                        and_(
+                            Reporter.ip_address_hash == report.ip_address_hash,
+                            Reporter.is_blocked == True,
+                            Reporter.id != report.reporter_id,
+                        )
+                    ).limit(1)
+                )
+                matched_ip_blocked = blocked_ip_result.scalar_one_or_none()
+                if matched_ip_blocked:
+                    new_flag = "red"
+                    flag_reason = "Submission IP matches a blocked reporter"
+                    flag_metadata = {
+                        "matched_blocked_reporter_id": str(matched_ip_blocked.id),
+                        "ip_address_hash": report.ip_address_hash,
+                    }
+                    log.info(
+                        "auto_flag_report: report %s flagged Red — IP hash matches blocked reporter %s",
+                        report_id, matched_ip_blocked.id,
+                    )
 
             # ── Rule 3: Photo validation ──────────────────────────────────────
             async def _photo_count() -> int:

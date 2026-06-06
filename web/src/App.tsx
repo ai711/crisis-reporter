@@ -153,6 +153,40 @@ function AppContent() {
     return () => window.removeEventListener("online", flushProgressQueue);
   }, []);
 
+  // D6-server: Check the server's current TC version on every app mount.
+  // The module-load IIFE only compares against the bundled en.json version ("1.0"),
+  // which never changes without a code deploy. This effect fetches the live version
+  // from the backend — which increments whenever an admin saves new TC content —
+  // and clears acceptance if the server version has advanced since the last check.
+  // Uses cr_tc_server_version as a persistent baseline so we only force re-accept
+  // on an *increase* from what the reporter has already seen, not on every cold load.
+  useEffect(() => {
+    const BASE_URL = (import.meta.env.VITE_API_URL as string) || "http://127.0.0.1:8000";
+    let cancelled = false;
+    fetch(`${BASE_URL}/api/content/tc`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: { version?: number } | null) => {
+        if (cancelled || !data?.version) return;
+        const serverVersion = String(data.version);
+        const knownVersion = localStorage.getItem("cr_tc_server_version");
+        // Always persist the latest known version so the next load has a baseline.
+        localStorage.setItem("cr_tc_server_version", serverVersion);
+        // Only force re-accept if: (a) the reporter previously accepted, and
+        // (b) the server version has changed since they last saw it.
+        if (knownVersion !== null && knownVersion !== serverVersion) {
+          const wasAccepted = localStorage.getItem("cr_tc_accepted");
+          if (wasAccepted) {
+            localStorage.removeItem("cr_tc_accepted");
+            localStorage.removeItem("cr_tc_version");
+            // Hard reload so ProtectedRoute re-evaluates without stale React state.
+            window.location.replace(window.location.href);
+          }
+        }
+      })
+      .catch(() => { /* network unavailable — defer to next mount */ });
+    return () => { cancelled = true; };
+  }, []);
+
   return (
     <Suspense fallback={<LoadingSpinner />}>
       <Routes>

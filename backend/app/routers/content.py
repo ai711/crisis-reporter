@@ -6,7 +6,7 @@ from sqlalchemy import select
 from pydantic import BaseModel
 from typing import Any
 
-from app.database import get_db
+from app.database import get_db, AsyncSessionLocal
 from app.models.app_setting import AppSetting
 from app.services.dependencies import require_admin
 from app.models.dashboard_user import DashboardUser
@@ -160,12 +160,14 @@ async def get_safety_tips(
 async def _sync_safety_tips_to_translation(
     disaster_type: str,
     slides: list,
-    db: AsyncSession,
 ) -> None:
     """
     For each slide in the safety tips content, ensure a StringKey row exists
     for every translatable text string and trigger auto-translation for all
     active languages. Called as a background task after content save.
+
+    Creates its own DB session — the request-scoped session may already be
+    closed by the time this background task runs.
     """
     try:
         from app.routers.language_packages import ensure_string_keys_synced
@@ -197,23 +199,24 @@ async def _sync_safety_tips_to_translation(
                 if dont_text:
                     keys_to_ensure.append((f"{slide_prefix}_DONT_{dont_idx}", dont_text, "safety"))
 
-        for key_name, english_text, category in keys_to_ensure:
-            result = await db.execute(
-                sa_select(StringKey).where(StringKey.key == key_name)
-            )
-            existing = result.scalar_one_or_none()
-            if existing is None:
-                db.add(StringKey(
-                    key=key_name,
-                    english_text=english_text,
-                    category=category,
-                    is_active=True,
-                ))
-            elif existing.english_text != english_text:
-                existing.english_text = english_text
+        async with AsyncSessionLocal() as db:
+            for key_name, english_text, category in keys_to_ensure:
+                result = await db.execute(
+                    sa_select(StringKey).where(StringKey.key == key_name)
+                )
+                existing = result.scalar_one_or_none()
+                if existing is None:
+                    db.add(StringKey(
+                        key=key_name,
+                        english_text=english_text,
+                        category=category,
+                        is_active=True,
+                    ))
+                elif existing.english_text != english_text:
+                    existing.english_text = english_text
 
-        await db.commit()
-        await ensure_string_keys_synced(db)
+            await db.commit()
+            await ensure_string_keys_synced(db)
         asyncio.create_task(auto_translate_content("safety-tips"))
 
     except Exception as exc:
@@ -241,19 +244,21 @@ async def patch_safety_tips(
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
     await _upsert(db, key, updated)
-    asyncio.create_task(_sync_safety_tips_to_translation(disaster_type, payload.slides, db))
+    asyncio.create_task(_sync_safety_tips_to_translation(disaster_type, payload.slides))
     return updated
 
 
 async def _sync_slideshow_to_translation(
     part: str,
     slides: list,
-    db: AsyncSession,
 ) -> None:
     """
     For each slide in reporting-guidelines (Part B) or first-aid (Part C) content,
     ensure a StringKey row exists for every translatable string and trigger
     auto-translation. Called as a background task after content save.
+
+    Creates its own DB session — the request-scoped session may already be
+    closed by the time this background task runs.
 
     Key format:
       SAFETY_TIP_B_SLIDE_{N}_TITLE / SAFETY_TIP_B_SLIDE_{N}_BULLET_{M}  (reporting-guidelines)
@@ -280,23 +285,24 @@ async def _sync_slideshow_to_translation(
                 if bullet_text:
                     keys_to_ensure.append((f"{slide_prefix}_BULLET_{bullet_idx}", bullet_text, "content"))
 
-        for key_name, english_text, category in keys_to_ensure:
-            result = await db.execute(
-                sa_select(StringKey).where(StringKey.key == key_name)
-            )
-            existing = result.scalar_one_or_none()
-            if existing is None:
-                db.add(StringKey(
-                    key=key_name,
-                    english_text=english_text,
-                    category=category,
-                    is_active=True,
-                ))
-            elif existing.english_text != english_text:
-                existing.english_text = english_text
+        async with AsyncSessionLocal() as db:
+            for key_name, english_text, category in keys_to_ensure:
+                result = await db.execute(
+                    sa_select(StringKey).where(StringKey.key == key_name)
+                )
+                existing = result.scalar_one_or_none()
+                if existing is None:
+                    db.add(StringKey(
+                        key=key_name,
+                        english_text=english_text,
+                        category=category,
+                        is_active=True,
+                    ))
+                elif existing.english_text != english_text:
+                    existing.english_text = english_text
 
-        await db.commit()
-        await ensure_string_keys_synced(db)
+            await db.commit()
+            await ensure_string_keys_synced(db)
         asyncio.create_task(auto_translate_content(content_type))
 
     except Exception as exc:
@@ -364,6 +370,6 @@ async def patch_content(
     asyncio.create_task(auto_translate_content(content_type=content_type))
     if content_type in ("reporting-guidelines", "first-aid") and payload.slides is not None:
         part = "B" if content_type == "reporting-guidelines" else "C"
-        asyncio.create_task(_sync_slideshow_to_translation(part, payload.slides, db))
+        asyncio.create_task(_sync_slideshow_to_translation(part, payload.slides))
 
     return updated

@@ -460,6 +460,10 @@ async def submit_report(
         # Capture identity fields on first submission (never overwrite)
         if not reporter.ip_address and client_ip:
             reporter.ip_address = client_ip
+        # Update ip_address_hash on every submission — used by Rule 2 auto-flagging
+        # to match the report's submission IP against blocked reporters' last-seen IPs.
+        if ip_hash:
+            reporter.ip_address_hash = ip_hash
         if not reporter.app_version and request.app_version:
             reporter.app_version = request.app_version
         if not reporter.mcc and request.mcc:

@@ -110,6 +110,12 @@ class Reporter(Base):
     # OS-level device identifier (Android ID) — stored plain (non-PII on Android)
     os_device_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
+    # SHA-256 hash of the reporter's most-recent submission IP — for Rule 2 auto-flagging
+    # (blocked IP reporter match). Updated on every report submission, not just the first.
+    ip_address_hash: Mapped[str | None] = mapped_column(
+        String(64), nullable=True, index=True
+    )
+
     # T&C acceptance timestamp — set when reporter accepts on-device
     t_and_c_accepted_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True

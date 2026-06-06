@@ -241,7 +241,7 @@ export default function App() {
             <Route
               path="/content"
               element={
-                <ProtectedRoute requiredSection="app_configuration">
+                <ProtectedRoute requiredSection="content_management">
                   <ContentManagementPage />
                 </ProtectedRoute>
               }

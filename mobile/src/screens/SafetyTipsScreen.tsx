@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   View,
   Text,
@@ -187,9 +188,32 @@ async function fetchContent(
   }
 }
 
+// ── Translation key helper ────────────────────────────────────────────────────
+// Mirrors web SafetyTipsPage.tsx — keys follow the backend pipeline pattern:
+//   SAFETY_TIP_A_{DISASTER}_SLIDE_{N}_TITLE / DO_{M} / DONT_{M}
+//   SAFETY_TIP_B_SLIDE_{N}_TITLE / BULLET_{M}
+//   SAFETY_TIP_C_SLIDE_{N}_TITLE / BULLET_{M}
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function makeTip(t: (key: string, opts?: any) => string) {
+  return function tip(
+    part: 'A' | 'B' | 'C',
+    disaster: string,
+    slideIdx: number,       // 1-based
+    field: 'TITLE' | 'DO' | 'DONT' | 'BULLET',
+    bulletIdx: number,      // 1-based; 0 = no suffix (for TITLE)
+    fallback: string,
+  ): string {
+    const d = disaster ? `_${disaster.toUpperCase().replace(/-/g, '_')}` : '';
+    const b = bulletIdx > 0 ? `_${bulletIdx}` : '';
+    return t(`SAFETY_TIP_${part}${d}_SLIDE_${slideIdx}_${field}${b}`, { defaultValue: fallback });
+  };
+}
+
 export default function SafetyTipsScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
+  const { t } = useTranslation();
+  const tip = makeTip(t);
 
   const [viewState, setViewState] = useState<ViewState>({ screen: 'overview' });
   const [progressA, setProgressA] = useState<Record<string, boolean>>({});
@@ -260,8 +284,8 @@ export default function SafetyTipsScreen() {
         `cr_tips_v_a_${key}`,
         `/api/content/safety-tips/${key}`,
         (freshSlides) => {
-          // Only override if the API actually has more than the default 1-slide stub.
-          if (freshSlides.length > 1) setSlides(freshSlides);
+          // Override hardcoded fallback whenever the API returns any slides.
+          if (freshSlides.length > 0) setSlides(freshSlides);
         },
         () => { /* ignore load-state changes — we're already 'loaded' */ },
       );
@@ -561,6 +585,13 @@ export default function SafetyTipsScreen() {
   const currentSlideData = slides[currentSlide];
   const isLastSlide = slides.length > 0 && currentSlide === slides.length - 1;
 
+  // Derive part + disasterId for tip() key construction
+  const tipPart: 'A' | 'B' | 'C' =
+    viewState.screen === 'disaster_slides' ? 'A' :
+    viewState.screen === 'part_b_slides' ? 'B' : 'C';
+  const tipDisaster =
+    viewState.screen === 'disaster_slides' ? viewState.disasterType : '';
+
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
@@ -627,7 +658,9 @@ export default function SafetyTipsScreen() {
               paddingBottom: 120,
             }}
           >
-            <Text style={styles.slideTitle}>{currentSlideData?.title}</Text>
+            <Text style={styles.slideTitle}>
+              {tip(tipPart, tipDisaster, currentSlide + 1, 'TITLE', 0, currentSlideData?.title ?? '')}
+            </Text>
 
             {/* Dos */}
             {currentSlideData?.dos && currentSlideData.dos.length > 0 && (
@@ -641,7 +674,9 @@ export default function SafetyTipsScreen() {
                       color="#38A169"
                       style={{ marginTop: 2 }}
                     />
-                    <Text style={styles.dosDontText}>{item}</Text>
+                    <Text style={styles.dosDontText}>
+                      {tip(tipPart, tipDisaster, currentSlide + 1, 'DO', idx + 1, item)}
+                    </Text>
                   </View>
                 ))}
               </View>
@@ -665,7 +700,9 @@ export default function SafetyTipsScreen() {
                       color="#E53E3E"
                       style={{ marginTop: 2 }}
                     />
-                    <Text style={styles.dosDontText}>{item}</Text>
+                    <Text style={styles.dosDontText}>
+                      {tip(tipPart, tipDisaster, currentSlide + 1, 'DONT', idx + 1, item)}
+                    </Text>
                   </View>
                 ))}
               </View>
@@ -677,7 +714,9 @@ export default function SafetyTipsScreen() {
                 {currentSlideData.bullets.map((item, idx) => (
                   <View key={idx} style={styles.bulletRow}>
                     <View style={styles.bulletDot} />
-                    <Text style={styles.bulletText}>{item}</Text>
+                    <Text style={styles.bulletText}>
+                      {tip(tipPart, tipDisaster, currentSlide + 1, 'BULLET', idx + 1, item)}
+                    </Text>
                   </View>
                 ))}
               </View>

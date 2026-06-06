@@ -46,7 +46,7 @@ const ADMIN_NAV: NavItem[] = [
   { path: "/users",               icon: UserCog,           label: "Manage Users",       sectionKey: "manage_users"       },
   { path: "/roles",               icon: Shield,            label: "Manage Roles",       sectionKey: "manage_roles"       },
   { path: "/settings",            icon: Settings,          label: "App Configuration",  sectionKey: "app_configuration"  },
-  { path: "/content",             icon: BookOpen,          label: "Content Management", sectionKey: "app_configuration"  },
+  { path: "/content",             icon: BookOpen,          label: "Content Management", sectionKey: "content_management"  },
   { path: "/dashboard-settings",  icon: SlidersHorizontal, label: "Dashboard Settings", sectionKey: null                 },
 ];
 

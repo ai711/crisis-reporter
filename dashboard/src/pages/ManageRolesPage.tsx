@@ -24,7 +24,8 @@ type SectionKey =
   | "projects"
   | "manage_users"
   | "manage_roles"
-  | "app_configuration";
+  | "app_configuration"
+  | "content_management";
 
 const SECTIONS: Array<{ key: SectionKey; label: string }> = [
   { key: "main_map_view",            label: "Main Map View" },
@@ -38,6 +39,7 @@ const SECTIONS: Array<{ key: SectionKey; label: string }> = [
   { key: "manage_users",             label: "Manage Users" },
   { key: "manage_roles",             label: "Manage Roles" },
   { key: "app_configuration",        label: "App Configuration" },
+  { key: "content_management",       label: "Content Management" },
 ];
 
 // ── Types ──────────────────────────────────────────────────────────────────────
