@@ -712,9 +712,9 @@ function CountriesTab() {
   const [highlightedCountry, setHighlightedCountry] = useState<string | null>(null);
 
   const { data: countries = [], isLoading } = useQuery<Country[]>({
-    queryKey: ["countries"],
+    queryKey: ["countries", "all"],
     queryFn: async () => {
-      const res = await api.get<Country[]>("/api/countries");
+      const res = await api.get<Country[]>("/api/countries?include_inactive=true");
       return res.data;
     },
   });
@@ -725,6 +725,7 @@ function CountriesTab() {
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["countries"] });
+      queryClient.invalidateQueries({ queryKey: ["countries", "all"] });
       setHighlightedCountry(variables.code);
       setTimeout(() => setHighlightedCountry(null), 2000);
       setTimeout(() => {
@@ -743,6 +744,7 @@ function CountriesTab() {
   function handleSuccess() {
     setShowAddModal(false);
     queryClient.invalidateQueries({ queryKey: ["countries"] });
+    queryClient.invalidateQueries({ queryKey: ["countries", "all"] });
     setSuccessBanner("Country added successfully");
     setTimeout(() => setSuccessBanner(""), 4000);
   }

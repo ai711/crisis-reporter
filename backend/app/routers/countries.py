@@ -1,5 +1,5 @@
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from pydantic import BaseModel
@@ -372,11 +372,20 @@ async def seed_countries() -> None:
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 @router.get("", response_model=list[CountryResponse])
-async def list_countries(db: AsyncSession = Depends(get_db)):
-    """List all countries — active countries first, then alphabetical by name."""
-    result = await db.execute(
-        select(Country).where(Country.is_active == True).order_by(Country.name)
-    )
+async def list_countries(
+    include_inactive: bool = Query(False),
+    db: AsyncSession = Depends(get_db),
+):
+    """List countries. By default returns only active countries (reporter onboarding).
+    Pass include_inactive=true to return all countries (dashboard management view)."""
+    if include_inactive:
+        result = await db.execute(
+            select(Country).order_by(Country.is_active.desc(), Country.name)
+        )
+    else:
+        result = await db.execute(
+            select(Country).where(Country.is_active == True).order_by(Country.name)
+        )
     countries = result.scalars().all()
     response = []
     for country in countries:

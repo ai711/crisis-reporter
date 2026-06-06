@@ -17,7 +17,6 @@ import {
   Legend,
 } from "recharts";
 import { UserMinus, AlertTriangle } from "lucide-react";
-import Layout from "../components/Layout";
 import Header from "../components/Header";
 import PropertySummaryPanel from "../components/PropertySummaryPanel";
 import { useAuthStore } from "../stores/authStore";
@@ -680,16 +679,14 @@ export default function ProjectDetailPage() {
     return (
       <>
         <style>{`@keyframes pd-spin { to { transform: rotate(360deg); } }`}</style>
-        <Layout>
-          <Spinner size={40} full />
-        </Layout>
+        <Spinner size={40} full />
       </>
     );
   }
 
   if (projectError || !project) {
     return (
-      <Layout>
+      <>
         <Header title="Project Not Found" />
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "60vh" }}>
           <div style={ss.errorCard}>
@@ -699,7 +696,7 @@ export default function ProjectDetailPage() {
             </button>
           </div>
         </div>
-      </Layout>
+      </>
     );
   }
 
@@ -724,8 +721,7 @@ export default function ProjectDetailPage() {
         .pd-tab-btn:hover { background: #f0f4f8 !important; }
         .pd-tab-btn-active:hover { background: transparent !important; }
       `}</style>
-      <Layout>
-        <Header title={headerTitle} />
+      <Header title={headerTitle} />
 
         {/* ── Tab bar ── */}
         <div style={ss.tabBar}>
@@ -1310,7 +1306,6 @@ export default function ProjectDetailPage() {
           )}
 
         </div>
-      </Layout>
     </>
   );
 }
