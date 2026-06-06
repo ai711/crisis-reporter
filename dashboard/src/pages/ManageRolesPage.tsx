@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { Lock, ShieldOff } from "lucide-react";
+import { ShieldOff } from "lucide-react";
 import { useAuthStore } from "../stores/authStore";
 import api from "../services/api";
 import type { Role } from "../types";
@@ -9,9 +9,9 @@ import type { Role } from "../types";
 // ── Constants ──────────────────────────────────────────────────────────────────
 
 const BLUE = "var(--c-primary-container)";
+const BLUE_HEX = "#0468B1";
 
 // ── Section definitions ────────────────────────────────────────────────────────
-// Keys MUST match the backend require_section_access keys and seed permissions
 
 type SectionKey =
   | "main_map_view"
@@ -27,17 +27,17 @@ type SectionKey =
   | "app_configuration";
 
 const SECTIONS: Array<{ key: SectionKey; label: string }> = [
-  { key: "main_map_view",          label: "Main Map View" },
-  { key: "reports_page",           label: "Reports Page" },
-  { key: "location_page",          label: "Location Page" },
-  { key: "review_queue",           label: "Review Queue" },
+  { key: "main_map_view",            label: "Main Map View" },
+  { key: "reports_page",             label: "Reports Page" },
+  { key: "location_page",            label: "Location Page" },
+  { key: "review_queue",             label: "Review Queue" },
   { key: "analytics_and_statistics", label: "Analytics and Statistics" },
-  { key: "reporter_profiles",      label: "Reporter Profiles" },
-  { key: "export",                 label: "Export" },
-  { key: "projects",               label: "Projects" },
-  { key: "manage_users",           label: "Manage Users" },
-  { key: "manage_roles",           label: "Manage Roles" },
-  { key: "app_configuration",      label: "App Configuration" },
+  { key: "reporter_profiles",        label: "Reporter Profiles" },
+  { key: "export",                   label: "Export" },
+  { key: "projects",                 label: "Projects" },
+  { key: "manage_users",             label: "Manage Users" },
+  { key: "manage_roles",             label: "Manage Roles" },
+  { key: "app_configuration",        label: "App Configuration" },
 ];
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -62,17 +62,31 @@ function mergePermissions(raw: Record<string, { view: boolean; edit: boolean }>)
   return base;
 }
 
+const ROLE_DOT_COLORS = [
+  "#0468B1", "#1565C0", "#6A1B9A", "#2E7D32",
+  "#BF360C", "#00695C", "#4527A0", "#C62828",
+];
+
+function getRoleDotColor(name: string): string {
+  // Fixed colors for default roles
+  if (name === "superadmin") return "#0468B1";
+  if (name === "guest") return "#718096";
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h);
+  return ROLE_DOT_COLORS[Math.abs(h) % ROLE_DOT_COLORS.length];
+}
+
+function capitalize(s: string): string {
+  return s ? s.charAt(0).toUpperCase() + s.slice(1) : "";
+}
+
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, {
     year: "numeric", month: "short", day: "numeric",
   });
 }
 
-// ── Subcomponents ──────────────────────────────────────────────────────────────
-
-function DefaultBadge() {
-  return <span style={s.defaultBadge}>Default</span>;
-}
+// ── PermCheck ──────────────────────────────────────────────────────────────────
 
 function PermCheck({
   checked,
@@ -90,11 +104,11 @@ function PermCheck({
       role="checkbox"
       onClick={() => !disabled && onChange(!checked)}
       style={{
-        width: 22,
-        height: 22,
+        width: 20,
+        height: 20,
         borderRadius: 5,
-        border: `2px solid ${disabled ? "#cbd5e0" : checked ? BLUE : "#cbd5e0"}`,
-        background: checked ? (disabled ? "#a0aec0" : BLUE) : "var(--c-surface-lowest)",
+        border: `2px solid ${disabled ? "#cbd5e0" : checked ? BLUE_HEX : "#cbd5e0"}`,
+        background: checked ? (disabled ? "#a0aec0" : BLUE_HEX) : "#fff",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -104,13 +118,13 @@ function PermCheck({
       }}
     >
       {checked && (
-        <span style={{ color: "var(--c-surface-lowest)", fontSize: 13, lineHeight: 1, fontWeight: 700 }}>✓</span>
+        <span style={{ color: "#fff", fontSize: 12, lineHeight: 1, fontWeight: 700 }}>✓</span>
       )}
     </button>
   );
 }
 
-// ── Permissions table ──────────────────────────────────────────────────────────
+// ── Editable Permissions Table ─────────────────────────────────────────────────
 
 function PermissionsTable({
   permissions,
@@ -134,7 +148,7 @@ function PermissionsTable({
   return (
     <div style={s.permTable}>
       <div style={s.permHeaderRow}>
-        <div style={{ ...s.permCell, flex: 1 }}>Section</div>
+        <div style={{ flex: 1, fontSize: 11, fontWeight: 700, color: "var(--c-text-muted)", textTransform: "uppercase", letterSpacing: 0.5 }}>Section</div>
         <div style={s.permColHead}>View</div>
         <div style={s.permColHead}>Edit</div>
       </div>
@@ -143,9 +157,9 @@ function PermissionsTable({
         return (
           <div
             key={sec.key}
-            style={{ ...s.permRow, background: i % 2 === 0 ? "var(--c-surface-lowest)" : "#f9fafb" }}
+            style={{ ...s.permRow, background: i % 2 === 0 ? "#fff" : "#f9fafb" }}
           >
-            <div style={{ ...s.permCell, flex: 1, color: "var(--c-text-primary)", fontWeight: 500 }}>
+            <div style={{ flex: 1, fontSize: 13, color: "var(--c-text-primary)", fontWeight: 500 }}>
               {sec.label}
             </div>
             <div style={s.permCheckCell}>
@@ -169,61 +183,103 @@ function PermissionsTable({
   );
 }
 
-// ── Main Page ──────────────────────────────────────────────────────────────────
+// ── Read-only Permissions View ─────────────────────────────────────────────────
 
-type PageView = "list" | "form";
+function ReadOnlyPermissions({ permissions }: { permissions: Permissions }) {
+  return (
+    <div style={s.permTable}>
+      <div style={s.permHeaderRow}>
+        <div style={{ flex: 1, fontSize: 11, fontWeight: 700, color: "var(--c-text-muted)", textTransform: "uppercase", letterSpacing: 0.5 }}>Section</div>
+        <div style={s.permColHead}>View</div>
+        <div style={s.permColHead}>Edit</div>
+      </div>
+      {SECTIONS.map((sec, i) => {
+        const perm = permissions[sec.key];
+        return (
+          <div
+            key={sec.key}
+            style={{ ...s.permRow, background: i % 2 === 0 ? "#fff" : "#f9fafb" }}
+          >
+            <div style={{ flex: 1, fontSize: 13, color: "var(--c-text-primary)", fontWeight: 500 }}>
+              {sec.label}
+            </div>
+            <div style={s.permCheckCell}>
+              <span style={{ fontSize: 16, color: perm.view ? "#2E7D32" : "#ccc" }}>
+                {perm.view ? "✓" : "—"}
+              </span>
+            </div>
+            <div style={s.permCheckCell}>
+              <span style={{ fontSize: 16, color: perm.edit ? "#2E7D32" : "#ccc" }}>
+                {perm.edit ? "✓" : "—"}
+              </span>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Main Page ──────────────────────────────────────────────────────────────────
 
 export default function ManageRolesPage() {
   const { user: currentUser } = useAuthStore();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+
   const isAdmin = currentUser?.role === "admin" || currentUser?.role === "superadmin";
+  const canView = isAdmin || (currentUser?.role_permissions?.["manage_roles"]?.view ?? false);
+  const canEdit = isAdmin || (currentUser?.role_permissions?.["manage_roles"]?.edit ?? false);
 
-  const [view, setView] = useState<PageView>("list");
-  const [editingRole, setEditingRole] = useState<Role | null>(null);
+  // ── Panel state ────────────────────────────────────────────────────────────
+  const [selectedRole, setSelectedRole] = useState<Role | null>(null);
+  const [isCreating, setIsCreating] = useState(false);
 
-  // Search
+  // ── Search ─────────────────────────────────────────────────────────────────
   const [searchInput, setSearchInput] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
 
-  // Debounce search 300ms
   useEffect(() => {
     const t = setTimeout(() => setSearchTerm(searchInput.trim().toLowerCase()), 300);
     return () => clearTimeout(t);
   }, [searchInput]);
 
-  // Form state
+  // ── Form state ─────────────────────────────────────────────────────────────
   const [formName, setFormName] = useState("");
   const [formPermissions, setFormPermissions] = useState<Permissions>(emptyPermissions);
   const [nameError, setNameError] = useState("");
   const [submitError, setSubmitError] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [successBanner, setSuccessBanner] = useState("");
+  const [successMsg, setSuccessMsg] = useState("");
 
-  // Admin guard
-  if (!isAdmin) {
+  useEffect(() => {
+    if (!successMsg) return;
+    const t = setTimeout(() => setSuccessMsg(""), 4000);
+    return () => clearTimeout(t);
+  }, [successMsg]);
+
+  // ── Access guard ───────────────────────────────────────────────────────────
+  if (!canView) {
     return (
       <div style={s.page}>
         <div style={s.accessDenied}>
           <ShieldOff size={52} color="var(--c-text-muted)" />
-          <div style={s.accessTitle}>Admin access required</div>
+          <div style={s.accessTitle}>Access restricted</div>
           <div style={s.accessNote}>
-            Manage Roles is restricted to Admin accounts. Contact your administrator if you need access.
+            You don't have permission to view Manage Roles. Contact your administrator.
           </div>
         </div>
       </div>
     );
   }
 
-  // ── Data ──────────────────────────────────────────────────────────────────────
-
+  // ── Data ───────────────────────────────────────────────────────────────────
   const { data: allRoles = [], isLoading } = useQuery<Role[]>({
     queryKey: ["roles"],
     queryFn: async () => {
       const res = await api.get<Role[]>("/api/roles");
       return res.data;
     },
-    enabled: view === "list",
   });
 
   const defaultRoles = allRoles.filter((r) => r.is_default);
@@ -249,59 +305,51 @@ export default function ManageRolesPage() {
     },
   });
 
-  useEffect(() => {
-    if (!successBanner) return;
-    const t = setTimeout(() => setSuccessBanner(""), 4000);
-    return () => clearTimeout(t);
-  }, [successBanner]);
-
-  // ── Navigation ────────────────────────────────────────────────────────────────
+  // ── Panel actions ──────────────────────────────────────────────────────────
 
   function openCreate() {
-    setEditingRole(null);
+    setIsCreating(true);
+    setSelectedRole(null);
     setFormName("");
     setFormPermissions(emptyPermissions());
     setNameError("");
     setSubmitError("");
-    setView("form");
   }
 
-  function openEdit(role: Role) {
-    setEditingRole(role);
+  function openRole(role: Role) {
+    setIsCreating(false);
+    setSelectedRole(role);
     setFormName(role.name);
     setFormPermissions(mergePermissions(role.permissions));
     setNameError("");
     setSubmitError("");
-    setView("form");
   }
 
-  function backToList() {
-    setView("list");
-    setEditingRole(null);
+  function closePanel() {
+    setIsCreating(false);
+    setSelectedRole(null);
   }
 
-  // ── Submit ────────────────────────────────────────────────────────────────────
+  // ── Save ───────────────────────────────────────────────────────────────────
 
   async function handleSave() {
     const name = formName.trim();
-    if (!name) {
-      setNameError("Role name is required");
-      return;
-    }
+    if (!name) { setNameError("Role name is required"); return; }
     setNameError("");
     setSubmitError("");
     setSubmitting(true);
-
     try {
-      if (editingRole) {
-        await updateMutation.mutateAsync({ id: editingRole.id, name, permissions: formPermissions });
-        setSuccessBanner(`Role "${name}" updated successfully`);
-      } else {
+      if (selectedRole && !selectedRole.is_default) {
+        await updateMutation.mutateAsync({ id: selectedRole.id, name, permissions: formPermissions });
+        setSuccessMsg(`Role "${name}" updated successfully.`);
+        queryClient.invalidateQueries({ queryKey: ["roles"] });
+        closePanel();
+      } else if (isCreating) {
         await createMutation.mutateAsync({ name, permissions: formPermissions });
-        setSuccessBanner(`Role "${name}" created successfully`);
+        setSuccessMsg(`Role "${name}" created successfully.`);
+        queryClient.invalidateQueries({ queryKey: ["roles"] });
+        closePanel();
       }
-      queryClient.invalidateQueries({ queryKey: ["roles"] });
-      backToList();
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? "";
@@ -317,197 +365,301 @@ export default function ManageRolesPage() {
     }
   }
 
-  // ── Render: form ──────────────────────────────────────────────────────────────
+  // ── Right panel content ────────────────────────────────────────────────────
 
-  if (view === "form") {
-    return (
-      <div style={s.page}>
-        <div style={s.headerRow}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <button style={s.backBtn} onClick={backToList}>← Roles</button>
-            <h1 style={s.pageTitle}>
-              {editingRole ? `Edit Role — ${editingRole.name}` : "Create Role"}
-            </h1>
-          </div>
-        </div>
+  const showRightPanel = selectedRole !== null || isCreating;
+  const rightPanelIsReadOnly = selectedRole?.is_default || !canEdit;
+  const rightPanelIsEditing = !rightPanelIsReadOnly;
 
-        <div style={s.formContent}>
-          <div style={s.formCard}>
-            <div style={s.fieldGroup}>
-              <label style={s.label}>
-                Role Name <span style={s.req}>*</span>
-              </label>
-              <input
-                type="text"
-                value={formName}
-                maxLength={100}
-                placeholder="e.g. Field Analyst"
-                onChange={(e) => { setFormName(e.target.value); setNameError(""); }}
-                style={{ ...s.input, borderColor: nameError ? "#e53e3e" : "var(--c-surface-high)", maxWidth: 400 }}
-              />
-              {nameError && <span style={s.fieldErr}>{nameError}</span>}
-            </div>
+  const rightPanelMergedPermissions = selectedRole
+    ? mergePermissions(selectedRole.permissions)
+    : formPermissions;
 
-            <div style={s.fieldGroup}>
-              <label style={s.label}>Section Permissions</label>
-              <p style={s.permHint}>
-                Checking <strong>Edit</strong> automatically grants View and locks it.
-                Uncheck Edit to allow independent View control.
-              </p>
-              <PermissionsTable permissions={formPermissions} onChange={setFormPermissions} />
-            </div>
-
-            {submitError && <div style={s.submitError}>{submitError}</div>}
-
-            <div style={s.formFooter}>
-              <button style={s.cancelBtn} type="button" onClick={backToList}>
-                Cancel
-              </button>
-              <button
-                style={{ ...s.saveBtn, opacity: submitting ? 0.7 : 1 }}
-                type="button"
-                disabled={submitting}
-                onClick={handleSave}
-              >
-                {submitting ? "Saving…" : editingRole ? "Save Changes" : "Create Role"}
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // ── Render: list ──────────────────────────────────────────────────────────────
+  // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
     <div style={s.page}>
-      <div style={s.headerRow}>
-        <div>
-          <h1 style={s.pageTitle}>Manage Roles</h1>
-          <p style={s.pageSubtitle}>
-            {isLoading
-              ? "Loading…"
-              : `${defaultRoles.length} default + ${customRoles.length} custom role${customRoles.length !== 1 ? "s" : ""}`}
-          </p>
+      {/* ── Left panel ── */}
+      <div style={s.leftPanel}>
+        {/* Left header */}
+        <div style={s.leftHeader}>
+          <div>
+            <div style={s.leftTitle}>Roles</div>
+            <div style={s.leftSubtitle}>
+              {isLoading
+                ? "Loading…"
+                : `${defaultRoles.length} default · ${customRoles.length} custom`}
+            </div>
+          </div>
+          {canEdit && (
+            <button
+              style={s.newRoleBtn}
+              onClick={openCreate}
+              title="Create new role"
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: 16, lineHeight: 1 }}>
+                add
+              </span>
+              New Role
+            </button>
+          )}
         </div>
-        <button style={s.addBtn} onClick={openCreate}>
-          + Create Role
-        </button>
-      </div>
 
-      {successBanner && <div style={s.successBanner}>{successBanner}</div>}
-
-      <div style={s.content}>
-        {/* Search bar */}
-        <div style={s.searchWrap}>
+        {/* Search */}
+        <div style={s.leftSearch}>
+          <span className="material-symbols-outlined" style={{ position: "absolute", left: 9, top: "50%", transform: "translateY(-50%)", fontSize: 16, color: "#9aa5b4", pointerEvents: "none" }}>
+            search
+          </span>
           <input
             type="text"
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
-            placeholder="Search by role name"
-            style={s.searchInput}
+            placeholder="Search roles…"
+            style={s.leftSearchInput}
           />
         </div>
 
-        <div style={s.tableWrap}>
-          <table style={s.table}>
-            <thead>
-              <tr style={s.thead}>
-                <th style={s.th}>Role Name</th>
-                <th style={s.th}>Users Assigned</th>
-                <th style={s.th}>Created</th>
-                <th style={s.th}>Created By</th>
-                <th style={s.th}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {/* Default protected roles — always visible regardless of search */}
-              {defaultRoles.map((role) => (
-                <tr key={role.id} style={s.tr}>
-                  <td style={s.td}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <Lock size={14} color="var(--c-text-muted)" />
-                      <button
-                        style={s.roleNameBtn}
-                        onClick={() => navigate(`/roles/${role.id}`)}
-                      >
-                        {role.name}
-                      </button>
-                      <DefaultBadge />
-                    </div>
-                    {role.description && (
-                      <div style={s.roleDesc}>{role.description}</div>
-                    )}
-                  </td>
-                  <td style={s.td}>
-                    <span style={s.userCount}>{role.user_count}</span>
-                  </td>
-                  <td style={s.td}>
-                    <span style={s.dateText}>Built-in</span>
-                  </td>
-                  <td style={s.td}>
-                    <span style={s.mutedText}>{role.created_by_name ?? "System"}</span>
-                  </td>
-                  <td style={s.td}>{/* No edit for default roles */}</td>
-                </tr>
-              ))}
+        {/* Success banner */}
+        {successMsg && (
+          <div style={s.successBanner}>
+            <span className="material-symbols-outlined" style={{ fontSize: 16, verticalAlign: "middle", marginRight: 6 }}>
+              check_circle
+            </span>
+            {successMsg}
+          </div>
+        )}
 
-              {/* Custom roles */}
-              {isLoading ? (
-                <tr>
-                  <td colSpan={5} style={{ ...s.td, textAlign: "center", color: "var(--c-text-muted)", padding: 32 }}>
-                    Loading roles…
-                  </td>
-                </tr>
-              ) : filteredCustomRoles.length === 0 ? (
-                <tr>
-                  <td colSpan={5} style={{ ...s.td, textAlign: "center", color: "var(--c-text-muted)", padding: 32 }}>
-                    {searchTerm
-                      ? "No roles match your search."
-                      : "No custom roles yet. Create one to get started."}
-                  </td>
-                </tr>
-              ) : (
-                filteredCustomRoles.map((role) => (
-                  <tr key={role.id} style={s.tr}>
-                    <td style={s.td}>
-                      <button
-                        style={s.roleNameBtn}
-                        onClick={() => navigate(`/roles/${role.id}`)}
-                      >
-                        {role.name}
-                      </button>
-                    </td>
-                    <td style={s.td}>
-                      <span style={s.userCount}>{role.user_count}</span>
-                    </td>
-                    <td style={s.td}>
-                      <span style={s.dateText}>{formatDate(role.created_at)}</span>
-                    </td>
-                    <td style={s.td}>
-                      {role.created_by_user_id ? (
-                        <button
-                          style={s.creatorLink}
-                          onClick={() => window.open(`/users/${role.created_by_user_id}`, "_blank")}
-                        >
-                          {role.created_by_name ?? "—"}
-                        </button>
-                      ) : (
-                        <span style={s.mutedText}>{role.created_by_name ?? "—"}</span>
-                      )}
-                    </td>
-                    <td style={s.td}>
-                      <button style={s.editBtn} onClick={() => openEdit(role)}>
-                        Edit
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+        {/* Roles list */}
+        <div style={s.rolesList}>
+          {/* Default roles */}
+          {defaultRoles.length > 0 && (
+            <>
+              <div style={s.rolesGroupLabel}>Default Roles</div>
+              {defaultRoles.map((role) => {
+                const isSelected = selectedRole?.id === role.id;
+                return (
+                  <button
+                    key={role.id}
+                    style={{
+                      ...s.roleItem,
+                      ...(isSelected ? s.roleItemSelected : {}),
+                    }}
+                    onClick={() => openRole(role)}
+                  >
+                    <div style={s.roleItemLeft}>
+                      <div
+                        style={{
+                          ...s.roleDot,
+                          background: getRoleDotColor(role.name),
+                          opacity: 0.5,
+                        }}
+                      />
+                      <div>
+                        <div style={{ ...s.roleItemName, color: isSelected ? BLUE_HEX : "#4a5568" }}>
+                          {capitalize(role.name)}
+                        </div>
+                        <div style={s.roleItemMeta}>
+                          {role.user_count} user{role.user_count !== 1 ? "s" : ""}
+                        </div>
+                      </div>
+                    </div>
+                    <span
+                      className="material-symbols-outlined"
+                      style={{ fontSize: 15, color: "#9aa5b4", flexShrink: 0 }}
+                      title="Default — cannot be modified"
+                    >
+                      lock
+                    </span>
+                  </button>
+                );
+              })}
+            </>
+          )}
+
+          {/* Custom roles */}
+          <div style={s.rolesGroupLabel}>
+            Custom Roles
+            {filteredCustomRoles.length > 0 && (
+              <span style={s.rolesGroupCount}>{filteredCustomRoles.length}</span>
+            )}
+          </div>
+
+          {isLoading ? (
+            <div style={s.rolesListEmpty}>Loading…</div>
+          ) : filteredCustomRoles.length === 0 ? (
+            <div style={s.rolesListEmpty}>
+              {searchTerm ? "No roles match your search." : "No custom roles yet."}
+            </div>
+          ) : (
+            filteredCustomRoles.map((role) => {
+              const isSelected = selectedRole?.id === role.id;
+              return (
+                <button
+                  key={role.id}
+                  style={{
+                    ...s.roleItem,
+                    ...(isSelected ? s.roleItemSelected : {}),
+                  }}
+                  onClick={() => openRole(role)}
+                >
+                  <div style={s.roleItemLeft}>
+                    <div style={{ ...s.roleDot, background: getRoleDotColor(role.name) }} />
+                    <div>
+                      <div style={{ ...s.roleItemName, color: isSelected ? BLUE_HEX : "var(--c-text-primary)" }}>
+                        {capitalize(role.name)}
+                      </div>
+                      <div style={s.roleItemMeta}>
+                        {role.user_count} user{role.user_count !== 1 ? "s" : ""}
+                        {role.created_at && ` · ${formatDate(role.created_at)}`}
+                      </div>
+                    </div>
+                  </div>
+                  {canEdit && (
+                    <span className="material-symbols-outlined" style={{ fontSize: 15, color: isSelected ? BLUE_HEX : "#c8d0db", flexShrink: 0 }}>
+                      chevron_right
+                    </span>
+                  )}
+                </button>
+              );
+            })
+          )}
         </div>
+      </div>
+
+      {/* ── Right panel ── */}
+      <div style={s.rightPanel}>
+        {!showRightPanel ? (
+          /* Empty state */
+          <div style={s.rightEmpty}>
+            <span className="material-symbols-outlined" style={{ fontSize: 52, color: "#dde3ea", marginBottom: 14 }}>
+              shield_person
+            </span>
+            <div style={s.rightEmptyTitle}>Select a role</div>
+            <div style={s.rightEmptyNote}>
+              Choose a role from the list to view its permissions
+              {canEdit ? ", or click New Role to create one." : "."}
+            </div>
+          </div>
+        ) : (
+          <div style={s.rightContent}>
+            {/* Right panel header */}
+            <div style={s.rightHeader}>
+              <div style={s.rightHeaderLeft}>
+                {isCreating ? (
+                  <>
+                    <div
+                      style={{
+                        ...s.roleDot,
+                        background: formName ? getRoleDotColor(formName) : "#cbd5e0",
+                        width: 14,
+                        height: 14,
+                      }}
+                    />
+                    <div>
+                      <div style={s.rightTitle}>New Role</div>
+                      <div style={s.rightSubtitle}>Define a name and set section permissions.</div>
+                    </div>
+                  </>
+                ) : selectedRole ? (
+                  <>
+                    <div
+                      style={{
+                        ...s.roleDot,
+                        background: getRoleDotColor(selectedRole.name),
+                        width: 14,
+                        height: 14,
+                        opacity: selectedRole.is_default ? 0.5 : 1,
+                      }}
+                    />
+                    <div>
+                      <div style={s.rightTitle}>{capitalize(selectedRole.name)}</div>
+                      <div style={s.rightSubtitle}>
+                        {selectedRole.is_default
+                          ? "Default role — permissions cannot be modified."
+                          : `${selectedRole.user_count} user${selectedRole.user_count !== 1 ? "s" : ""} assigned · Created ${formatDate(selectedRole.created_at)}`}
+                      </div>
+                    </div>
+                  </>
+                ) : null}
+              </div>
+
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                {selectedRole && !selectedRole.is_default && canEdit && (
+                  <button
+                    style={s.viewDetailBtn}
+                    onClick={() => navigate(`/roles/${selectedRole.id}`)}
+                  >
+                    View Detail
+                  </button>
+                )}
+                <button style={s.closeRightBtn} onClick={closePanel} title="Close panel">
+                  <span className="material-symbols-outlined" style={{ fontSize: 18 }}>close</span>
+                </button>
+              </div>
+            </div>
+
+            <div style={s.rightBody}>
+              {/* Role name field (editable only for custom/create) */}
+              {rightPanelIsEditing && (
+                <div style={s.fieldGroup}>
+                  <label style={s.label}>
+                    Role Name <span style={{ color: "#e53e3e" }}>*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={formName}
+                    maxLength={100}
+                    placeholder="e.g. Field Analyst"
+                    onChange={(e) => { setFormName(e.target.value); setNameError(""); }}
+                    style={{ ...s.input, borderColor: nameError ? "#e53e3e" : "#e2e8f0" }}
+                  />
+                  {nameError && <span style={s.fieldErr}>{nameError}</span>}
+                </div>
+              )}
+
+              {/* Permissions */}
+              <div style={s.fieldGroup}>
+                <label style={s.label}>Section Permissions</label>
+                {rightPanelIsEditing && (
+                  <p style={s.permHint}>
+                    Checking <strong>Edit</strong> automatically grants View and locks it.
+                    Uncheck Edit to allow independent View control.
+                  </p>
+                )}
+                {rightPanelIsEditing ? (
+                  <PermissionsTable permissions={formPermissions} onChange={setFormPermissions} />
+                ) : (
+                  <ReadOnlyPermissions permissions={rightPanelMergedPermissions} />
+                )}
+              </div>
+
+              {submitError && (
+                <div style={s.submitError}>{submitError}</div>
+              )}
+
+              {/* Footer — only for editable */}
+              {rightPanelIsEditing && (
+                <div style={s.formFooter}>
+                  <button style={s.cancelBtn} type="button" onClick={closePanel}>
+                    Cancel
+                  </button>
+                  <button
+                    style={{ ...s.saveBtn, opacity: submitting ? 0.7 : 1 }}
+                    type="button"
+                    disabled={submitting}
+                    onClick={handleSave}
+                  >
+                    {submitting
+                      ? "Saving…"
+                      : isCreating
+                      ? "Create Role"
+                      : "Save Changes"}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -518,10 +670,12 @@ export default function ManageRolesPage() {
 const s: Record<string, React.CSSProperties> = {
   page: {
     display: "flex",
-    flexDirection: "column",
     height: "100vh",
     background: "var(--c-surface-low)",
+    overflow: "hidden",
   },
+
+  // Access denied
   accessDenied: {
     flex: 1,
     display: "flex",
@@ -533,153 +687,274 @@ const s: Record<string, React.CSSProperties> = {
   },
   accessTitle: { fontSize: 22, fontWeight: 700, color: "var(--c-text-primary)" },
   accessNote: { fontSize: 14, color: "var(--c-text-muted)", maxWidth: 400, textAlign: "center" },
-  headerRow: {
+
+  // Left panel
+  leftPanel: {
+    width: 310,
+    minWidth: 260,
+    flexShrink: 0,
     background: "var(--c-surface-lowest)",
-    borderBottom: "1px solid #e0e0e0",
-    padding: "16px 32px",
+    borderRight: "1px solid #e0e8f0",
+    display: "flex",
+    flexDirection: "column",
+    overflow: "hidden",
+  },
+  leftHeader: {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
-    position: "sticky",
-    top: 0,
-    zIndex: 50,
+    padding: "18px 18px 12px",
+    borderBottom: "1px solid #f0f4f8",
+    flexShrink: 0,
   },
-  pageTitle: { fontSize: 20, fontWeight: 700, color: "var(--c-text-primary)", margin: 0 },
-  pageSubtitle: { fontSize: 13, color: "var(--c-text-muted)", marginTop: 4, marginBottom: 0 },
-  addBtn: {
-    padding: "10px 20px",
+  leftTitle: {
+    fontSize: 16,
+    fontWeight: 700,
+    color: "var(--c-text-primary)",
+  },
+  leftSubtitle: {
+    fontSize: 12,
+    color: "var(--c-text-muted)",
+    marginTop: 2,
+  },
+  newRoleBtn: {
+    display: "flex",
+    alignItems: "center",
+    gap: 4,
+    padding: "7px 12px",
     background: BLUE,
-    color: "var(--c-surface-lowest)",
+    color: "#fff",
     border: "none",
-    borderRadius: 8,
-    fontSize: 14,
+    borderRadius: 7,
+    fontSize: 12,
     fontWeight: 600,
     cursor: "pointer",
     whiteSpace: "nowrap" as const,
+    flexShrink: 0,
   },
-  backBtn: {
-    background: "transparent",
-    border: "none",
-    color: BLUE,
-    fontSize: 14,
-    fontWeight: 600,
-    cursor: "pointer",
-    padding: "4px 0",
+  leftSearch: {
+    padding: "10px 12px",
+    borderBottom: "1px solid #f0f4f8",
+    position: "relative",
+    flexShrink: 0,
   },
-  successBanner: {
-    background: "#d4edda",
-    color: "#155724",
-    border: "1px solid #c3e6cb",
-    padding: "12px 32px",
-    fontSize: 14,
-    fontWeight: 500,
-  },
-  content: { flex: 1, padding: "28px 32px", overflowY: "auto" },
-  searchWrap: { marginBottom: 16 },
-  searchInput: {
-    padding: "9px 14px",
-    borderRadius: 7,
+  leftSearchInput: {
+    width: "100%",
+    padding: "7px 10px 7px 30px",
     border: "1.5px solid #e2e8f0",
+    borderRadius: 7,
     fontSize: 13,
     color: "var(--c-text-primary)",
+    background: "#f8fafc",
     outline: "none",
-    width: 320,
-    background: "var(--c-surface-lowest)",
+    boxSizing: "border-box" as const,
   },
-  tableWrap: {
-    background: "var(--c-surface-lowest)",
-    borderRadius: 12,
-    overflow: "hidden",
-    boxShadow: "var(--shadow-card)",
+  successBanner: {
+    padding: "10px 14px",
+    background: "#d4edda",
+    color: "#155724",
+    fontSize: 13,
+    fontWeight: 500,
+    borderBottom: "1px solid #c3e6cb",
+    flexShrink: 0,
   },
-  table: { width: "100%", borderCollapse: "collapse" },
-  thead: { background: "#f7fafc" },
-  th: {
-    padding: "12px 16px",
-    textAlign: "left",
+  rolesList: {
+    flex: 1,
+    overflowY: "auto",
+    padding: "8px 0",
+  },
+  rolesGroupLabel: {
+    display: "flex",
+    alignItems: "center",
+    gap: 7,
+    padding: "10px 18px 4px",
     fontSize: 11,
     fontWeight: 700,
     color: "var(--c-text-muted)",
     textTransform: "uppercase",
-    letterSpacing: 0.5,
-    borderBottom: "1px solid #e2e8f0",
+    letterSpacing: 0.6,
   },
-  tr: { borderBottom: "1px solid #f0f4f8" },
-  td: { padding: "14px 16px", fontSize: 13, color: "var(--c-text-primary)", verticalAlign: "middle" },
-  roleNameBtn: {
-    background: "transparent",
-    border: "none",
-    color: BLUE,
-    fontSize: 14,
-    fontWeight: 600,
-    cursor: "pointer",
-    padding: 0,
-    textDecoration: "underline",
-    textUnderlineOffset: 2,
-  },
-  roleDesc: { fontSize: 12, color: "var(--c-text-muted)", marginTop: 3 },
-  userCount: { fontSize: 13, color: "#4a5568" },
-  dateText: { fontSize: 13, color: "var(--c-text-muted)" },
-  mutedText: { fontSize: 13, color: "var(--c-text-muted)" },
-  creatorLink: {
-    background: "transparent",
-    border: "none",
-    color: BLUE,
-    fontSize: 13,
-    cursor: "pointer",
-    padding: 0,
-    textDecoration: "underline",
-    textUnderlineOffset: 2,
-  },
-  editBtn: {
-    background: "transparent",
-    border: "none",
-    color: BLUE,
-    fontSize: 13,
-    fontWeight: 600,
-    cursor: "pointer",
-    padding: "4px 0",
-  },
-  defaultBadge: {
-    display: "inline-block",
-    padding: "2px 9px",
-    borderRadius: 20,
+  rolesGroupCount: {
+    background: "#e8f0fe",
+    color: BLUE_HEX,
     fontSize: 11,
     fontWeight: 700,
-    background: "#EBF5FB",
-    color: BLUE,
-    border: `1px solid #bee3f8`,
-    letterSpacing: 0.2,
+    padding: "1px 7px",
+    borderRadius: 10,
   },
-  // Form
-  formContent: { flex: 1, overflowY: "auto", padding: "28px 32px" },
-  formCard: {
-    background: "var(--c-surface-lowest)",
-    borderRadius: 12,
-    padding: "28px",
-    boxShadow: "var(--shadow-card)",
+  rolesListEmpty: {
+    padding: "12px 18px",
+    fontSize: 13,
+    color: "var(--c-text-muted)",
+    fontStyle: "italic",
+  },
+  roleItem: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    width: "100%",
+    padding: "10px 16px",
+    background: "transparent",
+    border: "none",
+    borderLeft: "3px solid transparent",
+    cursor: "pointer",
+    textAlign: "left" as const,
+    transition: "background 0.12s, border-color 0.12s",
+    gap: 8,
+  },
+  roleItemSelected: {
+    background: "#EBF5FB",
+    borderLeftColor: BLUE_HEX,
+  },
+  roleItemLeft: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    flex: 1,
+    minWidth: 0,
+  },
+  roleDot: {
+    width: 10,
+    height: 10,
+    borderRadius: "50%",
+    flexShrink: 0,
+  },
+  roleItemName: {
+    fontSize: 13,
+    fontWeight: 600,
+    color: "var(--c-text-primary)",
+    whiteSpace: "nowrap" as const,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+  },
+  roleItemMeta: {
+    fontSize: 11,
+    color: "var(--c-text-muted)",
+    marginTop: 2,
+  },
+
+  // Right panel
+  rightPanel: {
+    flex: 1,
     display: "flex",
     flexDirection: "column",
-    gap: 28,
-    maxWidth: 760,
+    overflow: "hidden",
+    background: "var(--c-surface-low)",
   },
+  rightEmpty: {
+    flex: 1,
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 60,
+    textAlign: "center" as const,
+  },
+  rightEmptyTitle: {
+    fontSize: 18,
+    fontWeight: 700,
+    color: "#b0bcc8",
+    marginBottom: 8,
+  },
+  rightEmptyNote: {
+    fontSize: 14,
+    color: "#c8d0da",
+    maxWidth: 320,
+    lineHeight: 1.6,
+  },
+  rightContent: {
+    display: "flex",
+    flexDirection: "column",
+    height: "100%",
+    overflow: "hidden",
+  },
+  rightHeader: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: "18px 28px",
+    background: "var(--c-surface-lowest)",
+    borderBottom: "1px solid #e0e8f0",
+    flexShrink: 0,
+    gap: 12,
+  },
+  rightHeaderLeft: {
+    display: "flex",
+    alignItems: "center",
+    gap: 12,
+    flex: 1,
+    minWidth: 0,
+  },
+  rightTitle: {
+    fontSize: 17,
+    fontWeight: 700,
+    color: "var(--c-text-primary)",
+  },
+  rightSubtitle: {
+    fontSize: 12,
+    color: "var(--c-text-muted)",
+    marginTop: 3,
+  },
+  viewDetailBtn: {
+    padding: "7px 14px",
+    background: "transparent",
+    border: "1.5px solid #d0dce8",
+    borderRadius: 7,
+    fontSize: 13,
+    fontWeight: 600,
+    color: BLUE_HEX,
+    cursor: "pointer",
+  },
+  closeRightBtn: {
+    background: "transparent",
+    border: "1px solid #e2e8f0",
+    borderRadius: 7,
+    width: 32,
+    height: 32,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    cursor: "pointer",
+    color: "var(--c-text-muted)",
+    flexShrink: 0,
+  },
+  rightBody: {
+    flex: 1,
+    overflowY: "auto",
+    padding: "24px 28px",
+    display: "flex",
+    flexDirection: "column",
+    gap: 24,
+  },
+
+  // Shared form elements
   fieldGroup: { display: "flex", flexDirection: "column", gap: 8 },
   label: { fontSize: 13, fontWeight: 600, color: "#4a5568" },
-  req: { color: "#e53e3e" },
   input: {
     padding: "10px 12px",
-    borderRadius: 7,
-    border: "1.5px solid",
+    borderRadius: 8,
+    border: "1.5px solid #e2e8f0",
     fontSize: 14,
     color: "var(--c-text-primary)",
     outline: "none",
-    background: "var(--c-surface-lowest)",
+    background: "#fff",
     width: "100%",
+    maxWidth: 400,
     boxSizing: "border-box" as const,
   },
   fieldErr: { fontSize: 12, color: "#e53e3e", fontWeight: 500 },
-  permHint: { fontSize: 13, color: "var(--c-text-muted)", margin: "0 0 8px" },
-  permTable: { border: "1px solid #e2e8f0", borderRadius: 8, overflow: "hidden" },
+  permHint: {
+    fontSize: 13,
+    color: "var(--c-text-muted)",
+    margin: "0 0 8px",
+    lineHeight: 1.5,
+  },
+  permTable: {
+    border: "1px solid #e2e8f0",
+    borderRadius: 8,
+    overflow: "hidden",
+    background: "#fff",
+  },
   permHeaderRow: {
     display: "flex",
     alignItems: "center",
@@ -693,30 +968,44 @@ const s: Record<string, React.CSSProperties> = {
     padding: "10px 16px",
     borderBottom: "1px solid #f0f4f8",
   },
-  permCell: { fontSize: 13, color: "#4a5568" },
   permColHead: {
-    width: 80,
+    width: 70,
     fontSize: 11,
     fontWeight: 700,
     color: "var(--c-text-muted)",
-    textTransform: "uppercase",
+    textTransform: "uppercase" as const,
     letterSpacing: 0.5,
     textAlign: "center" as const,
   },
-  permCheckCell: { width: 80, display: "flex", justifyContent: "center", alignItems: "center" },
+  permCheckCell: {
+    width: 70,
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  submitError: {
+    background: "#fff5f5",
+    color: "#c53030",
+    border: "1px solid #fc8181",
+    borderRadius: 8,
+    padding: "10px 14px",
+    fontSize: 13,
+    fontWeight: 500,
+  },
   formFooter: {
     display: "flex",
     justifyContent: "flex-end",
     gap: 10,
-    paddingTop: 4,
+    paddingTop: 8,
     borderTop: "1px solid #f0f4f8",
+    marginTop: 4,
   },
   cancelBtn: {
     padding: "10px 20px",
-    background: "var(--c-surface-lowest)",
+    background: "#fff",
     color: "#4a5568",
     border: "1px solid #cbd5e0",
-    borderRadius: 7,
+    borderRadius: 8,
     fontSize: 14,
     fontWeight: 600,
     cursor: "pointer",
@@ -724,20 +1013,11 @@ const s: Record<string, React.CSSProperties> = {
   saveBtn: {
     padding: "10px 28px",
     background: BLUE,
-    color: "var(--c-surface-lowest)",
+    color: "#fff",
     border: "none",
-    borderRadius: 7,
+    borderRadius: 8,
     fontSize: 14,
     fontWeight: 600,
     cursor: "pointer",
-  },
-  submitError: {
-    background: "#fff5f5",
-    color: "#c53030",
-    border: "1px solid #fc8181",
-    borderRadius: 7,
-    padding: "10px 14px",
-    fontSize: 13,
-    fontWeight: 500,
   },
 };

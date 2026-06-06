@@ -114,12 +114,13 @@ class StatusUpdateRequest(BaseModel):
 @router.get("")
 async def list_users(
     search: Optional[str] = Query(None),
+    is_active: Optional[bool] = Query(None),
     cursor: Optional[str] = Query(None),
     limit: int = Query(default=50, le=200),
     db: AsyncSession = Depends(get_db),
     current_user: DashboardUser = Depends(require_section_access("manage_users")),
 ):
-    """List all dashboard users, sorted by created_at DESC, with optional search."""
+    """List all dashboard users, sorted by created_at DESC, with optional search and status filter."""
     conditions = []
 
     if search:
@@ -131,6 +132,9 @@ async def list_users(
                 func.lower(DashboardUser.role).like(s),
             )
         )
+
+    if is_active is not None:
+        conditions.append(DashboardUser.is_active == is_active)
 
     if cursor:
         try:

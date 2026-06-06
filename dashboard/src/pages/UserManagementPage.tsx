@@ -1,49 +1,89 @@
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { Users, X, Eye, EyeOff } from "lucide-react";
+import { X, Eye, EyeOff } from "lucide-react";
 import { useAuthStore } from "../stores/authStore";
 import {
   getDashboardUsers,
   createDashboardUser,
   getRolesList,
 } from "../services/api";
+import api from "../services/api";
 import type { DashboardUser, DashboardUsersListResponse } from "../types";
 import { formatDateTime } from "../utils/formatters";
 
 const BLUE = "var(--c-primary-container)";
+const BLUE_HEX = "#0468B1";
 const PAGE_SIZE = 50;
 
-// ── Role display ───────────────────────────────────────────────────────────────
+// ── Avatar helpers ─────────────────────────────────────────────────────────────
+
+const AVATAR_COLORS = [
+  "#0468B1", "#1565C0", "#6A1B9A", "#2E7D32",
+  "#BF360C", "#00695C", "#4527A0", "#283593",
+];
+
+function getAvatarColor(name: string): string {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h);
+  return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length];
+}
+
+function getInitials(name: string): string {
+  const p = name.trim().split(/\s+/);
+  if (p.length >= 2) return (p[0][0] + p[p.length - 1][0]).toUpperCase();
+  return name.slice(0, 2).toUpperCase();
+}
 
 function capitalize(s: string): string {
   return s ? s.charAt(0).toUpperCase() + s.slice(1) : "";
 }
 
-// ── Status pill ────────────────────────────────────────────────────────────────
+// ── Toggle switch ──────────────────────────────────────────────────────────────
 
-function StatusPill({ active }: { active: boolean }) {
+function ToggleSwitch({ checked, onChange }: { checked: boolean; onChange: () => void }) {
   return (
-    <span style={{
-      display: "inline-block",
-      padding: "3px 10px",
-      borderRadius: 20,
-      fontSize: 12,
-      fontWeight: 600,
-      background: active ? "#E8F5E9" : "#FDECEA",
-      color: active ? "#2E7D32" : "#C62828",
-    }}>
-      {active ? "Active" : "Inactive"}
-    </span>
+    <div
+      onClick={onChange}
+      title={checked ? "Click to deactivate" : "Click to activate"}
+      style={{
+        width: 40,
+        height: 22,
+        borderRadius: 11,
+        background: checked ? BLUE_HEX : "#c8c8c8",
+        cursor: "pointer",
+        position: "relative",
+        transition: "background 0.2s",
+        flexShrink: 0,
+        border: "none",
+        outline: "none",
+      }}
+    >
+      <div
+        style={{
+          position: "absolute",
+          top: 3,
+          left: checked ? 21 : 3,
+          width: 16,
+          height: 16,
+          borderRadius: "50%",
+          background: "#fff",
+          transition: "left 0.2s",
+          boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
+        }}
+      />
+    </div>
   );
 }
 
-// ── Create User Modal ──────────────────────────────────────────────────────────
+// ── Role option type ───────────────────────────────────────────────────────────
 
 interface RoleOption {
   id: string;
   name: string;
 }
+
+// ── Create User Modal ──────────────────────────────────────────────────────────
 
 interface CreateUserModalProps {
   onClose: () => void;
@@ -118,7 +158,8 @@ function CreateUserModal({ onClose, onSuccess, currentUserRole }: CreateUserModa
       if (status === 409) {
         setErrors((p) => ({ ...p, email: "This email address is already in use." }));
       } else {
-        setSubmitError("Failed to create user. Please try again.");
+        const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+        setSubmitError(typeof detail === "string" ? detail : "Failed to create user. Please try again.");
       }
     } finally {
       setSubmitting(false);
@@ -128,10 +169,22 @@ function CreateUserModal({ onClose, onSuccess, currentUserRole }: CreateUserModa
   return (
     <div style={ms.overlay} onClick={onClose}>
       <div style={ms.modal} onClick={(e) => e.stopPropagation()}>
+        {/* Blue gradient header */}
         <div style={ms.header}>
-          <h2 style={ms.title}>Create User</h2>
-          <button style={ms.closeBtn} onClick={onClose}>✕</button>
+          <div style={ms.headerLeft}>
+            <span className="material-symbols-outlined" style={{ fontSize: 28, color: "#fff", opacity: 0.9 }}>
+              person_add
+            </span>
+            <div>
+              <div style={ms.title}>Add New User</div>
+              <div style={ms.subtitle}>Configure credentials and platform access permissions.</div>
+            </div>
+          </div>
+          <button style={ms.closeBtn} onClick={onClose} aria-label="Close">
+            <X size={18} color="rgba(255,255,255,0.8)" />
+          </button>
         </div>
+
         <form onSubmit={handleSubmit} style={ms.form}>
           <div style={{ display: "flex", gap: 12 }}>
             <MField label="First Name" required error={errors.firstName} style={{ flex: 1 }}>
@@ -140,7 +193,7 @@ function CreateUserModal({ onClose, onSuccess, currentUserRole }: CreateUserModa
                 value={firstName}
                 onChange={(e) => { setFirstName(e.target.value); clearErr("firstName"); }}
                 placeholder="Jane"
-                style={{ ...ms.input, borderColor: errors.firstName ? "#e53e3e" : "var(--c-surface-high)" }}
+                style={{ ...ms.input, borderColor: errors.firstName ? "#e53e3e" : "#e2e8f0" }}
               />
             </MField>
             <MField label="Last Name" required error={errors.lastName} style={{ flex: 1 }}>
@@ -149,7 +202,7 @@ function CreateUserModal({ onClose, onSuccess, currentUserRole }: CreateUserModa
                 value={lastName}
                 onChange={(e) => { setLastName(e.target.value); clearErr("lastName"); }}
                 placeholder="Smith"
-                style={{ ...ms.input, borderColor: errors.lastName ? "#e53e3e" : "var(--c-surface-high)" }}
+                style={{ ...ms.input, borderColor: errors.lastName ? "#e53e3e" : "#e2e8f0" }}
               />
             </MField>
           </div>
@@ -160,7 +213,7 @@ function CreateUserModal({ onClose, onSuccess, currentUserRole }: CreateUserModa
               value={email}
               onChange={(e) => { setEmail(e.target.value); clearErr("email"); }}
               placeholder="jane@undp.org"
-              style={{ ...ms.input, borderColor: errors.email ? "#e53e3e" : "var(--c-surface-high)" }}
+              style={{ ...ms.input, borderColor: errors.email ? "#e53e3e" : "#e2e8f0" }}
             />
           </MField>
 
@@ -171,7 +224,7 @@ function CreateUserModal({ onClose, onSuccess, currentUserRole }: CreateUserModa
                 value={password}
                 onChange={(e) => { setPassword(e.target.value); clearErr("password"); }}
                 placeholder="Min. 8 characters"
-                style={{ ...ms.input, borderColor: errors.password ? "#e53e3e" : "var(--c-surface-high)", paddingRight: 40, width: "100%", boxSizing: "border-box" }}
+                style={{ ...ms.input, borderColor: errors.password ? "#e53e3e" : "#e2e8f0", paddingRight: 40, width: "100%", boxSizing: "border-box" }}
               />
               <button
                 type="button"
@@ -179,7 +232,9 @@ function CreateUserModal({ onClose, onSuccess, currentUserRole }: CreateUserModa
                 style={ms.eyeBtn}
                 tabIndex={-1}
               >
-                {showPassword ? <EyeOff size={16} color="var(--c-text-muted)" /> : <Eye size={16} color="var(--c-text-muted)" />}
+                {showPassword
+                  ? <EyeOff size={16} color="var(--c-text-muted)" />
+                  : <Eye size={16} color="var(--c-text-muted)" />}
               </button>
             </div>
             <span style={{ fontSize: 11, color: password.length >= 8 ? "#2E7D32" : "var(--c-text-muted)", marginTop: 2 }}>
@@ -191,7 +246,7 @@ function CreateUserModal({ onClose, onSuccess, currentUserRole }: CreateUserModa
             <select
               value={role}
               onChange={(e) => { setRole(e.target.value); clearErr("role"); }}
-              style={{ ...ms.select, borderColor: errors.role ? "#e53e3e" : "var(--c-surface-high)" }}
+              style={{ ...ms.select, borderColor: errors.role ? "#e53e3e" : "#e2e8f0" }}
             >
               <option value="">Select role…</option>
               {availableRoles.map((r) => (
@@ -200,22 +255,13 @@ function CreateUserModal({ onClose, onSuccess, currentUserRole }: CreateUserModa
             </select>
           </MField>
 
+          {/* Account Status — toggle switch */}
           <MField label="Account Status">
-            <div style={{ display: "flex", gap: 8 }}>
-              <button
-                type="button"
-                onClick={() => setIsActive(true)}
-                style={{ ...ms.toggleBtn, background: isActive ? "#E8F5E9" : "#f0f4f8", color: isActive ? "#2E7D32" : "var(--c-text-muted)", border: `1.5px solid ${isActive ? "#A5D6A7" : "var(--c-surface-high)"}`, fontWeight: isActive ? 700 : 500 }}
-              >
-                Active
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsActive(false)}
-                style={{ ...ms.toggleBtn, background: !isActive ? "#FDECEA" : "#f0f4f8", color: !isActive ? "#C62828" : "var(--c-text-muted)", border: `1.5px solid ${!isActive ? "#EF9A9A" : "var(--c-surface-high)"}`, fontWeight: !isActive ? 700 : 500 }}
-              >
-                Inactive
-              </button>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <ToggleSwitch checked={isActive} onChange={() => setIsActive((v) => !v)} />
+              <span style={{ fontSize: 13, fontWeight: 600, color: isActive ? "#2E7D32" : "#718096" }}>
+                {isActive ? "Active" : "Inactive"}
+              </span>
             </div>
           </MField>
 
@@ -236,9 +282,9 @@ function CreateUserModal({ onClose, onSuccess, currentUserRole }: CreateUserModa
             <button
               type="submit"
               disabled={!isValid || submitting}
-              style={{ ...ms.submitBtn, opacity: !isValid || submitting ? 0.5 : 1, cursor: !isValid || submitting ? "default" : "pointer" }}
+              style={{ ...ms.submitBtn, opacity: !isValid || submitting ? 0.55 : 1, cursor: !isValid || submitting ? "default" : "pointer" }}
             >
-              {submitting ? "Creating…" : "Create User"}
+              {submitting ? "Creating…" : "Add User"}
             </button>
           </div>
         </form>
@@ -273,6 +319,8 @@ function MField({
 
 // ── Main Page ──────────────────────────────────────────────────────────────────
 
+type StatusFilter = "all" | "active" | "inactive";
+
 export default function UserManagementPage() {
   const { user: currentUser } = useAuthStore();
   const navigate = useNavigate();
@@ -281,11 +329,13 @@ export default function UserManagementPage() {
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
 
   const [cursors, setCursors] = useState<(string | null)[]>([null]);
   const [pageIndex, setPageIndex] = useState(0);
 
   const [showCreate, setShowCreate] = useState(false);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
 
   const isAdminOrSuper = currentUser?.role === "admin" || currentUser?.role === "superadmin";
 
@@ -294,22 +344,26 @@ export default function UserManagementPage() {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       setSearch(searchInput);
-      // Reset pagination on new search
       setCursors([null]);
       setPageIndex(0);
     }, 400);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, [searchInput]);
 
-  const queryParams: Record<string, string | number> = {
-    limit: PAGE_SIZE,
-  };
+  // Reset pagination when status filter changes
+  useEffect(() => {
+    setCursors([null]);
+    setPageIndex(0);
+  }, [statusFilter]);
+
+  const queryParams: Record<string, string | number> = { limit: PAGE_SIZE };
   if (search) queryParams.search = search;
+  if (statusFilter !== "all") queryParams.is_active = statusFilter === "active" ? "true" : "false";
   const currentCursor = cursors[pageIndex];
   if (currentCursor) queryParams.cursor = currentCursor;
 
   const { data, isLoading } = useQuery<DashboardUsersListResponse>({
-    queryKey: ["dashboard-users", search, pageIndex, currentCursor],
+    queryKey: ["dashboard-users", search, statusFilter, pageIndex, currentCursor],
     queryFn: async () => {
       const res = await getDashboardUsers(queryParams);
       return res.data;
@@ -339,47 +393,73 @@ export default function UserManagementPage() {
     navigate(`/users/${newUserId}`);
   }
 
+  async function handleToggleStatus(userId: string, currentActive: boolean) {
+    if (togglingId) return;
+    setTogglingId(userId);
+    try {
+      await api.patch(`/api/dashboard/users/${userId}/status`, { is_active: !currentActive });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-users"] });
+    } catch { /* silent */ } finally {
+      setTogglingId(null);
+    }
+  }
+
   return (
     <div style={s.page}>
-      {/* Header */}
-      <div style={s.headerRow}>
-        <h1 style={s.pageTitle}>Manage Users</h1>
-        <div style={s.topBar}>
+      {/* ── Sticky toolbar ── */}
+      <div style={s.toolbar}>
+        <div style={s.toolbarLeft}>
+          {/* Account Status filter */}
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+            style={s.filterSelect}
+          >
+            <option value="all">All Statuses</option>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+          </select>
+
           {/* Search */}
           <div style={s.searchWrap}>
+            <span className="material-symbols-outlined" style={s.searchIcon}>search</span>
             <input
               type="text"
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
-              placeholder="Search by name, email, role, or status"
+              placeholder="Search by name, email or role…"
               style={s.searchInput}
             />
             {searchInput && (
-              <button
-                style={s.clearBtn}
-                onClick={() => setSearchInput("")}
-                aria-label="Clear search"
-              >
-                <X size={14} color="var(--c-text-muted)" />
+              <button style={s.clearBtn} onClick={() => setSearchInput("")} aria-label="Clear search">
+                <X size={13} color="#9aa5b4" />
               </button>
             )}
           </div>
-          {/* Create User — Admin/Superadmin only */}
+        </div>
+
+        <div style={s.toolbarRight}>
+          <span style={s.countLabel}>{total.toLocaleString()} user{total !== 1 ? "s" : ""}</span>
           {isAdminOrSuper && (
-            <button style={s.createBtn} onClick={() => setShowCreate(true)}>
-              + Create User
+            <button style={s.addBtn} onClick={() => setShowCreate(true)}>
+              <span className="material-symbols-outlined" style={{ fontSize: 18, lineHeight: 1 }}>
+                person_add
+              </span>
+              Add User
             </button>
           )}
         </div>
       </div>
 
-      {/* Content */}
+      {/* ── Content ── */}
       <div style={s.content}>
         {isLoading ? (
           <div style={s.loading}>Loading users…</div>
         ) : users.length === 0 ? (
           <div style={s.empty}>
-            <Users size={44} color="#cbd5e0" />
+            <span className="material-symbols-outlined" style={{ fontSize: 48, color: "#cbd5e0" }}>
+              group
+            </span>
             <div style={s.emptyText}>No dashboard users found.</div>
           </div>
         ) : (
@@ -388,39 +468,128 @@ export default function UserManagementPage() {
               <table style={s.table}>
                 <thead>
                   <tr style={s.thead}>
-                    <th style={s.th}>Full Name</th>
+                    <th style={s.th}>Name</th>
                     <th style={s.th}>Email Address</th>
-                    <th style={s.th}>Role</th>
                     <th style={s.th}>Account Status</th>
                     <th style={s.th}>Date Created</th>
                     <th style={s.th}>Created By</th>
+                    {isAdminOrSuper && <th style={{ ...s.th, textAlign: "center" }}>Actions</th>}
                   </tr>
                 </thead>
                 <tbody>
                   {users.map((u) => {
                     const isSelf = u.id === currentUser?.id;
+                    const active = u.is_active ?? true;
+                    const avatarColor = getAvatarColor(u.full_name);
+                    const initials = getInitials(u.full_name);
                     return (
-                      <tr key={u.id} style={s.tr}>
+                      <tr
+                        key={u.id}
+                        style={s.tr}
+                        onMouseEnter={(e) => { (e.currentTarget as HTMLTableRowElement).style.background = "#f8fafc"; }}
+                        onMouseLeave={(e) => { (e.currentTarget as HTMLTableRowElement).style.background = ""; }}
+                      >
+                        {/* Name column: avatar + name + role sublabel */}
                         <td style={s.td}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                            <button
-                              style={s.nameLink}
-                              onClick={() => navigate(`/users/${u.id}`)}
+                          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                            <div
+                              style={{
+                                width: 36,
+                                height: 36,
+                                borderRadius: "50%",
+                                background: avatarColor,
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                color: "#fff",
+                                fontSize: 13,
+                                fontWeight: 700,
+                                flexShrink: 0,
+                                letterSpacing: 0.5,
+                              }}
                             >
-                              {u.full_name}
-                            </button>
-                            {isSelf && (
-                              <span style={s.youPill}>You</span>
-                            )}
+                              {initials}
+                            </div>
+                            <div>
+                              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                <button
+                                  style={s.nameLink}
+                                  onClick={() => navigate(`/users/${u.id}`)}
+                                >
+                                  {u.full_name}
+                                </button>
+                                {isSelf && <span style={s.youPill}>You</span>}
+                              </div>
+                              <div style={s.roleSublabel}>{capitalize(u.role)}</div>
+                            </div>
                           </div>
                         </td>
+
                         <td style={s.td}>{u.email}</td>
-                        <td style={s.td}>{capitalize(u.role)}</td>
+
+                        {/* Status: dot + text */}
                         <td style={s.td}>
-                          <StatusPill active={u.is_active ?? true} />
+                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            <div
+                              style={{
+                                width: 8,
+                                height: 8,
+                                borderRadius: "50%",
+                                background: active ? "#4caf50" : "#9e9e9e",
+                                flexShrink: 0,
+                              }}
+                            />
+                            <span
+                              style={{
+                                fontSize: 13,
+                                fontWeight: 500,
+                                color: active ? "#2E7D32" : "#718096",
+                              }}
+                            >
+                              {active ? "Active" : "Inactive"}
+                            </span>
+                          </div>
                         </td>
+
                         <td style={s.td}>{u.created_at ? formatDateTime(u.created_at) : "—"}</td>
                         <td style={s.td}>{u.created_by_name ?? "—"}</td>
+
+                        {/* Actions column */}
+                        {isAdminOrSuper && (
+                          <td style={{ ...s.td, textAlign: "center" }}>
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                              {/* Edit */}
+                              <button
+                                style={s.actionBtn}
+                                onClick={() => navigate(`/users/${u.id}`)}
+                                title="Edit user"
+                              >
+                                <span
+                                  className="material-symbols-outlined"
+                                  style={{ fontSize: 17, color: "#4a5568" }}
+                                >
+                                  edit
+                                </span>
+                              </button>
+                              {/* Toggle active */}
+                              {!isSelf && (
+                                <button
+                                  style={{ ...s.actionBtn, opacity: togglingId === u.id ? 0.5 : 1 }}
+                                  onClick={() => handleToggleStatus(u.id, active)}
+                                  disabled={togglingId === u.id}
+                                  title={active ? "Deactivate account" : "Activate account"}
+                                >
+                                  <span
+                                    className="material-symbols-outlined"
+                                    style={{ fontSize: 17, color: active ? "#C62828" : "#2E7D32" }}
+                                  >
+                                    {active ? "person_off" : "person"}
+                                  </span>
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        )}
                       </tr>
                     );
                   })}
@@ -428,26 +597,23 @@ export default function UserManagementPage() {
               </table>
             </div>
 
-            {/* Pagination bar */}
+            {/* Pagination */}
             <div style={s.paginationBar}>
-              <span style={s.totalCount}>{total.toLocaleString()} user{total !== 1 ? "s" : ""}</span>
-              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                <button
-                  style={{ ...s.pageBtn, opacity: pageIndex === 0 ? 0.4 : 1, cursor: pageIndex === 0 ? "default" : "pointer" }}
-                  onClick={handlePrev}
-                  disabled={pageIndex === 0}
-                >
-                  ← Previous
-                </button>
-                <span style={s.pageLabel}>Page {pageIndex + 1}</span>
-                <button
-                  style={{ ...s.pageBtn, opacity: !hasMore ? 0.4 : 1, cursor: !hasMore ? "default" : "pointer" }}
-                  onClick={handleNext}
-                  disabled={!hasMore}
-                >
-                  Next →
-                </button>
-              </div>
+              <button
+                style={{ ...s.pageBtn, opacity: pageIndex === 0 ? 0.4 : 1, cursor: pageIndex === 0 ? "default" : "pointer" }}
+                onClick={handlePrev}
+                disabled={pageIndex === 0}
+              >
+                ← Previous
+              </button>
+              <span style={s.pageLabel}>Page {pageIndex + 1}</span>
+              <button
+                style={{ ...s.pageBtn, opacity: !hasMore ? 0.4 : 1, cursor: !hasMore ? "default" : "pointer" }}
+                onClick={handleNext}
+                disabled={!hasMore}
+              >
+                Next →
+              </button>
             </div>
           </>
         )}
@@ -464,7 +630,7 @@ export default function UserManagementPage() {
   );
 }
 
-// ── Styles ─────────────────────────────────────────────────────────────────────
+// ── Page styles ────────────────────────────────────────────────────────────────
 
 const s: Record<string, React.CSSProperties> = {
   page: {
@@ -474,40 +640,64 @@ const s: Record<string, React.CSSProperties> = {
     background: "var(--c-surface-low)",
     overflow: "hidden",
   },
-  headerRow: {
+  toolbar: {
     background: "var(--c-surface-lowest)",
     borderBottom: "1px solid #e0e0e0",
-    padding: "16px 32px",
+    padding: "12px 28px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
     position: "sticky",
     top: 0,
     zIndex: 50,
-    display: "flex",
-    flexDirection: "column",
-    gap: 12,
+    flexWrap: "wrap",
   },
-  pageTitle: {
-    fontSize: 20,
-    fontWeight: 700,
-    color: "var(--c-text-primary)",
-    margin: 0,
-  },
-  topBar: {
+  toolbarLeft: {
     display: "flex",
-    gap: 12,
     alignItems: "center",
+    gap: 10,
+    flex: 1,
+    minWidth: 0,
+  },
+  toolbarRight: {
+    display: "flex",
+    alignItems: "center",
+    gap: 14,
+    flexShrink: 0,
+  },
+  filterSelect: {
+    padding: "8px 12px",
+    border: "1.5px solid #e2e8f0",
+    borderRadius: 8,
+    fontSize: 13,
+    color: "var(--c-text-primary)",
+    background: "var(--c-surface-lowest)",
+    cursor: "pointer",
+    flexShrink: 0,
+    outline: "none",
   },
   searchWrap: {
     flex: 1,
     position: "relative",
     display: "flex",
     alignItems: "center",
+    minWidth: 0,
+  },
+  searchIcon: {
+    position: "absolute",
+    left: 10,
+    fontSize: 18,
+    color: "#9aa5b4",
+    pointerEvents: "none",
+    lineHeight: 1,
   },
   searchInput: {
     width: "100%",
-    padding: "9px 36px 9px 12px",
+    padding: "8px 34px 8px 34px",
     border: "1.5px solid #e2e8f0",
     borderRadius: 8,
-    fontSize: 14,
+    fontSize: 13,
     color: "var(--c-text-primary)",
     background: "var(--c-surface-lowest)",
     outline: "none",
@@ -523,20 +713,29 @@ const s: Record<string, React.CSSProperties> = {
     alignItems: "center",
     padding: 0,
   },
-  createBtn: {
-    padding: "9px 20px",
+  countLabel: {
+    fontSize: 13,
+    color: "var(--c-text-muted)",
+    whiteSpace: "nowrap",
+  },
+  addBtn: {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    padding: "9px 18px",
     background: BLUE,
-    color: "var(--c-surface-lowest)",
+    color: "#fff",
     border: "none",
     borderRadius: 8,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: 600,
     cursor: "pointer",
     whiteSpace: "nowrap",
+    flexShrink: 0,
   },
   content: {
     flex: 1,
-    padding: "24px 32px",
+    padding: "24px 28px",
     overflowY: "auto",
     display: "flex",
     flexDirection: "column",
@@ -562,11 +761,12 @@ const s: Record<string, React.CSSProperties> = {
     borderRadius: 12,
     overflow: "hidden",
     boxShadow: "var(--shadow-card)",
+    border: "1px solid #e8eef4",
   },
   table: { width: "100%", borderCollapse: "collapse" },
   thead: { background: "#f7fafc" },
   th: {
-    padding: "12px 16px",
+    padding: "11px 16px",
     textAlign: "left",
     fontSize: 11,
     fontWeight: 700,
@@ -574,9 +774,18 @@ const s: Record<string, React.CSSProperties> = {
     textTransform: "uppercase",
     letterSpacing: 0.5,
     borderBottom: "1px solid #e2e8f0",
+    whiteSpace: "nowrap",
   },
-  tr: { borderBottom: "1px solid #f0f4f8" },
-  td: { padding: "14px 16px", fontSize: 13, color: "var(--c-text-primary)", verticalAlign: "middle" },
+  tr: {
+    borderBottom: "1px solid #f0f4f8",
+    transition: "background 0.1s",
+  },
+  td: {
+    padding: "12px 16px",
+    fontSize: 13,
+    color: "var(--c-text-primary)",
+    verticalAlign: "middle",
+  },
   nameLink: {
     background: "transparent",
     border: "none",
@@ -587,6 +796,12 @@ const s: Record<string, React.CSSProperties> = {
     padding: 0,
     textAlign: "left",
   },
+  roleSublabel: {
+    fontSize: 11,
+    color: "var(--c-text-muted)",
+    marginTop: 2,
+    fontWeight: 500,
+  },
   youPill: {
     fontSize: 10,
     fontWeight: 700,
@@ -596,13 +811,26 @@ const s: Record<string, React.CSSProperties> = {
     borderRadius: 10,
     border: "1px solid #e2e8f0",
   },
+  actionBtn: {
+    background: "none",
+    border: "1px solid #e2e8f0",
+    borderRadius: 7,
+    width: 32,
+    height: 32,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    cursor: "pointer",
+    flexShrink: 0,
+    transition: "border-color 0.15s, background 0.15s",
+  },
   paginationBar: {
     display: "flex",
-    justifyContent: "space-between",
+    justifyContent: "center",
     alignItems: "center",
-    padding: "8px 0",
+    gap: 12,
+    padding: "4px 0",
   },
-  totalCount: { fontSize: 13, color: "var(--c-text-muted)" },
   pageLabel: { fontSize: 13, color: "#4a5568", fontWeight: 500 },
   pageBtn: {
     padding: "7px 16px",
@@ -612,6 +840,7 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: 13,
     fontWeight: 500,
     color: "#4a5568",
+    cursor: "pointer",
   },
 };
 
@@ -621,7 +850,7 @@ const ms: Record<string, React.CSSProperties> = {
   overlay: {
     position: "fixed",
     inset: 0,
-    background: "rgba(0,0,0,0.45)",
+    background: "rgba(0,0,0,0.50)",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
@@ -629,33 +858,52 @@ const ms: Record<string, React.CSSProperties> = {
   },
   modal: {
     background: "var(--c-surface-lowest)",
-    borderRadius: 14,
+    borderRadius: 16,
     width: "100%",
     maxWidth: 520,
     maxHeight: "90vh",
     overflowY: "auto",
-    boxShadow: "0 20px 60px rgba(0,0,0,0.25)",
+    boxShadow: "0 24px 64px rgba(0,0,0,0.28)",
   },
   header: {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
-    padding: "20px 24px",
-    borderBottom: "1px solid #e2e8f0",
+    padding: "22px 24px",
+    background: `linear-gradient(135deg, ${BLUE_HEX} 0%, #00508a 100%)`,
+    borderRadius: "16px 16px 0 0",
     position: "sticky",
     top: 0,
-    background: "var(--c-surface-lowest)",
     zIndex: 1,
   },
-  title: { fontSize: 18, fontWeight: 700, color: "var(--c-text-primary)", margin: 0 },
-  closeBtn: {
-    background: "transparent",
-    border: "none",
+  headerLeft: {
+    display: "flex",
+    alignItems: "center",
+    gap: 14,
+  },
+  title: {
     fontSize: 18,
-    color: "var(--c-text-muted)",
+    fontWeight: 700,
+    color: "#fff",
+    margin: 0,
+    lineHeight: 1.2,
+  },
+  subtitle: {
+    fontSize: 12,
+    color: "rgba(255,255,255,0.75)",
+    marginTop: 3,
+  },
+  closeBtn: {
+    background: "rgba(255,255,255,0.15)",
+    border: "none",
+    borderRadius: 8,
+    width: 32,
+    height: 32,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
     cursor: "pointer",
-    lineHeight: 1,
-    padding: 4,
+    flexShrink: 0,
   },
   form: {
     padding: "24px",
@@ -665,7 +913,7 @@ const ms: Record<string, React.CSSProperties> = {
   },
   input: {
     padding: "10px 12px",
-    borderRadius: 7,
+    borderRadius: 8,
     border: "1.5px solid #e2e8f0",
     fontSize: 14,
     color: "var(--c-text-primary)",
@@ -676,12 +924,13 @@ const ms: Record<string, React.CSSProperties> = {
   },
   select: {
     padding: "10px 12px",
-    borderRadius: 7,
+    borderRadius: 8,
     border: "1.5px solid #e2e8f0",
     fontSize: 14,
     color: "var(--c-text-primary)",
     background: "var(--c-surface-lowest)",
     width: "100%",
+    outline: "none",
   },
   eyeBtn: {
     position: "absolute",
@@ -695,22 +944,11 @@ const ms: Record<string, React.CSSProperties> = {
     alignItems: "center",
     padding: 0,
   },
-  toggleBtn: {
-    flex: 1,
-    padding: "9px 0",
-    borderRadius: 7,
-    fontSize: 14,
-    cursor: "pointer",
-    textAlign: "center",
-    border: "1.5px solid #e2e8f0",
-    background: "#f0f4f8",
-    color: "var(--c-text-muted)",
-  },
   submitError: {
     background: "#fff5f5",
     color: "#c53030",
     border: "1px solid #fc8181",
-    borderRadius: 7,
+    borderRadius: 8,
     padding: "10px 14px",
     fontSize: 13,
     fontWeight: 500,
@@ -726,7 +964,7 @@ const ms: Record<string, React.CSSProperties> = {
     background: "var(--c-surface-lowest)",
     color: "#4a5568",
     border: "1px solid #cbd5e0",
-    borderRadius: 7,
+    borderRadius: 8,
     fontSize: 14,
     fontWeight: 600,
     cursor: "pointer",
@@ -734,9 +972,9 @@ const ms: Record<string, React.CSSProperties> = {
   submitBtn: {
     padding: "10px 24px",
     background: BLUE,
-    color: "var(--c-surface-lowest)",
+    color: "#fff",
     border: "none",
-    borderRadius: 7,
+    borderRadius: 8,
     fontSize: 14,
     fontWeight: 600,
     cursor: "pointer",

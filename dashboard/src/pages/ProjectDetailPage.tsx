@@ -589,6 +589,9 @@ export default function ProjectDetailPage() {
     fetchProperties(null, false);
   }, [fetchProperties]);
 
+  // ── Tab state ──────────────────────────────────────────────────────────
+  const [activeTab, setActiveTab] = useState<"overview" | "reports" | "properties">("overview");
+
   // ── Statistics section ─────────────────────────────────────────────────
   const [statsGranularity, setStatsGranularity] = useState<"daily" | "weekly">("daily");
 
@@ -706,532 +709,571 @@ export default function ProjectDetailPage() {
       <style>{`
         @keyframes pd-spin { to { transform: rotate(360deg); } }
         @keyframes pd-pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+        .pd-tab-btn:hover { background: #f0f4f8 !important; }
+        .pd-tab-btn-active:hover { background: transparent !important; }
       `}</style>
       <Layout>
         <Header title={headerTitle} />
+
+        {/* ── Tab bar ── */}
+        <div style={ss.tabBar}>
+          {(
+            [
+              { key: "overview", label: "Overview" },
+              { key: "reports", label: reportTotal > 0 ? `Reports (${reportTotal})` : "Reports" },
+              { key: "properties", label: propTotal > 0 ? `Properties (${propTotal})` : "Properties" },
+            ] as { key: "overview" | "reports" | "properties"; label: string }[]
+          ).map((tab) => (
+            <button
+              key={tab.key}
+              className={activeTab === tab.key ? "pd-tab-btn pd-tab-btn-active" : "pd-tab-btn"}
+              style={activeTab === tab.key ? { ...ss.tabBtn, ...ss.tabBtnActive } : ss.tabBtn}
+              onClick={() => setActiveTab(tab.key)}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
         <div style={ss.page}>
 
-          {/* ── SECTION 1: Project Header ── */}
-          <SectionCard>
-            <div style={ss.headerGrid}>
-              {/* Left */}
-              <div style={ss.headerLeft}>
-                <div style={ss.serialId}>{project.serial_id}</div>
-                <div style={ss.projectName}>{project.name}</div>
-                <div>
-                  <span style={{ ...ss.statusPill, background: statusColors.bg, color: statusColors.text }}>
-                    {formatProjectStatus(project.status)}
-                  </span>
-                </div>
-                <div style={ss.countriesRow}>
-                  {(project.countries ?? []).slice(0, 5).map((c) => (
-                    <span key={c} style={ss.countryChip}>{c}</span>
-                  ))}
-                  {(project.countries ?? []).length > 5 && (
-                    <span style={ss.countryChip}>+{project.countries.length - 5} more</span>
-                  )}
-                </div>
-                <div style={ss.dateRange}>
-                  {formatDateRange(project.start_date, project.end_date)}
-                  {isEndDatePassed(project.end_date) && (
-                    <span style={ss.pastDateBadge}>Past end date</span>
-                  )}
-                </div>
-                {project.description && (
-                  <div style={ss.description}>{project.description}</div>
-                )}
-              </div>
+          {/* ── TAB 1: Overview ── */}
+          {activeTab === "overview" && (
+            <>
+              {/* ── SECTION 1: Project Header ── */}
+              <SectionCard>
+                <div style={ss.headerGrid}>
+                  {/* Left */}
+                  <div style={ss.headerLeft}>
+                    <div style={ss.serialId}>{project.serial_id}</div>
+                    <div style={ss.projectName}>{project.name}</div>
+                    <div>
+                      <span style={{ ...ss.statusPill, background: statusColors.bg, color: statusColors.text }}>
+                        {formatProjectStatus(project.status)}
+                      </span>
+                    </div>
+                    <div style={ss.countriesRow}>
+                      {(project.countries ?? []).slice(0, 5).map((c) => (
+                        <span key={c} style={ss.countryChip}>{c}</span>
+                      ))}
+                      {(project.countries ?? []).length > 5 && (
+                        <span style={ss.countryChip}>+{project.countries.length - 5} more</span>
+                      )}
+                    </div>
+                    <div style={ss.dateRange}>
+                      {formatDateRange(project.start_date, project.end_date)}
+                      {isEndDatePassed(project.end_date) && (
+                        <span style={ss.pastDateBadge}>Past end date</span>
+                      )}
+                    </div>
+                    {project.description && (
+                      <div style={ss.description}>{project.description}</div>
+                    )}
+                  </div>
 
-              {/* Right */}
-              <div style={ss.headerRight}>
-                <div style={ss.metaBlock}>
-                  <span style={ss.metaLabel}>Created by</span>
-                  <span
-                    style={ss.metaLink}
-                    onClick={() =>
-                      project.created_by_user_id &&
-                      window.open("/users/" + project.created_by_user_id, "_blank")
-                    }
+                  {/* Right */}
+                  <div style={ss.headerRight}>
+                    <div style={ss.metaBlock}>
+                      <span style={ss.metaLabel}>Created by</span>
+                      <span
+                        style={ss.metaLink}
+                        onClick={() =>
+                          project.created_by_user_id &&
+                          window.open("/users/" + project.created_by_user_id, "_blank")
+                        }
+                      >
+                        {project.created_by_name ?? "—"}
+                      </span>
+                    </div>
+                    <div style={ss.metaBlock}>
+                      <span style={ss.metaLabel}>Date created</span>
+                      <span style={ss.metaValue}>{formatDateTime(project.created_at)}</span>
+                    </div>
+
+                    {effectiveImportStatus !== "complete" && (
+                      <div style={ss.importStatus}>
+                        {effectiveImportStatus === "running" && (
+                          <>
+                            <span style={{ ...ss.importDot, background: "#ff9800", animation: "pd-pulse 1.5s infinite" }} />
+                            <span style={ss.importText}>
+                              Importing reports — {importStatus?.import_progress ?? 0} of {importStatus?.import_total ?? 0} complete
+                            </span>
+                          </>
+                        )}
+                        {effectiveImportStatus === "pending" && (
+                          <>
+                            <span style={{ ...ss.importDot, background: "#9e9e9e" }} />
+                            <span style={ss.importText}>Import pending</span>
+                          </>
+                        )}
+                        {effectiveImportStatus === "failed" && (
+                          <>
+                            <span style={{ ...ss.importDot, background: "#f44336" }} />
+                            <span style={{ ...ss.importText, color: "#f44336" }}>
+                              Import failed — contact administrator
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    )}
+
+                    <button
+                      style={ss.exportBtn}
+                      onClick={() =>
+                        navigate("/export", {
+                          state: { prefill: { project_id: project.id, report_type: "project_summary" } },
+                        })
+                      }
+                    >
+                      Export this project →
+                    </button>
+                  </div>
+                </div>
+              </SectionCard>
+
+              {/* ── SECTION 2: Project Map ── */}
+              <SectionCard title="Project Map">
+                <div style={{ position: "relative", height: 420, borderRadius: 6, overflow: "hidden" }}>
+                  <div
+                    ref={mapContainer}
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                      background: "#dde8f0",
+                    }}
+                  />
+
+                  {effectiveImportStatus !== "complete" && (
+                    <div style={ss.mapOverlay}>
+                      Map will populate once report import is complete.
+                    </div>
+                  )}
+
+                  <div
+                    style={{
+                      ...ss.liveIndicator,
+                      background: liveStatus === "connected"
+                        ? "rgba(255,255,255,0.97)"
+                        : "rgba(255,248,240,0.97)",
+                    }}
                   >
-                    {project.created_by_name ?? "—"}
-                  </span>
+                    <div style={{ ...ss.liveDot, background: liveStatus === "connected" ? "#4caf50" : "#ff9800" }} />
+                    <span style={ss.liveText}>
+                      {liveStatus === "connected"
+                        ? `LIVE — LAST UPDATED ${secondsSince}s ago`
+                        : "LOADING MAP DATA"}
+                    </span>
+                  </div>
+
+                  <div style={ss.legend}>
+                    <div style={ss.legendTitle}>Damage Level</div>
+                    {(["complete", "partial", "minimal"] as const).map((lvl) => (
+                      <div key={lvl} style={ss.legendItem}>
+                        <div style={{ ...ss.legendDot, background: DAMAGE_COLORS[lvl] }} />
+                        <span style={ss.legendLabel}>
+                          {lvl === "complete" ? "Completely Destroyed" : lvl === "partial" ? "Partially Damaged" : "Minimal or No Damage"}
+                        </span>
+                      </div>
+                    ))}
+                    <div style={ss.legendNote}>Number on pin = report count</div>
+                  </div>
+
+                  {selectedPin && (
+                    <PropertySummaryPanel pin={selectedPin} onClose={() => setSelectedPin(null)} />
+                  )}
                 </div>
-                <div style={ss.metaBlock}>
-                  <span style={ss.metaLabel}>Date created</span>
-                  <span style={ss.metaValue}>{formatDateTime(project.created_at)}</span>
+              </SectionCard>
+
+              {/* ── SECTION 5: Statistics ── */}
+              <SectionCard title="Statistics">
+                <div style={ss.statsNote}>
+                  Showing confirmed reports only — Grey and Red flagged reports are excluded from all statistics.
                 </div>
 
-                {effectiveImportStatus !== "complete" && (
-                  <div style={ss.importStatus}>
-                    {effectiveImportStatus === "running" && (
-                      <>
-                        <span style={{ ...ss.importDot, background: "#ff9800", animation: "pd-pulse 1.5s infinite" }} />
-                        <span style={ss.importText}>
-                          Importing reports — {importStatus?.import_progress ?? 0} of {importStatus?.import_total ?? 0} complete
-                        </span>
-                      </>
-                    )}
-                    {effectiveImportStatus === "pending" && (
-                      <>
-                        <span style={{ ...ss.importDot, background: "#9e9e9e" }} />
-                        <span style={ss.importText}>Import pending</span>
-                      </>
-                    )}
-                    {effectiveImportStatus === "failed" && (
-                      <>
-                        <span style={{ ...ss.importDot, background: "#f44336" }} />
-                        <span style={{ ...ss.importText, color: "#f44336" }}>
-                          Import failed — contact administrator
-                        </span>
-                      </>
-                    )}
+                {statsLoading ? (
+                  <Spinner />
+                ) : !statsData ? (
+                  <div style={ss.emptyState}>No statistics available.</div>
+                ) : (
+                  <>
+                    {/* Summary numbers */}
+                    <div style={ss.summaryRow}>
+                      {[
+                        { label: "Total Reports", value: statsData.summary.total_reports, color: BLUE },
+                        { label: "Completely Destroyed", value: statsData.summary.completely_damaged, color: "#F44336" },
+                        { label: "Partially Damaged", value: statsData.summary.partially_damaged, color: "#FF9800" },
+                        { label: "Minimal or No Damage", value: statsData.summary.minimal_damage, color: "#4CAF50" },
+                      ].map((s) => (
+                        <div key={s.label} style={ss.summaryCard}>
+                          <div style={{ ...ss.summaryNum, color: s.color }}>{s.value.toLocaleString()}</div>
+                          <div style={ss.summaryLbl}>{s.label}</div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Reports Over Time */}
+                    <div style={ss.chartBox}>
+                      <div style={ss.chartHeader}>
+                        <span style={ss.chartTitle}>Reports Over Time</span>
+                        <div style={ss.toggleGroup}>
+                          {(["daily", "weekly"] as const).map((g) => (
+                            <button
+                              key={g}
+                              style={{ ...ss.toggleBtn, ...(statsGranularity === g ? ss.toggleActive : {}) }}
+                              onClick={() => setStatsGranularity(g)}
+                            >
+                              {g.charAt(0).toUpperCase() + g.slice(1)}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      {statsData.time_series.length === 0 ? (
+                        <div style={ss.emptyState}>No data.</div>
+                      ) : (
+                        <ResponsiveContainer width="100%" height={240}>
+                          <BarChart data={statsData.time_series} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#f0f4f8" vertical={false} />
+                            <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#718096" }} tickLine={false} interval="preserveStartEnd" />
+                            <YAxis tick={{ fontSize: 11, fill: "#718096" }} tickLine={false} axisLine={false} allowDecimals={false} />
+                            <Tooltip contentStyle={{ fontSize: 13, borderRadius: 8 }} />
+                            <Bar dataKey="count" fill={BLUE} radius={[3, 3, 0, 0]} name="Reports" />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      )}
+                    </div>
+
+                    {/* Damage pie + Infrastructure */}
+                    <div style={ss.twoCol}>
+                      <div style={ss.chartBox}>
+                        <div style={ss.chartTitle}>Damage Level Distribution</div>
+                        {pieData.length === 0 ? (
+                          <div style={ss.emptyState}>No data.</div>
+                        ) : (
+                          <ResponsiveContainer width="100%" height={240}>
+                            <PieChart>
+                              <Pie data={pieData} dataKey="count" nameKey="level" cx="50%" cy="50%" outerRadius={85} label={renderPieLabel} labelLine>
+                                {pieData.map((entry) => (
+                                  <Cell key={entry.level} fill={PIE_COLORS[entry.level] ?? "#94a3b8"} />
+                                ))}
+                              </Pie>
+                              <Tooltip contentStyle={{ fontSize: 13, borderRadius: 8 }} />
+                              <Legend iconSize={10} wrapperStyle={{ fontSize: 12 }} />
+                            </PieChart>
+                          </ResponsiveContainer>
+                        )}
+                      </div>
+
+                      <div style={ss.chartBox}>
+                        <div style={ss.chartTitle}>Reports by Infrastructure Type</div>
+                        {(statsData.infrastructure_breakdown ?? []).length === 0 ? (
+                          <div style={ss.emptyState}>No data.</div>
+                        ) : (
+                          <ResponsiveContainer width="100%" height={Math.max(240, statsData.infrastructure_breakdown.length * 36)}>
+                            <BarChart data={statsData.infrastructure_breakdown} layout="vertical" margin={{ top: 4, right: 24, left: 0, bottom: 0 }}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="#f0f4f8" horizontal={false} />
+                              <XAxis type="number" tick={{ fontSize: 11, fill: "#718096" }} tickLine={false} axisLine={false} allowDecimals={false} />
+                              <YAxis type="category" dataKey="infrastructure_type" tick={{ fontSize: 11, fill: "#4a5568" }} tickLine={false} width={180} />
+                              <Tooltip contentStyle={{ fontSize: 13, borderRadius: 8 }} />
+                              <Bar dataKey="count" fill={BLUE} radius={[0, 3, 3, 0]} name="Reports" />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Crisis type */}
+                    <div style={ss.chartBox}>
+                      <div style={ss.chartTitle}>Reports by Crisis Type</div>
+                      {(statsData.crisis_type_breakdown ?? []).length === 0 ? (
+                        <div style={ss.emptyState}>No data.</div>
+                      ) : (
+                        <ResponsiveContainer width="100%" height={Math.max(200, statsData.crisis_type_breakdown.length * 36)}>
+                          <BarChart data={statsData.crisis_type_breakdown} layout="vertical" margin={{ top: 4, right: 24, left: 0, bottom: 0 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#f0f4f8" horizontal={false} />
+                            <XAxis type="number" tick={{ fontSize: 11, fill: "#718096" }} tickLine={false} axisLine={false} allowDecimals={false} />
+                            <YAxis type="category" dataKey="crisis_type" tick={{ fontSize: 12, fill: "#4a5568" }} tickLine={false} width={150} />
+                            <Tooltip contentStyle={{ fontSize: 13, borderRadius: 8 }} />
+                            <Bar dataKey="count" fill={BLUE} radius={[0, 3, 3, 0]} name="Reports" />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      )}
+                    </div>
+                  </>
+                )}
+              </SectionCard>
+
+              {/* ── SECTION 6: Project Users ── */}
+              <SectionCard
+                title="Project Users"
+                action={
+                  isAdmin ? (
+                    <button style={ss.addUserBtn} onClick={() => setAddUserOpen((o) => !o)}>
+                      + Add User
+                    </button>
+                  ) : undefined
+                }
+              >
+                {addUserOpen && isAdmin && (
+                  <div style={ss.addUserForm}>
+                    <div style={{ position: "relative" }}>
+                      <input
+                        style={ss.addUserInput}
+                        placeholder="Search for a user…"
+                        value={addUserSearch}
+                        onChange={(e) => { setAddUserSearch(e.target.value); setAddUserSelected(null); }}
+                      />
+                      {userSearchResults.length > 0 && !addUserSelected && addUserSearch.length >= 2 && (
+                        <div style={ss.searchDropdown}>
+                          {userSearchResults.map((u) => (
+                            <button
+                              key={u.id}
+                              style={ss.searchDropdownItem}
+                              onClick={() => { setAddUserSelected(u); setAddUserSearch(u.full_name); }}
+                            >
+                              <strong>{u.full_name}</strong> — {u.email}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <select
+                      style={ss.accessSelect}
+                      value={addUserAccessLevel}
+                      onChange={(e) => setAddUserAccessLevel(e.target.value as "view_only" | "view_and_edit")}
+                    >
+                      <option value="view_only">View only</option>
+                      <option value="view_and_edit">View and Edit</option>
+                    </select>
+                    <button
+                      style={{ ...ss.addUserSubmit, opacity: addUserSelected && !addUserLoading ? 1 : 0.5 }}
+                      onClick={handleAddUser}
+                      disabled={!addUserSelected || addUserLoading}
+                    >
+                      {addUserLoading ? "Adding…" : "Add"}
+                    </button>
+                    <button
+                      style={ss.cancelBtn}
+                      onClick={() => { setAddUserOpen(false); setAddUserSearch(""); setAddUserSelected(null); }}
+                    >
+                      Cancel
+                    </button>
                   </div>
                 )}
 
+                <div style={ss.tableWrap}>
+                  <table style={ss.table}>
+                    <thead>
+                      <tr style={ss.thead}>
+                        {["Full Name", "Email", "Role", "Access Level", "Assigned", "Creator",
+                          ...(isAdmin ? ["Actions"] : [])].map((h) => (
+                          <th key={h} style={ss.th}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {projectUsers.map((u) => (
+                        <tr key={u.dashboard_user_id} style={ss.tr}>
+                          <td style={ss.td}>
+                            <span style={ss.idLink} onClick={() => window.open("/users/" + u.dashboard_user_id, "_blank")}>
+                              {u.full_name}
+                            </span>
+                          </td>
+                          <td style={ss.td}>{u.email}</td>
+                          <td style={ss.td}>{u.role.charAt(0).toUpperCase() + u.role.slice(1)}</td>
+                          <td style={ss.td}>{u.access_level === "view_only" ? "View only" : "View and Edit"}</td>
+                          <td style={ss.td}>{formatDateTime(u.assigned_at)}</td>
+                          <td style={ss.td}>
+                            {u.is_creator && <span style={ss.creatorBadge}>Assigned as Creator</span>}
+                          </td>
+                          {isAdmin && (
+                            <td style={ss.td}>
+                              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                                <select
+                                  style={ss.accessSelectSmall}
+                                  value={u.access_level}
+                                  disabled={u.is_creator}
+                                  onChange={(e) => handleChangeAccess(u.dashboard_user_id, e.target.value)}
+                                >
+                                  <option value="view_only">View only</option>
+                                  <option value="view_and_edit">View and Edit</option>
+                                </select>
+                                <button
+                                  style={{ ...ss.removeBtn, opacity: u.is_creator ? 0.4 : 1, cursor: u.is_creator ? "not-allowed" : "pointer" }}
+                                  onClick={() => !u.is_creator && handleRemoveUser(u.dashboard_user_id)}
+                                  disabled={u.is_creator}
+                                  title={u.is_creator ? "Project creator cannot be removed" : "Remove user"}
+                                >
+                                  <UserMinus size={14} />
+                                </button>
+                              </div>
+                            </td>
+                          )}
+                        </tr>
+                      ))}
+                      {projectUsers.length === 0 && (
+                        <tr>
+                          <td colSpan={isAdmin ? 7 : 6} style={ss.emptyState}>No users found.</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </SectionCard>
+
+              {/* ── SECTION 7: Export shortcut ── */}
+              <div style={ss.exportCard}>
+                <div>
+                  <div style={ss.exportCardTitle}>Export data for this project</div>
+                  <div style={ss.exportCardSub}>Generates a structured export file scoped to this project's reports.</div>
+                </div>
                 <button
-                  style={ss.exportBtn}
+                  style={ss.exportCardBtn}
                   onClick={() =>
                     navigate("/export", {
                       state: { prefill: { project_id: project.id, report_type: "project_summary" } },
                     })
                   }
                 >
-                  Export this project →
+                  Go to Export →
                 </button>
               </div>
-            </div>
-          </SectionCard>
+            </>
+          )}
 
-          {/* ── SECTION 2: Project Map ── */}
-          <SectionCard title="Project Map">
-            <div style={{ position: "relative", height: 400 }}>
-              <div ref={mapContainer} style={{ width: "100%", height: "100%" }} />
-
-              {effectiveImportStatus !== "complete" && (
-                <div style={ss.mapOverlay}>
-                  Map will populate once report import is complete.
-                </div>
-              )}
-
-              <div
-                style={{
-                  ...ss.liveIndicator,
-                  background: liveStatus === "connected"
-                    ? "rgba(255,255,255,0.97)"
-                    : "rgba(255,248,240,0.97)",
-                }}
-              >
-                <div style={{ ...ss.liveDot, background: liveStatus === "connected" ? "#4caf50" : "#ff9800" }} />
-                <span style={ss.liveText}>
-                  {liveStatus === "connected"
-                    ? `LIVE — LAST UPDATED ${secondsSince}s ago`
-                    : "LOADING MAP DATA"}
-                </span>
-              </div>
-
-              <div style={ss.legend}>
-                <div style={ss.legendTitle}>Damage Level</div>
-                {(["complete", "partial", "minimal"] as const).map((lvl) => (
-                  <div key={lvl} style={ss.legendItem}>
-                    <div style={{ ...ss.legendDot, background: DAMAGE_COLORS[lvl] }} />
-                    <span style={ss.legendLabel}>
-                      {lvl === "complete" ? "Completely Destroyed" : lvl === "partial" ? "Partially Damaged" : "Minimal or No Damage"}
-                    </span>
-                  </div>
-                ))}
-                <div style={ss.legendNote}>Number on pin = report count</div>
-              </div>
-
-              {selectedPin && (
-                <PropertySummaryPanel pin={selectedPin} onClose={() => setSelectedPin(null)} />
-              )}
-            </div>
-          </SectionCard>
-
-          {/* ── SECTION 3: Project Reports ── */}
-          <SectionCard title="Reports" badge={reportTotal}>
-            <div style={ss.filterBar}>
-              <div style={ss.flagFilterRow}>
-                {(["grey", "green", "orange", "red"] as FlagStatus[]).map((flag) => (
-                  <label key={flag} style={ss.flagCheckLabel}>
-                    <input
-                      type="checkbox"
-                      checked={reportFlagFilter.includes(flag)}
-                      onChange={() =>
-                        setReportFlagFilter((prev) =>
-                          prev.includes(flag) ? prev.filter((f) => f !== flag) : [...prev, flag]
-                        )
-                      }
-                      style={{ accentColor: BLUE, marginRight: 5 }}
-                    />
-                    <span style={{ width: 8, height: 8, borderRadius: "50%", background: FLAG_COLORS[flag], display: "inline-block", marginRight: 4, flexShrink: 0 }} />
-                    {flag.charAt(0).toUpperCase() + flag.slice(1)}
-                  </label>
-                ))}
-              </div>
-              <input
-                style={ss.searchInput}
-                placeholder="Search by Report ID…"
-                value={reportSearch}
-                onChange={(e) => setReportSearch(e.target.value)}
-              />
-            </div>
-
-            {reportsLoading ? (
-              <Spinner />
-            ) : reportItems.length === 0 ? (
-              <div style={ss.emptyState}>No reports linked to this project yet.</div>
-            ) : (
-              <>
-                <div style={ss.tableWrap}>
-                  <table style={ss.table}>
-                    <thead>
-                      <tr style={ss.thead}>
-                        {["Report ID", "Date / Time", "Country", "Damage Level", "Infrastructure", "Crisis Type", "Flag Status"].map(
-                          (h) => <th key={h} style={ss.th}>{h}</th>
-                        )}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {reportItems.map((row) => (
-                        <tr key={row.report_id} style={ss.tr}>
-                          <td style={ss.td}>
-                            <span style={ss.idLink} onClick={() => window.open("/reports/" + row.report_id, "_blank")}>
-                              {row.serial_number != null ? `#${row.serial_number}` : row.report_id.slice(0, 8).toUpperCase()}
-                            </span>
-                          </td>
-                          <td style={ss.td}>{formatDateTime(row.created_at)}</td>
-                          <td style={ss.td}>{row.country ?? "—"}</td>
-                          <td style={ss.td}><DamagePill level={row.damage_level} /></td>
-                          <td style={ss.td}>{(row.infrastructure_types ?? []).join(", ") || "—"}</td>
-                          <td style={ss.td}>{row.crisis_type ?? "—"}</td>
-                          <td style={ss.td}><FlagPill status={row.flag_status} /></td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                {reportHasMore && (
-                  <div style={ss.loadMoreRow}>
-                    <button style={ss.loadMoreBtn} onClick={() => fetchReports(reportCursor, true)} disabled={reportsLoadingMore}>
-                      {reportsLoadingMore ? "Loading…" : "Load More"}
-                    </button>
-                  </div>
-                )}
-              </>
-            )}
-          </SectionCard>
-
-          {/* ── SECTION 4: Project Properties ── */}
-          <SectionCard title="Properties" badge={propTotal}>
-            {propsLoading ? (
-              <Spinner />
-            ) : propItems.length === 0 ? (
-              <div style={ss.emptyState}>No properties linked to this project yet.</div>
-            ) : (
-              <>
-                <div style={ss.tableWrap}>
-                  <table style={ss.table}>
-                    <thead>
-                      <tr style={ss.thead}>
-                        {["Property ID", "Property Name", "Country", "Current Damage", "Confirmed Status", "Conflict", "Total Reports", "Most Recent Report"].map(
-                          (h) => <th key={h} style={ss.th}>{h}</th>
-                        )}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {propItems.map((row) => (
-                        <tr key={row.property_id} style={ss.tr}>
-                          <td style={ss.td}>
-                            <span
-                              style={ss.idLink}
-                              onClick={() => window.open("/locations/" + row.property_id + "?project_id=" + serialId, "_blank")}
-                            >
-                              {row.property_id.slice(0, 8)}…
-                            </span>
-                          </td>
-                          <td style={ss.td}>{row.display_name}</td>
-                          <td style={ss.td}>{row.country ?? "—"}</td>
-                          <td style={ss.td}><DamagePill level={row.current_damage_level} /></td>
-                          <td style={ss.td}>
-                            {row.confirmed_status
-                              ? <span style={ss.confirmedPill}><span className="material-symbols-outlined" style={{ fontSize: 12, verticalAlign: "middle", marginRight: 3, fontVariationSettings: "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 20" }}>lock</span>{formatDamageLevel(row.confirmed_status)}</span>
-                              : null}
-                          </td>
-                          <td style={ss.td}>
-                            {row.has_conflict_warning && <AlertTriangle size={16} color="#e65100" />}
-                          </td>
-                          <td style={{ ...ss.td, textAlign: "center" }}>{row.total_reports}</td>
-                          <td style={ss.td}>{formatDateTime(row.most_recent_report_at)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                {propHasMore && (
-                  <div style={ss.loadMoreRow}>
-                    <button style={ss.loadMoreBtn} onClick={() => fetchProperties(propCursor, true)} disabled={propsLoadingMore}>
-                      {propsLoadingMore ? "Loading…" : "Load More"}
-                    </button>
-                  </div>
-                )}
-              </>
-            )}
-          </SectionCard>
-
-          {/* ── SECTION 5: Statistics ── */}
-          <SectionCard title="Statistics">
-            <div style={ss.statsNote}>
-              Showing confirmed reports only — Grey and Red flagged reports are excluded from all statistics.
-            </div>
-
-            {statsLoading ? (
-              <Spinner />
-            ) : !statsData ? (
-              <div style={ss.emptyState}>No statistics available.</div>
-            ) : (
-              <>
-                {/* Summary numbers */}
-                <div style={ss.summaryRow}>
-                  {[
-                    { label: "Total Reports", value: statsData.summary.total_reports, color: BLUE },
-                    { label: "Completely Destroyed", value: statsData.summary.completely_damaged, color: "#F44336" },
-                    { label: "Partially Damaged", value: statsData.summary.partially_damaged, color: "#FF9800" },
-                    { label: "Minimal or No Damage", value: statsData.summary.minimal_damage, color: "#4CAF50" },
-                  ].map((s) => (
-                    <div key={s.label} style={ss.summaryCard}>
-                      <div style={{ ...ss.summaryNum, color: s.color }}>{s.value.toLocaleString()}</div>
-                      <div style={ss.summaryLbl}>{s.label}</div>
-                    </div>
+          {/* ── TAB 2: Reports ── */}
+          {activeTab === "reports" && (
+            <SectionCard title="Reports" badge={reportTotal}>
+              <div style={ss.filterBar}>
+                <div style={ss.flagFilterRow}>
+                  {(["grey", "green", "orange", "red"] as FlagStatus[]).map((flag) => (
+                    <label key={flag} style={ss.flagCheckLabel}>
+                      <input
+                        type="checkbox"
+                        checked={reportFlagFilter.includes(flag)}
+                        onChange={() =>
+                          setReportFlagFilter((prev) =>
+                            prev.includes(flag) ? prev.filter((f) => f !== flag) : [...prev, flag]
+                          )
+                        }
+                        style={{ accentColor: BLUE, marginRight: 5 }}
+                      />
+                      <span style={{ width: 8, height: 8, borderRadius: "50%", background: FLAG_COLORS[flag], display: "inline-block", marginRight: 4, flexShrink: 0 }} />
+                      {flag.charAt(0).toUpperCase() + flag.slice(1)}
+                    </label>
                   ))}
                 </div>
-
-                {/* Reports Over Time */}
-                <div style={ss.chartBox}>
-                  <div style={ss.chartHeader}>
-                    <span style={ss.chartTitle}>Reports Over Time</span>
-                    <div style={ss.toggleGroup}>
-                      {(["daily", "weekly"] as const).map((g) => (
-                        <button
-                          key={g}
-                          style={{ ...ss.toggleBtn, ...(statsGranularity === g ? ss.toggleActive : {}) }}
-                          onClick={() => setStatsGranularity(g)}
-                        >
-                          {g.charAt(0).toUpperCase() + g.slice(1)}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  {statsData.time_series.length === 0 ? (
-                    <div style={ss.emptyState}>No data.</div>
-                  ) : (
-                    <ResponsiveContainer width="100%" height={240}>
-                      <BarChart data={statsData.time_series} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#f0f4f8" vertical={false} />
-                        <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#718096" }} tickLine={false} interval="preserveStartEnd" />
-                        <YAxis tick={{ fontSize: 11, fill: "#718096" }} tickLine={false} axisLine={false} allowDecimals={false} />
-                        <Tooltip contentStyle={{ fontSize: 13, borderRadius: 8 }} />
-                        <Bar dataKey="count" fill={BLUE} radius={[3, 3, 0, 0]} name="Reports" />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  )}
-                </div>
-
-                {/* Damage pie + Infrastructure */}
-                <div style={ss.twoCol}>
-                  <div style={ss.chartBox}>
-                    <div style={ss.chartTitle}>Damage Level Distribution</div>
-                    {pieData.length === 0 ? (
-                      <div style={ss.emptyState}>No data.</div>
-                    ) : (
-                      <ResponsiveContainer width="100%" height={240}>
-                        <PieChart>
-                          <Pie data={pieData} dataKey="count" nameKey="level" cx="50%" cy="50%" outerRadius={85} label={renderPieLabel} labelLine>
-                            {pieData.map((entry) => (
-                              <Cell key={entry.level} fill={PIE_COLORS[entry.level] ?? "#94a3b8"} />
-                            ))}
-                          </Pie>
-                          <Tooltip contentStyle={{ fontSize: 13, borderRadius: 8 }} />
-                          <Legend iconSize={10} wrapperStyle={{ fontSize: 12 }} />
-                        </PieChart>
-                      </ResponsiveContainer>
-                    )}
-                  </div>
-
-                  <div style={ss.chartBox}>
-                    <div style={ss.chartTitle}>Reports by Infrastructure Type</div>
-                    {(statsData.infrastructure_breakdown ?? []).length === 0 ? (
-                      <div style={ss.emptyState}>No data.</div>
-                    ) : (
-                      <ResponsiveContainer width="100%" height={Math.max(240, statsData.infrastructure_breakdown.length * 36)}>
-                        <BarChart data={statsData.infrastructure_breakdown} layout="vertical" margin={{ top: 4, right: 24, left: 0, bottom: 0 }}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#f0f4f8" horizontal={false} />
-                          <XAxis type="number" tick={{ fontSize: 11, fill: "#718096" }} tickLine={false} axisLine={false} allowDecimals={false} />
-                          <YAxis type="category" dataKey="infrastructure_type" tick={{ fontSize: 11, fill: "#4a5568" }} tickLine={false} width={180} />
-                          <Tooltip contentStyle={{ fontSize: 13, borderRadius: 8 }} />
-                          <Bar dataKey="count" fill={BLUE} radius={[0, 3, 3, 0]} name="Reports" />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    )}
-                  </div>
-                </div>
-
-                {/* Crisis type */}
-                <div style={ss.chartBox}>
-                  <div style={ss.chartTitle}>Reports by Crisis Type</div>
-                  {(statsData.crisis_type_breakdown ?? []).length === 0 ? (
-                    <div style={ss.emptyState}>No data.</div>
-                  ) : (
-                    <ResponsiveContainer width="100%" height={Math.max(200, statsData.crisis_type_breakdown.length * 36)}>
-                      <BarChart data={statsData.crisis_type_breakdown} layout="vertical" margin={{ top: 4, right: 24, left: 0, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#f0f4f8" horizontal={false} />
-                        <XAxis type="number" tick={{ fontSize: 11, fill: "#718096" }} tickLine={false} axisLine={false} allowDecimals={false} />
-                        <YAxis type="category" dataKey="crisis_type" tick={{ fontSize: 12, fill: "#4a5568" }} tickLine={false} width={150} />
-                        <Tooltip contentStyle={{ fontSize: 13, borderRadius: 8 }} />
-                        <Bar dataKey="count" fill={BLUE} radius={[0, 3, 3, 0]} name="Reports" />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  )}
-                </div>
-              </>
-            )}
-          </SectionCard>
-
-          {/* ── SECTION 6: Project Users ── */}
-          <SectionCard
-            title="Project Users"
-            action={
-              isAdmin ? (
-                <button style={ss.addUserBtn} onClick={() => setAddUserOpen((o) => !o)}>
-                  + Add User
-                </button>
-              ) : undefined
-            }
-          >
-            {addUserOpen && isAdmin && (
-              <div style={ss.addUserForm}>
-                <div style={{ position: "relative" }}>
-                  <input
-                    style={ss.addUserInput}
-                    placeholder="Search for a user…"
-                    value={addUserSearch}
-                    onChange={(e) => { setAddUserSearch(e.target.value); setAddUserSelected(null); }}
-                  />
-                  {userSearchResults.length > 0 && !addUserSelected && addUserSearch.length >= 2 && (
-                    <div style={ss.searchDropdown}>
-                      {userSearchResults.map((u) => (
-                        <button
-                          key={u.id}
-                          style={ss.searchDropdownItem}
-                          onClick={() => { setAddUserSelected(u); setAddUserSearch(u.full_name); }}
-                        >
-                          <strong>{u.full_name}</strong> — {u.email}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <select
-                  style={ss.accessSelect}
-                  value={addUserAccessLevel}
-                  onChange={(e) => setAddUserAccessLevel(e.target.value as "view_only" | "view_and_edit")}
-                >
-                  <option value="view_only">View only</option>
-                  <option value="view_and_edit">View and Edit</option>
-                </select>
-                <button
-                  style={{ ...ss.addUserSubmit, opacity: addUserSelected && !addUserLoading ? 1 : 0.5 }}
-                  onClick={handleAddUser}
-                  disabled={!addUserSelected || addUserLoading}
-                >
-                  {addUserLoading ? "Adding…" : "Add"}
-                </button>
-                <button
-                  style={ss.cancelBtn}
-                  onClick={() => { setAddUserOpen(false); setAddUserSearch(""); setAddUserSelected(null); }}
-                >
-                  Cancel
-                </button>
+                <input
+                  style={ss.searchInput}
+                  placeholder="Search by Report ID…"
+                  value={reportSearch}
+                  onChange={(e) => setReportSearch(e.target.value)}
+                />
               </div>
-            )}
 
-            <div style={ss.tableWrap}>
-              <table style={ss.table}>
-                <thead>
-                  <tr style={ss.thead}>
-                    {["Full Name", "Email", "Role", "Access Level", "Assigned", "Creator",
-                      ...(isAdmin ? ["Actions"] : [])].map((h) => (
-                      <th key={h} style={ss.th}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {projectUsers.map((u) => (
-                    <tr key={u.dashboard_user_id} style={ss.tr}>
-                      <td style={ss.td}>
-                        <span style={ss.idLink} onClick={() => window.open("/users/" + u.dashboard_user_id, "_blank")}>
-                          {u.full_name}
-                        </span>
-                      </td>
-                      <td style={ss.td}>{u.email}</td>
-                      <td style={ss.td}>{u.role.charAt(0).toUpperCase() + u.role.slice(1)}</td>
-                      <td style={ss.td}>{u.access_level === "view_only" ? "View only" : "View and Edit"}</td>
-                      <td style={ss.td}>{formatDateTime(u.assigned_at)}</td>
-                      <td style={ss.td}>
-                        {u.is_creator && <span style={ss.creatorBadge}>Assigned as Creator</span>}
-                      </td>
-                      {isAdmin && (
-                        <td style={ss.td}>
-                          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                            <select
-                              style={ss.accessSelectSmall}
-                              value={u.access_level}
-                              disabled={u.is_creator}
-                              onChange={(e) => handleChangeAccess(u.dashboard_user_id, e.target.value)}
-                            >
-                              <option value="view_only">View only</option>
-                              <option value="view_and_edit">View and Edit</option>
-                            </select>
-                            <button
-                              style={{ ...ss.removeBtn, opacity: u.is_creator ? 0.4 : 1, cursor: u.is_creator ? "not-allowed" : "pointer" }}
-                              onClick={() => !u.is_creator && handleRemoveUser(u.dashboard_user_id)}
-                              disabled={u.is_creator}
-                              title={u.is_creator ? "Project creator cannot be removed" : "Remove user"}
-                            >
-                              <UserMinus size={14} />
-                            </button>
-                          </div>
-                        </td>
-                      )}
-                    </tr>
-                  ))}
-                  {projectUsers.length === 0 && (
-                    <tr>
-                      <td colSpan={isAdmin ? 7 : 6} style={ss.emptyState}>No users found.</td>
-                    </tr>
+              {reportsLoading ? (
+                <Spinner />
+              ) : reportItems.length === 0 ? (
+                <div style={ss.emptyState}>No reports linked to this project yet.</div>
+              ) : (
+                <>
+                  <div style={ss.tableWrap}>
+                    <table style={ss.table}>
+                      <thead>
+                        <tr style={ss.thead}>
+                          {["Report ID", "Date / Time", "Country", "Damage Level", "Infrastructure", "Crisis Type", "Flag Status"].map(
+                            (h) => <th key={h} style={ss.th}>{h}</th>
+                          )}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {reportItems.map((row) => (
+                          <tr key={row.report_id} style={ss.tr}>
+                            <td style={ss.td}>
+                              <span style={ss.idLink} onClick={() => window.open("/reports/" + row.report_id, "_blank")}>
+                                {row.serial_number != null ? `#${row.serial_number}` : row.report_id.slice(0, 8).toUpperCase()}
+                              </span>
+                            </td>
+                            <td style={ss.td}>{formatDateTime(row.created_at)}</td>
+                            <td style={ss.td}>{row.country ?? "—"}</td>
+                            <td style={ss.td}><DamagePill level={row.damage_level} /></td>
+                            <td style={ss.td}>{(row.infrastructure_types ?? []).join(", ") || "—"}</td>
+                            <td style={ss.td}>{row.crisis_type ?? "—"}</td>
+                            <td style={ss.td}><FlagPill status={row.flag_status} /></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {reportHasMore && (
+                    <div style={ss.loadMoreRow}>
+                      <button style={ss.loadMoreBtn} onClick={() => fetchReports(reportCursor, true)} disabled={reportsLoadingMore}>
+                        {reportsLoadingMore ? "Loading…" : "Load More"}
+                      </button>
+                    </div>
                   )}
-                </tbody>
-              </table>
-            </div>
-          </SectionCard>
+                </>
+              )}
+            </SectionCard>
+          )}
 
-          {/* ── SECTION 7: Export shortcut ── */}
-          <div style={ss.exportCard}>
-            <div>
-              <div style={ss.exportCardTitle}>Export data for this project</div>
-              <div style={ss.exportCardSub}>Generates a structured export file scoped to this project's reports.</div>
-            </div>
-            <button
-              style={ss.exportCardBtn}
-              onClick={() =>
-                navigate("/export", {
-                  state: { prefill: { project_id: project.id, report_type: "project_summary" } },
-                })
-              }
-            >
-              Go to Export →
-            </button>
-          </div>
+          {/* ── TAB 3: Properties ── */}
+          {activeTab === "properties" && (
+            <SectionCard title="Properties" badge={propTotal}>
+              {propsLoading ? (
+                <Spinner />
+              ) : propItems.length === 0 ? (
+                <div style={ss.emptyState}>No properties linked to this project yet.</div>
+              ) : (
+                <>
+                  <div style={ss.tableWrap}>
+                    <table style={ss.table}>
+                      <thead>
+                        <tr style={ss.thead}>
+                          {["Property ID", "Property Name", "Country", "Current Damage", "Confirmed Status", "Conflict", "Total Reports", "Most Recent Report"].map(
+                            (h) => <th key={h} style={ss.th}>{h}</th>
+                          )}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {propItems.map((row) => (
+                          <tr key={row.property_id} style={ss.tr}>
+                            <td style={ss.td}>
+                              <span
+                                style={ss.idLink}
+                                onClick={() => window.open("/locations/" + row.property_id + "?project_id=" + serialId, "_blank")}
+                              >
+                                {row.property_id.slice(0, 8)}…
+                              </span>
+                            </td>
+                            <td style={ss.td}>{row.display_name}</td>
+                            <td style={ss.td}>{row.country ?? "—"}</td>
+                            <td style={ss.td}><DamagePill level={row.current_damage_level} /></td>
+                            <td style={ss.td}>
+                              {row.confirmed_status
+                                ? <span style={ss.confirmedPill}><span className="material-symbols-outlined" style={{ fontSize: 12, verticalAlign: "middle", marginRight: 3, fontVariationSettings: "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 20" }}>lock</span>{formatDamageLevel(row.confirmed_status)}</span>
+                                : null}
+                            </td>
+                            <td style={ss.td}>
+                              {row.has_conflict_warning && <AlertTriangle size={16} color="#e65100" />}
+                            </td>
+                            <td style={{ ...ss.td, textAlign: "center" }}>{row.total_reports}</td>
+                            <td style={ss.td}>{formatDateTime(row.most_recent_report_at)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {propHasMore && (
+                    <div style={ss.loadMoreRow}>
+                      <button style={ss.loadMoreBtn} onClick={() => fetchProperties(propCursor, true)} disabled={propsLoadingMore}>
+                        {propsLoadingMore ? "Loading…" : "Load More"}
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+            </SectionCard>
+          )}
 
         </div>
       </Layout>
@@ -1242,6 +1284,34 @@ export default function ProjectDetailPage() {
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const ss: Record<string, React.CSSProperties> = {
+  tabBar: {
+    display: "flex",
+    gap: 0,
+    borderBottom: "2px solid #e0e8f0",
+    background: "#fff",
+    padding: "0 32px",
+    position: "sticky",
+    top: 64,
+    zIndex: 49,
+  },
+  tabBtn: {
+    padding: "14px 22px",
+    fontSize: 14,
+    fontWeight: 600,
+    color: "#718096",
+    background: "transparent",
+    border: "none",
+    borderBottom: "3px solid transparent",
+    marginBottom: -2,
+    cursor: "pointer",
+    transition: "color 0.15s, border-color 0.15s",
+    whiteSpace: "nowrap" as const,
+  },
+  tabBtnActive: {
+    color: BLUE,
+    borderBottomColor: BLUE,
+    background: "transparent",
+  },
   page: {
     padding: "24px 32px",
     display: "flex",
