@@ -759,8 +759,8 @@ export default function ReporterDetailPage() {
     );
   }
 
-  // Short readable ID: first 8 chars of UUID + ellipsis
-  const shortId = reporter.reporter_id.slice(0, 8) + "…";
+  // Short readable ID: sequential display_id (integer)
+  const shortId = `#${reporter.reporter_id}`;
   // Display name: decrypted name if available, else "Reporter #<shortId>"
   const displayName = reporter.name || null;
 
@@ -795,7 +795,7 @@ export default function ReporterDetailPage() {
                     borderRadius: "var(--radius-sm)",
                     padding: "2px 8px",
                     userSelect: "all" as const,
-                  }} title={reporter.reporter_id}>
+                  }} title={reporter.uuid || String(reporter.reporter_id)}>
                     {shortId}
                   </span>
                 </>

@@ -466,9 +466,9 @@ export default function ReportersPage() {
                               e.stopPropagation();
                               openProfile(row.reporter_id);
                             }}
-                            title={row.reporter_id}
+                            title={row.uuid || String(row.reporter_id)}
                           >
-                            {row.reporter_id.slice(0, 8)}…
+                            #{row.reporter_id}
                           </button>
                         </td>
                         <td style={s.td}>{formatProfileType(row.profile_type)}</td>
