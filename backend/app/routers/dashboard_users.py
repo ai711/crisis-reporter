@@ -89,13 +89,6 @@ class CreateUserRequest(BaseModel):
     is_active: bool = True
     contact_number: Optional[str] = None
 
-    @validator("role")
-    def valid_role(cls, v):
-        allowed = ["superadmin", "admin", "analyst"]
-        if v not in allowed:
-            raise ValueError(f"Role must be one of: {', '.join(allowed)}")
-        return v
-
     @validator("email")
     def valid_email(cls, v):
         if "@" not in v:
@@ -110,12 +103,6 @@ class UpdateUserRequest(BaseModel):
     role: Optional[str] = None
     is_active: Optional[bool] = None
     password: Optional[str] = None
-
-    @validator("role")
-    def valid_role(cls, v):
-        if v is not None and v not in ("superadmin", "admin", "analyst"):
-            raise ValueError("Role must be one of: superadmin, admin, analyst")
-        return v
 
 
 class StatusUpdateRequest(BaseModel):
@@ -268,6 +255,8 @@ async def get_user(
         {
             "serial_id": pu.crisis.serial_id if pu.crisis else None,
             "project_name": pu.crisis.name if pu.crisis else None,
+            "countries": pu.crisis.countries if pu.crisis else [],
+            "status": pu.crisis.status if pu.crisis else None,
             "access_level": pu.access_level,
             "is_creator": pu.is_creator,
             "assigned_at": pu.assigned_at.isoformat() if pu.assigned_at else None,
@@ -390,7 +379,7 @@ async def get_user_projects(
     return [
         {
             "serial_id": pu.crisis.serial_id if pu.crisis else None,
-            "name": pu.crisis.name if pu.crisis else None,
+            "project_name": pu.crisis.name if pu.crisis else None,
             "countries": pu.crisis.countries if pu.crisis else [],
             "status": pu.crisis.status if pu.crisis else None,
             "access_level": pu.access_level,

@@ -49,8 +49,6 @@ function StatusConfirmModal({ user, action, onClose, onSuccess }: StatusModalPro
   const [error, setError] = useState("");
 
   const isDeactivate = action === "deactivate";
-  const commentRequired = isDeactivate;
-  const isValid = commentRequired ? comment.trim().length >= 10 : true;
 
   async function handleConfirm() {
     setError("");
@@ -82,8 +80,7 @@ function StatusConfirmModal({ user, action, onClose, onSuccess }: StatusModalPro
           {isDeactivate && (
             <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
               <label style={{ fontSize: 13, fontWeight: 600, color: "#4a5568" }}>
-                Reason <span style={{ color: "#e53e3e" }}>*</span>
-                <span style={{ fontWeight: 400, color: "#718096", marginLeft: 4 }}>(min. 10 characters)</span>
+                Reason <span style={{ fontWeight: 400, color: "#718096" }}>(optional)</span>
               </label>
               <textarea
                 value={comment}
@@ -101,9 +98,6 @@ function StatusConfirmModal({ user, action, onClose, onSuccess }: StatusModalPro
                   fontFamily: "inherit",
                 }}
               />
-              <span style={{ fontSize: 12, color: comment.trim().length >= 10 ? "#2E7D32" : "#718096" }}>
-                {comment.trim().length} / 10 characters minimum
-              </span>
             </div>
           )}
 
@@ -117,7 +111,7 @@ function StatusConfirmModal({ user, action, onClose, onSuccess }: StatusModalPro
             <button style={ms.cancelBtn} onClick={onClose}>Cancel</button>
             <button
               onClick={handleConfirm}
-              disabled={!isValid || submitting}
+              disabled={submitting}
               style={{
                 padding: "10px 24px",
                 background: isDeactivate ? "#C62828" : "#2E7D32",
@@ -126,8 +120,8 @@ function StatusConfirmModal({ user, action, onClose, onSuccess }: StatusModalPro
                 borderRadius: 7,
                 fontSize: 14,
                 fontWeight: 600,
-                cursor: !isValid || submitting ? "default" : "pointer",
-                opacity: !isValid || submitting ? 0.5 : 1,
+                cursor: submitting ? "default" : "pointer",
+                opacity: submitting ? 0.5 : 1,
               }}
             >
               {submitting ? "Saving…" : isDeactivate ? "Deactivate" : "Reactivate"}
@@ -414,7 +408,6 @@ export default function UserDetailPage() {
                 <div style={d.profileName}>{user.full_name}</div>
                 <div style={d.profileEmail}>{user.email}</div>
                 <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontSize: 13, color: "#4a5568" }}>{capitalize(user.role)}</span>
                   <span style={roleBadgeStyle(user.role)}>{capitalize(user.role)}</span>
                 </div>
               </div>
@@ -479,10 +472,11 @@ export default function UserDetailPage() {
           <div style={d.cardTitle}>Account Details</div>
           <div style={d.detailGrid}>
             <DetailRow label="First Name" value={user.first_name || "—"} />
-            <DetailRow label="Role" value={capitalize(user.role)} />
             <DetailRow label="Last Name" value={user.last_name || "—"} />
-            <DetailRow label="Account Status" value={isActive ? "Active" : "Inactive"} valueColor={isActive ? "#2E7D32" : "#C62828"} />
+            <DetailRow label="Email Address" value={user.email} />
             <DetailRow label="Contact Number" value={user.contact_number || "—"} />
+            <DetailRow label="Role" value={capitalize(user.role)} />
+            <DetailRow label="Account Status" value={isActive ? "Active" : "Inactive"} valueColor={isActive ? "#2E7D32" : "#C62828"} />
             <DetailRow label="Date Created" value={formatDateTime(user.created_at ?? null)} />
           </div>
         </div>
@@ -514,7 +508,7 @@ export default function UserDetailPage() {
                           <td style={d.td}>
                             <button
                               style={{ background: "transparent", border: "none", color: BLUE, cursor: "pointer", fontSize: 13, fontWeight: 600, padding: 0 }}
-                              onClick={() => navigate(`/projects/${a.serial_id}`)}
+                              onClick={() => window.open(`/projects/${a.serial_id}`, "_blank")}
                             >
                               {a.project_name}
                             </button>

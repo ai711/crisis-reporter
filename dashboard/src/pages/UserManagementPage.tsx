@@ -393,6 +393,7 @@ export default function UserManagementPage() {
                     <th style={s.th}>Role</th>
                     <th style={s.th}>Account Status</th>
                     <th style={s.th}>Date Created</th>
+                    <th style={s.th}>Created By</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -419,6 +420,7 @@ export default function UserManagementPage() {
                           <StatusPill active={u.is_active ?? true} />
                         </td>
                         <td style={s.td}>{u.created_at ? formatDateTime(u.created_at) : "—"}</td>
+                        <td style={s.td}>{u.created_by_name ?? "—"}</td>
                       </tr>
                     );
                   })}
