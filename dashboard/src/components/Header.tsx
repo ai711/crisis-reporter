@@ -231,15 +231,6 @@ function NotificationDropdown({
         )}
       </div>
 
-      {/* Footer — View all */}
-      <div style={{ padding: "10px 16px", background: "#f2f4f7", textAlign: "center" }}>
-        <button
-          onClick={() => { onNavigate("/notifications"); onClose(); }}
-          style={{ fontSize: 12, fontWeight: 600, color: "#00508a", background: "none", border: "none", cursor: "pointer", padding: 0 }}
-        >
-          View all notifications →
-        </button>
-      </div>
     </div>
   );
 }

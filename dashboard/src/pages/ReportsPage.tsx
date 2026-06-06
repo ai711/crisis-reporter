@@ -145,9 +145,6 @@ export default function ReportsPage() {
   const filtersRef = useRef(filters);
   filtersRef.current = filters;
 
-  // Row selection
-  const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
-
   // Pagination
   const [pageSize, setPageSize] = useState(100);
   const [page, setPage] = useState(1);
@@ -310,23 +307,6 @@ export default function ReportsPage() {
     window.open(`/reports/${id}`, "_blank");
   }
 
-  function toggleRow(id: string) {
-    setSelectedRows((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  }
-
-  function toggleAllRows() {
-    const ids = (data?.items ?? []).map((r) => r.id);
-    if (selectedRows.size === ids.length && ids.length > 0) {
-      setSelectedRows(new Set());
-    } else {
-      setSelectedRows(new Set(ids));
-    }
-  }
-
   // ── Computed ───────────────────────────────────────────────────────────────
 
   const activeCount = countActiveFilters(filters);
@@ -334,7 +314,6 @@ export default function ReportsPage() {
   const startRecord = data ? (page - 1) * pageSize + 1 : 0;
   const endRecord = data ? (page - 1) * pageSize + items.length : 0;
   const totalPages = data ? Math.ceil(data.total / pageSize) : 0;
-  const allSelected = items.length > 0 && selectedRows.size === items.length;
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -647,14 +626,6 @@ export default function ReportsPage() {
               <table style={styles.table}>
                 <thead>
                   <tr style={styles.theadRow}>
-                    <th style={{ ...styles.th, width: 48, textAlign: "center" }}>
-                      <input
-                        type="checkbox"
-                        checked={allSelected}
-                        onChange={toggleAllRows}
-                        style={{ cursor: "pointer" }}
-                      />
-                    </th>
                     <th style={styles.th}>Report ID</th>
                     <th style={styles.th}>Date &amp; Time</th>
                     <th style={styles.th}>Country</th>
@@ -669,7 +640,6 @@ export default function ReportsPage() {
                 <tbody>
                   {items.map((report: ReportListItem) => {
                     const flagColor = FLAG_COLORS[report.flag_status];
-                    const isSelected = selectedRows.has(report.id);
                     const dmg = DAMAGE_PILL[report.damage_level];
                     return (
                       <tr
@@ -677,32 +647,15 @@ export default function ReportsPage() {
                         style={{
                           ...styles.tableRow,
                           borderLeft: `4px solid ${flagColor}`,
-                          background: isSelected ? "rgba(0,80,138,0.04)" : undefined,
                         }}
                         onMouseEnter={(e) => {
-                          if (!isSelected) (e.currentTarget as HTMLElement).style.background = "#f0f6ff";
+                          (e.currentTarget as HTMLElement).style.background = "#f0f6ff";
                         }}
                         onMouseLeave={(e) => {
-                          (e.currentTarget as HTMLElement).style.background = isSelected
-                            ? "rgba(0,80,138,0.04)"
-                            : "";
+                          (e.currentTarget as HTMLElement).style.background = "";
                         }}
                         onClick={() => openReport(report.id)}
                       >
-                        {/* Checkbox */}
-                        <td
-                          style={{ ...styles.td, textAlign: "center" }}
-                          onClick={(e) => { e.stopPropagation(); toggleRow(report.id); }}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() => toggleRow(report.id)}
-                            style={{ cursor: "pointer" }}
-                            onClick={(e) => e.stopPropagation()}
-                          />
-                        </td>
-
                         {/* Report ID */}
                         <td style={styles.td}>
                           <span style={styles.idLink} title={report.id}>
@@ -793,7 +746,7 @@ export default function ReportsPage() {
                   })}
                   {items.length === 0 && (
                     <tr>
-                      <td colSpan={10} style={styles.emptyCell}>No reports found.</td>
+                      <td colSpan={9} style={styles.emptyCell}>No reports found.</td>
                     </tr>
                   )}
                 </tbody>

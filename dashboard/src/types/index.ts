@@ -211,6 +211,7 @@ export type ProfileType = 'anonymous_no_reports' | 'anonymous_with_reports' | 'n
 
 export interface ReporterListRow {
   reporter_id: string;
+  uuid: string;
   profile_type: ProfileType;
   created_at: string;
   country: string | null;

@@ -4,10 +4,9 @@ import maplibregl, { GeoJSONSource } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import Header from "../components/Header";
 import PropertySummaryPanel from "../components/PropertySummaryPanel";
-import { useAuthStore } from "../stores/authStore";
 import { useSSE } from "../hooks/useSSE";
 import api from "../services/api";
-import type { MapPin, DashboardStats, Crisis, SSEEvent } from "../types";
+import type { MapPin, DashboardStats, SSEEvent } from "../types";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -17,12 +16,6 @@ const DAMAGE_COLORS: Record<string, string> = {
   minimal: "#38a169",
   partial: "#f2994a",
   complete: "#e53e3e",
-};
-
-const DAMAGE_LABELS: Record<string, string> = {
-  minimal: "Minimal or No Damage",
-  partial: "Partially Damaged",
-  complete: "Completely Destroyed",
 };
 
 // ── SVG icons ─────────────────────────────────────────────────────────────────
@@ -58,14 +51,11 @@ export default function MainMapPage() {
   const map = useRef<maplibregl.Map | null>(null);
   // Stable ref so map click handlers (defined once) always call current setter.
   const setSelectedPinRef = useRef<((p: MapPin | null) => void) | null>(null);
-  // Prevents repeated flyTo for the same crisis.
-  const lastFlyToCrisisRef = useRef<string | null>(null);
   // Used to detect outside-clicks for chip dropdown close.
   const pillRef = useRef<HTMLDivElement>(null);
 
   // ── Store ─────────────────────────────────────────────────────────────────
   const queryClient = useQueryClient();
-  const { activeCrisisId, activeCrisisName, setActiveCrisis } = useAuthStore();
 
   // ── State ─────────────────────────────────────────────────────────────────
   const [liveStatus, setLiveStatus] = useState<"connected" | "disconnected">("disconnected");
@@ -80,7 +70,11 @@ export default function MainMapPage() {
   const [flagMode, setFlagMode] = useState<string>("default");
   const [damageLevel, setDamageLevel] = useState<string[]>([]);
   const [crisisType, setCrisisType] = useState<string[]>([]);
-  const [dateFrom, setDateFrom] = useState("");
+  const [dateFrom, setDateFrom] = useState(() => {
+    const d = new Date();
+    d.setMonth(d.getMonth() - 3);
+    return d.toISOString().split("T")[0]; // e.g. "2026-03-06"
+  });
   const [dateTo, setDateTo] = useState("");
   const [country, setCountry] = useState("");
   const [showRecovered, setShowRecovered] = useState(false);
@@ -119,23 +113,14 @@ export default function MainMapPage() {
     setActiveChip((prev) => (prev === name ? null : name));
 
   // ── Data queries ──────────────────────────────────────────────────────────
-  const { data: crises } = useQuery<Crisis[]>({
-    queryKey: ["crises"],
-    queryFn: async () => {
-      const res = await api.get<Crisis[]>("/api/crises");
-      return res.data;
-    },
-  });
-
   const { data: pinsData } = useQuery({
     queryKey: [
-      "map-pins", activeCrisisId, flagParam,
+      "map-pins", flagParam,
       damageLevel.join(","), crisisType.join(","),
       dateFrom, dateTo, country, showRecovered,
     ],
     queryFn: async () => {
-      if (!activeCrisisId) return { pins: [], total: 0 };
-      const params: Record<string, string> = { crisis_id: activeCrisisId };
+      const params: Record<string, string> = {};
       if (flagParam) params.flag_status = flagParam;
       if (damageLevel.length > 0) params.damage_level = damageLevel.join(",");
       if (crisisType.length > 0) params.crisis_type = crisisType.join(",");
@@ -146,35 +131,26 @@ export default function MainMapPage() {
       const res = await api.get("/api/dashboard/map/pins", { params });
       return res.data as { pins: MapPin[]; total: number };
     },
-    enabled: !!activeCrisisId,
-    refetchInterval: liveStatus === "disconnected" ? 20000 : false,
+    refetchInterval: 20000,
   });
 
   const { data: stats } = useQuery<DashboardStats>({
-    queryKey: ["dashboard-stats", activeCrisisId],
+    queryKey: ["dashboard-stats"],
     queryFn: async () => {
-      if (!activeCrisisId) return null;
-      const res = await api.get("/api/dashboard/map/stats", {
-        params: { crisis_id: activeCrisisId },
-      });
+      const res = await api.get("/api/dashboard/map/stats");
       return res.data;
     },
-    enabled: !!activeCrisisId,
-    refetchInterval: liveStatus === "disconnected" ? 20000 : false,
+    refetchInterval: 20000,
   });
-
-  // ── Auto-select first crisis ───────────────────────────────────────────────
-  useEffect(() => {
-    if (crises && crises.length > 0 && !activeCrisisId) {
-      setActiveCrisis(crises[0].id, crises[0].name);
-    }
-  }, [crises, activeCrisisId, setActiveCrisis]);
 
   // Stable ref so SSE handler always sees the current selectedPin.
   const selectedPinRef = useRef<MapPin | null>(null);
   selectedPinRef.current = selectedPin;
 
-  // ── SSE real-time updates ─────────────────────────────────────────────────
+  // ── SSE — not active (no per-crisis channel without a crisis_id). ──────────
+  // Map data refreshes on a 20-second polling interval instead.
+  // The handler is kept so SSE can be re-enabled trivially if a global channel
+  // is added to the backend in the future.
   const handleSSEEvent = useCallback(
     (event: SSEEvent) => {
       if (event.type === "connected") {
@@ -183,8 +159,8 @@ export default function MainMapPage() {
       } else if (event.type === "heartbeat") {
         setLastUpdated(new Date());
       } else if (event.type === "report_confirmed" || event.type === "flag_changed") {
-        queryClient.invalidateQueries({ queryKey: ["map-pins", activeCrisisId] });
-        queryClient.invalidateQueries({ queryKey: ["dashboard-stats", activeCrisisId] });
+        queryClient.invalidateQueries({ queryKey: ["map-pins"] });
+        queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
         setLastUpdated(new Date());
       } else if (event.type === "property_updated") {
         queryClient.invalidateQueries({ queryKey: ["map-pins"] });
@@ -201,10 +177,10 @@ export default function MainMapPage() {
         setLiveStatus("disconnected");
       }
     },
-    [activeCrisisId, queryClient]
+    [queryClient]
   );
 
-  useSSE({ crisisId: activeCrisisId, onEvent: handleSSEEvent, enabled: !!activeCrisisId });
+  useSSE({ crisisId: null, onEvent: handleSSEEvent, enabled: false });
 
   // ── Map initialisation ────────────────────────────────────────────────────
   useEffect(() => {
@@ -367,23 +343,6 @@ export default function MainMapPage() {
     };
   }, []);
 
-  // ── Fly to active crisis centre ───────────────────────────────────────────
-  // Runs when crises data loads or active crisis changes. Flies once per crisis
-  // ID to avoid fighting with the user's manual panning.
-  useEffect(() => {
-    if (!map.current || !crises || !activeCrisisId) return;
-    if (lastFlyToCrisisRef.current === activeCrisisId) return;
-    const crisis = crises.find((c) => c.id === activeCrisisId);
-    if (crisis?.map_center_lat && crisis?.map_center_lng) {
-      map.current.flyTo({
-        center: [crisis.map_center_lng, crisis.map_center_lat],
-        zoom: 10,
-        duration: 1500,
-      });
-      lastFlyToCrisisRef.current = activeCrisisId;
-    }
-  }, [crises, activeCrisisId]);
-
   // ── Update GeoJSON source when pins data changes ──────────────────────────
   useEffect(() => {
     if (!map.current || !mapReady || !pinsData?.pins) return;
@@ -478,39 +437,6 @@ export default function MainMapPage() {
 
           {/* ── Floating glassmorphism pill toolbar ── */}
           <div ref={pillRef} style={styles.pillToolbar}>
-
-            {/* Project chip */}
-            <div style={{ position: "relative" }}>
-              <button style={chipSty("project", !!activeCrisisId)} onClick={() => toggleChip("project")}>
-                {activeCrisisName ?? "Select Project"}
-                <ChevronDown />
-              </button>
-              {activeChip === "project" && (
-                <div style={styles.chipDropdown}>
-                  <div style={styles.chipDropdownTitle}>Project</div>
-                  {crises?.map((c) => (
-                    <button
-                      key={c.id}
-                      style={{
-                        ...styles.chipDropdownItem,
-                        fontWeight: c.id === activeCrisisId ? 700 : 400,
-                        color: c.id === activeCrisisId ? "#00508a" : "#191c1e",
-                      }}
-                      onClick={() => { setActiveCrisis(c.id, c.name); setActiveChip(null); }}
-                    >
-                      {c.name}
-                    </button>
-                  ))}
-                  {!crises?.length && (
-                    <div style={{ fontSize: 12, color: "#9e9e9e", padding: "8px 12px" }}>
-                      No projects available
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-
-            <div style={styles.pillSep} />
 
             {/* Damage Level chip */}
             <div style={{ position: "relative" }}>
@@ -715,20 +641,22 @@ export default function MainMapPage() {
             <div style={styles.legendNote}>Number = report count per property</div>
           </div>
 
-          {/* ── FAB — zoom to active crisis ── */}
+          {/* ── FAB — fit all visible pins ── */}
           <button
             style={styles.fab}
-            title="Zoom to active crisis"
+            title="Zoom to fit all pins"
             onClick={() => {
-              if (!activeCrisisId || !crises) return;
-              const crisis = crises.find((c) => c.id === activeCrisisId);
-              if (crisis?.map_center_lat && crisis?.map_center_lng) {
-                map.current?.flyTo({
-                  center: [crisis.map_center_lng, crisis.map_center_lat],
-                  zoom: 10,
-                  duration: 1200,
-                });
-              }
+              const pins = pinsData?.pins;
+              if (!pins?.length || !map.current) return;
+              const lngs = pins.map((p: MapPin) => p.longitude);
+              const lats = pins.map((p: MapPin) => p.latitude);
+              map.current.fitBounds(
+                [
+                  [Math.min(...lngs), Math.min(...lats)],
+                  [Math.max(...lngs), Math.max(...lats)],
+                ],
+                { padding: 60, duration: 1200, maxZoom: 14 }
+              );
             }}
           >
             <TargetIcon size={22} />
@@ -1002,5 +930,3 @@ const styles: Record<string, React.CSSProperties> = {
   },
 };
 
-// Suppress unused-import warning — DAMAGE_LABELS kept for future legend expansion.
-void DAMAGE_LABELS;

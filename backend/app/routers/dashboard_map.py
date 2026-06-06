@@ -48,7 +48,7 @@ class DashboardStats(BaseModel):
 
 @router.get("/pins", response_model=MapPinsResponse)
 async def get_map_pins(
-    crisis_id: str = Query(...),
+    crisis_id: Optional[str] = Query(None),
     flag_status: Optional[str] = Query(None),
     project_serial_id: Optional[str] = Query(None),
     damage_level: Optional[str] = Query(None),
@@ -60,7 +60,10 @@ async def get_map_pins(
     db: AsyncSession = Depends(get_db),
     current_user: DashboardUser = Depends(get_current_dashboard_user),
 ):
-    """Get one pin per property for a crisis.
+    """Get one pin per property, optionally scoped to a single crisis/project.
+
+    When crisis_id is omitted, returns pins from all crises (global map view).
+    When crisis_id is provided, scopes to that project only (used by ProjectDetailPage).
 
     Groups all qualifying Green/Orange reports by building_id (or lat/lng pair
     when building_id is null). Returns the most recent report's damage_level as
@@ -98,11 +101,13 @@ async def get_map_pins(
     )
 
     base_conditions = [
-        Report.crisis_id == crisis_id,
         Report.flag_status.in_(allowed_flags),
         Report.gps_latitude.isnot(None),
         Report.gps_longitude.isnot(None),
     ]
+    # Scope to a specific project when provided; otherwise show all crises.
+    if crisis_id:
+        base_conditions.append(Report.crisis_id == crisis_id)
     if project_report_ids is not None:
         base_conditions.append(Report.id.in_(project_report_ids))
 
@@ -200,17 +205,20 @@ async def get_map_pins(
 
 @router.get("/stats", response_model=DashboardStats)
 async def get_dashboard_stats(
-    crisis_id: str = Query(...),
+    crisis_id: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
     current_user: DashboardUser = Depends(get_current_dashboard_user),
 ):
-    """Get report counts by flag status for a crisis."""
+    """Get report counts by flag status.
 
-    result = await db.execute(
-        select(Report.flag_status, func.count(Report.id))
-        .where(Report.crisis_id == crisis_id)
-        .group_by(Report.flag_status)
-    )
+    When crisis_id is omitted, returns global counts across all crises.
+    When crisis_id is provided, scopes to that project only.
+    """
+
+    query = select(Report.flag_status, func.count(Report.id)).group_by(Report.flag_status)
+    if crisis_id:
+        query = query.where(Report.crisis_id == crisis_id)
+    result = await db.execute(query)
     rows = result.all()
 
     counts = {row[0]: row[1] for row in rows}
