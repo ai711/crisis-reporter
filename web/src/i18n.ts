@@ -17,6 +17,40 @@ i18n.use(initReactI18next).init({
 });
 
 const BASE_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
+
+/**
+ * Converts a flat key→value dict from the backend into the nested object
+ * structure that i18next expects when keys are dot-separated paths.
+ *
+ * Two key formats coexist in the backend pipeline:
+ *   - dotted  e.g. "home.reportButton"  → nested into { home: { reportButton: … } }
+ *   - UPPERCASE e.g. "SAFETY_DO"        → kept as top-level (SafetyTipsPage uses these)
+ *
+ * Without this step, i18next resolves t("home.reportButton") by traversing
+ * the nested path — but the bundle only has a literal "home.reportButton" key,
+ * so lookup fails and falls back to English.
+ */
+function unflattenStrings(flat: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(flat)) {
+    if (!k.includes(".")) {
+      // No dot → UPPERCASE_SNAKE key (SAFETY_DO, COMMON_NEXT…) — keep top-level
+      out[k] = v;
+    } else {
+      const parts = k.split(".");
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let cur = out as Record<string, any>;
+      for (let i = 0; i < parts.length - 1; i++) {
+        if (typeof cur[parts[i]] !== "object" || cur[parts[i]] === null) {
+          cur[parts[i]] = {};
+        }
+        cur = cur[parts[i]];
+      }
+      cur[parts[parts.length - 1]] = v;
+    }
+  }
+  return out;
+}
 const FETCH_TIMEOUT_MS = 10_000;
 
 export interface LangPackageResult {
@@ -60,7 +94,7 @@ export async function loadLanguagePackage(langCode: string): Promise<LangPackage
         if (cached) {
           clearTimeout(timer);
           const cachedData = JSON.parse(cached);
-          i18n.addResourceBundle(langCode, "translation", cachedData, true, true);
+          i18n.addResourceBundle(langCode, "translation", unflattenStrings(cachedData), true, true);
           await i18n.changeLanguage(langCode);
           return { success: true, fromCache: true };
         }
@@ -81,7 +115,9 @@ export async function loadLanguagePackage(langCode: string): Promise<LangPackage
 
     // Extract the flat strings dict (backend wraps it in { version, language_code, strings })
     const strings = (data.strings as Record<string, unknown>) ?? data;
-    i18n.addResourceBundle(langCode, "translation", strings, true, true);
+    // Unflatten dotted keys (home.reportButton → nested) before registering so
+    // i18next path-based lookups resolve correctly. UPPERCASE keys pass through.
+    i18n.addResourceBundle(langCode, "translation", unflattenStrings(strings), true, true);
     await i18n.changeLanguage(langCode);
 
     try {
@@ -121,7 +157,7 @@ export async function loadLanguagePackageFromCache(langCode: string): Promise<bo
     const cached = localStorage.getItem(`cr_language_package_${langCode}`);
     if (cached) {
       const data: Record<string, unknown> = JSON.parse(cached);
-      i18n.addResourceBundle(langCode, "translation", data, true, true);
+      i18n.addResourceBundle(langCode, "translation", unflattenStrings(data), true, true);
       await i18n.changeLanguage(langCode);
       return true;
     }

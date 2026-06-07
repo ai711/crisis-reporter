@@ -452,22 +452,28 @@ async def get_active_package(
     language_code: str,
     db: AsyncSession = Depends(get_db),
 ) -> dict:
-    """Public endpoint — returns the full published string package for a language.
+    """Public endpoint — returns the full string package for a language.
 
     Response shape:
         {
-          "version": "1.3",          # version string from LanguagePackage row
+          "version": "1.3",          # version string from LanguagePackage row (None if unpublished)
           "language_code": "ar",
           "strings": {"KEY": "translated text", ...}
         }
 
-    Every active string key is guaranteed to appear in "strings". Keys that
-    have a published translation use that translation. Keys that do not have
-    a published translation fall back to the English source text, so the
-    mobile app never receives an incomplete bundle.
+    Every active string key is guaranteed to appear in "strings":
+      - published translation  (highest priority)
+      - draft translation      (auto-translated, pending review — served so reporters
+                               see translated UI as soon as auto-translation runs,
+                               without waiting for a manual publish step)
+      - English source text    (fallback for keys with no translation yet)
 
-    Returns version=None and strings={} when no published package exists yet.
+    Previously this returned strings={} when no published LanguagePackage existed.
+    That caused the entire UI to silently fall back to English for any language
+    that hadn't gone through the full publish workflow. Now strings are always
+    served regardless of publish state so translations appear as soon as they exist.
     """
+    # Find the latest published package for version tracking only
     pkg_result = await db.execute(
         select(LanguagePackage).where(
             LanguagePackage.language_code == language_code,
@@ -475,40 +481,40 @@ async def get_active_package(
         )
     )
     pkg = pkg_result.scalar_one_or_none()
-    if not pkg:
-        return {
-            "version": None,
-            "language_code": language_code,
-            "strings": {},
-        }
 
-    # Fetch all published translations for this language
+    # Fetch best available translation for each key: published beats draft.
+    # We collect all published+draft rows then let Python pick the winner so we
+    # avoid a subquery and keep this readable.
     result = await db.execute(
-        select(StringKey.key, Translation.translated_text)
+        select(StringKey.key, Translation.translated_text, Translation.status)
         .join(Translation, Translation.string_key_id == StringKey.id)
         .where(
             Translation.language_code == language_code,
-            Translation.status == "published",
+            Translation.status.in_(["published", "draft"]),
             StringKey.is_active == True,
         )
     )
-    strings_dict = {row.key: row.translated_text for row in result.all()}
+    strings_dict: dict[str, str] = {}
+    for row in result.all():
+        # Keep published over draft; first occurrence wins for same status
+        if row.key not in strings_dict or row.status == "published":
+            strings_dict[row.key] = row.translated_text
 
-    # English fallback: fetch any active string keys with no published translation
-    # and substitute the English source text so no key is ever silently dropped.
-    published_keys = set(strings_dict.keys())
+    # English fallback: every active key that has no translation yet gets
+    # its english_text so the bundle is always complete.
+    translated_keys = set(strings_dict.keys())
     missing_result = await db.execute(
         select(StringKey.key, StringKey.english_text)
         .where(
             StringKey.is_active == True,
-            StringKey.key.not_in(published_keys) if published_keys else True,
+            StringKey.key.not_in(translated_keys) if translated_keys else True,
         )
     )
     for row in missing_result.all():
-        strings_dict[row.key] = row.english_text  # English fallback
+        strings_dict[row.key] = row.english_text
 
     return {
-        "version": pkg.version,
+        "version": pkg.version if pkg else None,
         "language_code": language_code,
         "strings": strings_dict,
     }
@@ -1996,6 +2002,260 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
     ("DISASTER_CHEMICAL_INCIDENT",  "disaster_label", "Chemical Incident"),
     ("DISASTER_CONFLICT",           "disaster_label", "Conflict"),
     ("DISASTER_CIVIL_UNREST",       "disaster_label", "Civil Unrest"),
+
+    # ── Dotted-path keys — match en.json structure used by web/mobile pages ──────
+    # The original UPPERCASE keys above were not resolvable by i18next dot-path
+    # lookups (t("home.reportButton") ≠ "HOME_REPORT_BUTTON"). These dotted keys
+    # are returned by the backend and unflattened into nested objects by i18n.ts
+    # so the existing t() calls in all pages resolve correctly without page changes.
+    # UPPERCASE safety/common keys stay UPPERCASE (SafetyTipsPage calls them that way).
+
+    # nav
+    ("nav.home",    "ui_nav", "Home"),
+    ("nav.map",     "ui_nav", "Map"),
+    ("nav.reports", "ui_nav", "Reports"),
+
+    # common
+    ("common.loading",            "ui_common", "Loading..."),
+    ("common.loading_countries",  "ui_common", "Loading countries…"),
+    ("common.retry",              "ui_common", "Retry"),
+    ("common.cancel",             "ui_common", "Cancel"),
+    ("common.confirm",            "ui_common", "Confirm"),
+    ("common.back",               "ui_common", "← Back"),
+    ("common.next",               "ui_common", "Next →"),
+    ("common.previous",           "ui_common", "← Previous"),
+    ("common.edit",               "ui_common", "Edit"),
+    ("common.optional",           "ui_common", "Optional"),
+    ("common.saving",             "ui_common", "Saving…"),
+    ("common.go_back",            "ui_common", "Go Back"),
+    ("common.go_home",            "ui_common", "Go to Home"),
+    ("common.got_it",             "ui_common", "Got it"),
+    ("common.refresh",            "ui_common", "Refresh"),
+
+    # app chrome
+    ("app.name", "ui_common", "Crisis Reporter"),
+
+    # terms & conditions (onboarding flow)
+    ("terms.title",    "ui_terms", "Terms and Conditions"),
+    ("terms.subtitle", "ui_terms", "Please read and accept the terms below to continue."),
+    ("terms.error",    "ui_terms", "You must accept the Terms and Conditions to continue."),
+    ("terms.agree",    "ui_terms", "I Agree"),
+    ("terms.decline",  "ui_terms", "Decline"),
+    ("terms.privacy",  "ui_terms", "Your data is secured by UNDP Privacy Protocols"),
+
+    # onboarding
+    ("onboarding.selectCountry",       "ui_onboarding", "Select Your Country"),
+    ("onboarding.selectLanguage",      "ui_onboarding", "Select Language"),
+    ("onboarding.countryPlaceholder",  "ui_onboarding", "Search for your country..."),
+    ("onboarding.inactive",            "ui_onboarding", "We are unable to provide any assistance for your region at this moment"),
+    ("onboarding.continue",            "ui_onboarding", "Continue"),
+    ("onboarding.more_languages_title","ui_onboarding", "More languages"),
+    ("onboarding.more_languages_btn",  "ui_onboarding", "+ More"),
+    ("onboarding.show_less",           "ui_onboarding", "Show less"),
+    ("onboarding.lang_load_error",     "ui_onboarding", "Could not load language. Check your connection and try again."),
+
+    # home screen
+    ("home.reportButton",    "ui_home", "Report an Incident"),
+    ("home.myReports",       "ui_home", "My Reports"),
+    ("home.noReportsTitle",  "ui_home", "No reports yet"),
+    ("home.noReportsBody",   "ui_home", "Your submitted reports will appear here"),
+    ("home.recentReports",   "ui_home", "YOUR RECENT REPORTS"),
+    ("home.queuedReports",   "ui_home", "{{count}} report(s) waiting to sync"),
+    ("home.loadingReports",  "ui_home", "Loading your reports..."),
+    ("home.pendingSync",     "ui_home", "Pending Sync"),
+    ("home.offline",         "ui_home", "Offline"),
+    ("home.unknownLocation", "ui_home", "Unknown location"),
+    ("home.unnamedLocation", "ui_home", "Unnamed location"),
+    ("home.firstReportHint", "ui_home", "Tap \"Report an Incident\" to submit your first report"),
+    ("home.welcomeText",     "ui_home", "Crisis Reporter helps you document damage to buildings and infrastructure after a disaster. You can report earthquakes, floods, conflicts, and other crises. Your reports help UNDP get help to the right places faster."),
+    ("home.welcomeGotIt",    "ui_home", "Got it"),
+    ("home.whatCanReport",   "ui_home", "What can I report?"),
+
+    # login prompt (home screen modal)
+    ("loginPrompt.title",      "ui_home", "Have you used Crisis Reporter before?"),
+    ("loginPrompt.body",       "ui_home", "If you have an existing verified account, log in to restore your reports, badges, and profile."),
+    ("loginPrompt.settingUp",  "ui_home", "Setting up…"),
+    ("loginPrompt.skip",       "ui_home", "Skip for now"),
+
+    # settings
+    ("settings.title",            "ui_settings", "Settings"),
+    ("settings.language",         "ui_settings", "Language"),
+    ("settings.country",          "ui_settings", "Country"),
+    ("settings.account",          "ui_settings", "Account"),
+    ("settings.login",            "ui_settings", "Log In"),
+    ("settings.register",         "ui_settings", "Create Account"),
+    ("settings.logout",           "ui_settings", "Log Out"),
+    ("settings.section_account",  "ui_settings", "ACCOUNT"),
+    ("settings.section_about",    "ui_settings", "ABOUT"),
+    ("settings.section_session",  "ui_settings", "SESSION"),
+    ("settings.change_country",   "ui_settings", "Change Country"),
+    ("settings.change_language",  "ui_settings", "Change Language"),
+    ("settings.version",          "ui_settings", "Version"),
+    ("settings.privacy_policy",   "ui_settings", "Privacy Policy"),
+    ("settings.search_countries", "ui_settings", "Search countries..."),
+    ("settings.no_countries_match","ui_settings","No countries match your search."),
+    ("settings.select_language",  "ui_settings", "Select Language"),
+    ("settings.lang_load_error",  "ui_settings", "Could not load the language package. Please check your connection and try again."),
+    ("settings.lang_cache_note",  "ui_settings", "Using saved language data. Some text may not be fully updated."),
+
+    # offline / connectivity
+    ("offline.banner",  "ui_offline", "You are offline. Reports will be saved and sent when you reconnect."),
+    ("offline.syncing", "ui_offline", "Syncing your reports..."),
+
+    # error messages
+    ("errors.required",     "ui_error", "This field is required"),
+    ("errors.networkError", "ui_error", "Network error. Please check your connection."),
+    ("errors.unknownError", "ui_error", "Something went wrong. Please try again."),
+
+    # profile
+    ("profile.title",              "ui_profile", "My Profile"),
+    ("profile.anonymous",          "ui_profile", "Anonymous Reporter"),
+    ("profile.first_name",         "ui_profile", "First Name"),
+    ("profile.last_name",          "ui_profile", "Last Name"),
+    ("profile.email",              "ui_profile", "Email Address"),
+    ("profile.phone",              "ui_profile", "Phone Number"),
+    ("profile.save_btn",           "ui_profile", "Save Profile"),
+    ("profile.save_success",       "ui_profile", "Profile saved"),
+    ("profile.save_error",         "ui_profile", "Could not save profile. Please try again."),
+    ("profile.anon_gate_heading",  "ui_profile", "Create a free account to save your profile and earn badges."),
+    ("profile.anon_gate_subtext",  "ui_profile", "You can still submit reports anonymously without an account."),
+    ("profile.anon_note",          "ui_profile", "All profile fields are optional. You can submit reports anonymously."),
+    ("profile.edit_photo",         "ui_profile", "Edit photo"),
+    ("profile.completion_label",   "ui_profile", "Profile {{completion}}% complete"),
+
+    # login
+    ("login.title",               "ui_login", "Sign In"),
+    ("login.email_label",         "ui_login", "Email"),
+    ("login.password_label",      "ui_login", "Password"),
+    ("login.submit_btn",          "ui_login", "Sign In"),
+    ("login.signing_in",          "ui_login", "Signing in…"),
+    ("login.validation",          "ui_login", "Please enter your email and password."),
+    ("login.invalid_credentials", "ui_login", "Invalid email or password."),
+    ("login.no_account",          "ui_login", "Don't have an account?"),
+    ("login.setup_profile",       "ui_login", "Set up your profile →"),
+
+    # my reports
+    ("my_reports.empty_title",     "ui_my_reports", "No reports submitted yet"),
+    ("my_reports.load_error",      "ui_my_reports", "Failed to load reports. Please try again."),
+    ("my_reports.load_more",       "ui_my_reports", "Load More"),
+    ("my_reports.label_location",  "ui_my_reports", "Location:"),
+    ("my_reports.label_damage",    "ui_my_reports", "Damage Level:"),
+    ("my_reports.label_date",      "ui_my_reports", "Date:"),
+    ("my_reports.label_status",    "ui_my_reports", "Status:"),
+    ("my_reports.login_prompt",    "ui_my_reports", "Log in to see all your reports across sessions and devices."),
+    ("my_reports.session_note",    "ui_my_reports", "Showing reports from this session. Log in to see your full history."),
+    ("my_reports.damage_complete", "ui_my_reports", "Completely Damaged"),
+    ("my_reports.damage_partial",  "ui_my_reports", "Partially Damaged"),
+    ("my_reports.damage_minimal",  "ui_my_reports", "Minimal / No Damage"),
+    ("my_reports.status_submitted","ui_my_reports", "✓ Submitted"),
+    ("my_reports.detail_title",    "ui_my_reports", "Report Details"),
+    ("my_reports.back",            "ui_my_reports", "← Back to My Reports"),
+    ("my_reports.loading_detail",  "ui_my_reports", "Loading report details…"),
+    ("my_reports.description",     "ui_my_reports", "Description"),
+    ("my_reports.report_number",   "ui_my_reports", "Report #{{n}}"),
+
+    # stepper
+    ("stepper.step_photo",     "ui_stepper", "Photo"),
+    ("stepper.step_location",  "ui_stepper", "Location"),
+    ("stepper.step_questions", "ui_stepper", "Questions"),
+    ("stepper.step_review",    "ui_stepper", "Review"),
+    ("stepper.step_submit",    "ui_stepper", "Submit"),
+
+    # side menu
+    ("menu.safety_tips", "ui_menu", "Safety Tips"),
+    ("menu.profile",     "ui_menu", "Reporter Profile"),
+
+    # faq / about
+    ("faq.title",   "ui_about", "FAQ"),
+    ("about.title", "ui_about", "About Crisis Reporter"),
+
+    # badges (dotted — BADGES_* UPPERCASE kept for mobile)
+    ("badges.title",          "ui_badges", "Badges & Certifications"),
+    ("badges.anon_heading",   "ui_badges", "Badges are available to reporters with a verified account."),
+    ("badges.anon_body",      "ui_badges", "Log in or create a free account to earn and view your badges."),
+    ("badges.subtitle",       "ui_badges", "Badges are awarded to reporters with a verified profile. Complete your profile to unlock badges."),
+    ("badges.status_earned",  "ui_badges", "Earned ✓"),
+    ("badges.status_claim",   "ui_badges", "Add email or phone to claim"),
+    ("badges.status_locked",  "ui_badges", "Locked"),
+    ("badges.status_coming_soon","ui_badges","Coming Soon"),
+    ("badges.safety_name",    "ui_badges", "Safety Training Completion"),
+    ("badges.safety_desc_locked","ui_badges","Complete all safety training modules in Crisis Reporter."),
+    ("badges.referral_name",  "ui_badges", "Community Referral"),
+    ("badges.modules_progress","ui_badges","{{n}} of {{total}} modules complete"),
+
+    # safety tabs (dotted — t("safety.*") calls in SafetyTipsPage tab labels)
+    ("safety.tab_a",            "ui_safety", "Part A: Disaster Tips"),
+    ("safety.tab_b",            "ui_safety", "Part B: Reporting"),
+    ("safety.tab_c",            "ui_safety", "Part C: First Aid"),
+    ("safety.complete",         "ui_safety", "✓ Complete"),
+    ("safety.progress_label",   "ui_safety", "Disaster types completed"),
+    ("safety.all_complete_banner","ui_safety","Safety Training Complete — you are now eligible for the Safety Training Badge"),
+
+    # disaster type labels (dotted — used in dropdowns / display)
+    ("disaster_types.earthquake",       "disaster_label", "Earthquake"),
+    ("disaster_types.flood",            "disaster_label", "Flood"),
+    ("disaster_types.tsunami",          "disaster_label", "Tsunami"),
+    ("disaster_types.hurricane_cyclone","disaster_label", "Hurricane or Cyclone"),
+    ("disaster_types.wildfire",         "disaster_label", "Wildfire"),
+    ("disaster_types.explosion",        "disaster_label", "Explosion"),
+    ("disaster_types.chemical_incident","disaster_label", "Chemical Incident"),
+    ("disaster_types.conflict",         "disaster_label", "Conflict"),
+    ("disaster_types.civil_unrest",     "disaster_label", "Civil Unrest"),
+
+    # report form (most-used strings)
+    ("report.title",             "ui_report", "Report Damage"),
+    ("report.damageLevel",       "ui_report", "Damage Level"),
+    ("report.minimal",           "ui_report", "Minimal or No Damage"),
+    ("report.partial",           "ui_report", "Partially Damaged"),
+    ("report.complete",          "ui_report", "Completely Destroyed"),
+    ("report.infrastructureType","ui_report", "Infrastructure Type"),
+    ("report.residential",       "ui_report", "Residential Building"),
+    ("report.commercial",        "ui_report", "Commercial Building"),
+    ("report.school",            "ui_report", "School"),
+    ("report.hospital",          "ui_report", "Hospital"),
+    ("report.road",              "ui_report", "Road or Bridge"),
+    ("report.other",             "ui_report", "Other"),
+    ("report.description",       "ui_report", "Description (optional)"),
+    ("report.photos",            "ui_report", "Photos"),
+    ("report.addPhoto",          "ui_report", "Add Photo"),
+    ("report.takePhoto",         "ui_report", "Take a Photo"),
+    ("report.uploadPhoto",       "ui_report", "Upload from Gallery"),
+    ("report.photoRequired",     "ui_report", "At least one photo is required"),
+    ("report.maxPhotos",         "ui_report", "Maximum 3 photos per report"),
+    ("report.location",          "ui_report", "Location"),
+    ("report.submit",            "ui_report", "Submit Report"),
+    ("report.submitting",        "ui_report", "Submitting..."),
+    ("report.queued",            "ui_report", "Report saved. Will sync when internet is available."),
+    ("report.success",           "ui_report", "Report submitted successfully"),
+    ("report.error",             "ui_report", "Failed to submit report. Please try again."),
+    ("report.success_title",     "ui_report", "Report Submitted"),
+    ("report.submit_another",    "ui_report", "Submit Another Report"),
+    ("report.review_title",      "ui_report", "Review Your Report"),
+    ("report.dupe_title",        "ui_report", "Possible duplicate report"),
+    ("report.dupe_body",         "ui_report", "It looks like you have already submitted a report for this location. Are you sure you want to submit another?"),
+    ("report.dupe_submit_anyway","ui_report", "Submit anyway"),
+    ("report.no_crisis",         "ui_report", "No active crisis found. Please try again later."),
+    ("report.gps_button",        "ui_report", "Use My GPS Location"),
+    ("report.gps_getting",       "ui_report", "Getting location…"),
+    ("report.selectBuilding",    "ui_report", "Select building on map"),
+    ("report.back_to_review",    "ui_report", "Back to Review without changes"),
+    ("report.select_at_least_one","ui_report","Select all that apply. At least one required."),
+
+    # map
+    ("map.loading",          "ui_map", "Loading map..."),
+    ("map.selectLocation",   "ui_map", "Tap a building to select it"),
+    ("map.searchPlaceholder","ui_map", "Search for a location..."),
+    ("map.zoom_hint",        "ui_map", "Zoom in to see buildings"),
+    ("map.damage_complete",  "ui_map", "Completely Damaged"),
+    ("map.damage_partial",   "ui_map", "Partially Damaged"),
+    ("map.damage_minimal",   "ui_map", "Minimal / No Damage"),
+    ("map.loading_reports",  "ui_map", "Loading reports…"),
+
+    # photo step guidelines
+    ("photo_guidelines.guideline_1","ui_report","Make sure the damage is clearly visible in the photo"),
+    ("photo_guidelines.guideline_2","ui_report","Avoid photos that are too dark or blurry"),
+    ("photo_guidelines.guideline_3","ui_report","Take the photo from a safe distance — do not put yourself at risk"),
+    ("photo_guidelines.guideline_4","ui_report","Include the full structure in the frame where possible"),
 ]
 
 

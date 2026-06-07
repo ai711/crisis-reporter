@@ -123,10 +123,15 @@ async def auto_translate_content(content_type: str) -> None:
     For every active non-English language, auto-translate all string keys in
     the given content type that don't yet have an approved translation.
     Stores results as Draft translations in the translations table.
+
+    content_type may be one of the named types below, or the special value
+    "all" which translates every active StringKey regardless of category.
+    "all" is used at startup to catch any newly-seeded UI keys.
     """
     log.info("auto_translate_content: starting for content_type=%s", content_type)
 
-    # Map content types to string key categories
+    # Map content types to string key categories.
+    # "all" is a special sentinel — no category filter applied.
     category_map = {
         "tc": "tc",
         "onboarding": "onboarding",
@@ -136,18 +141,24 @@ async def auto_translate_content(content_type: str) -> None:
         "error_messages": "error",
         "system_messages": "content",
     }
-    category = category_map.get(content_type)
-    if not category:
+    translate_all = (content_type == "all")
+    category = category_map.get(content_type) if not translate_all else None
+    if not translate_all and category is None:
         log.warning("auto_translate_content: unknown content_type=%s", content_type)
         return
 
     async with AsyncSessionLocal() as db:
-        keys_result = await db.execute(
-            select(StringKey).where(
-                StringKey.is_active == True,
-                StringKey.category == category,
+        if translate_all:
+            keys_result = await db.execute(
+                select(StringKey).where(StringKey.is_active == True)
             )
-        )
+        else:
+            keys_result = await db.execute(
+                select(StringKey).where(
+                    StringKey.is_active == True,
+                    StringKey.category == category,
+                )
+            )
         keys = keys_result.scalars().all()
 
         if not keys:
