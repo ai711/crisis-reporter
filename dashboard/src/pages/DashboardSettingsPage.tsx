@@ -7,7 +7,7 @@ import api from "../services/api";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
-const BLUE = "#0468B1";
+const BLUE = "var(--c-primary-container)";
 const GREEN = "#38a169";
 const AMBER = "#f5a623";
 const RED = "#e53e3e";

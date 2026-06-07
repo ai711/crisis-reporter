@@ -2,6 +2,8 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Users, X, Filter } from "lucide-react";
 import Header from "../components/Header";
+import PageSpinner from "../components/PageSpinner";
+import EmptyState from "../components/EmptyState";
 import { getReporters } from "../services/api";
 import type { ReporterListRow, ReportersListResponse } from "../types";
 import {
@@ -419,17 +421,19 @@ export default function ReportersPage() {
         {/* Table */}
         <div className="card" style={{ overflow: "hidden" }}>
           {isLoading ? (
-            <div style={s.loading}>Loading reporter profiles…</div>
+            <PageSpinner />
           ) : allItems.length === 0 ? (
-            <div style={s.emptyState}>
-              <Users size={48} color="var(--c-text-subtle)" />
-              <p style={s.emptyText}>No reporter profiles found.</p>
-            </div>
+            <EmptyState
+              icon={<Users size={28} color="var(--c-text-subtle)" />}
+              title="No reporter profiles found"
+              message="Reporter profiles appear here once submissions are received."
+            />
           ) : (
             <>
               <div style={s.countRow}>
                 Showing {allItems.length} of {total} reporters
               </div>
+              <div style={{ overflowX: "auto" }}>
               <table style={s.table}>
                 <thead>
                   <tr style={s.thead}>
@@ -508,6 +512,7 @@ export default function ReportersPage() {
                   })}
                 </tbody>
               </table>
+              </div>
 
               {/* Pagination bar */}
               <div style={s.paginationRow}>
@@ -602,15 +607,6 @@ const s: Record<string, React.CSSProperties> = {
     padding: "2px 7px",
   },
 
-  loading: { padding: 40, textAlign: "center" as const, color: "var(--c-text-muted)", fontSize: "var(--text-sm)" },
-  emptyState: {
-    display: "flex",
-    flexDirection: "column" as const,
-    alignItems: "center" as const,
-    padding: "64px 0",
-    gap: 16,
-  },
-  emptyText: { fontSize: "var(--text-sm)", color: "var(--c-text-subtle)", fontStyle: "italic" },
   countRow: {
     padding: "10px 16px",
     fontSize: "var(--text-xs)",
@@ -621,7 +617,7 @@ const s: Record<string, React.CSSProperties> = {
   table: { width: "100%", borderCollapse: "collapse" as const },
   thead: { background: "var(--c-surface-low)" },
   th: {
-    padding: "11px 14px",
+    padding: "10px 14px",
     textAlign: "left" as const,
     fontSize: "var(--text-xs)",
     fontWeight: 700,
@@ -636,7 +632,7 @@ const s: Record<string, React.CSSProperties> = {
     cursor: "pointer",
     transition: "background 0.1s",
   },
-  td: { padding: "12px 14px", fontSize: "var(--text-sm)", color: "var(--c-text-primary)", verticalAlign: "middle" as const },
+  td: { padding: "9px 14px", fontSize: "var(--text-sm)", color: "var(--c-text-primary)", verticalAlign: "middle" as const },
   linkBtn: {
     background: "none",
     border: "none",

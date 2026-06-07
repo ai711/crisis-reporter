@@ -23,7 +23,7 @@ export default function SettingsPage() {
             <span style={{
               ...styles.value,
               background: "#E8F4FD",
-              color: "#0468B1",
+              color: "var(--c-primary-container)",
               padding: "4px 12px",
               borderRadius: 20,
               fontSize: 13,

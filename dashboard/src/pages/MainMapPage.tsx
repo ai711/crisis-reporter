@@ -390,13 +390,14 @@ export default function MainMapPage() {
       activeChip === name
         ? "#e6e8eb"
         : filterActive
-        ? "#00508a"
+        ? "var(--c-primary)"
         : "transparent",
     color: filterActive && activeChip !== name ? "#fff" : "#191c1e",
   });
 
   return (
     <div style={styles.container}>
+      <style>{`.map-pill-toolbar::-webkit-scrollbar { display: none; }`}</style>
       <Header
         title="Map View"
         subtitle={`${pinsData?.total ?? 0} location${(pinsData?.total ?? 0) !== 1 ? "s" : ""} reported`}
@@ -436,7 +437,7 @@ export default function MainMapPage() {
           <div ref={mapContainer} style={styles.map} />
 
           {/* ── Floating glassmorphism pill toolbar ── */}
-          <div ref={pillRef} style={styles.pillToolbar}>
+          <div ref={pillRef} style={styles.pillToolbar} className="map-pill-toolbar">
 
             {/* Damage Level chip */}
             <div style={{ position: "relative" }}>
@@ -593,7 +594,7 @@ export default function MainMapPage() {
             <button
               style={{
                 ...chipSty("recovered", showRecovered),
-                background: showRecovered ? "#00508a" : "transparent",
+                background: showRecovered ? "var(--c-primary)" : "transparent",
                 color: showRecovered ? "#fff" : "#191c1e",
               }}
               onClick={() => setShowRecovered((v) => !v)}
@@ -638,7 +639,29 @@ export default function MainMapPage() {
                 <span style={styles.legendLabel}>{label}</span>
               </div>
             ))}
-            <div style={styles.legendNote}>Number = report count per property</div>
+            {/* Divider */}
+            <div style={{ borderTop: "1px solid rgba(0,0,0,0.07)", margin: "4px 0" }} />
+            {/* Cluster explanation */}
+            <div style={styles.legendItem}>
+              <div style={{
+                width: 22,
+                height: 22,
+                borderRadius: "50%",
+                background: "rgba(56,161,105,0.85)",
+                border: "2px solid #fff",
+                boxShadow: "0 0 0 1px rgba(0,0,0,0.12)",
+                flexShrink: 0,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 9,
+                fontWeight: 700,
+                color: "#fff",
+              }}>
+                N
+              </div>
+              <span style={{ ...styles.legendLabel, fontSize: 11 }}>Cluster — zoom in to expand</span>
+            </div>
           </div>
 
           {/* ── FAB — fit all visible pins ── */}
@@ -728,6 +751,8 @@ const styles: Record<string, React.CSSProperties> = {
     height: "100%",
   },
   // Floating pill toolbar — glassmorphism, horizontally centered on the map.
+  // max-width + overflow-x scroll ensures chips don't disappear off-screen on
+  // narrow viewports (e.g. 1024px wide dashboard with sidebar).
   pillToolbar: {
     position: "absolute",
     top: 14,
@@ -742,7 +767,10 @@ const styles: Record<string, React.CSSProperties> = {
     backdropFilter: "blur(12px)",
     borderRadius: 9999,
     boxShadow: "0 4px 20px rgba(8,27,57,0.12)",
-    whiteSpace: "nowrap",
+    maxWidth: "calc(100% - 28px)",
+    overflowX: "auto",
+    // Hide scrollbar visually while keeping it functional
+    scrollbarWidth: "none" as const,
   },
   pillSep: {
     width: 1,
@@ -793,7 +821,7 @@ const styles: Record<string, React.CSSProperties> = {
     userSelect: "none",
   },
   chipCheck: {
-    accentColor: "#00508a",
+    accentColor: "var(--c-primary)",
     width: 14,
     height: 14,
     flexShrink: 0,
@@ -902,13 +930,6 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#191c1e",
     fontWeight: 500,
   },
-  legendNote: {
-    fontSize: 10,
-    color: "#9e9e9e",
-    fontStyle: "italic",
-    marginTop: 3,
-    lineHeight: 1.4,
-  },
   // FAB — zoom-to-crisis, bottom-right of map area
   fab: {
     position: "absolute",
@@ -920,7 +941,7 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: "50%",
     border: "none",
     cursor: "pointer",
-    background: "linear-gradient(135deg, #00508a 0%, #0468b1 100%)",
+    background: "linear-gradient(135deg, var(--c-primary) 0%, var(--c-primary-container) 100%)",
     color: "#fff",
     display: "flex",
     alignItems: "center",

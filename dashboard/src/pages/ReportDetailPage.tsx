@@ -12,6 +12,8 @@ import {
   User,
 } from "lucide-react";
 import Header from "../components/Header";
+import PageSpinner from "../components/PageSpinner";
+import ErrorState from "../components/ErrorState";
 import FlagChangeModal from "../components/FlagChangeModal";
 import ReviewPanel from "../components/ReviewPanel";
 import api from "../services/api";
@@ -495,7 +497,7 @@ export default function ReportDetailPage() {
     return (
       <div style={styles.container}>
         <Header title="Report Detail" />
-        <div style={styles.loading}>Loading report…</div>
+        <PageSpinner label="Loading report…" />
       </div>
     );
   }
@@ -504,7 +506,7 @@ export default function ReportDetailPage() {
     return (
       <div style={styles.container}>
         <Header title="Report Detail" />
-        <div style={styles.loading}>Report not found.</div>
+        <ErrorState message="Report not found. It may have been deleted or the ID is incorrect." />
       </div>
     );
   }
@@ -730,7 +732,7 @@ export default function ReportDetailPage() {
                                   {report.location_address}
                                 </p>
                               )}
-                              <p style={{ fontSize: 10, fontFamily: "monospace", color: "#00508a", fontWeight: 700, margin: 0 }}>
+                              <p style={{ fontSize: 10, fontFamily: "monospace", color: "var(--c-primary)", fontWeight: 700, margin: 0 }}>
                                 {report.gps_latitude.toFixed(5)}°, {report.gps_longitude.toFixed(5)}°
                               </p>
                             </div>
@@ -1084,7 +1086,7 @@ export default function ReportDetailPage() {
                       {reportEdits.map((edit) => (
                         <div key={edit.id} style={{ padding: "10px 0", borderBottom: "1px solid rgba(193,199,210,0.15)" }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                            <span style={{ fontSize: 10, background: "#d2e4ff", color: "#00508a", padding: "2px 7px", borderRadius: 20, fontWeight: 700 }}>EDIT v{edit.version_number}</span>
+                            <span style={{ fontSize: 10, background: "#d2e4ff", color: "var(--c-primary)", padding: "2px 7px", borderRadius: 20, fontWeight: 700 }}>EDIT v{edit.version_number}</span>
                             <span style={{ fontSize: 11, color: "#9ca3af" }}>{new Date(edit.edited_at).toLocaleString()}</span>
                           </div>
                           {edit.edit_reason && <p style={{ fontSize: 11, color: "#717782", fontStyle: "italic", margin: "4px 0" }}>"{edit.edit_reason}"</p>}
@@ -1145,7 +1147,7 @@ export default function ReportDetailPage() {
                       <a
                         href={`/projects/${proj.id}`}
                         target="_blank" rel="noopener noreferrer"
-                        style={{ fontSize: 12, fontWeight: 600, color: "#00508a", textDecoration: "none", textAlign: "right" }}
+                        style={{ fontSize: 12, fontWeight: 600, color: "var(--c-primary)", textDecoration: "none", textAlign: "right" }}
                         onClick={(e) => { e.preventDefault(); window.open(`/projects/${proj.id}`, "_blank"); }}
                       >
                         {proj.name} ↗
@@ -1311,7 +1313,6 @@ export default function ReportDetailPage() {
 const styles: Record<string, React.CSSProperties> = {
   container: { display: "flex", flexDirection: "column", height: "100vh" },
   content: { flex: 1, padding: "20px 28px 32px", overflow: "auto", background: "#f4f6f9" },
-  loading: { padding: 48, textAlign: "center", color: "#9ca3af", fontSize: 14 },
 
   // Top bar
   topBar: {
@@ -1465,7 +1466,7 @@ const styles: Record<string, React.CSSProperties> = {
     display: "inline-flex",
     alignItems: "center",
     gap: 5,
-    color: "#0468b1",
+    color: "var(--c-primary-container)",
     fontSize: 12,
     fontWeight: 500,
     textDecoration: "none",
@@ -1555,7 +1556,7 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 5,
     fontSize: 10,
     fontWeight: 700,
-    color: "#00508a",
+    color: "var(--c-primary)",
     textDecoration: "none",
     letterSpacing: 0.5,
     textTransform: "uppercase",
@@ -1582,7 +1583,7 @@ const styles: Record<string, React.CSSProperties> = {
   flagContextTable: { width: "100%", borderCollapse: "collapse", fontSize: 12, marginTop: 8 },
   flagContextTh: { textAlign: "left", padding: "5px 8px", background: "#f2f4f7", fontWeight: 700, color: "#717782", fontSize: 10, textTransform: "uppercase" },
   flagContextTd: { padding: "6px 8px", borderBottom: "1px solid rgba(193,199,210,0.15)", color: "#414751" },
-  flagContextLink: { background: "none", border: "none", color: "#0468b1", cursor: "pointer", fontFamily: "monospace", fontSize: 12, fontWeight: 600, padding: 0, textDecoration: "underline", textUnderlineOffset: 2 },
+  flagContextLink: { background: "none", border: "none", color: "var(--c-primary-container)", cursor: "pointer", fontFamily: "monospace", fontSize: 12, fontWeight: 600, padding: 0, textDecoration: "underline", textUnderlineOffset: 2 },
   flagReasonMeta: { fontSize: 11, color: "#414751", background: "#f2f4f7", borderRadius: 6, padding: "8px 10px", overflowX: "auto", margin: "8px 0 0" },
   mergeDuplicateBtn: {
     width: "100%",
@@ -1622,8 +1623,8 @@ const styles: Record<string, React.CSSProperties> = {
     transition: "color 0.12s, border-color 0.12s",
   },
   historyTabActive: {
-    color: "#00508a",
-    borderBottom: "2px solid #00508a",
+    color: "var(--c-primary)",
+    borderBottom: "2px solid var(--c-primary)",
   },
   historyEmpty: {
     display: "flex",
@@ -1642,7 +1643,7 @@ const styles: Record<string, React.CSSProperties> = {
   historyDot: {
     width: 8, height: 8,
     borderRadius: "50%",
-    background: "#00508a",
+    background: "var(--c-primary)",
     boxShadow: "0 0 0 4px rgba(0,80,138,0.1)",
     flexShrink: 0,
     marginTop: 4,
@@ -1653,7 +1654,7 @@ const styles: Record<string, React.CSSProperties> = {
   versionRowHeader: { display: "flex", alignItems: "center", gap: 10, padding: "10px 0", cursor: "pointer", flexWrap: "wrap" },
   versionDate: { fontSize: 11, color: "#717782", flexShrink: 0 },
   versionDamage: { fontSize: 12, color: "#414751", flex: 1 },
-  viewReportBtn: { background: "none", border: "none", color: "#0468b1", fontSize: 12, cursor: "pointer", fontWeight: 500, padding: 0 },
+  viewReportBtn: { background: "none", border: "none", color: "var(--c-primary-container)", fontSize: 12, cursor: "pointer", fontWeight: 500, padding: 0 },
   versionExpanded: { display: "flex", gap: 12, padding: "8px 0 12px", fontSize: 12, color: "#414751" },
 
   // Review log
@@ -1689,7 +1690,7 @@ const styles: Record<string, React.CSSProperties> = {
   translateBtn: {
     display: "inline-flex", alignItems: "center", gap: 5,
     padding: "5px 12px",
-    background: "rgba(4,104,177,0.07)", color: "#0468b1",
+    background: "rgba(4,104,177,0.07)", color: "var(--c-primary-container)",
     border: "none", borderRadius: 6,
     fontSize: 12, cursor: "pointer", fontWeight: 500,
   },
@@ -1699,7 +1700,7 @@ const styles: Record<string, React.CSSProperties> = {
     position: "fixed",
     bottom: 28, left: "50%",
     transform: "translateX(-50%)",
-    background: "#00508a", color: "#fff",
+    background: "var(--c-primary)", color: "#fff",
     padding: "10px 22px",
     borderRadius: 8, fontSize: 13, fontWeight: 500,
     zIndex: 999,

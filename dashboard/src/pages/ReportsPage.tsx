@@ -1,8 +1,11 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { Search, ChevronDown, X, ChevronLeft, ChevronRight, Eye, Download } from "lucide-react";
+import { Search, ChevronDown, X, ChevronLeft, ChevronRight, Eye, Download, FileText } from "lucide-react";
 import Header from "../components/Header";
+import PageSpinner from "../components/PageSpinner";
+import EmptyState from "../components/EmptyState";
+import ErrorState from "../components/ErrorState";
 import api from "../services/api";
 import type { ReportListItem, FlagStatus, ReportListResponse } from "../types";
 import { formatDamageLevel, formatDateTime } from "../utils/formatters";
@@ -151,6 +154,12 @@ export default function ReportsPage() {
   const [cursor, setCursor] = useState<string | null>(null);
   const cursorStack = useRef<string[]>([]);
 
+  function resetPagination() {
+    cursorStack.current = [];
+    setCursor(null);
+    setPage(1);
+  }
+
   // Close chip dropdowns when clicking outside the filter bar
   useEffect(() => {
     function handleMouseDown(e: MouseEvent) {
@@ -162,6 +171,20 @@ export default function ReportsPage() {
     document.addEventListener("mousedown", handleMouseDown);
     return () => document.removeEventListener("mousedown", handleMouseDown);
   }, []);
+
+  // Debounce search — auto-apply 400ms after the user stops typing, without
+  // requiring them to press Enter. Chip-based filters still require explicit Apply.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setFilters((prev) => {
+        if (prev.search === pendingFilters.search) return prev;
+        resetPagination();
+        return { ...prev, search: pendingFilters.search };
+      });
+    }, 400);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingFilters.search]);
 
   // Build query params from current applied filters + pagination state
   const queryParams = useCallback((): Record<string, string> => {
@@ -180,7 +203,7 @@ export default function ReportsPage() {
     return p;
   }, [filters, pageSize, cursor]);
 
-  const { data, isLoading } = useQuery<ReportListResponse>({
+  const { data, isLoading, isError } = useQuery<ReportListResponse>({
     queryKey: ["reports", filters, pageSize, cursor],
     queryFn: async () => {
       const response = await api.get("/api/dashboard/reports", { params: queryParams() });
@@ -237,12 +260,6 @@ export default function ReportsPage() {
     setCursor(null);
     setPage(1);
     setPageSize(newSize);
-  }
-
-  function resetPagination() {
-    cursorStack.current = [];
-    setCursor(null);
-    setPage(1);
   }
 
   // ── Filter chip handlers ───────────────────────────────────────────────────
@@ -360,10 +377,9 @@ export default function ReportsPage() {
               <input
                 type="text"
                 style={styles.searchInput}
-                placeholder="Search report ID, reporter..."
+                placeholder="Search report ID, reporter…"
                 value={pendingFilters.search}
                 onChange={(e) => setPendingFilters((p) => ({ ...p, search: e.target.value }))}
-                onKeyDown={(e) => { if (e.key === "Enter") applyFilters(); }}
               />
             </div>
 
@@ -584,7 +600,7 @@ export default function ReportsPage() {
 
         {/* ── Summary stat cards ───────────────────────────────────────── */}
         <div style={styles.statsGrid}>
-          <div style={{ ...styles.statCard, borderLeft: "4px solid #00508a" }}>
+          <div style={{ ...styles.statCard, borderLeft: "4px solid var(--c-primary)" }}>
             <p style={styles.statLabel}>Total Reports</p>
             <span style={styles.statValue}>{statsData ? statsData.total.toLocaleString() : (data ? data.total.toLocaleString() : "—")}</span>
             <p style={styles.statSub}>All statuses</p>
@@ -619,7 +635,9 @@ export default function ReportsPage() {
 
         {/* ── Table + pagination ───────────────────────────────────────── */}
         {isLoading ? (
-          <div style={styles.loading}>Loading reports…</div>
+          <PageSpinner />
+        ) : isError ? (
+          <ErrorState message="Failed to load reports. Check your connection and try again." />
         ) : (
           <div style={styles.tableCard}>
             <div style={{ overflowX: "auto" }}>
@@ -697,12 +715,18 @@ export default function ReportsPage() {
                         </td>
 
                         {/* Infrastructure Type */}
-                        <td style={{ ...styles.td, fontSize: 12, color: "#414751" }}>
-                          {report.infrastructure_type}
+                        <td
+                          style={{ ...styles.td, fontSize: 12, color: "#414751", maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                          title={report.infrastructure_type ?? ""}
+                        >
+                          {report.infrastructure_type ?? "—"}
                         </td>
 
                         {/* Crisis Type */}
-                        <td style={{ ...styles.td, fontSize: 12, color: "#414751" }}>
+                        <td
+                          style={{ ...styles.td, fontSize: 12, color: "#414751", maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                          title={report.disaster_type ?? ""}
+                        >
                           {report.disaster_type ?? "—"}
                         </td>
 
@@ -746,7 +770,13 @@ export default function ReportsPage() {
                   })}
                   {items.length === 0 && (
                     <tr>
-                      <td colSpan={9} style={styles.emptyCell}>No reports found.</td>
+                      <td colSpan={9}>
+                        <EmptyState
+                          icon={<FileText size={28} color="var(--c-text-subtle)" />}
+                          title="No reports found"
+                          message="Try adjusting your filters or date range."
+                        />
+                      </td>
                     </tr>
                   )}
                 </tbody>
@@ -839,7 +869,7 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: "center",
     gap: 7,
     padding: "8px 18px",
-    background: "#00508a",
+    background: "var(--c-primary)",
     color: "#fff",
     border: "none",
     borderRadius: 8,
@@ -918,10 +948,10 @@ const styles: Record<string, React.CSSProperties> = {
   },
   chipActive: {
     background: "#d2e4ff",
-    color: "#00508a",
+    color: "var(--c-primary)",
   },
   chipBadge: {
-    background: "#00508a",
+    background: "var(--c-primary)",
     color: "#fff",
     borderRadius: 20,
     padding: "1px 5px",
@@ -938,7 +968,7 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: "pointer",
     fontSize: 12,
     fontWeight: 700,
-    color: "#00508a",
+    color: "var(--c-primary)",
     padding: "6px 8px",
     textDecoration: "underline",
     textUnderlineOffset: 2,
@@ -981,7 +1011,7 @@ const styles: Record<string, React.CSSProperties> = {
   applyBtn: {
     width: "100%",
     padding: "7px",
-    background: "#00508a",
+    background: "var(--c-primary)",
     color: "#fff",
     border: "none",
     borderRadius: 7,
@@ -1054,21 +1084,6 @@ const styles: Record<string, React.CSSProperties> = {
   },
 
   // Table
-  emptyState: {
-    padding: "56px 20px",
-    textAlign: "center",
-    color: "#717782",
-    fontSize: 14,
-    background: "#fff",
-    borderRadius: 12,
-    boxShadow: "0 4px 20px rgba(8,27,57,0.04)",
-  },
-  loading: {
-    padding: 56,
-    textAlign: "center",
-    color: "#717782",
-    fontSize: 14,
-  },
   tableCard: {
     background: "#fff",
     borderRadius: 12,
@@ -1081,7 +1096,7 @@ const styles: Record<string, React.CSSProperties> = {
     borderBottom: "1px solid rgba(193,199,210,0.25)",
   },
   th: {
-    padding: "14px 16px",
+    padding: "10px 14px",
     textAlign: "left",
     fontSize: 10,
     fontWeight: 800,
@@ -1096,21 +1111,16 @@ const styles: Record<string, React.CSSProperties> = {
     transition: "background 0.1s",
   },
   td: {
-    padding: "12px 16px",
+    padding: "9px 14px",
     fontSize: 13,
     color: "#191c1e",
     verticalAlign: "middle",
   },
-  emptyCell: {
-    padding: 48,
-    textAlign: "center",
-    color: "#717782",
-    fontSize: 14,
-  },
+
 
   // Cell styles
   idLink: {
-    color: "#00508a",
+    color: "var(--c-primary)",
     fontWeight: 700,
     fontFamily: "monospace",
     fontSize: 12,
@@ -1175,7 +1185,7 @@ const styles: Record<string, React.CSSProperties> = {
     transition: "background 0.1s",
   },
   pageNumBtnActive: {
-    background: "#00508a",
+    background: "var(--c-primary)",
     color: "#fff",
     cursor: "default",
     borderRadius: 4,

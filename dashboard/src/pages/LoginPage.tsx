@@ -17,7 +17,7 @@ function UndpLogo() {
       xmlns="http://www.w3.org/2000/svg"
       aria-label="UNDP logo"
     >
-      <rect width={64} height={64} rx={10} fill="#0468B1" />
+      <rect width={64} height={64} rx={10} fill="#0468b1" />
       <text
         x={32}
         y={26}
@@ -58,7 +58,7 @@ function Spinner() {
         border: "2.5px solid rgba(255,255,255,0.35)",
         borderTopColor: "#ffffff",
         borderRadius: "50%",
-        animation: "spin 0.7s linear infinite",
+        animation: "cr-spin 0.7s linear infinite",
         verticalAlign: "middle",
         marginRight: 8,
         flexShrink: 0,
@@ -223,7 +223,6 @@ export default function LoginPage() {
   return (
     <>
       <style>{`
-        @keyframes spin { to { transform: rotate(360deg); } }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
         .login-input {
           width: 100%;
@@ -239,20 +238,20 @@ export default function LoginPage() {
           box-sizing: border-box;
         }
         .login-input::placeholder { color: rgba(113,119,130,0.6); }
-        .login-input:focus { border-bottom-color: #00508a; background: #eceef1; }
+        .login-input:focus { border-bottom-color: var(--c-primary); background: #eceef1; }
         .login-input-wrap { position: relative; }
         .login-input-bar {
           position: absolute;
           bottom: 0; left: 0;
           height: 2px;
           width: 0;
-          background: #00508a;
+          background: var(--c-primary);
           transition: width 0.25s ease;
         }
         .login-input-wrap:focus-within .login-input-bar { width: 100%; }
         .login-submit-btn {
           width: 100%;
-          background: linear-gradient(135deg, #00508a 0%, #0468b1 100%);
+          background: linear-gradient(135deg, var(--c-primary) 0%, var(--c-primary-container) 100%);
           color: #fff;
           border: none;
           border-radius: 4px;
@@ -285,7 +284,7 @@ export default function LoginPage() {
           align-items: center;
           transition: color 0.15s;
         }
-        .login-eye-btn:hover { color: #00508a; }
+        .login-eye-btn:hover { color: var(--c-primary); }
         .expired-panel {
           margin-top: 24px;
           background: #fffbeb;
@@ -394,7 +393,7 @@ export default function LoginPage() {
                     autoFocus
                     autoComplete="email"
                     disabled={loading}
-                    style={emailFocused ? { borderBottomColor: "#00508a", background: "#eceef1" } : {}}
+                    style={emailFocused ? { borderBottomColor: "var(--c-primary)", background: "#eceef1" } : {}}
                   />
                 </div>
               </div>
@@ -422,7 +421,7 @@ export default function LoginPage() {
                     required
                     autoComplete="current-password"
                     disabled={loading}
-                    style={{ paddingRight: 44, ...(passwordFocused ? { borderBottomColor: "#00508a", background: "#eceef1" } : {}) }}
+                    style={{ paddingRight: 44, ...(passwordFocused ? { borderBottomColor: "var(--c-primary)", background: "#eceef1" } : {}) }}
                   />
                   <button
                     type="button"
@@ -711,7 +710,7 @@ const s: Record<string, React.CSSProperties> = {
   cardTitle: {
     fontSize: 22,
     fontWeight: 700,
-    color: "#00508a",
+    color: "var(--c-primary)",
     margin: "0 0 6px",
     letterSpacing: "-0.01em",
   },

@@ -1,5 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { CheckCircle } from "lucide-react";
 import Header from "../components/Header";
+import PageSpinner from "../components/PageSpinner";
+import EmptyState from "../components/EmptyState";
 import { useSSE } from "../hooks/useSSE";
 import api from "../services/api";
 import type { SSEEvent } from "../types";
@@ -55,23 +58,6 @@ function locationLabel(r: QueueReport): string {
   if (r.gps_latitude != null && r.gps_longitude != null)
     return `${r.gps_latitude.toFixed(4)}, ${r.gps_longitude.toFixed(4)}`;
   return "No location recorded";
-}
-
-// ── Spinner ────────────────────────────────────────────────────────────────────
-
-function Spinner({ size = 28 }: { size?: number }) {
-  return (
-    <div
-      style={{
-        width: size,
-        height: size,
-        border: "3px solid var(--c-surface-high)",
-        borderTop: "3px solid var(--c-primary-container)",
-        borderRadius: "50%",
-        animation: "rq-spin 0.8s linear infinite",
-      }}
-    />
-  );
 }
 
 // ── Component ──────────────────────────────────────────────────────────────────
@@ -178,8 +164,6 @@ export default function ReportQueuePage() {
 
   return (
     <div style={s.page}>
-      <style>{`@keyframes rq-spin { to { transform: rotate(360deg); } }`}</style>
-
       <Header
         title="Report Queue"
         subtitle={loading ? "Loading…" : `${total} pending report${total !== 1 ? "s" : ""}`}
@@ -199,14 +183,13 @@ export default function ReportQueuePage() {
 
         {/* Table */}
         {loading ? (
-          <div style={s.centred}>
-            <Spinner />
-          </div>
+          <PageSpinner />
         ) : items.length === 0 ? (
-          <div style={s.emptyState}>
-            <div style={s.emptyIcon}>✅</div>
-            <p style={s.emptyTitle}>No reports pending review</p>
-          </div>
+          <EmptyState
+            icon={<CheckCircle size={28} color="var(--c-flag-green)" />}
+            title="No reports pending review"
+            message="Grey reports awaiting initial processing will appear here."
+          />
         ) : (
           <>
             <div className="card" style={{ overflow: "hidden" }}>
@@ -376,7 +359,7 @@ const s: Record<string, React.CSSProperties> = {
     height: 8,
     borderRadius: "50%",
     background: "var(--c-primary-container)",
-    animation: "rq-spin 2s linear infinite",
+    animation: "cr-spin 2s linear infinite",
     display: "inline-block",
   },
   note: {
@@ -388,21 +371,6 @@ const s: Record<string, React.CSSProperties> = {
     borderRadius: 8,
     padding: "8px 14px",
     flex: 1,
-  },
-  centred: { display: "flex", justifyContent: "center", paddingTop: 80 },
-  emptyState: {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    padding: "60px 0",
-    gap: 12,
-  },
-  emptyIcon: { fontSize: 48, color: "var(--c-text-subtle)" },
-  emptyTitle: {
-    fontSize: "var(--text-xl)" as string,
-    fontWeight: 700,
-    color: "var(--c-text-primary)",
-    margin: 0,
   },
   thumb: { width: 60, height: 60, objectFit: "cover", borderRadius: 6, display: "block" },
   thumbPlaceholder: {

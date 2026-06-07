@@ -1434,7 +1434,7 @@ function LanguagesTab() {
 
   return (
     <div style={s.tabContent}>
-      <style>{`@keyframes cr-spin { from { transform: rotate(0deg) } to { transform: rotate(360deg) } }`}</style>
+
       {banner && (
         <div style={{ ...s.successBanner, background: banner.ok ? "#d4edda" : "#fff5f5", color: banner.ok ? "#155724" : "#c53030", border: `1px solid ${banner.ok ? "#c3e6cb" : "#fc8181"}` }}>
           {banner.msg}
@@ -1501,7 +1501,7 @@ function LanguagesTab() {
         <div id="translate-progress-banner" style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 6, padding: "12px 16px" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <div style={{ width: 14, height: 14, border: "2px solid #0468b1", borderTopColor: "transparent", borderRadius: "50%", animation: "cr-spin 0.8s linear infinite", flexShrink: 0 }} />
+              <div style={{ width: 14, height: 14, border: "2px solid var(--c-primary-container)", borderTopColor: "transparent", borderRadius: "50%", animation: "cr-spin 0.8s linear infinite", flexShrink: 0 }} />
               <span style={{ fontWeight: 700, fontSize: 13, color: "#1e40af" }}>
                 Auto-translating {languages.find((l) => l.code === autoTranslatingLang)?.name ?? autoTranslatingLang.toUpperCase()}...
               </span>
@@ -1834,7 +1834,7 @@ function LanguagesTab() {
         {(lockLoading || transLoading || translationsLoadingImmediate) && (
           <div style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", background: "rgba(255,255,255,0.8)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10, borderRadius: 12 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <div style={{ width: 20, height: 20, border: "3px solid #0468b1", borderTopColor: "transparent", borderRadius: "50%", animation: "cr-spin 0.8s linear infinite" }} />
+              <div style={{ width: 20, height: 20, border: "3px solid var(--c-primary-container)", borderTopColor: "transparent", borderRadius: "50%", animation: "cr-spin 0.8s linear infinite" }} />
               <span style={{ fontSize: 14, color: "#6b7280", fontWeight: 500 }}>Loading translations...</span>
             </div>
           </div>
@@ -2722,7 +2722,7 @@ function QuestionsTab({ isAdmin, onSwitchToLanguages: _onSwitchToLanguages }: { 
 
   return (
     <div style={s.tabContent}>
-      <style>{`@keyframes cr-spin { from { transform: rotate(0deg) } to { transform: rotate(360deg) } }`}</style>
+
       {successBanner && <div style={{ ...s.successBanner, marginBottom: 16 }}>{successBanner}</div>}
       {publishBanner && <div style={{ ...s.successBanner, marginBottom: 16 }}>{publishBanner}</div>}
 

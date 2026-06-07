@@ -6,7 +6,7 @@ import { useHasAccess } from "../hooks/useHasAccess";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
-const BLUE = "#0468b1";
+const BLUE = "var(--c-primary-container)";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -209,9 +209,9 @@ function formatFilters(item: ExportHistoryItem): string {
   return parts.length > 0 ? parts.join(" | ") : "Default filters";
 }
 
-// ── Spinner ────────────────────────────────────────────────────────────────────
+// ── ButtonSpinner (inline, white, for use inside dark buttons) ────────────────
 
-function Spinner({ size = 16 }: { size?: number }) {
+function ButtonSpinner({ size = 16 }: { size?: number }) {
   return (
     <span
       style={{
@@ -221,7 +221,7 @@ function Spinner({ size = 16 }: { size?: number }) {
         border: "2px solid rgba(255,255,255,0.4)",
         borderTop: "2px solid #fff",
         borderRadius: "50%",
-        animation: "ex-spin 0.7s linear infinite",
+        animation: "cr-spin 0.7s linear infinite",
         verticalAlign: "middle",
         marginRight: 8,
         flexShrink: 0,
@@ -597,7 +597,6 @@ export default function ExportPage() {
   return (
     <div style={s.page}>
       <style>{`
-        @keyframes ex-spin  { to { transform: rotate(360deg); } }
         @keyframes ex-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
         .ex-type-card { transition: box-shadow 0.15s, transform 0.15s, border-color 0.15s; }
         .ex-type-card:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(4,104,177,0.13) !important; }
@@ -964,7 +963,7 @@ export default function ExportPage() {
                 marginTop: 20,
                 padding: "14px 0",
                 background: canGenerate
-                  ? "linear-gradient(135deg, #00508a 0%, #0468b1 100%)"
+                  ? "linear-gradient(135deg, var(--c-primary) 0%, var(--c-primary-container) 100%)"
                   : "var(--c-surface-high)",
                 color: canGenerate ? "#fff" : "var(--c-text-muted)",
                 border: "none",
@@ -986,7 +985,7 @@ export default function ExportPage() {
             >
               {generating ? (
                 <>
-                  <Spinner />
+                  <ButtonSpinner />
                   Generating — please wait
                 </>
               ) : (
@@ -1005,8 +1004,8 @@ export default function ExportPage() {
           <div className="card card-padded" style={{ marginBottom: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
               <span className="section-label">Recent Exports</span>
-              <span style={{ fontSize: "var(--text-sm)", color: BLUE, fontWeight: 600, cursor: "pointer" }}>
-                View All
+              <span style={{ fontSize: "var(--text-xs)", color: "var(--c-text-muted)" }}>
+                Last 20 exports
               </span>
             </div>
 
@@ -1060,7 +1059,7 @@ export default function ExportPage() {
                             border: `1.5px solid ${BLUE}`,
                             borderTop: "1.5px solid transparent",
                             borderRadius: "50%",
-                            animation: "ex-spin 0.7s linear infinite",
+                            animation: "cr-spin 0.7s linear infinite",
                           }}
                         />
                       ) : (

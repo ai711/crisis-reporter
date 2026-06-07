@@ -159,7 +159,7 @@ function NotificationDropdown({
         {notifications.length > 0 && (
           <button
             onClick={onMarkAllRead}
-            style={{ fontSize: 11, fontWeight: 600, color: "#00508a", background: "none", border: "none", cursor: "pointer", padding: 0, letterSpacing: "0.02em" }}
+            style={{ fontSize: 11, fontWeight: 600, color: "var(--c-primary)", background: "none", border: "none", cursor: "pointer", padding: 0, letterSpacing: "0.02em" }}
           >
             Mark all as read
           </button>
@@ -182,7 +182,7 @@ function NotificationDropdown({
                   display: "flex",
                   gap: 12,
                   padding: "12px 16px",
-                  borderLeft: "3px solid #00508a",
+                  borderLeft: "3px solid var(--c-primary)",
                   background: "rgba(0,80,138,0.03)",
                   marginBottom: 1,
                   cursor: "pointer",
@@ -194,7 +194,7 @@ function NotificationDropdown({
                 <div style={{
                   width: 32, height: 32, borderRadius: 8,
                   background: "rgba(0,80,138,0.08)",
-                  color: "#00508a",
+                  color: "var(--c-primary)",
                   display: "flex", alignItems: "center", justifyContent: "center",
                   flexShrink: 0,
                 }}>
@@ -357,8 +357,8 @@ export default function Header({ title, subtitle }: HeaderProps) {
 
 const styles: Record<string, React.CSSProperties> = {
   header: {
-    background: "#fff",
-    borderBottom: "1px solid #e0e0e0",
+    background: "var(--c-surface-lowest)",
+    borderBottom: "1px solid var(--c-border)",
     padding: "0 32px",
     height: 64,
     display: "flex",
@@ -376,13 +376,13 @@ const styles: Record<string, React.CSSProperties> = {
   title: {
     fontSize: 18,
     fontWeight: 700,
-    color: "#1A2B4A",
+    color: "var(--c-navy)",
     margin: 0,
     lineHeight: 1.2,
   },
   subtitle: {
     fontSize: 12,
-    color: "#666",
+    color: "var(--c-text-muted)",
     margin: "2px 0 0",
   },
   right: {
@@ -394,7 +394,7 @@ const styles: Record<string, React.CSSProperties> = {
   bellBtn: {
     background: "none",
     border: "none",
-    color: "#6b7280",
+    color: "var(--c-text-muted)",
     cursor: "pointer",
     padding: "6px 8px",
     borderRadius: 8,
@@ -412,7 +412,7 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 24,
     padding: "5px 12px 5px 10px",
     cursor: "pointer",
-    color: "#1A2B4A",
+    color: "var(--c-navy)",
     fontSize: 13,
     fontWeight: 600,
     transition: "background 0.15s",
@@ -428,15 +428,15 @@ const styles: Record<string, React.CSSProperties> = {
     height: 32,
     borderRadius: "50%",
     objectFit: "cover",
-    border: "2px solid #0468B1",
+    border: "2px solid var(--c-primary-container)",
     flexShrink: 0,
   },
   avatarInitial: {
     width: 32,
     height: 32,
     borderRadius: "50%",
-    background: "#0468B1",
-    color: "#fff",
+    background: "var(--c-primary-container)",
+    color: "var(--c-on-primary)",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",

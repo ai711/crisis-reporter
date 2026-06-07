@@ -2,6 +2,8 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useSearchParams, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Header from "../components/Header";
+import PageSpinner from "../components/PageSpinner";
+import ErrorState from "../components/ErrorState";
 import {
   getPropertyDetail,
   setConfirmedStatus,
@@ -754,9 +756,7 @@ export default function PropertyDetailPage() {
     return (
       <div style={s.page}>
         <Header title="Location Detail" subtitle="Loading property…" />
-        <div style={{ padding: 60, textAlign: "center" as const, color: "var(--c-text-muted)" }}>
-          Loading property details…
-        </div>
+        <PageSpinner />
       </div>
     );
   }
@@ -765,9 +765,7 @@ export default function PropertyDetailPage() {
     return (
       <div style={s.page}>
         <Header title="Property Detail" />
-        <div style={{ padding: 60, textAlign: "center" as const, color: "var(--c-flag-red)" }}>
-          Failed to load property. Check the Property ID and try again.
-        </div>
+        <ErrorState message="Failed to load property. Check the Property ID and try again." />
       </div>
     );
   }

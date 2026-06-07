@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Eye, EyeOff } from "lucide-react";
 import { useAuthStore } from "../stores/authStore";
+import Header from "../components/Header";
 import {
   getDashboardUserDetail,
   getDashboardUserProjects,
@@ -13,7 +14,7 @@ import {
 import type { DashboardUserDetail, UserProjectAssignment } from "../types";
 import { formatDateTime, formatProjectStatus, PROJECT_STATUS_COLOURS } from "../utils/formatters";
 
-const BLUE = "#0468B1";
+const BLUE = "var(--c-primary-container)";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -381,6 +382,7 @@ export default function UserDetailPage() {
 
   return (
     <div style={d.page}>
+      <Header title="User Management" />
       {/* Back nav */}
       <div style={d.backBar}>
         <button style={d.backBtn} onClick={() => navigate("/users")}>← Manage Users</button>
@@ -598,7 +600,7 @@ function DetailRow({ label, value, valueColor }: { label: string; value: string;
 function roleBadgeStyle(role: string): React.CSSProperties {
   const map: Record<string, { bg: string; color: string }> = {
     superadmin: { bg: "#EDE7F6", color: "#4527A0" },
-    admin: { bg: "#EBF5FB", color: "#0468B1" },
+    admin: { bg: "#EBF5FB", color: "var(--c-primary-container)" },
     analyst: { bg: "#f0f4f8", color: "#4a5568" },
   };
   const c = map[role] ?? map.analyst;

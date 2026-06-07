@@ -1,8 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Pencil, Lock, X, ChevronLeft, ChevronRight, Filter } from "lucide-react";
+import { Pencil, Lock, X, ChevronLeft, ChevronRight, Filter, FolderOpen } from "lucide-react";
 import Header from "../components/Header";
+import PageSpinner from "../components/PageSpinner";
+import EmptyState from "../components/EmptyState";
+import ErrorState from "../components/ErrorState";
 import { useAuthStore } from "../stores/authStore";
 import {
   getDashboardProjects,
@@ -227,7 +230,7 @@ function CreateProjectModal({ onClose, countries }: CreateProjectModalProps) {
             background: "rgba(4,104,177,0.06)", border: "1px solid rgba(4,104,177,0.15)",
             borderRadius: 8, padding: "12px 14px", display: "flex", gap: 10, alignItems: "flex-start",
           }}>
-            <span className="material-symbols-outlined" style={{ fontSize: 20, color: "#0468B1", flexShrink: 0, fontVariationSettings: "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20" }}>info</span>
+            <span className="material-symbols-outlined" style={{ fontSize: 20, color: "var(--c-primary-container)", flexShrink: 0, fontVariationSettings: "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20" }}>info</span>
             <p style={{ fontSize: 12, color: "#00497f", lineHeight: 1.6, margin: 0 }}>
               <strong>Important Notice:</strong> Country selection and start date cannot be changed once the project has been initialized. Please verify all details before creation.
             </p>
@@ -540,7 +543,7 @@ function FilterPanel({ filters, onChange, onClose, countries }: FilterPanelProps
     }}>
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
         <span style={{ fontWeight: 700, fontSize: 13, color: "#1A2B4A" }}>Advanced Filters</span>
-        <button onClick={clear} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "#0468B1", fontWeight: 600 }}>Clear</button>
+        <button onClick={clear} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "var(--c-primary-container)", fontWeight: 600 }}>Clear</button>
       </div>
 
       <div style={{ marginBottom: 14 }}>
@@ -695,7 +698,7 @@ export default function ProjectsPage() {
                   style={{
                     padding: "6px 18px", borderRadius: 6, border: "none", cursor: "pointer",
                     fontSize: 12, fontWeight: 700, lineHeight: 1,
-                    background: isTab ? "#0468B1" : "transparent",
+                    background: isTab ? "var(--c-primary-container)" : "transparent",
                     color: isTab ? "#fff" : "#718096",
                     transition: "all 0.15s",
                   }}
@@ -715,14 +718,14 @@ export default function ProjectsPage() {
                 border: "1px solid #e0e8f0", borderRadius: 8,
                 background: filtersActive ? "#EBF5FB" : "#fff",
                 cursor: "pointer", fontSize: 12, fontWeight: 600,
-                color: filtersActive ? "#0468B1" : "#555",
+                color: filtersActive ? "var(--c-primary-container)" : "#555",
                 boxShadow: "0 1px 4px rgba(8,27,57,0.05)",
               }}
             >
               <Filter size={13} />
               Filters
               {filtersActive && (
-                <span style={{ background: "#0468B1", color: "#fff", borderRadius: 10, fontSize: 10, padding: "1px 6px", fontWeight: 700 }}>
+                <span style={{ background: "var(--c-primary-container)", color: "#fff", borderRadius: 10, fontSize: 10, padding: "1px 6px", fontWeight: 700 }}>
                   On
                 </span>
               )}
@@ -769,26 +772,27 @@ export default function ProjectsPage() {
             <tbody>
               {isLoading && (
                 <tr>
-                  <td colSpan={7} style={{ padding: 48, textAlign: "center", color: "#9aa5b4", fontSize: 14 }}>Loading projects…</td>
+                  <td colSpan={7}><PageSpinner /></td>
                 </tr>
               )}
               {isError && (
                 <tr>
-                  <td colSpan={7} style={{ padding: 48, textAlign: "center", color: "#C62828", fontSize: 14 }}>Failed to load projects.</td>
+                  <td colSpan={7}><ErrorState message="Failed to load projects. Check your connection and try again." /></td>
                 </tr>
               )}
               {!isLoading && !isError && items.length === 0 && (
                 <tr>
                   <td colSpan={7}>
-                    <div style={{ padding: "60px 0", textAlign: "center" }}>
-                      <span className="material-symbols-outlined" style={{ fontSize: 40, color: "#d0dce8", display: "block", marginBottom: 12, fontVariationSettings: "'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 48" }}>inventory_2</span>
-                      <p style={{ color: "#9aa5b4", marginBottom: 20, fontSize: 14 }}>
-                        No projects found. Create your first project to start organising crisis reports.
-                      </p>
-                      <button onClick={() => setShowCreate(true)} style={primaryBtnStyle}>
-                        + New Project
-                      </button>
-                    </div>
+                    <EmptyState
+                      icon={<FolderOpen size={28} color="var(--c-text-subtle)" />}
+                      title="No projects found"
+                      message="Create your first project to start organising crisis reports."
+                      action={
+                        <button onClick={() => setShowCreate(true)} style={primaryBtnStyle}>
+                          + New Project
+                        </button>
+                      }
+                    />
                   </td>
                 </tr>
               )}
@@ -880,7 +884,7 @@ export default function ProjectsPage() {
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                         <button
                           onClick={() => navigate(`/projects/${row.serial_id}`)}
-                          style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, fontWeight: 700, color: "#0468B1", padding: 0 }}
+                          style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, fontWeight: 700, color: "var(--c-primary-container)", padding: 0 }}
                         >
                           View
                         </button>
@@ -970,7 +974,7 @@ const labelStyle: React.CSSProperties = {
 };
 
 const primaryBtnStyle: React.CSSProperties = {
-  background: "#0468B1",
+  background: "var(--c-primary-container)",
   color: "#fff",
   border: "none",
   borderRadius: 6,

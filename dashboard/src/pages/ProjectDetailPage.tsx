@@ -18,6 +18,8 @@ import {
 } from "recharts";
 import { UserMinus, AlertTriangle } from "lucide-react";
 import Header from "../components/Header";
+import PageSpinner from "../components/PageSpinner";
+import ErrorState from "../components/ErrorState";
 import PropertySummaryPanel from "../components/PropertySummaryPanel";
 import { useAuthStore } from "../stores/authStore";
 import {
@@ -45,7 +47,8 @@ import {
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const MAPTILER_KEY = import.meta.env.VITE_MAPTILER_KEY || "";
-const BLUE = "#0468B1";
+// Keep as hex: used as SVG fill= in Recharts charts (CSS vars don't work in SVG attributes)
+const BLUE = "#0468b1"; // matches --c-primary-container
 
 const DAMAGE_COLORS: Record<string, string> = {
   minimal: "#4caf50",
@@ -152,29 +155,6 @@ interface DashboardUserSearchItem {
 }
 
 // ── Small helpers ─────────────────────────────────────────────────────────────
-
-function Spinner({ size = 32, full = false }: { size?: number; full?: boolean }) {
-  const el = (
-    <div
-      style={{
-        width: size,
-        height: size,
-        border: "3px solid #e2e8f0",
-        borderTop: `3px solid ${BLUE}`,
-        borderRadius: "50%",
-        animation: "pd-spin 0.8s linear infinite",
-      }}
-    />
-  );
-  if (full) {
-    return (
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh" }}>
-        {el}
-      </div>
-    );
-  }
-  return <div style={{ display: "flex", justifyContent: "center", padding: "32px 0" }}>{el}</div>;
-}
 
 function SectionCard({
   title,
@@ -677,10 +657,10 @@ export default function ProjectDetailPage() {
   // ── Render guards ──────────────────────────────────────────────────────
   if (projectLoading) {
     return (
-      <>
-        <style>{`@keyframes pd-spin { to { transform: rotate(360deg); } }`}</style>
-        <Spinner size={40} full />
-      </>
+      <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
+        <Header title="Project Detail" subtitle="Loading…" />
+        <PageSpinner />
+      </div>
     );
   }
 
@@ -688,14 +668,9 @@ export default function ProjectDetailPage() {
     return (
       <>
         <Header title="Project Not Found" />
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "60vh" }}>
-          <div style={ss.errorCard}>
-            <div style={ss.errorTitle}>Project not found.</div>
-            <button style={ss.backBtn} onClick={() => navigate("/projects")}>
-              Back to Projects
-            </button>
-          </div>
-        </div>
+        <ErrorState
+          message="Project not found or you don't have access. Check the URL and try again."
+        />
       </>
     );
   }
@@ -716,7 +691,6 @@ export default function ProjectDetailPage() {
   return (
     <>
       <style>{`
-        @keyframes pd-spin { to { transform: rotate(360deg); } }
         @keyframes pd-pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
         .pd-tab-btn:hover { background: #f0f4f8 !important; }
         .pd-tab-btn-active:hover { background: transparent !important; }
@@ -921,7 +895,7 @@ export default function ProjectDetailPage() {
                 </div>
 
                 {statsLoading ? (
-                  <Spinner />
+                  <PageSpinner />
                 ) : !statsData ? (
                   <div style={ss.emptyState}>No statistics available.</div>
                 ) : (
@@ -1201,7 +1175,7 @@ export default function ProjectDetailPage() {
               </div>
 
               {reportsLoading ? (
-                <Spinner />
+                <PageSpinner />
               ) : reportItems.length === 0 ? (
                 <div style={ss.emptyState}>No reports linked to this project yet.</div>
               ) : (
@@ -1250,7 +1224,7 @@ export default function ProjectDetailPage() {
           {activeTab === "properties" && (
             <SectionCard title="Properties" badge={propTotal}>
               {propsLoading ? (
-                <Spinner />
+                <PageSpinner />
               ) : propItems.length === 0 ? (
                 <div style={ss.emptyState}>No properties linked to this project yet.</div>
               ) : (
@@ -1348,25 +1322,6 @@ const ss: Record<string, React.CSSProperties> = {
     gap: 20,
     background: "#f4f6f9",
     minHeight: "100%",
-  },
-  errorCard: {
-    background: "#fff",
-    border: "1px solid #e0e8f0",
-    borderRadius: 12,
-    padding: "40px 48px",
-    textAlign: "center",
-    boxShadow: "0 2px 12px rgba(0,0,0,0.08)",
-  },
-  errorTitle: { fontSize: 18, fontWeight: 700, color: "#1A2B4A", marginBottom: 16 },
-  backBtn: {
-    padding: "9px 20px",
-    background: BLUE,
-    color: "#fff",
-    border: "none",
-    borderRadius: 8,
-    fontSize: 13,
-    fontWeight: 600,
-    cursor: "pointer",
   },
   card: {
     background: "#fff",

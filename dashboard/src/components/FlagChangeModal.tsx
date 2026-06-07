@@ -154,7 +154,7 @@ const styles: Record<string, React.CSSProperties> = {
     padding: 24,
   },
   modal: {
-    background: "#fff",
+    background: "var(--c-surface-lowest)",
     borderRadius: 14,
     padding: "28px 28px 24px",
     width: "100%",
@@ -165,7 +165,7 @@ const styles: Record<string, React.CSSProperties> = {
   title: {
     fontSize: 18,
     fontWeight: 700,
-    color: "#1A2B4A",
+    color: "var(--c-navy)",
     margin: "0 0 8px",
   },
   subtitle: {
@@ -192,7 +192,7 @@ const styles: Record<string, React.CSSProperties> = {
     border: "1.5px solid #d0dce8",
     borderRadius: 8,
     fontSize: 13,
-    color: "#1A2B4A",
+    color: "var(--c-navy)",
     resize: "vertical",
     outline: "none",
     fontFamily: "inherit",
@@ -205,8 +205,8 @@ const styles: Record<string, React.CSSProperties> = {
     border: "1.5px solid #d0dce8",
     borderRadius: 8,
     fontSize: 13,
-    color: "#1A2B4A",
-    background: "#fff",
+    color: "var(--c-navy)",
+    background: "var(--c-surface-lowest)",
     outline: "none",
     cursor: "pointer",
   },
@@ -243,12 +243,12 @@ const styles: Record<string, React.CSSProperties> = {
   },
   confirmBtn: {
     padding: "9px 22px",
-    background: "#0468B1",
+    background: "var(--c-primary-container)",
     border: "none",
     borderRadius: 8,
     fontSize: 13,
     fontWeight: 600,
-    color: "#fff",
+    color: "var(--c-on-primary)",
     transition: "opacity 0.12s",
   },
 };

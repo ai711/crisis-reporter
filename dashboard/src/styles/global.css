@@ -36,6 +36,9 @@ body {
   --c-primary-container: #0468b1;
   --c-on-primary: #ffffff;
 
+  /* Brand navy — UNDP heading / title color */
+  --c-navy: #1a2b4a;
+
   /* Surfaces */
   --c-surface: #f7f9fc;
   --c-surface-low: #f2f4f7;
@@ -479,3 +482,6 @@ body {
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.12); border-radius: 3px; }
+
+/* --- Spinner animation (shared by PageSpinner component) --- */
+@keyframes cr-spin { to { transform: rotate(360deg); } }

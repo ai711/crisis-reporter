@@ -1,6 +1,10 @@
 import { useState, useRef, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Home } from "lucide-react";
 import Header from "../components/Header";
+import PageSpinner from "../components/PageSpinner";
+import EmptyState from "../components/EmptyState";
+import ErrorState from "../components/ErrorState";
 import { getProperties, getDashboardProjects } from "../services/api";
 import { formatDamageLevel, formatDateTime } from "../utils/formatters";
 import type { Property, PropertiesListResponse, ProjectListRow, ProjectsListResponse } from "../types";
@@ -529,29 +533,19 @@ export default function LocationsPage() {
         {/* ── Table ── */}
         <div style={styles.tableWrap}>
           {isError && (
-            <div style={styles.errorMsg}>
-              Failed to load properties. Check your connection and try again.
-            </div>
+            <ErrorState message="Failed to load properties. Check your connection and try again." />
           )}
 
           {isLoading && (
-            <div style={styles.loadingMsg}>Loading properties…</div>
+            <PageSpinner />
           )}
 
           {!isLoading && !isError && items.length === 0 && (
-            <div style={styles.emptyState}>
-              <svg width={48} height={48} viewBox="0 0 24 24" fill="none" stroke="var(--c-text-subtle)" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-                <polyline points="9 22 9 12 15 12 15 22" />
-              </svg>
-              <div style={styles.emptyText}>
-                No properties have been reported yet.
-                <br />
-                <span style={{ color: "var(--c-text-subtle)", fontStyle: "italic" }}>
-                  Properties appear here once green or orange reports are received.
-                </span>
-              </div>
-            </div>
+            <EmptyState
+              icon={<Home size={28} color="var(--c-text-subtle)" />}
+              title="No properties yet"
+              message="Properties appear here once green or orange reports are received."
+            />
           )}
 
           {!isLoading && !isError && items.length > 0 && (
@@ -1072,34 +1066,5 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: "var(--text-sm)",
     fontWeight: 500,
     color: "var(--c-text-primary)",
-  },
-  loadingMsg: {
-    padding: 60,
-    textAlign: "center" as const,
-    color: "var(--c-text-muted)",
-    fontSize: "var(--text-sm)",
-  },
-  errorMsg: {
-    padding: 40,
-    textAlign: "center" as const,
-    color: "var(--c-flag-red)",
-    fontSize: "var(--text-sm)",
-  },
-  emptyState: {
-    padding: 80,
-    textAlign: "center" as const,
-    display: "flex",
-    flexDirection: "column" as const,
-    alignItems: "center" as const,
-    gap: 16,
-  },
-  emptyIcon: {
-    fontSize: 48,
-  },
-  emptyText: {
-    fontSize: "var(--text-sm)",
-    color: "var(--c-text-muted)",
-    maxWidth: 440,
-    lineHeight: 1.6,
   },
 };

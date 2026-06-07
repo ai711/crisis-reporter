@@ -3,6 +3,8 @@ import { useParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { User } from "lucide-react";
 import Header from "../components/Header";
+import PageSpinner from "../components/PageSpinner";
+import ErrorState from "../components/ErrorState";
 import {
   getReporterDetail,
   changeReporterStatus,
@@ -740,10 +742,7 @@ export default function ReporterDetailPage() {
     return (
       <div style={s.container}>
         <Header title="Reporter Profile" />
-        <div style={s.fullLoading}>
-          <div style={s.spinner} />
-          <span style={{ marginTop: 16, fontSize: "var(--text-sm)", color: "var(--c-text-muted)" }}>Loading reporter profile…</span>
-        </div>
+        <PageSpinner label="Loading reporter profile…" />
       </div>
     );
   }
@@ -752,9 +751,7 @@ export default function ReporterDetailPage() {
     return (
       <div style={s.container}>
         <Header title="Reporter Profile" />
-        <div style={s.fullLoading}>
-          <p style={{ fontSize: "var(--text-sm)", color: "var(--c-flag-red)" }}>Failed to load reporter profile. Please refresh the page.</p>
-        </div>
+        <ErrorState message="Failed to load reporter profile. Please refresh the page." />
       </div>
     );
   }
@@ -971,23 +968,6 @@ export default function ReporterDetailPage() {
 const s: Record<string, React.CSSProperties> = {
   container: { display: "flex", flexDirection: "column", minHeight: "100vh" },
   content: { flex: 1, padding: "24px 32px", display: "flex", flexDirection: "column", gap: 20, overflow: "auto" },
-
-  fullLoading: {
-    flex: 1,
-    display: "flex",
-    flexDirection: "column" as const,
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
-    padding: 60,
-  },
-  spinner: {
-    width: 36,
-    height: 36,
-    border: "3px solid var(--c-border)",
-    borderTop: "3px solid var(--c-primary-container)",
-    borderRadius: "50%",
-    animation: "spin 0.8s linear infinite",
-  },
 
   profileHeader: {
     background: "var(--c-surface-lowest)",

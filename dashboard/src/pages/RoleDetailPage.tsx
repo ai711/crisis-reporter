@@ -3,12 +3,13 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Lock } from "lucide-react";
 import { useAuthStore } from "../stores/authStore";
+import Header from "../components/Header";
 import api from "../services/api";
 import type { Role } from "../types";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
-const BLUE = "#0468B1";
+const BLUE = "var(--c-primary-container)";
 
 // ── Section definitions — must match ManageRolesPage keys ─────────────────────
 
@@ -298,6 +299,7 @@ export default function RoleDetailPage() {
   if (isLoading) {
     return (
       <div style={s.page}>
+        <Header title="Manage Roles" />
         <div style={s.loading}>Loading…</div>
       </div>
     );
@@ -306,6 +308,7 @@ export default function RoleDetailPage() {
   if (isError || !role) {
     return (
       <div style={s.page}>
+        <Header title="Manage Roles" />
         <div style={s.loading}>Role not found.</div>
       </div>
     );
@@ -317,6 +320,7 @@ export default function RoleDetailPage() {
 
   return (
     <div style={s.page}>
+      <Header title="Manage Roles" />
       {/* Header */}
       <div style={s.headerRow}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>

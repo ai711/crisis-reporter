@@ -1,7 +1,9 @@
 import { useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle, AlertTriangle, Lock, ShieldAlert } from "lucide-react";
+import { CheckCircle, AlertTriangle, Lock, ShieldAlert, ClipboardCheck, Building2, AlertOctagon, UserX } from "lucide-react";
 import Header from "../components/Header";
+import PageSpinner from "../components/PageSpinner";
+import EmptyState from "../components/EmptyState";
 import { useAuthStore } from "../stores/authStore";
 import {
   getReviewQueueCounts,
@@ -105,23 +107,6 @@ function damageDotColor(level: string | null): string {
     minimal_or_no_damage:  "#16A34A",
   };
   return map[level ?? ""] ?? "#9CA3AF";
-}
-
-// ── Spinner ────────────────────────────────────────────────────────────────────
-
-function Spinner({ size = 28 }: { size?: number }) {
-  return (
-    <div
-      style={{
-        width: size,
-        height: size,
-        border: "3px solid var(--c-surface-high)",
-        borderTop: `3px solid var(--c-primary-container)`,
-        borderRadius: "50%",
-        animation: "rq-spin 0.8s linear infinite",
-      }}
-    />
-  );
 }
 
 // ── DamageDot ─────────────────────────────────────────────────────────────────
@@ -728,6 +713,7 @@ function Tab1ReviewModal({ row, onClose, onSuccess }: Tab1ReviewModalProps) {
 // ── Tab 1: Red-flagged Reports ─────────────────────────────────────────────────
 
 function Tab1({ currentUserName }: { currentUserName: string }) {
+  const [pendingSearch, setPendingSearch] = useState("");
   const [search, setSearch] = useState("");
   const [selectedReasons, setSelectedReasons] = useState<string[]>([]);
   const [country, setCountry] = useState("");
@@ -766,6 +752,11 @@ function Tab1({ currentUserName }: { currentUserName: string }) {
     setHasMore(data.has_more);
   }, [data]);
 
+  useEffect(() => {
+    const t = setTimeout(() => setSearch(pendingSearch), 400);
+    return () => clearTimeout(t);
+  }, [pendingSearch]);
+
   async function handleLoadMore() {
     if (!nextCursor || loadingMore) return;
     setLoadingMore(true);
@@ -787,10 +778,11 @@ function Tab1({ currentUserName }: { currentUserName: string }) {
   }
 
   const filtersActive =
-    [search, country, dateFrom, dateTo].filter(Boolean).length +
+    [pendingSearch, country, dateFrom, dateTo].filter(Boolean).length +
     selectedReasons.length;
 
   function clearFilters() {
+    setPendingSearch("");
     setSearch("");
     setSelectedReasons([]);
     setCountry("");
@@ -835,8 +827,8 @@ function Tab1({ currentUserName }: { currentUserName: string }) {
           className="input"
           style={s.filterInput}
           placeholder="Search Report # or Reporter ID"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          value={pendingSearch}
+          onChange={(e) => setPendingSearch(e.target.value)}
         />
         <div style={{ position: "relative" }}>
           <button
@@ -878,6 +870,7 @@ function Tab1({ currentUserName }: { currentUserName: string }) {
           onChange={(e) => setCountry(e.target.value)}
         />
         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <span style={{ fontSize: 11, color: "var(--c-text-muted)", whiteSpace: "nowrap" }}>Flagged:</span>
           <input
             type="date"
             className="input"
@@ -902,19 +895,13 @@ function Tab1({ currentUserName }: { currentUserName: string }) {
       </div>
 
       {isLoading ? (
-        <div style={s.centred}>
-          <Spinner />
-        </div>
+        <PageSpinner />
       ) : allItems.length === 0 ? (
-        <div style={s.emptyState}>
-          <div style={s.emptyIconWrap}>
-            <CheckCircle size={32} color="#16A34A" />
-          </div>
-          <p style={s.emptyTitle}>All clear — no reports pending review</p>
-          <p style={s.emptyText}>
-            Red-flagged reports will appear here as they are submitted.
-          </p>
-        </div>
+        <EmptyState
+          icon={<ClipboardCheck size={28} color="#16A34A" />}
+          title="All clear — no reports pending review"
+          message="Red-flagged reports will appear here as they are submitted."
+        />
       ) : (
         <>
           <div style={s.tableWrap}>
@@ -1049,6 +1036,7 @@ type Tab2Modal = { type: "dismiss"; row: Tab2Row } | null;
 
 function Tab2({ currentUserName }: { currentUserName: string }) {
   const qc = useQueryClient();
+  const [pendingSearch, setPendingSearch] = useState("");
   const [search, setSearch] = useState("");
   const [reviewReason, setReviewReason] = useState("");
   const [country, setCountry] = useState("");
@@ -1087,6 +1075,11 @@ function Tab2({ currentUserName }: { currentUserName: string }) {
     setHasMore(data.has_more);
   }, [data]);
 
+  useEffect(() => {
+    const t = setTimeout(() => setSearch(pendingSearch), 400);
+    return () => clearTimeout(t);
+  }, [pendingSearch]);
+
   async function handleLoadMore() {
     if (!nextCursor || loadingMore) return;
     setLoadingMore(true);
@@ -1108,9 +1101,10 @@ function Tab2({ currentUserName }: { currentUserName: string }) {
     setModal(null);
   }
 
-  const filtersActive = [search, reviewReason, country, damageLevel, dateFrom, dateTo].filter(Boolean).length;
+  const filtersActive = [pendingSearch, reviewReason, country, damageLevel, dateFrom, dateTo].filter(Boolean).length;
 
   function clearFilters() {
+    setPendingSearch("");
     setSearch("");
     setReviewReason("");
     setCountry("");
@@ -1128,8 +1122,8 @@ function Tab2({ currentUserName }: { currentUserName: string }) {
           className="input"
           style={s.filterInput}
           placeholder="Search Property ID or name"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          value={pendingSearch}
+          onChange={(e) => setPendingSearch(e.target.value)}
         />
         <select
           className="input"
@@ -1160,6 +1154,7 @@ function Tab2({ currentUserName }: { currentUserName: string }) {
           <option value="minimal_or_no_damage">Minimal or No Damage</option>
         </select>
         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <span style={{ fontSize: 11, color: "var(--c-text-muted)", whiteSpace: "nowrap" }}>In queue:</span>
           <input
             type="date"
             className="input"
@@ -1184,17 +1179,13 @@ function Tab2({ currentUserName }: { currentUserName: string }) {
       </div>
 
       {isLoading ? (
-        <div style={s.centred}>
-          <Spinner />
-        </div>
+        <PageSpinner />
       ) : allItems.length === 0 ? (
-        <div style={s.emptyState}>
-          <div style={s.emptyIconWrap}>
-            <CheckCircle size={32} color="#16A34A" />
-          </div>
-          <p style={s.emptyTitle}>No properties pending review</p>
-          <p style={s.emptyText}>Properties with conflicting reports will appear here.</p>
-        </div>
+        <EmptyState
+          icon={<Building2 size={28} color="#16A34A" />}
+          title="No properties pending review"
+          message="Properties with conflicting reports will appear here."
+        />
       ) : (
         <>
           <div style={s.tableWrap}>
@@ -1359,6 +1350,7 @@ function Tab2({ currentUserName }: { currentUserName: string }) {
 
 function Tab3({ currentUserName }: { currentUserName: string }) {
   const qc = useQueryClient();
+  const [pendingSearch, setPendingSearch] = useState("");
   const [search, setSearch] = useState("");
   const [country, setCountry] = useState("");
   const [platform, setPlatform] = useState("");
@@ -1393,6 +1385,11 @@ function Tab3({ currentUserName }: { currentUserName: string }) {
     setHasMore(data.has_more);
   }, [data]);
 
+  useEffect(() => {
+    const t = setTimeout(() => setSearch(pendingSearch), 400);
+    return () => clearTimeout(t);
+  }, [pendingSearch]);
+
   async function handleLoadMore() {
     if (!nextCursor || loadingMore) return;
     setLoadingMore(true);
@@ -1407,9 +1404,10 @@ function Tab3({ currentUserName }: { currentUserName: string }) {
     }
   }
 
-  const filtersActive = [search, country, platform, minStuck].filter(Boolean).length;
+  const filtersActive = [pendingSearch, country, platform, minStuck].filter(Boolean).length;
 
   function clearFilters() {
+    setPendingSearch("");
     setSearch("");
     setCountry("");
     setPlatform("");
@@ -1425,8 +1423,8 @@ function Tab3({ currentUserName }: { currentUserName: string }) {
           className="input"
           style={s.filterInput}
           placeholder="Search Report # or Reporter ID"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          value={pendingSearch}
+          onChange={(e) => setPendingSearch(e.target.value)}
         />
         <input
           className="input"
@@ -1465,17 +1463,13 @@ function Tab3({ currentUserName }: { currentUserName: string }) {
       </div>
 
       {isLoading ? (
-        <div style={s.centred}>
-          <Spinner />
-        </div>
+        <PageSpinner />
       ) : allItems.length === 0 ? (
-        <div style={s.emptyState}>
-          <div style={s.emptyIconWrap}>
-            <CheckCircle size={32} color="#16A34A" />
-          </div>
-          <p style={s.emptyTitle}>No stuck reports</p>
-          <p style={s.emptyText}>Background processing is running normally.</p>
-        </div>
+        <EmptyState
+          icon={<AlertOctagon size={28} color="#16A34A" />}
+          title="No stuck reports"
+          message="Background processing is running normally."
+        />
       ) : (
         <>
           <div style={s.tableWrap}>
@@ -1607,6 +1601,7 @@ type Tab4Modal = { type: "confirm" | "reverse"; row: Tab4Row } | null;
 
 function Tab4({ currentUserName: _currentUserName }: { currentUserName: string }) {
   const qc = useQueryClient();
+  const [pendingSearch, setPendingSearch] = useState("");
   const [search, setSearch] = useState("");
   const [country, setCountry] = useState("");
   const [timeRemaining, setTimeRemaining] = useState("");
@@ -1639,6 +1634,11 @@ function Tab4({ currentUserName: _currentUserName }: { currentUserName: string }
     setHasMore(data.has_more);
   }, [data]);
 
+  useEffect(() => {
+    const t = setTimeout(() => setSearch(pendingSearch), 400);
+    return () => clearTimeout(t);
+  }, [pendingSearch]);
+
   async function handleLoadMore() {
     if (!nextCursor || loadingMore) return;
     setLoadingMore(true);
@@ -1667,9 +1667,10 @@ function Tab4({ currentUserName: _currentUserName }: { currentUserName: string }
     setModal(null);
   }
 
-  const filtersActive = [search, country, timeRemaining].filter(Boolean).length;
+  const filtersActive = [pendingSearch, country, timeRemaining].filter(Boolean).length;
 
   function clearFilters() {
+    setPendingSearch("");
     setSearch("");
     setCountry("");
     setTimeRemaining("");
@@ -1684,8 +1685,8 @@ function Tab4({ currentUserName: _currentUserName }: { currentUserName: string }
           className="input"
           style={s.filterInput}
           placeholder="Search Reporter ID or device ID"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          value={pendingSearch}
+          onChange={(e) => setPendingSearch(e.target.value)}
         />
         <input
           className="input"
@@ -1713,17 +1714,13 @@ function Tab4({ currentUserName: _currentUserName }: { currentUserName: string }
       </div>
 
       {isLoading ? (
-        <div style={s.centred}>
-          <Spinner />
-        </div>
+        <PageSpinner />
       ) : allItems.length === 0 ? (
-        <div style={s.emptyState}>
-          <div style={s.emptyIconWrap}>
-            <CheckCircle size={32} color="#16A34A" />
-          </div>
-          <p style={s.emptyTitle}>No auto-blocked profiles pending review</p>
-          <p style={s.emptyText}>Auto-blocked reporter profiles will appear here for confirmation.</p>
-        </div>
+        <EmptyState
+          icon={<UserX size={28} color="#16A34A" />}
+          title="No auto-blocked profiles pending review"
+          message="Auto-blocked reporter profiles will appear here for confirmation."
+        />
       ) : (
         <>
           <div style={s.tableWrap}>
@@ -1894,7 +1891,8 @@ export default function ReviewQueuePage() {
   return (
     <div style={s.page}>
       <style>{`
-        @keyframes rq-spin { to { transform: rotate(360deg); } }
+        .rq-table th { padding: 10px 14px; }
+        .rq-table td { padding: 9px 14px; }
         .rq-table tbody tr { transition: background 0.1s; }
         .rq-table tbody tr:hover td { background: rgba(4,104,177,0.025) !important; }
         .rq-row-urgent td:first-child { border-left: 3px solid #D97706; }
@@ -2146,41 +2144,6 @@ const s: Record<string, React.CSSProperties> = {
     border: "1px solid var(--c-border)",
     overflow: "hidden",
     boxShadow: "var(--shadow-sm)" as string,
-  },
-  centred: {
-    display: "flex",
-    justifyContent: "center",
-    paddingTop: 80,
-  },
-  emptyState: {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    padding: "64px 0",
-    gap: 12,
-  },
-  emptyIconWrap: {
-    width: 64,
-    height: 64,
-    borderRadius: "50%",
-    background: "#F0FDF4",
-    border: "1.5px solid #BBF7D0",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  emptyTitle: {
-    fontSize: 15,
-    fontWeight: 600,
-    color: "var(--c-text-primary)",
-    margin: 0,
-  },
-  emptyText: {
-    fontSize: 13,
-    color: "var(--c-text-muted)",
-    margin: 0,
-    textAlign: "center",
-    maxWidth: 420,
   },
   damagePill: {
     borderRadius: 12,

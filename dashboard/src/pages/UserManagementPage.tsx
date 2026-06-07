@@ -1,8 +1,11 @@
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { X, Eye, EyeOff } from "lucide-react";
+import { X, Eye, EyeOff, Users } from "lucide-react";
 import { useAuthStore } from "../stores/authStore";
+import Header from "../components/Header";
+import PageSpinner from "../components/PageSpinner";
+import EmptyState from "../components/EmptyState";
 import {
   getDashboardUsers,
   createDashboardUser,
@@ -13,13 +16,13 @@ import type { DashboardUser, DashboardUsersListResponse } from "../types";
 import { formatDateTime } from "../utils/formatters";
 
 const BLUE = "var(--c-primary-container)";
-const BLUE_HEX = "#0468B1";
+const BLUE_HEX = "var(--c-primary-container)";
 const PAGE_SIZE = 50;
 
 // ── Avatar helpers ─────────────────────────────────────────────────────────────
 
 const AVATAR_COLORS = [
-  "#0468B1", "#1565C0", "#6A1B9A", "#2E7D32",
+  "var(--c-primary-container)", "#1565C0", "#6A1B9A", "#2E7D32",
   "#BF360C", "#00695C", "#4527A0", "#283593",
 ];
 
@@ -406,6 +409,7 @@ export default function UserManagementPage() {
 
   return (
     <div style={s.page}>
+      <Header title="User Management" />
       {/* ── Sticky toolbar ── */}
       <div style={s.toolbar}>
         <div style={s.toolbarLeft}>
@@ -454,14 +458,13 @@ export default function UserManagementPage() {
       {/* ── Content ── */}
       <div style={s.content}>
         {isLoading ? (
-          <div style={s.loading}>Loading users…</div>
+          <PageSpinner />
         ) : users.length === 0 ? (
-          <div style={s.empty}>
-            <span className="material-symbols-outlined" style={{ fontSize: 48, color: "#cbd5e0" }}>
-              group
-            </span>
-            <div style={s.emptyText}>No dashboard users found.</div>
-          </div>
+          <EmptyState
+            icon={<Users size={28} color="var(--c-text-subtle)" />}
+            title="No dashboard users found"
+            message="Add users to give UNDP staff access to the dashboard."
+          />
         ) : (
           <>
             <div style={s.tableWrap}>
@@ -741,21 +744,6 @@ const s: Record<string, React.CSSProperties> = {
     flexDirection: "column",
     gap: 12,
   },
-  loading: {
-    padding: 60,
-    textAlign: "center",
-    color: "var(--c-text-muted)",
-    fontSize: 15,
-  },
-  empty: {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 14,
-    padding: 80,
-  },
-  emptyText: { fontSize: 15, color: "var(--c-text-muted)" },
   tableWrap: {
     background: "var(--c-surface-lowest)",
     borderRadius: 12,
@@ -766,7 +754,7 @@ const s: Record<string, React.CSSProperties> = {
   table: { width: "100%", borderCollapse: "collapse" },
   thead: { background: "#f7fafc" },
   th: {
-    padding: "11px 16px",
+    padding: "10px 16px",
     textAlign: "left",
     fontSize: 11,
     fontWeight: 700,
@@ -781,7 +769,7 @@ const s: Record<string, React.CSSProperties> = {
     transition: "background 0.1s",
   },
   td: {
-    padding: "12px 16px",
+    padding: "9px 16px",
     fontSize: 13,
     color: "var(--c-text-primary)",
     verticalAlign: "middle",
@@ -870,7 +858,7 @@ const ms: Record<string, React.CSSProperties> = {
     justifyContent: "space-between",
     alignItems: "center",
     padding: "22px 24px",
-    background: `linear-gradient(135deg, ${BLUE_HEX} 0%, #00508a 100%)`,
+    background: "linear-gradient(135deg, var(--c-primary-container) 0%, var(--c-primary) 100%)",
     borderRadius: "16px 16px 0 0",
     position: "sticky",
     top: 0,

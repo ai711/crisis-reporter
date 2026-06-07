@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { ShieldOff } from "lucide-react";
 import { useAuthStore } from "../stores/authStore";
+import Header from "../components/Header";
 import api from "../services/api";
 import type { Role } from "../types";
 
@@ -263,12 +264,15 @@ export default function ManageRolesPage() {
   // ── Access guard ───────────────────────────────────────────────────────────
   if (!canView) {
     return (
-      <div style={s.page}>
-        <div style={s.accessDenied}>
-          <ShieldOff size={52} color="var(--c-text-muted)" />
-          <div style={s.accessTitle}>Access restricted</div>
-          <div style={s.accessNote}>
-            You don't have permission to view Manage Roles. Contact your administrator.
+      <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: "var(--c-surface-low)" }}>
+        <Header title="Manage Roles" />
+        <div style={s.page}>
+          <div style={s.accessDenied}>
+            <ShieldOff size={52} color="var(--c-text-muted)" />
+            <div style={s.accessTitle}>Access restricted</div>
+            <div style={s.accessNote}>
+              You don't have permission to view Manage Roles. Contact your administrator.
+            </div>
           </div>
         </div>
       </div>
@@ -380,7 +384,9 @@ export default function ManageRolesPage() {
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <div style={s.page}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: "var(--c-surface-low)" }}>
+      <Header title="Manage Roles" />
+      <div style={s.page}>
       {/* ── Left panel ── */}
       <div style={s.leftPanel}>
         {/* Left header */}
@@ -664,6 +670,7 @@ export default function ManageRolesPage() {
         )}
       </div>
     </div>
+    </div>
   );
 }
 
@@ -672,7 +679,7 @@ export default function ManageRolesPage() {
 const s: Record<string, React.CSSProperties> = {
   page: {
     display: "flex",
-    height: "100vh",
+    flex: 1,
     background: "var(--c-surface-low)",
     overflow: "hidden",
   },

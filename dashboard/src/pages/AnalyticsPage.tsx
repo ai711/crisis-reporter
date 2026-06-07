@@ -21,7 +21,8 @@ import type { ReviewQueueCounts } from "../types";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
-const BLUE = "#0468B1";
+// Keep as hex: used as SVG fill= prop in Recharts bars (CSS vars don't work in SVG attributes)
+const BLUE = "#0468b1"; // matches --c-primary-container
 
 const CRISIS_TYPE_OPTIONS = [
   "Earthquake",
@@ -242,26 +243,26 @@ function MultiSelectDropdown({ label, options, selected, onChange, placeholder }
   );
 }
 
-// ── Small shared components ────────────────────────────────────────────────────
+// ── Chart-level loading / empty (compact, used inside chart cards) ─────────────
 
-function Spinner() {
+function ChartSpinner() {
   return (
     <div style={{ display: "flex", justifyContent: "center", padding: "40px 0" }}>
       <div
         style={{
-          width: 32,
-          height: 32,
+          width: 28,
+          height: 28,
           border: "3px solid var(--c-surface-high)",
-          borderTop: `3px solid ${BLUE}`,
+          borderTop: "3px solid var(--c-primary-container)",
           borderRadius: "50%",
-          animation: "an-spin 0.8s linear infinite",
+          animation: "cr-spin 0.8s linear infinite",
         }}
       />
     </div>
   );
 }
 
-function EmptyState() {
+function ChartNoData() {
   return (
     <div style={{ textAlign: "center", padding: "40px 0", color: "var(--c-text-subtle)", fontSize: 14 }}>
       No data available for the selected filters.
@@ -290,7 +291,7 @@ function ChartCard({ title, subtitle, loading, empty, children, headerRight, foo
         </div>
         {headerRight && <div>{headerRight}</div>}
       </div>
-      {loading ? <Spinner /> : empty ? <EmptyState /> : children}
+      {loading ? <ChartSpinner /> : empty ? <ChartNoData /> : children}
       {footnote && (
         <div style={s.footnote}>{footnote}</div>
       )}
@@ -490,7 +491,6 @@ export default function AnalyticsPage() {
 
   return (
     <div style={s.page}>
-      <style>{`@keyframes an-spin { to { transform: rotate(360deg); } }`}</style>
 
       <Header title="Analytics and Statistics" subtitle="Crisis damage statistics" />
 
@@ -618,9 +618,9 @@ export default function AnalyticsPage() {
           <div style={s.compactCard}>
             <div style={s.compactTitle}>Reports by Crisis Type</div>
             {crisisTypeLoading ? (
-              <Spinner />
+              <ChartSpinner />
             ) : crisisTypeData.length === 0 ? (
-              <EmptyState />
+              <ChartNoData />
             ) : (
               <div style={s.compactList}>
                 {crisisTypeData.map((row) => (
@@ -637,9 +637,9 @@ export default function AnalyticsPage() {
           <div style={s.compactCard}>
             <div style={s.compactTitle}>Reports by Country</div>
             {countryLoading ? (
-              <Spinner />
+              <ChartSpinner />
             ) : countryData.length === 0 ? (
-              <EmptyState />
+              <ChartNoData />
             ) : (
               <>
                 <div style={s.compactList}>
@@ -763,9 +763,9 @@ export default function AnalyticsPage() {
             </div>
           </div>
           {timeLoading ? (
-            <Spinner />
+            <ChartSpinner />
           ) : timeData.length === 0 ? (
-            <EmptyState />
+            <ChartNoData />
           ) : (
             <ResponsiveContainer width="100%" height={260}>
               <BarChart data={timeData} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
@@ -947,7 +947,7 @@ export default function AnalyticsPage() {
           </div>
 
           {flagQualityLoading ? (
-            <div style={{ padding: "0 24px 20px" }}><Spinner /></div>
+            <div style={{ padding: "0 24px 20px" }}><ChartSpinner /></div>
           ) : flagQualityTotal < FLAG_QUALITY_THRESHOLD ? (
             <div style={{ padding: "0 24px 20px" }}>
               <div style={s.flagQualityNote}>
@@ -1173,7 +1173,7 @@ const s: Record<string, React.CSSProperties> = {
   // Compact breakdowns
   twoCol: {
     display: "grid",
-    gridTemplateColumns: "1fr 1fr",
+    gridTemplateColumns: "repeat(auto-fit, minmax(420px, 1fr))",
     gap: 20,
   },
   compactCard: {
