@@ -1032,14 +1032,6 @@ async def lifespan(app: FastAPI):
     Path(settings.LOCAL_UPLOAD_PATH).mkdir(parents=True, exist_ok=True)
     await seed_initial_package()
     await seed_string_keys()
-    # Fire-and-forget: auto-translate any newly seeded UI string keys into all
-    # non-English UN languages. Runs as a background task so startup is not
-    # blocked. Idempotent — skips keys that already have a Translation row.
-    # Requires LIBRETRANSLATE_URL to be configured; logs a warning and exits
-    # gracefully if the service is unreachable.
-    from app.tasks import auto_translate_content as _auto_translate_content
-    import asyncio as _asyncio
-    _asyncio.create_task(_auto_translate_content("all"))
     await seed_countries()
     await seed_first_admin()
     await _seed_default_roles()

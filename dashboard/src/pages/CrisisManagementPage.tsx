@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "../services/api";
+import Header from "../components/Header";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -401,19 +402,19 @@ export default function CrisisManagementPage() {
 
   return (
     <div style={s.page}>
-      {/* Custom header row with action button */}
+      <Header title="Crisis Management" />
+      {/* Toolbar row — action button + active crisis context */}
       <div style={s.headerRow}>
-        <div>
-          <h1 style={s.pageTitle}>Crisis Management</h1>
-          {activeCrisis && (
-            <p style={s.pageSubtitle}>
-              Active crisis: <strong>{activeCrisis.name}</strong>
-            </p>
-          )}
+        {activeCrisis && (
+          <p style={s.pageSubtitle}>
+            Active crisis: <strong>{activeCrisis.name}</strong>
+          </p>
+        )}
+        <div style={{ marginLeft: "auto" }}>
+          <button style={s.createBtn} onClick={() => setShowModal(true)}>
+            + Create New Crisis
+          </button>
         </div>
-        <button style={s.createBtn} onClick={() => setShowModal(true)}>
-          + Create New Crisis
-        </button>
       </div>
 
       {successBanner && (
@@ -476,12 +477,6 @@ const s: Record<string, React.CSSProperties> = {
     position: "sticky",
     top: 0,
     zIndex: 50,
-  },
-  pageTitle: {
-    fontSize: 20,
-    fontWeight: 700,
-    color: "var(--c-text-primary)",
-    margin: 0,
   },
   pageSubtitle: {
     fontSize: 13,

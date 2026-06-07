@@ -143,7 +143,7 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
         borderRadius: 12,
         border: "none",
         cursor: "pointer",
-        background: checked ? BLUE : "#cbd5e0",
+        background: checked ? BLUE : "var(--c-surface-high)",
         position: "relative",
         flexShrink: 0,
         transition: "background 0.2s",
@@ -156,7 +156,7 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
         width: 18,
         height: 18,
         borderRadius: "50%",
-        background: "#fff",
+        background: "var(--c-surface-lowest)",
         boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
         transition: "left 0.2s",
       }} />
@@ -166,7 +166,7 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>
+    <div style={{ fontSize: 11, fontWeight: 700, color: "var(--c-text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>
       {children}
     </div>
   );
@@ -177,7 +177,7 @@ function FieldGroup({ children, style }: { children: React.ReactNode; style?: Re
 }
 
 function FieldHint({ children }: { children: React.ReactNode }) {
-  return <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 4 }}>{children}</div>;
+  return <div style={{ fontSize: 11, color: "var(--c-text-subtle)", marginTop: 4 }}>{children}</div>;
 }
 
 function TextInput({
@@ -192,11 +192,11 @@ function TextInput({
       style={{
         width: "100%",
         padding: "9px 12px",
-        border: "1.5px solid #e0e8f0",
+        border: "1.5px solid var(--c-surface-high)",
         borderRadius: 8,
         fontSize: 14,
-        color: "#1A2B4A",
-        background: "#f7f9fc",
+        color: "var(--c-navy)",
+        background: "var(--c-surface)",
         outline: "none",
         boxSizing: "border-box",
         fontFamily: "inherit",
@@ -217,11 +217,11 @@ function NumberInput({ value, onChange, min, max }: { value: number; onChange: (
       style={{
         width: 120,
         padding: "9px 12px",
-        border: "1.5px solid #e0e8f0",
+        border: "1.5px solid var(--c-surface-high)",
         borderRadius: 8,
         fontSize: 14,
-        color: "#1A2B4A",
-        background: "#f7f9fc",
+        color: "var(--c-navy)",
+        background: "var(--c-surface)",
         outline: "none",
         boxSizing: "border-box",
         fontFamily: "inherit",
@@ -237,11 +237,11 @@ function SelectInput({ value, onChange, options }: { value: string; onChange: (v
       onChange={(e) => onChange(e.target.value)}
       style={{
         padding: "9px 12px",
-        border: "1.5px solid #e0e8f0",
+        border: "1.5px solid var(--c-surface-high)",
         borderRadius: 8,
         fontSize: 14,
-        color: "#1A2B4A",
-        background: "#f7f9fc",
+        color: "var(--c-navy)",
+        background: "var(--c-surface)",
         outline: "none",
         minWidth: 180,
         cursor: "pointer",
@@ -255,14 +255,14 @@ function SelectInput({ value, onChange, options }: { value: string; onChange: (v
 
 function SaveBar({ onSave, saving, saved }: { onSave: () => void; saving: boolean; saved: boolean }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 12, paddingTop: 20, borderTop: "1px solid #f0f4f8", marginTop: 24 }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 12, paddingTop: 20, borderTop: "1px solid var(--c-surface-high)", marginTop: 24 }}>
       <button
         onClick={onSave}
         disabled={saving}
         style={{
           padding: "10px 28px",
-          background: saving ? "#a0aec0" : BLUE,
-          color: "#fff",
+          background: saving ? "var(--c-surface-high)" : BLUE,
+          color: "var(--c-surface-lowest)",
           border: "none",
           borderRadius: 8,
           fontSize: 14,
@@ -289,7 +289,7 @@ function StatusBadge({ status }: { status: string }) {
     degraded:    { bg: "rgba(245,166,35,0.12)",  color: "#744210", label: "Degraded" },
     outage:      { bg: "rgba(229,62,62,0.12)",   color: "#822727", label: "Outage" },
   };
-  const cfg = map[status] ?? { bg: "#e2e8f0", color: "#4a5568", label: status };
+  const cfg = map[status] ?? { bg: "var(--c-surface-high)", color: "var(--c-text-secondary)", label: status };
   return (
     <span style={{ display: "inline-block", padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700, background: cfg.bg, color: cfg.color, letterSpacing: "0.03em" }}>
       {cfg.label}
@@ -314,7 +314,7 @@ function SettingsCard({
   return (
     <div style={{
       position: "relative",
-      background: "#fff",
+      background: "var(--c-surface-lowest)",
       borderRadius: 12,
       boxShadow: "0 4px 20px rgba(8,27,57,0.04), 0 12px 40px rgba(8,27,57,0.08)",
       overflow: "hidden",
@@ -325,10 +325,10 @@ function SettingsCard({
       <div style={{ padding: "24px 28px", paddingLeft: noAccent ? 28 : 32 }}>
         {title && (
           <div style={{ marginBottom: 20 }}>
-            <h4 style={{ fontSize: 11, fontWeight: 800, color: "#1A2B4A", textTransform: "uppercase", letterSpacing: "0.15em", margin: 0 }}>
+            <h4 style={{ fontSize: 11, fontWeight: 800, color: "var(--c-navy)", textTransform: "uppercase", letterSpacing: "0.15em", margin: 0 }}>
               {title}
             </h4>
-            {subtitle && <div style={{ fontSize: 12, color: "#9ca3af", marginTop: 4 }}>{subtitle}</div>}
+            {subtitle && <div style={{ fontSize: 12, color: "var(--c-text-subtle)", marginTop: 4 }}>{subtitle}</div>}
           </div>
         )}
         {children}
@@ -367,17 +367,17 @@ function ComingSoonRow({ label, description }: { label: string; description: str
       alignItems: "center",
       justifyContent: "space-between",
       padding: "16px 20px",
-      background: "#f7f9fc",
+      background: "var(--c-surface)",
       border: "1.5px dashed #e0e8f0",
       borderRadius: 10,
       opacity: 0.8,
     }}>
       <div>
-        <div style={{ fontSize: 14, fontWeight: 600, color: "#6b7280" }}>{label}</div>
-        <div style={{ fontSize: 12, color: "#9ca3af", marginTop: 2, maxWidth: 500 }}>{description}</div>
+        <div style={{ fontSize: 14, fontWeight: 600, color: "var(--c-text-muted)" }}>{label}</div>
+        <div style={{ fontSize: 12, color: "var(--c-text-subtle)", marginTop: 2, maxWidth: 500 }}>{description}</div>
       </div>
       <span style={{
-        fontSize: 10, fontWeight: 800, color: "#9ca3af", background: "#e5e7eb",
+        fontSize: 10, fontWeight: 800, color: "var(--c-text-subtle)", background: "var(--c-surface-high)",
         padding: "4px 12px", borderRadius: 20, whiteSpace: "nowrap", letterSpacing: "0.06em",
         textTransform: "uppercase",
       }}>
@@ -436,7 +436,7 @@ function GeneralSettingsTab() {
   };
 
   if (isLoading || !form) {
-    return <div style={{ padding: 40, color: "#9ca3af" }}>Loading…</div>;
+    return <div style={{ padding: 40, color: "var(--c-text-subtle)" }}>Loading…</div>;
   }
 
   const set = (k: keyof GeneralSettings) => (v: string) =>
@@ -480,10 +480,10 @@ function GeneralSettingsTab() {
             <img
               src={logoPreview}
               alt="Logo preview"
-              style={{ height: 60, maxWidth: 200, objectFit: "contain", border: "1px solid #e0e8f0", borderRadius: 8, padding: 6, background: "#f7f9fc" }}
+              style={{ height: 60, maxWidth: 200, objectFit: "contain", border: "1px solid #e0e8f0", borderRadius: 8, padding: 6, background: "var(--c-surface)" }}
             />
           ) : (
-            <div style={{ width: 200, height: 60, border: "1.5px dashed #d1d5db", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", color: "#9ca3af", fontSize: 13 }}>
+            <div style={{ width: 200, height: 60, border: "1.5px dashed #d1d5db", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--c-text-subtle)", fontSize: 13 }}>
               No logo uploaded
             </div>
           )}
@@ -491,7 +491,7 @@ function GeneralSettingsTab() {
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              style={{ padding: "8px 18px", background: "#f7f9fc", border: "1.5px solid #e0e8f0", borderRadius: 8, fontSize: 13, cursor: "pointer", color: "#1A2B4A", fontFamily: "inherit" }}
+              style={{ padding: "8px 18px", background: "var(--c-surface)", border: "1.5px solid #e0e8f0", borderRadius: 8, fontSize: 13, cursor: "pointer", color: "var(--c-navy)", fontFamily: "inherit" }}
             >
               {logoPreview ? "Change Logo" : "Upload Logo"}
             </button>
@@ -534,7 +534,7 @@ function SecuritySettingsTab() {
     },
   });
 
-  if (isLoading || !form) return <div style={{ padding: 40, color: "#9ca3af" }}>Loading…</div>;
+  if (isLoading || !form) return <div style={{ padding: 40, color: "var(--c-text-subtle)" }}>Loading…</div>;
 
   const setNum = (k: keyof SecuritySettings) => (v: number) =>
     setForm((f) => f ? { ...f, [k]: v } : f);
@@ -549,7 +549,7 @@ function SecuritySettingsTab() {
           <FieldLabel>Session Timeout (minutes)</FieldLabel>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <NumberInput value={form.session_timeout} onChange={setNum("session_timeout")} min={5} max={480} />
-            <span style={{ fontSize: 12, color: "#9ca3af" }}>Min 5 · Max 480 (8 hours)</span>
+            <span style={{ fontSize: 12, color: "var(--c-text-subtle)" }}>Min 5 · Max 480 (8 hours)</span>
           </div>
           <FieldHint>Users are automatically logged out after this many minutes of inactivity. Applies from next login.</FieldHint>
         </FieldGroup>
@@ -573,7 +573,7 @@ function SecuritySettingsTab() {
           <FieldLabel>Minimum Password Length</FieldLabel>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <NumberInput value={form.password_min_length} onChange={setNum("password_min_length")} min={8} max={64} />
-            <span style={{ fontSize: 12, color: "#9ca3af" }}>Min 8 · Max 64 characters</span>
+            <span style={{ fontSize: 12, color: "var(--c-text-subtle)" }}>Min 8 · Max 64 characters</span>
           </div>
         </FieldGroup>
 
@@ -589,8 +589,8 @@ function SecuritySettingsTab() {
           <FieldGroup key={key}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", maxWidth: 560 }}>
               <div>
-                <div style={{ fontSize: 14, fontWeight: 600, color: "#1A2B4A" }}>{label}</div>
-                <div style={{ fontSize: 12, color: "#9ca3af", marginTop: 2 }}>{hint}</div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: "var(--c-navy)" }}>{label}</div>
+                <div style={{ fontSize: 12, color: "var(--c-text-subtle)", marginTop: 2 }}>{hint}</div>
               </div>
               <Toggle
                 checked={(form[key] as boolean) ?? true}
@@ -604,11 +604,11 @@ function SecuritySettingsTab() {
           <FieldLabel>Password Expiry (days)</FieldLabel>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <NumberInput value={form.password_expiry_days ?? 90} onChange={setNum("password_expiry_days")} min={0} />
-            <span style={{ fontSize: 12, color: "#9ca3af" }}>Days before users must reset. Set 0 to disable expiry entirely.</span>
+            <span style={{ fontSize: 12, color: "var(--c-text-subtle)" }}>Days before users must reset. Set 0 to disable expiry entirely.</span>
           </div>
         </FieldGroup>
 
-        <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 8 }}>
+        <div style={{ fontSize: 11, color: "var(--c-text-subtle)", marginTop: 8 }}>
           Rules apply to all new and changed passwords. Existing passwords are not retroactively invalidated.
         </div>
 
@@ -617,7 +617,7 @@ function SecuritySettingsTab() {
 
       {/* Future Features */}
       <div>
-        <div style={{ fontSize: 11, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 12 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: "var(--c-text-subtle)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 12 }}>
           Future Security Features
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -669,26 +669,26 @@ function SubscribersModal({
         {/* Header */}
         <div style={ms.header}>
           <div>
-            <div style={{ fontWeight: 700, fontSize: 16, color: "#1A2B4A" }}>Manage Subscribers</div>
-            <div style={{ fontSize: 13, color: "#9ca3af", marginTop: 2 }}>{label}</div>
+            <div style={{ fontWeight: 700, fontSize: 16, color: "var(--c-navy)" }}>Manage Subscribers</div>
+            <div style={{ fontSize: 13, color: "var(--c-text-subtle)", marginTop: 2 }}>{label}</div>
           </div>
           <button style={ms.closeBtn} onClick={onClose}>✕</button>
         </div>
 
         {/* Body */}
         <div style={{ padding: "20px 24px", maxHeight: "50vh", overflowY: "auto" }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: "var(--c-text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>
             Current Subscribers ({subscribedUsers.length})
           </div>
           {subscribedUsers.length === 0 ? (
-            <div style={{ fontSize: 13, color: "#9ca3af", marginBottom: 16 }}>No subscribers yet.</div>
+            <div style={{ fontSize: 13, color: "var(--c-text-subtle)", marginBottom: 16 }}>No subscribers yet.</div>
           ) : (
             <div style={{ marginBottom: 16 }}>
               {subscribedUsers.map((u) => (
                 <div key={u.id} style={ms.userRow}>
                   <div>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: "#1A2B4A" }}>{u.full_name}</div>
-                    <div style={{ fontSize: 12, color: "#9ca3af" }}>{u.email} · {u.role}</div>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: "var(--c-navy)" }}>{u.full_name}</div>
+                    <div style={{ fontSize: 12, color: "var(--c-text-subtle)" }}>{u.email} · {u.role}</div>
                   </div>
                   <button
                     onClick={() => setLocalSubs((p) => p.filter((id) => id !== u.id))}
@@ -703,18 +703,18 @@ function SubscribersModal({
 
           {availableUsers.length > 0 && (
             <>
-              <div style={{ fontSize: 12, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "var(--c-text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>
                 Add Subscriber
               </div>
               {availableUsers.map((u) => (
-                <div key={u.id} style={{ ...ms.userRow, background: "#fff", border: "1px solid #e0e8f0" }}>
+                <div key={u.id} style={{ ...ms.userRow, background: "var(--c-surface-lowest)", border: "1px solid #e0e8f0" }}>
                   <div>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: "#1A2B4A" }}>{u.full_name}</div>
-                    <div style={{ fontSize: 12, color: "#9ca3af" }}>{u.email} · {u.role}</div>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: "var(--c-navy)" }}>{u.full_name}</div>
+                    <div style={{ fontSize: 12, color: "var(--c-text-subtle)" }}>{u.email} · {u.role}</div>
                   </div>
                   <button
                     onClick={() => setLocalSubs((p) => [...p, u.id])}
-                    style={{ padding: "4px 12px", background: BLUE, border: "none", color: "#fff", borderRadius: 6, cursor: "pointer", fontSize: 12, fontFamily: "inherit" }}
+                    style={{ padding: "4px 12px", background: BLUE, border: "none", color: "var(--c-surface-lowest)", borderRadius: 6, cursor: "pointer", fontSize: 12, fontFamily: "inherit" }}
                   >
                     Add
                   </button>
@@ -738,12 +738,12 @@ function SubscribersModal({
 
 const ms: Record<string, React.CSSProperties> = {
   overlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 },
-  box: { background: "#fff", borderRadius: 12, width: "100%", maxWidth: 560, maxHeight: "85vh", overflowY: "auto", boxShadow: "0 20px 60px rgba(0,0,0,0.18)" },
+  box: { background: "var(--c-surface-lowest)", borderRadius: 12, width: "100%", maxWidth: 560, maxHeight: "85vh", overflowY: "auto", boxShadow: "0 20px 60px rgba(0,0,0,0.18)" },
   header: { padding: "20px 24px", borderBottom: "1px solid #f0f4f8", display: "flex", justifyContent: "space-between", alignItems: "flex-start" },
-  closeBtn: { background: "none", border: "none", fontSize: 18, cursor: "pointer", color: "#9ca3af", lineHeight: 1, padding: 0 },
-  userRow: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", background: "#f7f9fc", borderRadius: 8, marginBottom: 8 },
-  cancelBtn: { padding: "8px 20px", background: "#fff", border: "1.5px solid #e0e8f0", borderRadius: 8, fontSize: 14, cursor: "pointer", color: "#1A2B4A", fontFamily: "inherit" },
-  saveBtn: { padding: "8px 20px", background: BLUE, border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", color: "#fff", fontFamily: "inherit" },
+  closeBtn: { background: "none", border: "none", fontSize: 18, cursor: "pointer", color: "var(--c-text-subtle)", lineHeight: 1, padding: 0 },
+  userRow: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", background: "var(--c-surface)", borderRadius: 8, marginBottom: 8 },
+  cancelBtn: { padding: "8px 20px", background: "var(--c-surface-lowest)", border: "1.5px solid #e0e8f0", borderRadius: 8, fontSize: 14, cursor: "pointer", color: "var(--c-navy)", fontFamily: "inherit" },
+  saveBtn: { padding: "8px 20px", background: BLUE, border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", color: "var(--c-surface-lowest)", fontFamily: "inherit" },
 };
 
 // ── Tab 3 — Notification Settings ─────────────────────────────────────────────
@@ -789,11 +789,11 @@ function NotificationSettingsTab() {
   const updateField = <K extends keyof NotificationType>(key: string, field: K, value: NotificationType[K]) =>
     setTypes((prev) => prev.map((t) => t.key === key ? { ...t, [field]: value } : t));
 
-  if (isLoading) return <div style={{ padding: 40, color: "#9ca3af" }}>Loading…</div>;
+  if (isLoading) return <div style={{ padding: 40, color: "var(--c-text-subtle)" }}>Loading…</div>;
 
   return (
     <div>
-      <div style={{ fontSize: 13, color: "#9ca3af", marginBottom: 20, lineHeight: 1.6 }}>
+      <div style={{ fontSize: 13, color: "var(--c-text-subtle)", marginBottom: 20, lineHeight: 1.6 }}>
         Configure which system events trigger notifications, who receives them, and through which channels.
         Subscribed users receive alerts via the in-dashboard bell and email.
       </div>
@@ -803,20 +803,20 @@ function NotificationSettingsTab() {
           <div
             key={t.key}
             style={{
-              background: "#fff",
+              background: "var(--c-surface-lowest)",
               border: "1px solid #e0e8f0",
               borderRadius: 10,
               padding: "16px 20px",
-              borderLeft: `4px solid ${t.active ? BLUE : "#e0e8f0"}`,
+              borderLeft: `4px solid ${t.active ? BLUE : "var(--c-surface-high)"}`,
               opacity: t.active ? 1 : 0.65,
               transition: "opacity 0.2s, border-left-color 0.2s",
             }}
           >
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 14, fontWeight: 600, color: "#1A2B4A" }}>{t.label}</div>
-                <div style={{ fontSize: 12, color: "#9ca3af", marginTop: 2 }}>{t.description}</div>
-                <div style={{ fontSize: 11, color: "#cbd5e0", marginTop: 6 }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: "var(--c-navy)" }}>{t.label}</div>
+                <div style={{ fontSize: 12, color: "var(--c-text-subtle)", marginTop: 2 }}>{t.description}</div>
+                <div style={{ fontSize: 11, color: "var(--c-surface-high)", marginTop: 6 }}>
                   {t.subscribers.length} subscriber{t.subscribers.length !== 1 ? "s" : ""}
                 </div>
               </div>
@@ -844,7 +844,7 @@ function NotificationSettingsTab() {
               <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid #f0f4f8" }}>
                 <FieldLabel>Alert delivery mode</FieldLabel>
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", fontSize: 13, color: "#1A2B4A" }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", fontSize: 13, color: "var(--c-navy)" }}>
                     <input
                       type="radio"
                       name={`delivery_${t.key}`}
@@ -853,7 +853,7 @@ function NotificationSettingsTab() {
                     />
                     Send individual alert per report
                   </label>
-                  <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", fontSize: 13, color: "#1A2B4A" }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", fontSize: 13, color: "var(--c-navy)" }}>
                     <input
                       type="radio"
                       name={`delivery_${t.key}`}
@@ -869,7 +869,7 @@ function NotificationSettingsTab() {
                         onChange={(v) => updateField(t.key, "summary_interval_minutes", v)}
                         min={5}
                       />
-                      <span style={{ fontSize: 13, color: "#9ca3af" }}>minutes between summary alerts</span>
+                      <span style={{ fontSize: 13, color: "var(--c-text-subtle)" }}>minutes between summary alerts</span>
                     </div>
                   )}
                 </div>
@@ -928,21 +928,21 @@ function SystemThresholdsCard() {
         <FieldLabel>Stuck Report Threshold (minutes)</FieldLabel>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <NumberInput value={form.stuck_report_threshold_minutes} onChange={setNum("stuck_report_threshold_minutes")} min={1} max={60} />
-          <span style={{ fontSize: 12, color: "#9ca3af" }}>Grey-flagged reports stuck beyond this threshold trigger a processing alert. Min 1 · Max 60</span>
+          <span style={{ fontSize: 12, color: "var(--c-text-subtle)" }}>Grey-flagged reports stuck beyond this threshold trigger a processing alert. Min 1 · Max 60</span>
         </div>
       </FieldGroup>
       <FieldGroup>
         <FieldLabel>Auto-block Confirmation Window (hours)</FieldLabel>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <NumberInput value={form.auto_block_confirmation_hours} onChange={setNum("auto_block_confirmation_hours")} min={24} max={168} />
-          <span style={{ fontSize: 12, color: "#9ca3af" }}>Hours before an unreviewed auto-block is automatically confirmed. Min 24 · Max 168 (7 days)</span>
+          <span style={{ fontSize: 12, color: "var(--c-text-subtle)" }}>Hours before an unreviewed auto-block is automatically confirmed. Min 24 · Max 168 (7 days)</span>
         </div>
       </FieldGroup>
       <FieldGroup style={{ marginBottom: 0 }}>
         <FieldLabel>Language Deprecation Window (days)</FieldLabel>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <NumberInput value={form.language_deprecation_window_days} onChange={setNum("language_deprecation_window_days")} min={30} max={365} />
-          <span style={{ fontSize: 12, color: "#9ca3af" }}>Days before a deprecated language is permanently removed. Min 30 · Max 365</span>
+          <span style={{ fontSize: 12, color: "var(--c-text-subtle)" }}>Days before a deprecated language is permanently removed. Min 30 · Max 365</span>
         </div>
       </FieldGroup>
       <SaveBar onSave={() => mutation.mutate(form)} saving={mutation.isPending} saved={saved} />
@@ -1021,10 +1021,10 @@ function SystemStatusTab() {
           <span style={{ fontSize: 15, fontWeight: 700, color: overallTextColor }}>{overallLabel}</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          <span style={{ fontSize: 12, color: "#9ca3af" }}>Updated {secondsSinceRefresh}s ago · auto-refreshes every 30s</span>
+          <span style={{ fontSize: 12, color: "var(--c-text-subtle)" }}>Updated {secondsSinceRefresh}s ago · auto-refreshes every 30s</span>
           <button
             onClick={handleManualRefresh}
-            style={{ padding: "6px 14px", background: "#fff", border: "1px solid #e0e8f0", borderRadius: 7, fontSize: 12, cursor: "pointer", color: "#1A2B4A", fontFamily: "inherit" }}
+            style={{ padding: "6px 14px", background: "var(--c-surface-lowest)", border: "1px solid #e0e8f0", borderRadius: 7, fontSize: 12, cursor: "pointer", color: "var(--c-navy)", fontFamily: "inherit" }}
           >
             Refresh Now
           </button>
@@ -1043,8 +1043,8 @@ function SystemStatusTab() {
           {greyCount}
         </span>
         <div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: "#1A2B4A" }}>Reports in Grey Flag Status</div>
-          <div style={{ fontSize: 12, color: "#9ca3af", marginTop: 2 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "var(--c-navy)" }}>Reports in Grey Flag Status</div>
+          <div style={{ fontSize: 12, color: "var(--c-text-subtle)", marginTop: 2 }}>
             {greyCount === 0
               ? "No reports are pending auto-flagging — all processing is complete."
               : `${greyCount} report${greyCount !== 1 ? "s" : ""} awaiting auto-flagging. Non-zero counts persisting beyond the threshold trigger a processing alert.`}
@@ -1055,7 +1055,7 @@ function SystemStatusTab() {
       {/* Component grid */}
       <SettingsCard title="Component Status" noAccent>
         {healthLoading ? (
-          <div style={{ color: "#9ca3af", padding: "12px 0" }}>Checking components…</div>
+          <div style={{ color: "var(--c-text-subtle)", padding: "12px 0" }}>Checking components…</div>
         ) : (
           <>
             <div style={{
@@ -1067,23 +1067,23 @@ function SystemStatusTab() {
               {health?.components.map((comp) => (
                 <div key={comp.key} style={{
                   padding: "16px 18px",
-                  background: "#f7f9fc",
+                  background: "var(--c-surface)",
                   borderRadius: 10,
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "space-between",
                 }}>
                   <div>
-                    <div style={{ fontSize: 10, fontWeight: 800, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 4 }}>
+                    <div style={{ fontSize: 10, fontWeight: 800, color: "var(--c-text-subtle)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 4 }}>
                       {comp.label}
                     </div>
                     <div style={{ marginBottom: 8 }}>
                       <StatusBadge status={comp.status} />
                     </div>
                     {comp.message && (
-                      <div style={{ fontSize: 11, color: "#718096" }}>{comp.message}</div>
+                      <div style={{ fontSize: 11, color: "var(--c-text-muted)" }}>{comp.message}</div>
                     )}
-                    <div style={{ fontSize: 10, color: "#cbd5e0", marginTop: 4 }}>{timeAgo(comp.checked_at)}</div>
+                    <div style={{ fontSize: 10, color: "var(--c-surface-high)", marginTop: 4 }}>{timeAgo(comp.checked_at)}</div>
                   </div>
                   <div style={{
                     width: 10, height: 10, borderRadius: "50%", flexShrink: 0,
@@ -1095,7 +1095,7 @@ function SystemStatusTab() {
             </div>
 
             {health?.app_version && (
-              <div style={{ fontSize: 11, color: "#cbd5e0", paddingTop: 12, borderTop: "1px solid #f0f4f8" }}>
+              <div style={{ fontSize: 11, color: "var(--c-surface-high)", paddingTop: 12, borderTop: "1px solid #f0f4f8" }}>
                 Crisis Reporter v{health.app_version}
                 {health.python_version && ` · Python ${health.python_version}`}
                 {health.database_version && ` · ${health.database_version}`}
@@ -1119,42 +1119,42 @@ function SystemStatusTab() {
             gap: 8,
             width: "100%",
             padding: "14px 20px",
-            background: "#fff",
+            background: "var(--c-surface-lowest)",
             border: "1px solid #e0e8f0",
             borderRadius: incidentsOpen ? "10px 10px 0 0" : 10,
             cursor: "pointer",
             fontSize: 14,
             fontWeight: 600,
-            color: "#1A2B4A",
+            color: "var(--c-navy)",
             fontFamily: "inherit",
             textAlign: "left",
             borderBottom: incidentsOpen ? "1px solid #f0f4f8" : undefined,
           }}
         >
-          <span style={{ color: "#9ca3af", fontSize: 12 }}>{incidentsOpen ? "▼" : "▶"}</span>
+          <span style={{ color: "var(--c-text-subtle)", fontSize: 12 }}>{incidentsOpen ? "▼" : "▶"}</span>
           Incident History — Last 90 Days
           {!incidentsLoading && incidentsData && (
-            <span style={{ marginLeft: "auto", fontSize: 12, fontWeight: 500, color: "#9ca3af" }}>
+            <span style={{ marginLeft: "auto", fontSize: 12, fontWeight: 500, color: "var(--c-text-subtle)" }}>
               {incidentsData.incidents.length} record{incidentsData.incidents.length !== 1 ? "s" : ""}
             </span>
           )}
         </button>
 
         {incidentsOpen && (
-          <div style={{ background: "#fff", border: "1px solid #e0e8f0", borderTop: "none", borderRadius: "0 0 10px 10px", overflow: "hidden" }}>
+          <div style={{ background: "var(--c-surface-lowest)", border: "1px solid #e0e8f0", borderTop: "none", borderRadius: "0 0 10px 10px", overflow: "hidden" }}>
             {incidentsLoading ? (
-              <div style={{ padding: 20, color: "#9ca3af", fontSize: 13 }}>Loading incidents…</div>
+              <div style={{ padding: 20, color: "var(--c-text-subtle)", fontSize: 13 }}>Loading incidents…</div>
             ) : (incidentsData?.incidents.length ?? 0) === 0 ? (
-              <div style={{ padding: "24px 20px", color: "#cbd5e0", fontSize: 14, textAlign: "center" }}>
+              <div style={{ padding: "24px 20px", color: "var(--c-surface-high)", fontSize: 14, textAlign: "center" }}>
                 No incidents recorded in the last 90 days.
               </div>
             ) : (
               <div style={{ overflowX: "auto" }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                   <thead>
-                    <tr style={{ background: "#f7f9fc" }}>
+                    <tr style={{ background: "var(--c-surface)" }}>
                       {["Component", "Event", "Start", "End", "Duration", "Notes"].map((h) => (
-                        <th key={h} style={{ padding: "10px 16px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.06em", borderBottom: "1px solid #e0e8f0", whiteSpace: "nowrap" }}>
+                        <th key={h} style={{ padding: "10px 16px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "var(--c-text-subtle)", textTransform: "uppercase", letterSpacing: "0.06em", borderBottom: "1px solid #e0e8f0", whiteSpace: "nowrap" }}>
                           {h}
                         </th>
                       ))}
@@ -1163,7 +1163,7 @@ function SystemStatusTab() {
                   <tbody>
                     {incidentsData?.incidents.map((inc, idx) => (
                       <tr key={inc.id} style={{ borderTop: idx > 0 ? "1px solid #f0f4f8" : "none" }}>
-                        <td style={{ padding: "12px 16px", color: "#1A2B4A", fontWeight: 500 }}>{inc.component}</td>
+                        <td style={{ padding: "12px 16px", color: "var(--c-navy)", fontWeight: 500 }}>{inc.component}</td>
                         <td style={{ padding: "12px 16px" }}>
                           <span style={{
                             display: "inline-block", padding: "2px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700,
@@ -1173,14 +1173,14 @@ function SystemStatusTab() {
                             {inc.event_type.charAt(0).toUpperCase() + inc.event_type.slice(1)}
                           </span>
                         </td>
-                        <td style={{ padding: "12px 16px", color: "#6b7280", whiteSpace: "nowrap" }}>
+                        <td style={{ padding: "12px 16px", color: "var(--c-text-muted)", whiteSpace: "nowrap" }}>
                           {inc.started_at ? new Date(inc.started_at).toLocaleString() : "—"}
                         </td>
-                        <td style={{ padding: "12px 16px", color: "#6b7280", whiteSpace: "nowrap" }}>
+                        <td style={{ padding: "12px 16px", color: "var(--c-text-muted)", whiteSpace: "nowrap" }}>
                           {inc.ended_at ? new Date(inc.ended_at).toLocaleString() : <span style={{ color: RED, fontWeight: 600 }}>Ongoing</span>}
                         </td>
-                        <td style={{ padding: "12px 16px", color: "#6b7280" }}>{formatDuration(inc.duration_seconds)}</td>
-                        <td style={{ padding: "12px 16px", color: "#9ca3af", fontSize: 12 }}>{inc.notes ?? "—"}</td>
+                        <td style={{ padding: "12px 16px", color: "var(--c-text-muted)" }}>{formatDuration(inc.duration_seconds)}</td>
+                        <td style={{ padding: "12px 16px", color: "var(--c-text-subtle)", fontSize: 12 }}>{inc.notes ?? "—"}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -1231,7 +1231,7 @@ export default function DashboardSettingsPage() {
             onClick={() => isSuperadmin && setActiveTab(tab.key)}
             style={{
               ...s.tabBtn,
-              color: activeTab === tab.key ? BLUE : "#6b7280",
+              color: activeTab === tab.key ? BLUE : "var(--c-text-muted)",
               fontWeight: activeTab === tab.key ? 600 : 400,
               borderBottom: activeTab === tab.key ? `3px solid ${BLUE}` : "3px solid transparent",
               cursor: isSuperadmin ? "pointer" : "default",
@@ -1248,8 +1248,8 @@ export default function DashboardSettingsPage() {
           {!isSuperadmin ? (
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "50vh", gap: 16 }}>
               <Lock size={48} color={BLUE} />
-              <div style={{ fontSize: 22, fontWeight: 700, color: "#1A2B4A" }}>Access Restricted</div>
-              <div style={{ fontSize: 15, color: "#9ca3af", textAlign: "center", maxWidth: 420 }}>
+              <div style={{ fontSize: 22, fontWeight: 700, color: "var(--c-navy)" }}>Access Restricted</div>
+              <div style={{ fontSize: 15, color: "var(--c-text-subtle)", textAlign: "center", maxWidth: 420 }}>
                 This section is only accessible to Superadmin users.
               </div>
             </div>

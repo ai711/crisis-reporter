@@ -59,7 +59,7 @@ const inputStyle: React.CSSProperties = {
   width: "100%",
   padding: "9px 12px",
   borderRadius: 8,
-  border: "1.5px solid var(--c-border)",
+  border: "1.5px solid var(--c-surface-high)",
   background: "var(--c-surface-lowest)",
   fontSize: 14,
   color: "var(--c-text-primary)",
@@ -172,15 +172,15 @@ function ConfirmDialog({
       display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000,
     }}>
       <div style={{
-        background: "#fff", borderRadius: 16, padding: "32px 36px", maxWidth: 480, width: "90%",
+        background: "var(--c-surface-lowest)", borderRadius: 16, padding: "32px 36px", maxWidth: 480, width: "90%",
         boxShadow: "0 20px 60px rgba(0,0,0,0.18)",
       }}>
-        <div style={{ fontSize: 17, fontWeight: 700, color: "#1B1C1C", marginBottom: 14 }}>{title}</div>
-        <div style={{ fontSize: 14, color: "#414751", lineHeight: 1.6, marginBottom: 24 }}>{body}</div>
+        <div style={{ fontSize: 17, fontWeight: 700, color: "var(--c-text-primary)", marginBottom: 14 }}>{title}</div>
+        <div style={{ fontSize: 14, color: "var(--c-text-secondary)", lineHeight: 1.6, marginBottom: 24 }}>{body}</div>
         <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
           <button
             onClick={onCancel}
-            style={{ padding: "9px 20px", borderRadius: 8, border: "1.5px solid #E4E2E1", background: "#fff", color: "#414751", fontWeight: 600, fontSize: 14, cursor: "pointer" }}
+            style={{ padding: "9px 20px", borderRadius: 8, border: "1.5px solid var(--c-surface-high)", background: "var(--c-surface-lowest)", color: "var(--c-text-secondary)", fontWeight: 600, fontSize: 14, cursor: "pointer" }}
           >
             Cancel
           </button>

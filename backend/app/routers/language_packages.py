@@ -452,28 +452,25 @@ async def get_active_package(
     language_code: str,
     db: AsyncSession = Depends(get_db),
 ) -> dict:
-    """Public endpoint — returns the full string package for a language.
+    """Public endpoint — returns the full published string package for a language.
 
     Response shape:
         {
-          "version": "1.3",          # version string from LanguagePackage row (None if unpublished)
+          "version": "1.3",          # version string from LanguagePackage row
           "language_code": "ar",
           "strings": {"KEY": "translated text", ...}
         }
 
-    Every active string key is guaranteed to appear in "strings":
-      - published translation  (highest priority)
-      - draft translation      (auto-translated, pending review — served so reporters
-                               see translated UI as soon as auto-translation runs,
-                               without waiting for a manual publish step)
-      - English source text    (fallback for keys with no translation yet)
+    Every active string key is guaranteed to appear in "strings". Keys that
+    have a published translation use that translation. Keys that do not have
+    a published translation fall back to the English source text, so the
+    frontend never receives an incomplete bundle.
 
-    Previously this returned strings={} when no published LanguagePackage existed.
-    That caused the entire UI to silently fall back to English for any language
-    that hadn't gone through the full publish workflow. Now strings are always
-    served regardless of publish state so translations appear as soon as they exist.
+    Returns version=None and strings={} when no published package exists yet.
+    The translation pipeline is dashboard-driven (manual): staff translate,
+    approve, and publish via the dashboard. This endpoint only serves the
+    published snapshot — draft/approved translations are staff-side only.
     """
-    # Find the latest published package for version tracking only
     pkg_result = await db.execute(
         select(LanguagePackage).where(
             LanguagePackage.language_code == language_code,
@@ -481,40 +478,40 @@ async def get_active_package(
         )
     )
     pkg = pkg_result.scalar_one_or_none()
+    if not pkg:
+        return {
+            "version": None,
+            "language_code": language_code,
+            "strings": {},
+        }
 
-    # Fetch best available translation for each key: published beats draft.
-    # We collect all published+draft rows then let Python pick the winner so we
-    # avoid a subquery and keep this readable.
+    # Fetch all published translations for this language
     result = await db.execute(
-        select(StringKey.key, Translation.translated_text, Translation.status)
+        select(StringKey.key, Translation.translated_text)
         .join(Translation, Translation.string_key_id == StringKey.id)
         .where(
             Translation.language_code == language_code,
-            Translation.status.in_(["published", "draft"]),
+            Translation.status == "published",
             StringKey.is_active == True,
         )
     )
-    strings_dict: dict[str, str] = {}
-    for row in result.all():
-        # Keep published over draft; first occurrence wins for same status
-        if row.key not in strings_dict or row.status == "published":
-            strings_dict[row.key] = row.translated_text
+    strings_dict = {row.key: row.translated_text for row in result.all()}
 
-    # English fallback: every active key that has no translation yet gets
-    # its english_text so the bundle is always complete.
-    translated_keys = set(strings_dict.keys())
+    # English fallback: fetch any active string keys with no published translation
+    # and substitute the English source text so no key is ever silently dropped.
+    published_keys = set(strings_dict.keys())
     missing_result = await db.execute(
         select(StringKey.key, StringKey.english_text)
         .where(
             StringKey.is_active == True,
-            StringKey.key.not_in(translated_keys) if translated_keys else True,
+            StringKey.key.not_in(published_keys) if published_keys else True,
         )
     )
     for row in missing_result.all():
-        strings_dict[row.key] = row.english_text
+        strings_dict[row.key] = row.english_text  # English fallback
 
     return {
-        "version": pkg.version if pkg else None,
+        "version": pkg.version,
         "language_code": language_code,
         "strings": strings_dict,
     }

@@ -233,12 +233,12 @@ const styles: Record<string, React.CSSProperties> = {
   },
   cancelBtn: {
     padding: "9px 20px",
-    background: "#f4f6f9",
+    background: "var(--c-surface-low)",
     border: "none",
     borderRadius: 8,
     fontSize: 13,
     fontWeight: 500,
-    color: "#444",
+    color: "var(--c-text-secondary)",
     cursor: "pointer",
   },
   confirmBtn: {

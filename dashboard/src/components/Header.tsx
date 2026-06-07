@@ -142,7 +142,7 @@ function NotificationDropdown({
         right: 0,
         width: 380,
         maxHeight: 500,
-        background: "#ffffff",
+        background: "var(--c-surface-lowest)",
         borderRadius: 8,
         boxShadow: "0 4px 20px rgba(8,27,57,0.06), 0 12px 40px rgba(8,27,57,0.10)",
         outline: "1px solid rgba(193,199,210,0.2)",
@@ -154,8 +154,8 @@ function NotificationDropdown({
       }}
     >
       {/* Header */}
-      <div style={{ padding: "14px 16px", background: "#f2f4f7", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <span style={{ fontSize: 13, fontWeight: 700, color: "#191c1e", letterSpacing: "0.04em" }}>NOTIFICATIONS</span>
+      <div style={{ padding: "14px 16px", background: "var(--c-surface-low)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <span style={{ fontSize: 13, fontWeight: 700, color: "var(--c-text-primary)", letterSpacing: "0.04em" }}>NOTIFICATIONS</span>
         {notifications.length > 0 && (
           <button
             onClick={onMarkAllRead}
@@ -169,7 +169,7 @@ function NotificationDropdown({
       {/* List */}
       <div style={{ overflowY: "auto", flex: 1 }}>
         {notifications.length === 0 ? (
-          <div style={{ padding: "36px 20px", textAlign: "center", fontSize: 13, color: "#717782" }}>
+          <div style={{ padding: "36px 20px", textAlign: "center", fontSize: 13, color: "var(--c-text-muted)" }}>
             No unread notifications
           </div>
         ) : (
@@ -203,9 +203,9 @@ function NotificationDropdown({
 
                 {/* Content */}
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: "#191c1e", marginBottom: 2 }}>{meta.title}</div>
-                  <div style={{ fontSize: 12, color: "#414751", lineHeight: 1.5 }}>{n.message}</div>
-                  <div style={{ fontSize: 11, color: "#717782", marginTop: 4 }}>{timeAgo(n.triggered_at)}</div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "var(--c-text-primary)", marginBottom: 2 }}>{meta.title}</div>
+                  <div style={{ fontSize: 12, color: "var(--c-text-secondary)", lineHeight: 1.5 }}>{n.message}</div>
+                  <div style={{ fontSize: 11, color: "var(--c-text-muted)", marginTop: 4 }}>{timeAgo(n.triggered_at)}</div>
                 </div>
 
                 {/* Mark as read */}
@@ -214,7 +214,7 @@ function NotificationDropdown({
                   title="Mark as read"
                   style={{
                     background: "none", border: "none", cursor: "pointer",
-                    color: "#717782", padding: 4, flexShrink: 0,
+                    color: "var(--c-text-muted)", padding: 4, flexShrink: 0,
                     alignSelf: "flex-start", borderRadius: 4,
                     display: "flex", alignItems: "center", justifyContent: "center",
                     transition: "color 0.12s",
@@ -300,8 +300,8 @@ export default function Header({ title, subtitle }: HeaderProps) {
                   height: 16,
                   padding: "0 3px",
                   borderRadius: 999,
-                  background: "#ba1a1a",
-                  color: "#fff",
+                  background: "var(--c-error)",
+                  color: "var(--c-surface-lowest)",
                   fontSize: 10,
                   fontWeight: 700,
                   display: "flex",

@@ -444,7 +444,7 @@ export default function ReportsPage() {
                           checked={pendingFilters.damageLevels.includes(value)}
                           onChange={() => toggleDamageLevel(value)}
                         />
-                        <span style={{ width: 8, height: 8, borderRadius: "50%", background: DAMAGE_PILL[value]?.color ?? "#9ca3af", display: "inline-block", flexShrink: 0 }} />
+                        <span style={{ width: 8, height: 8, borderRadius: "50%", background: DAMAGE_PILL[value]?.color ?? "var(--c-text-subtle)", display: "inline-block", flexShrink: 0 }} />
                         {label}
                       </label>
                     ))}
@@ -716,7 +716,7 @@ export default function ReportsPage() {
 
                         {/* Infrastructure Type */}
                         <td
-                          style={{ ...styles.td, fontSize: 12, color: "#414751", maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                          style={{ ...styles.td, fontSize: 12, color: "var(--c-text-secondary)", maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
                           title={report.infrastructure_type ?? ""}
                         >
                           {report.infrastructure_type ?? "—"}
@@ -724,7 +724,7 @@ export default function ReportsPage() {
 
                         {/* Crisis Type */}
                         <td
-                          style={{ ...styles.td, fontSize: 12, color: "#414751", maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                          style={{ ...styles.td, fontSize: 12, color: "var(--c-text-secondary)", maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
                           title={report.disaster_type ?? ""}
                         >
                           {report.disaster_type ?? "—"}
@@ -752,7 +752,7 @@ export default function ReportsPage() {
                                 : report.reporter_id.slice(0, 8).toUpperCase()}
                             </span>
                           ) : (
-                            <span style={{ fontSize: 13, color: "#9ca3af" }}>—</span>
+                            <span style={{ fontSize: 13, color: "var(--c-text-subtle)" }}>—</span>
                           )}
                         </td>
 
@@ -885,7 +885,7 @@ const styles: Record<string, React.CSSProperties> = {
     border: "none",
     borderRadius: 8,
     fontSize: 13,
-    color: "#191c1e",
+    color: "var(--c-text-primary)",
     cursor: "pointer",
     boxShadow: "0 1px 4px rgba(8,27,57,0.06)",
     outline: "none",
@@ -910,7 +910,7 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     alignItems: "center",
     gap: 10,
-    background: "#f2f4f7",
+    background: "var(--c-surface-low)",
     borderRadius: 8,
     padding: "8px 14px",
     flexGrow: 1,
@@ -922,7 +922,7 @@ const styles: Record<string, React.CSSProperties> = {
     outline: "none",
     background: "transparent",
     fontSize: 13,
-    color: "#191c1e",
+    color: "var(--c-text-primary)",
     width: "100%",
   },
   chipsGroup: {
@@ -936,13 +936,13 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: "center",
     gap: 6,
     padding: "6px 13px",
-    background: "#e6e8eb",
+    background: "var(--c-surface-high)",
     border: "none",
     borderRadius: 9999,
     cursor: "pointer",
     fontSize: 12,
     fontWeight: 600,
-    color: "#191c1e",
+    color: "var(--c-text-primary)",
     whiteSpace: "nowrap",
     transition: "background 0.12s",
   },
@@ -999,7 +999,7 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: "center",
     gap: 8,
     fontSize: 13,
-    color: "#191c1e",
+    color: "var(--c-text-primary)",
     marginBottom: 8,
     cursor: "pointer",
   },
@@ -1035,7 +1035,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 13,
     outline: "none",
     boxSizing: "border-box",
-    color: "#191c1e",
+    color: "var(--c-text-primary)",
   },
 
   // Stat cards
@@ -1063,7 +1063,7 @@ const styles: Record<string, React.CSSProperties> = {
   statValue: {
     fontSize: 28,
     fontWeight: 800,
-    color: "#191c1e",
+    color: "var(--c-text-primary)",
     lineHeight: 1.1,
   },
   statSub: {
@@ -1092,7 +1092,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   table: { width: "100%", borderCollapse: "collapse" },
   theadRow: {
-    background: "#f2f4f7",
+    background: "var(--c-surface-low)",
     borderBottom: "1px solid rgba(193,199,210,0.25)",
   },
   th: {
@@ -1113,7 +1113,7 @@ const styles: Record<string, React.CSSProperties> = {
   td: {
     padding: "9px 14px",
     fontSize: 13,
-    color: "#191c1e",
+    color: "var(--c-text-primary)",
     verticalAlign: "middle",
   },
 
@@ -1134,7 +1134,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 12,
     cursor: "pointer",
   },
-  anonymousCell: { color: "#9ca3af", fontSize: 12, fontStyle: "italic" },
+  anonymousCell: { color: "var(--c-text-subtle)", fontSize: 12, fontStyle: "italic" },
   eyeBtn: {
     display: "inline-flex",
     alignItems: "center",
@@ -1181,7 +1181,7 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: "pointer",
     fontSize: 12,
     fontWeight: 600,
-    color: "#191c1e",
+    color: "var(--c-text-primary)",
     transition: "background 0.1s",
   },
   pageNumBtnActive: {
