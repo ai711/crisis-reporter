@@ -129,7 +129,7 @@ export default function AboutPage() {
               letterSpacing: 0.3,
             }}
           >
-            Powered by UNDP
+            {t('about.powered_by')}
           </p>
         </div>
 

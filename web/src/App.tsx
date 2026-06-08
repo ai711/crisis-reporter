@@ -3,6 +3,7 @@ import React, { Suspense, lazy, useEffect } from "react";
 import AppLayout from "./components/AppLayout";
 import i18n, { loadLanguagePackage, loadLanguagePackageFromCache } from "./i18n";
 import { flushProgressQueue } from "./utils/progressQueue";
+import { useAuthStore } from "./stores/authStore";
 
 const OnboardingPage = lazy(() => import("./pages/OnboardingPage"));
 const LoginPage = lazy(() => import("./pages/LoginPage"));
@@ -35,8 +36,10 @@ const AboutPage = lazy(() => import("./pages/AboutPage"));
 // ── Stale local-ID cleanup — runs once at module load.
 // When anonymous registration fails offline, HomePage stores a "local_XXXX"
 // fallback ID in cr_reporter_id. That ID is meaningless to the backend and
-// causes 404s on every reporter API call in subsequent sessions. Clear it so
-// the next session starts fresh and triggers a real registration.
+// causes 404s on every reporter API call in subsequent sessions. Clear it from
+// BOTH the standalone localStorage key AND Zustand's persisted cr_auth store
+// (which is already hydrated by the time this IIFE runs, via the SideMenu
+// import chain: App → AppLayout → SideMenu → authStore).
 (function clearStaleLocalReporterId() {
   try {
     const id = localStorage.getItem("cr_reporter_id");
@@ -44,6 +47,12 @@ const AboutPage = lazy(() => import("./pages/AboutPage"));
       localStorage.removeItem("cr_reporter_id");
     }
   } catch { /* localStorage unavailable */ }
+  try {
+    const { reporterId } = useAuthStore.getState();
+    if (reporterId?.startsWith("local_")) {
+      useAuthStore.setState({ reporterId: null, isVerified: false });
+    }
+  } catch { /* store not accessible */ }
 })();
 
 class ErrorBoundary extends React.Component<

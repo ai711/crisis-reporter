@@ -1442,6 +1442,8 @@ export default function ReportPage() {
       question_package_translation_version: questionPackage?.translation_version ?? null,
       question_answers: (() => {
         const getQ4Label = (v: string) => {
+          const translated = t(`disaster_types.${v}`, { defaultValue: "" });
+          if (translated) return translated;
           for (const g of Q4_OPTIONS) {
             const o = g.options.find((x) => x.value === v);
             if (o) return o.label;
@@ -1889,7 +1891,7 @@ export default function ReportPage() {
           <div style={{ padding: "20px 16px 96px", display: "flex", flexDirection: "column" as const, gap: 16 }}>
             {/* Step label */}
             <p style={{ fontSize: 10, fontWeight: 700, color: "#717782", letterSpacing: "0.1em", textTransform: "uppercase" as const, margin: 0 }}>
-              STEP 1 OF 5 — ADD PHOTO
+              {t('report.step_1_of_5')}
             </p>
 
             {/* Photo content: empty state placeholder or 3-slot grid */}
@@ -1919,7 +1921,7 @@ export default function ReportPage() {
                     <div style={{ width: 48, height: 48, background: "#EAEAE7", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center" }}>
                       <span className="material-symbols-outlined" style={{ fontSize: 24, color: "#717782" }}>no_photography</span>
                     </div>
-                    <p style={{ fontSize: 14, fontWeight: 500, color: "#717782", margin: 0 }}>No photo added yet</p>
+                    <p style={{ fontSize: 14, fontWeight: 500, color: "#717782", margin: 0 }}>{t('report.no_photo_added')}</p>
                   </>
                 )}
               </div>
@@ -1930,7 +1932,7 @@ export default function ReportPage() {
             {/* Photo count (1–2 photos) */}
             {photos.length > 0 && photos.length < 3 && (
               <p style={{ fontSize: 14, color: "#717782", margin: 0 }}>
-                {photos.length} of 3 photos added. You can add up to 3.
+                {t('report.photos_added_count', { count: photos.length })}
               </p>
             )}
 
@@ -1955,7 +1957,7 @@ export default function ReportPage() {
             {/* Photo Tips card */}
             <div style={{ background: "#F6F3F2", borderRadius: 16, padding: "16px 20px", display: "flex", flexDirection: "column" as const, gap: 16 }}>
               <p style={{ fontSize: 10, fontWeight: 700, color: "#717782", letterSpacing: "0.1em", textTransform: "uppercase" as const, margin: 0 }}>
-                PHOTO TIPS
+                {t('report.photo_tips_title')}
               </p>
               <div style={{ display: "flex", flexDirection: "column" as const, gap: 12 }}>
                 {GUIDELINES.map((text, i) => (
@@ -2549,7 +2551,7 @@ export default function ReportPage() {
                           ...styles.radioCircle,
                           border: disasterType === value ? "6px solid #0468B1" : "2px solid #C1C7D2",
                         }} />
-                        <span style={styles.radioLabel}>{label}</span>
+                        <span style={styles.radioLabel}>{t(`disaster_types.${value}`, { defaultValue: label })}</span>
                       </div>
                     ))}
                   </div>
@@ -2997,7 +2999,7 @@ export default function ReportPage() {
                   </div>
                   <div style={styles.reviewDataCard}>
                     <p style={styles.reviewDataLabel}>{t('report.review_q4')}</p>
-                    <p style={styles.reviewDataValue}>{DISASTER_LABELS[disasterType] ?? disasterType}</p>
+                    <p style={styles.reviewDataValue}>{t(`disaster_types.${disasterType}`, { defaultValue: DISASTER_LABELS[disasterType] ?? disasterType })}</p>
                   </div>
                   <div style={styles.reviewDataCard}>
                     <p style={styles.reviewDataLabel}>{t('report.review_q5')}</p>

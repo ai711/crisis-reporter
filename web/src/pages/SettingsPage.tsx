@@ -261,7 +261,7 @@ export default function SettingsPage() {
               style={s.row}
               onClick={() => navigate("/onboarding?step=terms")}
             >
-              <span style={s.rowLabel}>Terms and Conditions</span>
+              <span style={s.rowLabel}>{t('settings.terms_and_conditions')}</span>
               <IconChevron />
             </button>
             <div style={s.divider} />
@@ -278,7 +278,7 @@ export default function SettingsPage() {
           <p style={s.sectionLabel}>{t('settings.section_session')}</p>
           <div style={s.card}>
             <button style={s.row} onClick={handleSignOut}>
-              <span style={{ ...s.rowLabel, color: "#E53E3E" }}>Sign Out</span>
+              <span style={{ ...s.rowLabel, color: "#E53E3E" }}>{t('settings.sign_out')}</span>
             </button>
           </div>
         </div>
@@ -290,7 +290,7 @@ export default function SettingsPage() {
           <div style={s.sheet} onClick={(e) => e.stopPropagation()}>
             <div style={s.sheetHandle} />
             <div style={s.sheetHeader}>
-              <span style={s.sheetTitle}>Select Country</span>
+              <span style={s.sheetTitle}>{t('settings.select_country')}</span>
               <button
                 style={s.closeBtn}
                 onClick={closeModal}

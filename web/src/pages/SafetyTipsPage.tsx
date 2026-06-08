@@ -688,13 +688,13 @@ export default function SafetyTipsPage() {
               <polyline points="15 18 9 12 15 6" />
             </svg>
           </button>
-          <span className="page-header-title">Part A — Safety Tips</span>
+          <span className="page-header-title">{t('safety.tab_a')}</span>
           <div className="page-header-spacer" />
         </header>
 
         <div style={{ padding: "12px 24px 0", background: BG }}>
           <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 6 }}>
-            <span style={{ fontSize: 12, color: "#717782", fontWeight: 500 }}>{completedA} of 9 completed</span>
+            <span style={{ fontSize: 12, color: "#717782", fontWeight: 500 }}>{t('safety.n_of_9_completed', { n: completedA })}</span>
           </div>
           <div style={{ height: 6, background: "#E4E2E1", borderRadius: 3, overflow: "hidden" }}>
             <div style={{ height: "100%", width: `${(completedA / 9) * 100}%`, background: BLUE, borderRadius: 3, transition: "width 0.3s" }} />
@@ -703,7 +703,7 @@ export default function SafetyTipsPage() {
 
         <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px 32px" }}>
           <p style={{ fontSize: 10, fontWeight: 700, color: "#717782", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 16 }}>
-            Tap a disaster type to read the safety tips
+            {t('safety.tap_hint')}
           </p>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {DISASTERS_FALLBACK.map((d) => {
@@ -728,8 +728,8 @@ export default function SafetyTipsPage() {
 
           <div style={{ marginTop: 32, background: "#EAE7E7", borderRadius: 16, padding: "20px 16px", display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center" }}>
             <MatIcon name="cloud_done" size={28} color={BLUE} />
-            <p style={{ margin: "10px 0 4px", fontSize: 14, fontWeight: 600, color: "#1B1C1C" }}>Ready for the field</p>
-            <p style={{ margin: 0, fontSize: 13, color: "#717782", lineHeight: 1.5 }}>Content works offline and is available in all supported languages</p>
+            <p style={{ margin: "10px 0 4px", fontSize: 14, fontWeight: 600, color: "#1B1C1C" }}>{t('safety.offline_ready')}</p>
+            <p style={{ margin: 0, fontSize: 13, color: "#717782", lineHeight: 1.5 }}>{t('safety.offline_ready_desc')}</p>
           </div>
         </div>
       </div>
@@ -743,7 +743,7 @@ export default function SafetyTipsPage() {
   const partCDone = isComplete("C");
   const shownChips = DISASTERS_FALLBACK.slice(0, 3);
   const moreCount = DISASTERS_FALLBACK.length - shownChips.length;
-  const partABtnLabel = completedA === 9 ? "✓ Completed" : completedA > 0 ? "Continue Safety Tips" : "Start";
+  const partABtnLabel = completedA === 9 ? t('SAFETY_COMPLETED') : completedA > 0 ? t('safety.continue_a') : t('safety.start');
 
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", background: BG }}>
@@ -759,7 +759,7 @@ export default function SafetyTipsPage() {
 
       <div style={{ flex: 1, overflowY: "auto", padding: "24px 24px 40px" }}>
         <p style={{ fontSize: 14, color: "#414751", textAlign: "center", marginBottom: 28, lineHeight: 1.6, padding: "0 8px" }}>
-          Learn how to stay safe and report effectively. Complete both parts to earn your Safety Training badge.
+          {t('safety.intro_text')}
         </p>
 
         {/* Part A Card */}
@@ -769,8 +769,8 @@ export default function SafetyTipsPage() {
               <MatIcon name="shield" size={22} color={BLUE} fill />
             </div>
             <div style={{ flex: 1 }}>
-              <h3 style={{ margin: "0 0 4px", fontSize: 16, fontWeight: 700, color: "#1B1C1C", lineHeight: 1.3 }}>Part A — Safety Tips by Disaster Type</h3>
-              <p style={{ margin: 0, fontSize: 13, color: "#717782" }}>{completedA} of 9 completed</p>
+              <h3 style={{ margin: "0 0 4px", fontSize: 16, fontWeight: 700, color: "#1B1C1C", lineHeight: 1.3 }}>{t('safety.part_a_card_title')}</h3>
+              <p style={{ margin: 0, fontSize: 13, color: "#717782" }}>{t('safety.n_of_9_completed', { n: completedA })}</p>
             </div>
           </div>
           <div style={{ height: 8, background: "#E4E2E1", borderRadius: 4, overflow: "hidden", marginBottom: 16 }}>
@@ -810,21 +810,21 @@ export default function SafetyTipsPage() {
               <MatIcon name="description" size={22} color={BLUE} fill />
             </div>
             <div style={{ flex: 1 }}>
-              <h3 style={{ margin: "0 0 4px", fontSize: 16, fontWeight: 700, color: "#1B1C1C", lineHeight: 1.3 }}>Part B — Reporting Guidelines</h3>
-              <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: partBDone ? GREEN : "#F5A623" }}>{partBDone ? "Completed" : "Not started"}</p>
+              <h3 style={{ margin: "0 0 4px", fontSize: 16, fontWeight: 700, color: "#1B1C1C", lineHeight: 1.3 }}>{t('safety.part_b_card_title')}</h3>
+              <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: partBDone ? GREEN : "#F5A623" }}>{partBDone ? t('safety.status_completed') : t('safety.status_not_started')}</p>
             </div>
           </div>
           <div style={{ height: 8, background: "#E4E2E1", borderRadius: 4, overflow: "hidden", marginBottom: 16 }}>
             <div style={{ height: "100%", width: partBDone ? "100%" : "0%", background: BLUE, borderRadius: 4, transition: "width 0.3s" }} />
           </div>
           <p style={{ fontSize: 14, color: "#414751", lineHeight: 1.6, marginBottom: 20 }}>
-            Simple do's and don'ts for submitting a report safely and accurately during a crisis
+            {t('safety.part_b_desc')}
           </p>
           <button
             onClick={() => setView({ type: "slide", part: "B" })}
             style={{ width: "100%", height: 48, borderRadius: 12, background: partBDone ? "transparent" : BLUE, color: partBDone ? GREEN : "#fff", border: partBDone ? `1.5px solid ${GREEN}` : "none", fontWeight: 700, fontSize: 15, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
           >
-            {partBDone ? "✓ Completed" : "Start"}
+            {partBDone ? t('SAFETY_COMPLETED') : t('safety.start')}
             {!partBDone && <MatIcon name="arrow_forward" size={18} color="#fff" />}
           </button>
         </article>
@@ -836,8 +836,8 @@ export default function SafetyTipsPage() {
               <MatIcon name="medical_services" size={22} color={BLUE} fill />
             </div>
             <div style={{ flex: 1 }}>
-              <h3 style={{ margin: "0 0 4px", fontSize: 16, fontWeight: 700, color: "#1B1C1C", lineHeight: 1.3 }}>Part C — First Aid Tips</h3>
-              <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: partCDone ? GREEN : "#F5A623" }}>{partCDone ? "Completed" : "Not started"}</p>
+              <h3 style={{ margin: "0 0 4px", fontSize: 16, fontWeight: 700, color: "#1B1C1C", lineHeight: 1.3 }}>{t('safety.part_c_card_title')}</h3>
+              <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: partCDone ? GREEN : "#F5A623" }}>{partCDone ? t('safety.status_completed') : t('safety.status_not_started')}</p>
             </div>
           </div>
           <div style={{ height: 8, background: "#E4E2E1", borderRadius: 4, overflow: "hidden", marginBottom: 20 }}>
@@ -847,7 +847,7 @@ export default function SafetyTipsPage() {
             onClick={() => setView({ type: "slide", part: "C" })}
             style={{ width: "100%", height: 48, borderRadius: 12, background: partCDone ? "transparent" : BLUE, color: partCDone ? GREEN : "#fff", border: partCDone ? `1.5px solid ${GREEN}` : "none", fontWeight: 700, fontSize: 15, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
           >
-            {partCDone ? "✓ Completed" : "Start"}
+            {partCDone ? t('SAFETY_COMPLETED') : t('safety.start')}
             {!partCDone && <MatIcon name="arrow_forward" size={18} color="#fff" />}
           </button>
         </article>
@@ -859,13 +859,13 @@ export default function SafetyTipsPage() {
           </div>
           <div style={{ flex: 1 }}>
             <p style={{ margin: "0 0 6px", fontSize: 13, fontWeight: 700, color: "#1B1C1C", lineHeight: 1.4 }}>
-              Complete both parts to unlock your Safety Training Badge
+              {t('safety.badge_teaser')}
             </p>
             <button
               onClick={() => navigate("/badges")}
               style={{ background: "none", border: "none", color: BLUE, fontWeight: 700, fontSize: 13, cursor: "pointer", padding: 0, display: "flex", alignItems: "center", gap: 4 }}
             >
-              View Badges
+              {t('safety.view_badges')}
               <MatIcon name="arrow_forward" size={14} color={BLUE} />
             </button>
           </div>

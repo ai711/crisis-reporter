@@ -191,7 +191,9 @@ export default function ProfilePage() {
   };
 
   // ── Anonymous gate ──────────────────────────────────────────────────────────
-  if (!reporterId) {
+  // Treat local_ IDs (offline-created fallbacks the backend never saw) the same
+  // as no ID — show the login/register prompt rather than an empty profile form.
+  if (!reporterId || reporterId.startsWith("local_")) {
     return (
       <div style={s.page}>
         <header style={s.header}>

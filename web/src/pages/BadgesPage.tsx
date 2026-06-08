@@ -194,16 +194,16 @@ export default function BadgesPage() {
             <MatIcon name="lock" size={24} color="#6C4500" fill style={{ flexShrink: 0, marginTop: 2 }} />
             <div style={{ flex: 1 }}>
               <h2 style={{ margin: "0 0 6px", fontSize: 16, fontWeight: 700, color: "#291800" }}>
-                Badges are locked
+                {t('badges.locked_title')}
               </h2>
               <p style={{ margin: "0 0 12px", fontSize: 13, color: "#6C4500", lineHeight: 1.5 }}>
-                Add your email or phone number to your profile to unlock badges and certifications
+                {t('badges.locked_body')}
               </p>
               <button
                 onClick={() => navigate("/profile")}
                 style={{ background: "none", border: "none", color: BLUE, fontWeight: 700, fontSize: 13, cursor: "pointer", padding: 0, display: "flex", alignItems: "center", gap: 4 }}
               >
-                Go to Profile
+                {t('badges.go_to_profile')}
                 <MatIcon name="arrow_forward" size={14} color={BLUE} />
               </button>
             </div>
@@ -211,7 +211,7 @@ export default function BadgesPage() {
 
           {/* Section label */}
           <p style={{ fontSize: 10, fontWeight: 700, color: "#717782", textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 16 }}>
-            Available Badges
+            {t('badges.section_available')}
           </p>
 
           {/* Safety Training Badge — locked */}
@@ -235,10 +235,10 @@ export default function BadgesPage() {
                 </div>
                 <div style={{ flex: 1 }}>
                   <h4 style={{ margin: "0 0 4px", fontSize: 17, fontWeight: 700, color: "#717782" }}>
-                    Safety Training Badge
+                    {t('badges.safety_name')}
                   </h4>
                   <p style={{ margin: 0, fontSize: 13, color: "#9CA3AF", lineHeight: 1.5 }}>
-                    Complete both Part A and Part B of Safety Tips to earn this badge
+                    {t('badges.safety_desc_locked')}
                   </p>
                 </div>
               </div>
@@ -246,7 +246,7 @@ export default function BadgesPage() {
               {/* Progress */}
               <div style={{ marginBottom: 8 }}>
                 <span style={{ fontSize: 12, fontWeight: 500, color: "#717782" }}>
-                  Part A: {completedPartA}/9 completed · Part B: {partBDone ? "Completed" : "Not started"}
+                  {t('badges.part_a_progress', { n: completedPartA, status: partBDone ? t('safety.status_completed') : t('safety.status_not_started') })}
                 </span>
               </div>
               <div style={{ height: 8, background: "#F0EDED", borderRadius: 4, overflow: "hidden", marginBottom: 16 }}>
@@ -271,7 +271,7 @@ export default function BadgesPage() {
                   gap: 8,
                 }}
               >
-                Continue Safety Tips
+                {t('safety.continue_a')}
                 <MatIcon name="arrow_forward" size={16} color={BLUE} />
               </button>
             </div>
@@ -297,14 +297,14 @@ export default function BadgesPage() {
                 </div>
                 <div style={{ flex: 1 }}>
                   <h4 style={{ margin: "0 0 4px", fontSize: 17, fontWeight: 700, color: "#717782" }}>
-                    Referral Badge
+                    {t('badges.referral_name')}
                   </h4>
                   <p style={{ margin: "0 0 12px", fontSize: 13, color: "#9CA3AF", lineHeight: 1.5 }}>
-                    Refer a friend who installs the app and completes safety training
+                    {t('badges.referral_desc')}
                   </p>
                   <div style={{ background: "#F0EDED", borderRadius: 8, padding: "6px 12px" }}>
                     <span style={{ fontSize: 12, fontWeight: 500, color: "#717782" }}>
-                      Status: Coming soon — referral program launching later
+                      {t('badges.referral_status')}
                     </span>
                   </div>
                 </div>
@@ -314,7 +314,7 @@ export default function BadgesPage() {
 
           {/* Bottom note */}
           <p style={{ fontSize: 12, color: "#717782", textAlign: "center", lineHeight: 1.6, padding: "0 16px" }}>
-            Badges are only visible inside the app at this stage. Shareable certificates coming soon.
+            {t('badges.visibility_note')}
           </p>
         </div>
       </div>
@@ -355,12 +355,12 @@ export default function BadgesPage() {
             </div>
             <div>
               <p style={{ margin: 0, fontWeight: 700, fontSize: 15, color: "#1B1C1C" }}>{reporterName}</p>
-              <p style={{ margin: 0, fontSize: 12, color: "#717782" }}>User ID: {displayId}</p>
+              <p style={{ margin: 0, fontSize: 12, color: "#717782" }}>{t('badges.user_id_label')}: {displayId}</p>
             </div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 12px", background: "rgba(0,109,55,0.1)", borderRadius: 99 }}>
             <div style={{ width: 8, height: 8, borderRadius: "50%", background: GREEN }} />
-            <span style={{ fontSize: 12, fontWeight: 700, color: "#006D37" }}>Profile Active</span>
+            <span style={{ fontSize: 12, fontWeight: 700, color: "#006D37" }}>{t('badges.profile_active')}</span>
           </div>
         </div>
 
@@ -369,7 +369,7 @@ export default function BadgesPage() {
 
         {/* Section label */}
         <p style={{ fontSize: 10, fontWeight: 700, color: "#717782", textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 20 }}>
-          Your Badges
+          {t('badges.section_your_badges')}
         </p>
 
         {/* ── Safety Training Badge ── */}
@@ -387,20 +387,20 @@ export default function BadgesPage() {
                 </div>
                 {/* EARNED chip */}
                 <div style={{ display: "flex", alignItems: "center", gap: 4, padding: "5px 12px", background: GREEN, borderRadius: 99 }}>
-                  <span style={{ fontSize: 11, fontWeight: 800, color: "#fff", letterSpacing: 0.5 }}>EARNED ✓</span>
+                  <span style={{ fontSize: 11, fontWeight: 800, color: "#fff", letterSpacing: 0.5 }}>{t('badges.status_earned').toUpperCase()}</span>
                 </div>
               </div>
 
               <h3 style={{ margin: "0 0 8px", fontSize: 18, fontWeight: 800, color: "#1B1C1C" }}>
-                Safety Training Badge
+                {t('badges.safety_name')}
               </h3>
               <p style={{ margin: "0 0 20px", fontSize: 14, color: "#414751", lineHeight: 1.6 }}>
-                You completed both Part A and Part B of the Crisis Response Safety Protocol. This certification validates your field readiness.
+                {t('badges.safety_earned_desc')}
               </p>
 
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
-                  <p style={{ margin: "0 0 2px", fontSize: 11, fontWeight: 700, color: "#717782", textTransform: "uppercase", letterSpacing: 0.5 }}>Earned on</p>
+                  <p style={{ margin: "0 0 2px", fontSize: 11, fontWeight: 700, color: "#717782", textTransform: "uppercase", letterSpacing: 0.5 }}>{t('badges.earned_on_label')}</p>
                   <p style={{ margin: 0, fontSize: 15, fontWeight: 600, color: "#1B1C1C" }}>{earnedDate}</p>
                 </div>
                 <button
@@ -420,7 +420,7 @@ export default function BadgesPage() {
                   }}
                 >
                   <MatIcon name="share" size={14} color="#717782" />
-                  Share Badge
+                  {t('badges.share_badge')}
                 </button>
               </div>
             </div>
@@ -438,15 +438,15 @@ export default function BadgesPage() {
                 </div>
               </div>
               <div style={{ flex: 1 }}>
-                <h4 style={{ margin: "0 0 4px", fontSize: 17, fontWeight: 700, color: "#717782" }}>Safety Training Badge</h4>
+                <h4 style={{ margin: "0 0 4px", fontSize: 17, fontWeight: 700, color: "#717782" }}>{t('badges.safety_name')}</h4>
                 <p style={{ margin: 0, fontSize: 13, color: "#9CA3AF", lineHeight: 1.5 }}>
-                  Complete both Part A and Part B of Safety Tips to earn this badge
+                  {t('badges.safety_desc_locked')}
                 </p>
               </div>
             </div>
             <div style={{ marginBottom: 8 }}>
               <span style={{ fontSize: 12, fontWeight: 500, color: "#717782" }}>
-                Part A: {completedPartA}/9 completed · Part B: {partBDone ? "Completed" : "Not started"}
+                {t('badges.part_a_progress', { n: completedPartA, status: partBDone ? t('safety.status_completed') : t('safety.status_not_started') })}
               </span>
             </div>
             <div style={{ height: 8, background: "#F0EDED", borderRadius: 4, overflow: "hidden", marginBottom: 16 }}>
@@ -456,7 +456,7 @@ export default function BadgesPage() {
               onClick={() => navigate("/safety-tips")}
               style={{ width: "100%", height: 48, borderRadius: 12, background: "transparent", color: BLUE, border: `1.5px solid ${BLUE}`, fontWeight: 700, fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
             >
-              Continue Safety Tips
+              {t('safety.continue_a')}
               <MatIcon name="arrow_forward" size={16} color={BLUE} />
             </button>
           </div>
@@ -470,10 +470,10 @@ export default function BadgesPage() {
             </div>
             <div style={{ flex: 1 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4 }}>
-                <h4 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "#1B1C1C" }}>Referral Badge</h4>
-                <span style={{ fontSize: 11, fontWeight: 700, color: "#C1C7D2", textTransform: "uppercase", letterSpacing: 0.5 }}>LOCKED</span>
+                <h4 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "#1B1C1C" }}>{t('badges.referral_name')}</h4>
+                <span style={{ fontSize: 11, fontWeight: 700, color: "#C1C7D2", textTransform: "uppercase", letterSpacing: 0.5 }}>{t('badges.status_locked').toUpperCase()}</span>
               </div>
-              <p style={{ margin: "0 0 16px", fontSize: 13, color: "#717782" }}>0 successful referrals</p>
+              <p style={{ margin: "0 0 16px", fontSize: 13, color: "#717782" }}>{t('badges.referral_count', { count: 0 })}</p>
               <button
                 style={{
                   width: "100%",
@@ -491,7 +491,7 @@ export default function BadgesPage() {
                   gap: 6,
                 }}
               >
-                Refer a Friend
+                {t('badges.refer_a_friend')}
               </button>
             </div>
           </div>
@@ -501,7 +501,7 @@ export default function BadgesPage() {
         <div style={{ display: "flex", gap: 10, alignItems: "flex-start", background: "#EAE7E7", borderRadius: 12, padding: "12px 14px" }}>
           <MatIcon name="info" size={16} color="#717782" style={{ marginTop: 1, flexShrink: 0 }} />
           <p style={{ margin: 0, fontSize: 11, color: "#717782", lineHeight: 1.6 }}>
-            Badges are only visible inside the app and linked to your verified ID. Sharing capabilities are currently restricted for security compliance.
+            {t('badges.security_note')}
           </p>
         </div>
       </div>
