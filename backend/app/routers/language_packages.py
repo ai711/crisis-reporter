@@ -2337,6 +2337,30 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
     ("badges.referral_status",   "ui_badges", "Status: Coming soon — referral program launching later"),
     ("badges.referral_count",    "ui_badges", "{{count}} successful referrals"),
     ("badges.refer_a_friend",    "ui_badges", "Refer a Friend"),
+
+    # Onboarding
+    ("onboarding.subtitle",      "ui_onboarding", "Helping UNDP respond faster to crises around the world"),
+    ("onboarding.unavailable",   "ui_onboarding", "Unavailable"),
+
+    # Profile form labels and placeholders
+    ("profile.add_photo",             "ui_profile", "Add Profile Photo"),
+    ("profile.completion_heading",    "ui_profile", "Profile Completion"),
+    ("profile.completion_hint",       "ui_profile", "Adding your email or phone number links all your reports to your profile"),
+    ("profile.first_name_optional",   "ui_profile", "First Name (optional)"),
+    ("profile.first_name_placeholder","ui_profile", "Enter your first name"),
+    ("profile.last_name_optional",    "ui_profile", "Last Name (optional)"),
+    ("profile.last_name_placeholder", "ui_profile", "Enter your last name"),
+    ("profile.email_optional",        "ui_profile", "Email Address (optional)"),
+    ("profile.email_hint",            "ui_profile", "Links all your reports to this email"),
+    ("profile.email_placeholder",     "ui_profile", "name@example.com"),
+    ("profile.phone_optional",        "ui_profile", "Mobile Number (optional)"),
+    ("profile.phone_placeholder",     "ui_profile", "Enter mobile number"),
+    ("profile.footer_hint",           "ui_profile", "Your profile is saved locally and synced when online"),
+
+    # Side menu / PWA install prompt
+    ("sidemenu.install_app",        "ui_menu", "Install App"),
+    ("sidemenu.add_to_home_screen", "ui_menu", "Add to home screen"),
+    ("sidemenu.version",            "ui_menu", "Crisis Reporter v1.0"),
 ]
 
 

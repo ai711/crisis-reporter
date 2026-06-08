@@ -456,7 +456,7 @@ export default function MapPage() {
           <div style={isMobile ? s.bottomSheet : s.rightPanel}>
             <div style={s.panelHeader}>
               <span style={s.panelTitle}>
-                {DAMAGE_LABELS[selectedPin.damage_level] ?? selectedPin.damage_level}
+                {t(`map.damage_${selectedPin.damage_level}`, { defaultValue: DAMAGE_LABELS[selectedPin.damage_level] ?? selectedPin.damage_level })}
               </span>
               <button style={s.panelCloseBtn} onClick={() => setSelectedPin(null)} aria-label="Close">
                 <IconClose />
@@ -471,7 +471,7 @@ export default function MapPage() {
                   background: DAMAGE_COLORS[selectedPin.damage_level] ?? "#9CA3AF",
                 }}
               >
-                {DAMAGE_LABELS[selectedPin.damage_level] ?? selectedPin.damage_level}
+                {t(`map.damage_${selectedPin.damage_level}`, { defaultValue: DAMAGE_LABELS[selectedPin.damage_level] ?? selectedPin.damage_level })}
               </span>
 
               {/* GPS coordinates */}

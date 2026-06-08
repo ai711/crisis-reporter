@@ -133,6 +133,20 @@ const PRESSING_NEEDS_LABELS: Record<string, string> = {
   other: "Other — please specify",
 };
 
+// Maps PRESSING_NEEDS_LABELS keys to their UPPERCASE seed keys (non-trivial mappings only)
+const Q8_KEY_MAP: Record<string, string> = {
+  food_water:      "Q8_OPT_FOOD_WATER",
+  cash_financial:  "Q8_OPT_CASH",
+  healthcare:      "Q8_OPT_HEALTHCARE",
+  shelter:         "Q8_OPT_SHELTER",
+  livelihoods:     "Q8_OPT_LIVELIHOODS",
+  wash:            "Q8_OPT_WASH",
+  basic_services:  "Q8_OPT_BASIC_SVC",
+  protection:      "Q8_OPT_PROTECTION",
+  local_support:   "Q8_OPT_LOCAL_SUPPORT",
+  other:           "Q8_OPT_OTHER",
+};
+
 // ── Question package types ─────────────────────────────────────────────────────
 
 interface ApiOption { option_text: string; option_value: string; }
@@ -3017,15 +3031,15 @@ export default function ReportPage() {
                 <div style={{ display: "flex", flexDirection: "column" as const, gap: 8 }}>
                   <div style={styles.reviewDataCard}>
                     <p style={styles.reviewDataLabel}>{t('report.review_q6')}</p>
-                    <p style={styles.reviewDataValue}>{ELECTRICITY_LABELS[electricityCondition] ?? electricityCondition}</p>
+                    <p style={styles.reviewDataValue}>{t(`Q6_OPT_${electricityCondition.toUpperCase()}`, { defaultValue: ELECTRICITY_LABELS[electricityCondition] ?? electricityCondition })}</p>
                   </div>
                   <div style={styles.reviewDataCard}>
                     <p style={styles.reviewDataLabel}>{t('report.review_q7')}</p>
-                    <p style={styles.reviewDataValue}>{HEALTH_LABELS[healthServicesCondition] ?? healthServicesCondition}</p>
+                    <p style={styles.reviewDataValue}>{t(`Q7_OPT_${healthServicesCondition.toUpperCase()}`, { defaultValue: HEALTH_LABELS[healthServicesCondition] ?? healthServicesCondition })}</p>
                   </div>
                   <div style={styles.reviewDataCard}>
                     <p style={styles.reviewDataLabel}>{t('report.review_q8')}</p>
-                    <p style={styles.reviewDataValue}>{pressingNeeds.map((v) => PRESSING_NEEDS_LABELS[v] ?? v).join(", ")}</p>
+                    <p style={styles.reviewDataValue}>{pressingNeeds.map((v) => t(Q8_KEY_MAP[v] ?? `Q8_OPT_${v.toUpperCase()}`, { defaultValue: PRESSING_NEEDS_LABELS[v] ?? v })).join(", ")}</p>
                   </div>
                   {pressingNeedsOther && (
                     <div style={styles.reviewDataCard}>

@@ -214,8 +214,8 @@ export default function ProfilePage() {
           <p style={s.anonGateHeading}>{t("profile.anon_gate_heading")}</p>
           <p style={s.anonGateSubtext}>{t("profile.anon_gate_subtext")}</p>
           <div style={s.anonGateBtns}>
-            <button onClick={() => navigate("/login")} style={s.loginBtn}>Log In</button>
-            <button onClick={() => navigate("/login?mode=register")} style={s.registerBtn}>Create Account</button>
+            <button onClick={() => navigate("/login")} style={s.loginBtn}>{t("settings.login")}</button>
+            <button onClick={() => navigate("/login?mode=register")} style={s.registerBtn}>{t("settings.register")}</button>
           </div>
         </div>
       </div>
@@ -297,7 +297,7 @@ export default function ProfilePage() {
             </button>
           </div>
           <button style={s.editPhotoBtn} onClick={() => photoInputRef.current?.click()}>
-            {displayPhoto ? t("profile.edit_photo") : "Add Profile Photo"}
+            {displayPhoto ? t("profile.edit_photo") : t("profile.add_photo")}
           </button>
           <input
             ref={photoInputRef}
@@ -312,14 +312,14 @@ export default function ProfilePage() {
         {/* Completion bar */}
         <section style={s.completionSection}>
           <div style={s.completionRow}>
-            <span style={s.completionTitle}>Profile Completion</span>
+            <span style={s.completionTitle}>{t("profile.completion_heading")}</span>
             <span style={s.completionPct}>{completion}%</span>
           </div>
           <div style={s.barTrack}>
             <div style={{ ...s.barFill, width: `${completion}%`, transition: "width 0.4s ease" }} />
           </div>
           <p style={s.completionHint}>
-            Adding your email or phone number links all your reports to your profile
+            {t("profile.completion_hint")}
           </p>
         </section>
 
@@ -339,26 +339,26 @@ export default function ProfilePage() {
 
           {/* First Name */}
           <div style={s.fieldGroup}>
-            <label style={s.fieldLabel}>First Name (optional)</label>
+            <label style={s.fieldLabel}>{t("profile.first_name_optional")}</label>
             <input
               style={s.fieldInput}
               type="text"
               value={firstName}
               onChange={(e) => { setFirstName(e.target.value.slice(0, 100)); setIsDirty(true); }}
-              placeholder="Enter your first name"
+              placeholder={t("profile.first_name_placeholder")}
               maxLength={100}
             />
           </div>
 
           {/* Last Name */}
           <div style={s.fieldGroup}>
-            <label style={s.fieldLabel}>Last Name (optional)</label>
+            <label style={s.fieldLabel}>{t("profile.last_name_optional")}</label>
             <input
               style={s.fieldInput}
               type="text"
               value={lastName}
               onChange={(e) => { setLastName(e.target.value.slice(0, 100)); setIsDirty(true); }}
-              placeholder="Enter your last name"
+              placeholder={t("profile.last_name_placeholder")}
               maxLength={100}
             />
           </div>
@@ -366,8 +366,8 @@ export default function ProfilePage() {
           {/* Email */}
           <div style={s.fieldGroup}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 6 }}>
-              <label style={{ ...s.fieldLabel, marginBottom: 0 }}>Email Address (optional)</label>
-              <span style={s.fieldHint}>Links all your reports to this email</span>
+              <label style={{ ...s.fieldLabel, marginBottom: 0 }}>{t("profile.email_optional")}</label>
+              <span style={s.fieldHint}>{t("profile.email_hint")}</span>
             </div>
             <input
               style={{
@@ -377,7 +377,7 @@ export default function ProfilePage() {
               type="email"
               value={email}
               onChange={(e) => handleEmailChange(e.target.value)}
-              placeholder="name@example.com"
+              placeholder={t("profile.email_placeholder")}
               inputMode="email"
               autoComplete="email"
             />
@@ -386,7 +386,7 @@ export default function ProfilePage() {
 
           {/* Mobile Number */}
           <div style={s.fieldGroup}>
-            <label style={s.fieldLabel}>Mobile Number (optional)</label>
+            <label style={s.fieldLabel}>{t("profile.phone_optional")}</label>
             <div style={{ display: "flex", gap: 8 }}>
               {/* Country code select */}
               <div style={{ position: "relative", flexShrink: 0 }}>
@@ -414,7 +414,7 @@ export default function ProfilePage() {
                 type="tel"
                 value={phone}
                 onChange={(e) => handlePhoneChange(e.target.value)}
-                placeholder="Enter mobile number"
+                placeholder={t("profile.phone_placeholder")}
                 inputMode="tel"
               />
             </div>
@@ -452,7 +452,7 @@ export default function ProfilePage() {
         >
           {saving ? t("common.saving") : t("profile.save_btn")}
         </button>
-        <p style={s.footerHint}>Your profile is saved locally and synced when online</p>
+        <p style={s.footerHint}>{t("profile.footer_hint")}</p>
       </div>
     </div>
   );

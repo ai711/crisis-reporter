@@ -21,7 +21,9 @@
     "more_languages_title": "More languages",
     "more_languages_btn": "+ More",
     "show_less": "Show less",
-    "lang_load_error": "Could not load language. Check your connection and try again."
+    "lang_load_error": "Could not load language. Check your connection and try again.",
+    "subtitle": "Helping UNDP respond faster to crises around the world",
+    "unavailable": "Unavailable"
   },
   "home": {
     "reportButton": "Report an Incident",
@@ -298,11 +300,24 @@
     "save_success": "Profile saved",
     "save_error": "Could not save profile. Please try again.",
     "edit_photo": "Edit photo",
+    "add_photo": "Add Profile Photo",
     "completion_label": "Profile {{completion}}% complete",
+    "completion_heading": "Profile Completion",
+    "completion_hint": "Adding your email or phone number links all your reports to your profile",
     "email_invalid": "Please enter a valid email address",
     "anon_gate_heading": "Create a free account to save your profile and earn badges.",
     "anon_gate_subtext": "You can still submit reports anonymously without an account.",
-    "anon_note": "All profile fields are optional. You can submit reports anonymously."
+    "anon_note": "All profile fields are optional. You can submit reports anonymously.",
+    "first_name_optional": "First Name (optional)",
+    "first_name_placeholder": "Enter your first name",
+    "last_name_optional": "Last Name (optional)",
+    "last_name_placeholder": "Enter your last name",
+    "email_optional": "Email Address (optional)",
+    "email_hint": "Links all your reports to this email",
+    "email_placeholder": "name@example.com",
+    "phone_optional": "Mobile Number (optional)",
+    "phone_placeholder": "Enter mobile number",
+    "footer_hint": "Your profile is saved locally and synced when online"
   },
   "login": {
     "title": "Sign In",
@@ -451,6 +466,11 @@
     "q9_answer": "Reports cannot be edited after submission. If you submitted a report in error please contact support with the date and location of the report.",
     "q10_question": "Is my data secure?",
     "q10_answer": "Yes. All data is transmitted over encrypted connections and stored securely. Photos are anonymised before storage. Your personal details are never shared with third parties."
+  },
+  "sidemenu": {
+    "install_app": "Install App",
+    "add_to_home_screen": "Add to home screen",
+    "version": "Crisis Reporter v1.0"
   },
   "about": {
     "title": "About Crisis Reporter",

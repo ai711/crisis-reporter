@@ -92,6 +92,7 @@ function LockIcon() {
 // ── Shared header ─────────────────────────────────────────────────────────────
 
 function OnboardingHeader() {
+  const { t } = useTranslation();
   return (
     <div style={s.headerArea}>
       <div style={s.shieldContainer}>
@@ -99,7 +100,7 @@ function OnboardingHeader() {
       </div>
       <p style={s.appName}>Crisis Reporter</p>
       <p style={s.appSubtitle}>
-        Helping UNDP respond faster to crises around the world
+        {t("onboarding.subtitle")}
       </p>
     </div>
   );
@@ -128,7 +129,7 @@ function CountryModal({
       <div style={s.bottomSheet} onClick={(e) => e.stopPropagation()}>
         <div style={s.sheetHandle} />
         <div style={s.sheetHeader}>
-          <span style={s.sheetTitle}>Select country</span>
+          <span style={s.sheetTitle}>{t("settings.select_country")}</span>
           <button style={s.sheetClose} onClick={onClose} aria-label="Close">✕</button>
         </div>
         <div style={{ padding: "0 16px 12px" }}>
@@ -158,7 +159,7 @@ function CountryModal({
               <span style={{ flex: 1, textAlign: "left" }}>{c.name}</span>
               {!c.is_active && (
                 <span style={{ fontSize: 11, color: "#A0AEC0", marginRight: 6 }}>
-                  Unavailable
+                  {t("onboarding.unavailable")}
                 </span>
               )}
               {selected?.code === c.code && (

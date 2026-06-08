@@ -311,10 +311,10 @@ export default function SideMenu({ open, onClose }: SideMenuProps) {
               <span className="material-symbols-outlined" style={{ color: BLUE, fontSize: 20 }}>install_mobile</span>
               <div>
                 <p style={{ fontSize: 13, color: BLUE, fontWeight: 700, margin: 0, lineHeight: 1.3 }}>
-                  Install App
+                  {t("sidemenu.install_app")}
                 </p>
                 <p style={{ fontSize: 11, color: "#4a6fa5", margin: 0, lineHeight: 1.3 }}>
-                  Add to home screen
+                  {t("sidemenu.add_to_home_screen")}
                 </p>
               </div>
             </button>
@@ -324,7 +324,7 @@ export default function SideMenu({ open, onClose }: SideMenuProps) {
         {/* Footer */}
         <div style={{ padding: "16px 24px 24px", flexShrink: 0 }}>
           <p style={{ fontSize: 12, color: "#9CA3AF", margin: 0, fontWeight: 500, letterSpacing: "0.05em" }}>
-            Crisis Reporter v1.0
+            {t("sidemenu.version")}
           </p>
         </div>
       </div>
