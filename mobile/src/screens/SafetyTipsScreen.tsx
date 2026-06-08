@@ -326,11 +326,11 @@ export default function SafetyTipsScreen() {
       const allComplete = Object.values(pA).filter(Boolean).length === 9 && pB && pC;
       if (allComplete) {
         Alert.alert(
-          'Safety Training Complete! 🎉',
-          'You have completed all three parts. Check your Badges to see your Safety Training Badge.',
+          t('safety.complete_alert_title') + ' 🎉',
+          t('safety.complete_alert_body'),
           [
-            { text: 'View Badges', onPress: () => navigation.navigate('BadgesScreen') },
-            { text: 'Done' },
+            { text: t('safety.view_badges'), onPress: () => navigation.navigate('BadgesScreen') },
+            { text: t('safety.done') },
           ],
         );
       }
@@ -379,7 +379,7 @@ export default function SafetyTipsScreen() {
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerBack}>
             <MaterialIcons name="arrow-back" size={scale(22)} color="#0468B1" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Safety Tips</Text>
+          <Text style={styles.headerTitle}>{t('safety.title')}</Text>
           <View style={styles.headerSpacer} />
         </View>
 
@@ -388,8 +388,7 @@ export default function SafetyTipsScreen() {
           contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
         >
           <Text style={styles.overviewIntro}>
-            Learn how to stay safe and report effectively. Complete all three parts to earn your Safety
-            Training badge.
+            {t('safety.intro_text')}
           </Text>
 
           {/* Part A */}
@@ -399,8 +398,8 @@ export default function SafetyTipsScreen() {
                 <MaterialIcons name="shield" size={scale(22)} color="#0468B1" />
               </View>
               <View style={{ flex: 1, marginLeft: 12 }}>
-                <Text style={styles.cardTitle}>Part A — Safety Tips by Disaster Type</Text>
-                <Text style={styles.cardSubtitle}>{completedA} of 9 completed</Text>
+                <Text style={styles.cardTitle}>{t('safety.part_a_card_title')}</Text>
+                <Text style={styles.cardSubtitle}>{t('safety.n_of_9_completed', { n: completedA })}</Text>
               </View>
             </View>
             <View style={styles.progressBarBg}>
@@ -411,7 +410,7 @@ export default function SafetyTipsScreen() {
               onPress={() => setViewState({ screen: 'part_a_list' })}
             >
               <Text style={[styles.cardBtnText, completedA === 9 && styles.cardBtnCompleteText]}>
-                {completedA === 9 ? '✓ Completed' : 'Continue →'}
+                {completedA === 9 ? t('SAFETY_COMPLETED', { defaultValue: '✓ Completed' }) : t('safety.continue_btn')}
               </Text>
             </TouchableOpacity>
           </View>
@@ -423,14 +422,14 @@ export default function SafetyTipsScreen() {
                 <MaterialIcons name="description" size={scale(22)} color="#0468B1" />
               </View>
               <View style={{ flex: 1, marginLeft: 12 }}>
-                <Text style={styles.cardTitle}>Part B — Reporting Guidelines</Text>
+                <Text style={styles.cardTitle}>{t('safety.part_b_card_title')}</Text>
                 <Text style={[styles.cardStatus, { color: progressB ? '#38A169' : '#F5A623' }]}>
-                  {progressB ? 'Completed' : 'Not started'}
+                  {progressB ? t('safety.status_completed') : t('safety.status_not_started')}
                 </Text>
               </View>
             </View>
             <Text style={styles.cardDesc}>
-              Simple do's and don'ts for submitting a report safely
+              {t('safety.part_b_desc')}
             </Text>
             <View style={styles.progressBarBg}>
               <View style={[styles.progressBarFill, { width: progressB ? '100%' : '0%' }]} />
@@ -440,7 +439,7 @@ export default function SafetyTipsScreen() {
               onPress={() => setViewState({ screen: 'part_b_slides' })}
             >
               <Text style={[styles.cardBtnText, progressB && styles.cardBtnCompleteText]}>
-                {progressB ? '✓ Completed' : 'Continue →'}
+                {progressB ? t('SAFETY_COMPLETED', { defaultValue: '✓ Completed' }) : t('safety.continue_btn')}
               </Text>
             </TouchableOpacity>
           </View>
@@ -452,9 +451,9 @@ export default function SafetyTipsScreen() {
                 <MaterialIcons name="medical-services" size={scale(22)} color="#0468B1" />
               </View>
               <View style={{ flex: 1, marginLeft: 12 }}>
-                <Text style={styles.cardTitle}>Part C — First Aid Tips</Text>
+                <Text style={styles.cardTitle}>{t('safety.part_c_card_title')}</Text>
                 <Text style={[styles.cardStatus, { color: progressC ? '#38A169' : '#F5A623' }]}>
-                  {progressC ? 'Completed' : 'Not started'}
+                  {progressC ? t('safety.status_completed') : t('safety.status_not_started')}
                 </Text>
               </View>
             </View>
@@ -466,7 +465,7 @@ export default function SafetyTipsScreen() {
               onPress={() => setViewState({ screen: 'part_c_slides' })}
             >
               <Text style={[styles.cardBtnText, progressC && styles.cardBtnCompleteText]}>
-                {progressC ? '✓ Completed' : 'Continue →'}
+                {progressC ? t('SAFETY_COMPLETED', { defaultValue: '✓ Completed' }) : t('safety.continue_btn')}
               </Text>
             </TouchableOpacity>
           </View>
@@ -475,10 +474,10 @@ export default function SafetyTipsScreen() {
           <View style={styles.badgeTeaser}>
             <MaterialIcons name="star" size={scale(20)} color="#0468B1" />
             <Text style={styles.badgeTeaserText}>
-              Complete all three parts to unlock your Safety Training Badge
+              {t('safety.badge_teaser')}
             </Text>
             <TouchableOpacity onPress={() => navigation.navigate('BadgesScreen')}>
-              <Text style={styles.badgeTeaserLink}>View Badges →</Text>
+              <Text style={styles.badgeTeaserLink}>{t('safety.badge_teaser_link')}</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -497,7 +496,7 @@ export default function SafetyTipsScreen() {
           >
             <MaterialIcons name="arrow-back" size={scale(22)} color="#0468B1" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Part A — Safety Tips</Text>
+          <Text style={styles.headerTitle}>{t('safety.tab_a')}</Text>
           <View style={styles.headerSpacer} />
         </View>
 
@@ -511,7 +510,7 @@ export default function SafetyTipsScreen() {
           style={styles.scroll}
           contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
         >
-          <Text style={styles.listLabel}>TAP A DISASTER TYPE TO READ THE SAFETY TIPS</Text>
+          <Text style={styles.listLabel}>{t('safety.tap_hint').toUpperCase()}</Text>
 
           {DISASTER_TYPES.map(dt => (
             <TouchableOpacity
@@ -522,7 +521,9 @@ export default function SafetyTipsScreen() {
               <View style={styles.disasterIconContainer}>
                 <MaterialIcons name={dt.icon as any} size={scale(22)} color="#0468B1" />
               </View>
-              <Text style={styles.disasterLabel}>{dt.label}</Text>
+              <Text style={styles.disasterLabel}>
+                {t(`SAFETY_DISASTER_${dt.key.toUpperCase().replace(/-/g, '_')}_LABEL`, { defaultValue: dt.label })}
+              </Text>
               {progressA[dt.key] ? (
                 <MaterialIcons name="check-circle" size={scale(22)} color="#38A169" />
               ) : (
@@ -533,8 +534,8 @@ export default function SafetyTipsScreen() {
 
           <View style={styles.offlineInfoCard}>
             <MaterialIcons name="cloud-done" size={scale(22)} color="#0468B1" />
-            <Text style={styles.offlineInfoText}>Content works offline once loaded</Text>
-            <Text style={styles.offlineInfoSubText}>Available in all supported languages</Text>
+            <Text style={styles.offlineInfoText}>{t('safety.offline_ready')}</Text>
+            <Text style={styles.offlineInfoSubText}>{t('safety.offline_ready_desc')}</Text>
           </View>
         </ScrollView>
       </View>
@@ -544,10 +545,11 @@ export default function SafetyTipsScreen() {
   // ── Slide viewer (disaster_slides | part_b_slides | part_c_slides) ───────────
   const getTitle = () => {
     if (viewState.screen === 'disaster_slides') {
-      return DISASTER_TYPES.find(d => d.key === viewState.disasterType)?.label ?? '';
+      const dt = DISASTER_TYPES.find(d => d.key === viewState.disasterType);
+      return dt ? t(`SAFETY_DISASTER_${dt.key.toUpperCase().replace(/-/g, '_')}_LABEL`, { defaultValue: dt.label }) : '';
     }
-    if (viewState.screen === 'part_b_slides') return 'Reporting Guidelines';
-    return 'First Aid Tips';
+    if (viewState.screen === 'part_b_slides') return t('SAFETY_PART_B_TITLE', { defaultValue: 'Reporting Guidelines' });
+    return t('SAFETY_PART_C_TITLE', { defaultValue: 'First Aid Tips' });
   };
 
   const handleSlideBack = () => {
@@ -620,12 +622,12 @@ export default function SafetyTipsScreen() {
       {loadState === 'offline' && (
         <View style={styles.offlineState}>
           <MaterialIcons name="wifi-off" size={scale(48)} color="#C1C7D2" />
-          <Text style={styles.offlineTitle}>Content not available offline</Text>
+          <Text style={styles.offlineTitle}>{t('safety.offline_content_unavailable')}</Text>
           <Text style={styles.offlineBody}>
-            Connect to the internet to load Safety Tips
+            {t('safety.connect_to_load')}
           </Text>
           <TouchableOpacity style={styles.retryBtn} onPress={retryFetch}>
-            <Text style={styles.retryBtnText}>Retry</Text>
+            <Text style={styles.retryBtnText}>{t('safety.retry')}</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -635,7 +637,7 @@ export default function SafetyTipsScreen() {
         <>
           <View style={{ marginHorizontal: screenWidth * 0.05, marginTop: 12, marginBottom: 16 }}>
             <Text style={styles.slideCounter}>
-              SLIDE {currentSlide + 1} OF {slides.length}
+              {t('SAFETY_SLIDE_PROGRESS', { n: currentSlide + 1, total: slides.length, defaultValue: `SLIDE ${currentSlide + 1} OF ${slides.length}` }).toUpperCase()}
             </Text>
             <View style={[styles.progressBarBg, { height: 4, marginBottom: 0, marginTop: 6 }]}>
               <View
@@ -665,7 +667,7 @@ export default function SafetyTipsScreen() {
             {/* Dos */}
             {currentSlideData?.dos && currentSlideData.dos.length > 0 && (
               <View>
-                <Text style={styles.dosLabel}>✓ DO</Text>
+                <Text style={styles.dosLabel}>✓ {t('SAFETY_DO', { defaultValue: 'DO' })}</Text>
                 {currentSlideData.dos.map((item, idx) => (
                   <View key={idx} style={styles.dosDontRow}>
                     <MaterialIcons
@@ -691,7 +693,7 @@ export default function SafetyTipsScreen() {
             {/* Donts */}
             {currentSlideData?.donts && currentSlideData.donts.length > 0 && (
               <View>
-                <Text style={styles.dontsLabel}>✗ DON'T</Text>
+                <Text style={styles.dontsLabel}>✗ {t('SAFETY_DONT', { defaultValue: "DON'T" })}</Text>
                 {currentSlideData.donts.map((item, idx) => (
                   <View key={idx} style={styles.dosDontRow}>
                     <MaterialIcons
@@ -732,7 +734,7 @@ export default function SafetyTipsScreen() {
               }}
               disabled={currentSlide === 0}
             >
-              <Text style={styles.footerBackText}>Back</Text>
+              <Text style={styles.footerBackText}>{t('COMMON_PREVIOUS', { defaultValue: 'Back' })}</Text>
             </TouchableOpacity>
 
             {isLastSlide ? (
@@ -740,14 +742,14 @@ export default function SafetyTipsScreen() {
                 style={[styles.footerActionBtn, styles.completeBtnGreen]}
                 onPress={handleComplete}
               >
-                <Text style={styles.footerActionText}>Mark as Complete ✓</Text>
+                <Text style={styles.footerActionText}>{t('SAFETY_MARK_COMPLETE', { defaultValue: 'Mark as Complete ✓' })}</Text>
               </TouchableOpacity>
             ) : (
               <TouchableOpacity
                 style={[styles.footerActionBtn, styles.nextBtnBlue]}
                 onPress={() => setCurrentSlide(prev => prev + 1)}
               >
-                <Text style={styles.footerActionText}>Next →</Text>
+                <Text style={styles.footerActionText}>{t('COMMON_NEXT', { defaultValue: 'Next →' })}</Text>
               </TouchableOpacity>
             )}
           </View>

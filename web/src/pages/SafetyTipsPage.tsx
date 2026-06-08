@@ -635,7 +635,8 @@ export default function SafetyTipsPage() {
 
     let slideTitle: string;
     if (part === "A") {
-      slideTitle = DISASTERS_FALLBACK.find((d) => d.id === disasterId)?.label ?? "";
+      const dis = DISASTERS_FALLBACK.find((d) => d.id === disasterId);
+      slideTitle = dis ? t(`SAFETY_DISASTER_${dis.id.toUpperCase().replace(/-/g, "_")}_LABEL`, { defaultValue: dis.label }) : "";
     } else if (part === "B") {
       slideTitle = t("SAFETY_PART_B_TITLE", { defaultValue: "Reporting Guidelines" });
     } else {
@@ -719,7 +720,7 @@ export default function SafetyTipsPage() {
                   <div style={{ width: 40, height: 40, borderRadius: 10, background: "#E4E2E1", display: "flex", alignItems: "center", justifyContent: "center", marginRight: 14, flexShrink: 0 }}>
                     <MatIcon name={d.icon} size={22} color={BLUE} />
                   </div>
-                  <span style={{ flex: 1, fontWeight: 700, fontSize: 15, color: "#1B1C1C" }}>{d.label}</span>
+                  <span style={{ flex: 1, fontWeight: 700, fontSize: 15, color: "#1B1C1C" }}>{t(`SAFETY_DISASTER_${d.id.toUpperCase().replace(/-/g, "_")}_LABEL`, { defaultValue: d.label })}</span>
                   {done ? <MatIcon name="check_circle" size={22} color={GREEN} fill /> : <MatIcon name="chevron_right" size={20} color="#C1C7D2" />}
                 </button>
               );
@@ -743,7 +744,7 @@ export default function SafetyTipsPage() {
   const partCDone = isComplete("C");
   const shownChips = DISASTERS_FALLBACK.slice(0, 3);
   const moreCount = DISASTERS_FALLBACK.length - shownChips.length;
-  const partABtnLabel = completedA === 9 ? t('SAFETY_COMPLETED') : completedA > 0 ? t('safety.continue_a') : t('safety.start');
+  const partABtnLabel = completedA === 9 ? t('SAFETY_COMPLETED', { defaultValue: '✓ Completed' }) : completedA > 0 ? t('safety.continue_a') : t('safety.start');
 
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", background: BG }}>
@@ -779,14 +780,15 @@ export default function SafetyTipsPage() {
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 20 }}>
             {shownChips.map((d) => {
               const done = isComplete("A", d.id);
+              const disLabel = t(`SAFETY_DISASTER_${d.id.toUpperCase().replace(/-/g, "_")}_LABEL`, { defaultValue: d.label });
               return done ? (
                 <div key={d.id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 12px", background: "rgba(56,161,105,0.1)", border: "1px solid rgba(56,161,105,0.25)", borderRadius: 99 }}>
                   <MatIcon name="check_circle" size={15} color={GREEN} fill />
-                  <span style={{ fontSize: 12, fontWeight: 600, color: "#276749" }}>{d.label}</span>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: "#276749" }}>{disLabel}</span>
                 </div>
               ) : (
                 <div key={d.id} style={{ padding: "5px 12px", background: FIELD_BG, border: "1px solid #C1C7D2", borderRadius: 99 }}>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: "#414751" }}>{d.label}</span>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: "#414751" }}>{disLabel}</span>
                 </div>
               );
             })}
@@ -824,7 +826,7 @@ export default function SafetyTipsPage() {
             onClick={() => setView({ type: "slide", part: "B" })}
             style={{ width: "100%", height: 48, borderRadius: 12, background: partBDone ? "transparent" : BLUE, color: partBDone ? GREEN : "#fff", border: partBDone ? `1.5px solid ${GREEN}` : "none", fontWeight: 700, fontSize: 15, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
           >
-            {partBDone ? t('SAFETY_COMPLETED') : t('safety.start')}
+            {partBDone ? t('SAFETY_COMPLETED', { defaultValue: '✓ Completed' }) : t('safety.start')}
             {!partBDone && <MatIcon name="arrow_forward" size={18} color="#fff" />}
           </button>
         </article>
@@ -847,7 +849,7 @@ export default function SafetyTipsPage() {
             onClick={() => setView({ type: "slide", part: "C" })}
             style={{ width: "100%", height: 48, borderRadius: 12, background: partCDone ? "transparent" : BLUE, color: partCDone ? GREEN : "#fff", border: partCDone ? `1.5px solid ${GREEN}` : "none", fontWeight: 700, fontSize: 15, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
           >
-            {partCDone ? t('SAFETY_COMPLETED') : t('safety.start')}
+            {partCDone ? t('SAFETY_COMPLETED', { defaultValue: '✓ Completed' }) : t('safety.start')}
             {!partCDone && <MatIcon name="arrow_forward" size={18} color="#fff" />}
           </button>
         </article>
