@@ -5,61 +5,21 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import api from '../services/api';
 
 const { width: screenWidth } = Dimensions.get('window');
 const scale = (size: number) => Math.round(screenWidth / 375 * size);
 
-const FAQ_ITEMS = [
-  {
-    q: 'What is Crisis Reporter?',
-    a: 'Crisis Reporter is a UNDP tool that lets community members document damage to buildings and infrastructure after a disaster. Your reports help UNDP direct emergency resources to the right places faster.',
-  },
-  {
-    q: 'Do I need internet to submit a report?',
-    a: 'You can fill in your report offline. Your text answers and GPS location are saved to your device. Photos require an internet connection to upload. When you reconnect, your report will send automatically.',
-  },
-  {
-    q: 'How do I enable GPS on my device?',
-    a: 'On Android: go to Settings → Location and turn it on. Then open Crisis Reporter and try again. If the app still cannot access your location, go to Settings → Apps → Crisis Reporter → Permissions and enable Location.',
-  },
-  {
-    q: 'Is my personal information shared?',
-    a: 'Anonymous reports contain no personal information. If you create a verified account with an email or phone number, that contact information is stored securely and shared only with authorised UNDP staff.',
-  },
-  {
-    q: 'How do I know my report was received?',
-    a: 'After submission you will see a confirmation screen with your report reference number. You can also view all your submitted reports in the My Reports section.',
-  },
-  {
-    q: 'How do I earn a Safety Training badge?',
-    a: 'Complete all three parts of Safety Tips — Part A covers all 9 disaster types, Part B covers reporting guidelines, Part C covers first aid. Then add an email or phone number to your profile. The badge is awarded automatically.',
-  },
-  {
-    q: 'What if my country is not in the list?',
-    a: 'Crisis Reporter is currently operational in countries where UNDP is actively responding to a crisis. If your country is not listed it means UNDP has not yet activated it. Check back during an active crisis event.',
-  },
-  {
-    q: 'Can I edit a report after submitting it?',
-    a: 'Reports cannot be edited after submission. If you need to update information, you can submit a new report for the same location. UNDP staff will see all reports for a location and consider the most recent.',
-  },
-  {
-    q: 'What do the damage levels mean?',
-    a: 'Minimal or No Damage: the building is structurally sound with only cosmetic damage. Partially Damaged: the building is repairable but should be used with caution. Completely Destroyed: the building is structurally unsafe.',
-  },
-  {
-    q: 'Is my data secure?',
-    a: 'Yes. All data is transmitted over encrypted connections and stored securely. Photos are anonymised before storage. Your personal details are never shared with third parties.',
-  },
-  {
-    q: 'How do I contact UNDP about a report?',
-    a: 'Crisis Reporter is for damage documentation only. For emergency assistance, contact your local emergency services. For questions about UNDP operations in your area, visit undp.org.',
-  },
+const FAQ_KEYS = [
+  'faq_m.q1', 'faq_m.q2', 'faq_m.q3', 'faq_m.q4', 'faq_m.q5',
+  'faq_m.q6', 'faq_m.q7', 'faq_m.q8', 'faq_m.q9', 'faq_m.q10', 'faq_m.q11',
 ];
 
 export default function FAQScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
+  const { t } = useTranslation();
   const [openIndex, setOpenIndex] = useState<number | null>(null);
   const [supportEmail, setSupportEmail] = useState('support@crisisreporter.org');
 
@@ -75,12 +35,12 @@ export default function FAQScreen() {
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <MaterialIcons name="arrow-back" size={scale(24)} color="#0468B1" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>FAQ</Text>
+        <Text style={styles.headerTitle}>{t('faq.title')}</Text>
         <View style={styles.backBtn} />
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        {FAQ_ITEMS.map((item, index) => (
+        {FAQ_KEYS.map((baseKey, index) => (
           <TouchableOpacity
             key={index}
             style={styles.faqItem}
@@ -88,7 +48,7 @@ export default function FAQScreen() {
             activeOpacity={0.8}
           >
             <View style={styles.faqQuestion}>
-              <Text style={styles.faqQuestionText}>{item.q}</Text>
+              <Text style={styles.faqQuestionText}>{t(`${baseKey}_question`)}</Text>
               <MaterialIcons
                 name={openIndex === index ? 'expand-more' : 'chevron-right'}
                 size={scale(20)}
@@ -98,7 +58,7 @@ export default function FAQScreen() {
             {openIndex === index && (
               <>
                 <View style={styles.separator} />
-                <Text style={styles.faqAnswer}>{item.a}</Text>
+                <Text style={styles.faqAnswer}>{t(`${baseKey}_answer`)}</Text>
               </>
             )}
           </TouchableOpacity>
@@ -106,12 +66,12 @@ export default function FAQScreen() {
 
         {/* Contact Support */}
         <View style={styles.contactSection}>
-          <Text style={styles.contactPrompt}>Still have questions?</Text>
+          <Text style={styles.contactPrompt}>{t('faq.contact_prompt')}</Text>
           <TouchableOpacity
             onPress={() => Linking.openURL(`mailto:${supportEmail}`)}
             activeOpacity={0.7}
           >
-            <Text style={styles.contactLink}>Contact Support</Text>
+            <Text style={styles.contactLink}>{t('faq.contact_link')}</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>

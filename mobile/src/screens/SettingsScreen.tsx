@@ -153,7 +153,7 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
         contentContainerStyle={{ paddingBottom: insets.bottom + 40 }}
       >
         {/* APP PREFERENCES */}
-        <Text style={styles.sectionHeader}>APP PREFERENCES</Text>
+        <Text style={styles.sectionHeader}>{t("settings.section_preferences")}</Text>
         <View style={styles.groupCard}>
           {/* Status row */}
           <View style={styles.settingRow}>
@@ -161,9 +161,9 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
               <MaterialIcons name="person" size={scale(20)} color="#0468B1" />
             </View>
             <View style={styles.rowContent}>
-              <Text style={styles.rowLabel}>Status</Text>
+              <Text style={styles.rowLabel}>{t("settings.status_label")}</Text>
               <Text style={styles.rowSubtitle}>
-                {isVerified ? "Verified Reporter" : "Anonymous"}
+                {isVerified ? t("settings.verified") : t("settings.anonymous")}
               </Text>
             </View>
             <View style={[
@@ -174,7 +174,7 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
                 styles.statusBadgeText,
                 { color: isVerified ? "#38A169" : "#0468B1" },
               ]}>
-                {isVerified ? "Verified" : "Anonymous"}
+                {isVerified ? t("settings.verified") : t("settings.anonymous")}
               </Text>
             </View>
           </View>
@@ -191,7 +191,7 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
             </View>
             <View style={styles.rowContent}>
               <Text style={styles.rowLabel}>{t("settings.country")}</Text>
-              <Text style={styles.rowSubtitle}>{currentCountry || "Not set"}</Text>
+              <Text style={styles.rowSubtitle}>{currentCountry || t("settings.not_set")}</Text>
             </View>
             <MaterialIcons name="chevron-right" size={scale(20)} color="#C1C7D2" />
           </TouchableOpacity>
@@ -215,7 +215,7 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
         </View>
 
         {/* ABOUT */}
-        <Text style={styles.sectionHeader}>ABOUT</Text>
+        <Text style={styles.sectionHeader}>{t("settings.section_about")}</Text>
         <View style={styles.groupCard}>
           {/* App Version */}
           <View style={styles.settingRow}>
@@ -223,9 +223,9 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
               <MaterialIcons name="info" size={scale(20)} color="#717782" />
             </View>
             <View style={styles.rowContent}>
-              <Text style={styles.rowLabel}>App Version</Text>
+              <Text style={styles.rowLabel}>{t("settings.app_version")}</Text>
             </View>
-            <Text style={styles.staticValue}>1.0.0</Text>
+            <Text style={styles.staticValue}>{t("settings.version_value")}</Text>
           </View>
 
           <View style={styles.separator} />
@@ -239,7 +239,7 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
               <MaterialIcons name="description" size={scale(20)} color="#717782" />
             </View>
             <View style={styles.rowContent}>
-              <Text style={styles.rowLabel}>Terms and Conditions</Text>
+              <Text style={styles.rowLabel}>{t("settings.terms_and_conditions")}</Text>
             </View>
             <MaterialIcons name="chevron-right" size={scale(20)} color="#C1C7D2" />
           </TouchableOpacity>
@@ -255,7 +255,7 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
               <MaterialIcons name="security" size={scale(20)} color="#717782" />
             </View>
             <View style={styles.rowContent}>
-              <Text style={styles.rowLabel}>Privacy Policy</Text>
+              <Text style={styles.rowLabel}>{t("settings.privacy_policy")}</Text>
             </View>
             <MaterialIcons name="chevron-right" size={scale(20)} color="#C1C7D2" />
           </TouchableOpacity>
@@ -264,7 +264,7 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
         {/* Logout */}
         <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
           <Text style={styles.logoutBtnText}>
-            {t("settings.logout")} / Reset App
+            {t("settings.logout")} {t("settings.reset_app")}
           </Text>
         </TouchableOpacity>
       </ScrollView>
@@ -279,7 +279,7 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
         <View style={styles.pickerOverlay}>
           <View style={[styles.pickerSheet, { paddingBottom: insets.bottom + 16 }]}>
             <View style={styles.pickerHeader}>
-              <Text style={styles.pickerTitle}>Select Country</Text>
+              <Text style={styles.pickerTitle}>{t("settings.select_country")}</Text>
               <TouchableOpacity
                 onPress={() => setShowCountryPicker(false)}
                 style={styles.pickerCloseBtn}
@@ -289,7 +289,7 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
             </View>
             <TextInput
               style={styles.pickerSearch}
-              placeholder="Search countries..."
+              placeholder={t("settings.search_countries")}
               value={countrySearch}
               onChangeText={setCountrySearch}
               autoCorrect={false}
@@ -326,7 +326,7 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
         <View style={styles.pickerOverlay}>
           <View style={[styles.pickerSheet, { paddingBottom: insets.bottom + 16 }]}>
             <View style={styles.pickerHeader}>
-              <Text style={styles.pickerTitle}>Select Language</Text>
+              <Text style={styles.pickerTitle}>{t("settings.select_language")}</Text>
               <TouchableOpacity
                 onPress={() => setShowLanguagePicker(false)}
                 style={styles.pickerCloseBtn}

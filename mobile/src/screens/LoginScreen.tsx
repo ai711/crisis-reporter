@@ -5,12 +5,14 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
+import { useTranslation } from "react-i18next";
 import { loginReporter } from "../services/auth";
 import { useAuthStore } from "../stores/authStore";
 
 export default function LoginScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
+  const { t } = useTranslation();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -30,9 +32,9 @@ export default function LoginScreen() {
     } catch (err: any) {
       const status = err?.response?.status;
       if (status === 401 || status === 404) {
-        setError("Invalid email or password. Please try again.");
+        setError(t("login.errorInvalid"));
       } else {
-        setError("Something went wrong. Please try again.");
+        setError(t("login.errorGeneric"));
       }
     } finally {
       setLoading(false);
@@ -41,8 +43,8 @@ export default function LoginScreen() {
 
   const handleForgotPassword = () => {
     Alert.alert(
-      "Forgot Password",
-      "Please contact your UNDP coordinator to reset your password."
+      t("login.forgotPassword"),
+      t("login.forgotPasswordMessage")
     );
   };
 
@@ -50,16 +52,16 @@ export default function LoginScreen() {
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Text style={styles.backText}>← Back</Text>
+          <Text style={styles.backText}>{t("common.back")}</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Log In</Text>
+        <Text style={styles.headerTitle}>{t("login.title")}</Text>
         <View style={styles.backBtn} />
       </View>
 
       <View style={styles.form}>
         <TextInput
           style={styles.input}
-          placeholder="Email address"
+          placeholder={t("login.emailPlaceholder")}
           placeholderTextColor="#999"
           keyboardType="email-address"
           autoCapitalize="none"
@@ -68,7 +70,7 @@ export default function LoginScreen() {
         />
         <TextInput
           style={styles.input}
-          placeholder="Password"
+          placeholder={t("login.passwordPlaceholder")}
           placeholderTextColor="#999"
           secureTextEntry
           value={password}
@@ -88,12 +90,12 @@ export default function LoginScreen() {
           {loading ? (
             <ActivityIndicator color="#FFF" />
           ) : (
-            <Text style={styles.loginBtnText}>Log In</Text>
+            <Text style={styles.loginBtnText}>{t("login.loginButton")}</Text>
           )}
         </TouchableOpacity>
 
         <TouchableOpacity onPress={handleForgotPassword} style={styles.forgotBtn}>
-          <Text style={styles.forgotText}>Forgot password?</Text>
+          <Text style={styles.forgotText}>{t("login.forgotPassword")}</Text>
         </TouchableOpacity>
       </View>
     </View>

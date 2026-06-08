@@ -5,6 +5,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 
 const { width: screenWidth } = Dimensions.get('window');
 const scale = (size: number) => Math.round(screenWidth / 375 * size);
@@ -12,6 +13,7 @@ const scale = (size: number) => Math.round(screenWidth / 375 * size);
 export default function AboutScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
+  const { t } = useTranslation();
 
   return (
     <View style={styles.container}>
@@ -19,7 +21,7 @@ export default function AboutScreen() {
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <MaterialIcons name="arrow-back" size={scale(24)} color="#0468B1" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>About</Text>
+        <Text style={styles.headerTitle}>{t('about.title')}</Text>
         <View style={styles.backBtn} />
       </View>
 
@@ -29,36 +31,32 @@ export default function AboutScreen() {
           <View style={styles.logoCircle}>
             <MaterialIcons name="security" size={scale(36)} color="#FFFFFF" />
           </View>
-          <Text style={styles.appTitle}>Crisis Reporter</Text>
-          <Text style={styles.appSubtitle}>Powered by UNDP</Text>
+          <Text style={styles.appTitle}>{t('app.name')}</Text>
+          <Text style={styles.appSubtitle}>{t('about.powered_by')}</Text>
         </View>
 
         {/* Card 1 — About */}
         <View style={styles.card}>
-          <Text style={styles.sectionLabel}>ABOUT</Text>
-          <Text style={styles.cardBody}>
-            Crisis Reporter is a community-driven damage reporting platform built for UNDP. It enables rapid infrastructure assessment following sudden-onset disasters, helping UNDP coordinate crisis response faster and more effectively.
-          </Text>
+          <Text style={styles.sectionLabel}>{t('about.section_about')}</Text>
+          <Text style={styles.cardBody}>{t('about.about_body')}</Text>
         </View>
 
         {/* Card 2 — How It Works */}
         <View style={styles.card}>
-          <Text style={styles.sectionLabel}>HOW IT WORKS</Text>
-          <Text style={styles.cardBody}>
-            Reporters submit photos and damage assessments from the field. UNDP staff review and verify reports on the dashboard. Verified data is exported for crisis response coordination with partner organisations.
-          </Text>
+          <Text style={styles.sectionLabel}>{t('about.section_how')}</Text>
+          <Text style={styles.cardBody}>{t('about.how_body')}</Text>
         </View>
 
         {/* Card 3 — Links */}
         <View style={styles.card}>
-          <Text style={styles.sectionLabel}>RESOURCES</Text>
+          <Text style={styles.sectionLabel}>{t('about.section_resources')}</Text>
           <TouchableOpacity
             style={styles.linkRow}
             onPress={() => Linking.openURL('https://www.undp.org/privacy-policy')}
             activeOpacity={0.7}
           >
             <MaterialIcons name="policy" size={scale(20)} color="#0468B1" />
-            <Text style={styles.linkText}>Privacy Policy</Text>
+            <Text style={styles.linkText}>{t('about.privacy_policy')}</Text>
             <MaterialIcons name="chevron-right" size={scale(18)} color="#C1C7D2" />
           </TouchableOpacity>
           <View style={styles.rowSeparator} />
@@ -68,23 +66,21 @@ export default function AboutScreen() {
             activeOpacity={0.7}
           >
             <MaterialIcons name="language" size={scale(20)} color="#0468B1" />
-            <Text style={styles.linkText}>UNDP Website</Text>
+            <Text style={styles.linkText}>{t('about.undp_website')}</Text>
             <MaterialIcons name="chevron-right" size={scale(18)} color="#C1C7D2" />
           </TouchableOpacity>
         </View>
 
         {/* Card 4 — Version */}
         <View style={styles.card}>
-          <Text style={styles.sectionLabel}>APP INFO</Text>
+          <Text style={styles.sectionLabel}>{t('about.section_info')}</Text>
           <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Version</Text>
-            <Text style={styles.infoValue}>1.0.0</Text>
+            <Text style={styles.infoLabel}>{t('about.version_label')}</Text>
+            <Text style={styles.infoValue}>{t('about.version_value')}</Text>
           </View>
         </View>
 
-        <Text style={styles.versionNote}>
-          Crisis Reporter is built for UNDP's InnoCentive Crisis Mapping Challenge
-        </Text>
+        <Text style={styles.versionNote}>{t('about.version_note')}</Text>
       </ScrollView>
     </View>
   );

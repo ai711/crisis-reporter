@@ -215,8 +215,8 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
       >
 
         {/* Headline group */}
-        <Text style={styles.headline}>Ready to report?</Text>
-        <Text style={styles.subtitle}>Help UNDP map damage in your area</Text>
+        <Text style={styles.headline}>{t("home.headline")}</Text>
+        <Text style={styles.subtitle}>{t("home.subtitle")}</Text>
 
         {/* Existing functional: welcome card */}
         {showWelcomeCard && (
@@ -230,10 +230,10 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
 
         {/* Existing functional: connectivity status card */}
         <View style={styles.statusCard}>
-          <Text style={styles.statusTitle}>Powered by UNDP Crisis Response</Text>
+          <Text style={styles.statusTitle}>{t("home.status_title")}</Text>
           <View style={styles.statusRow}>
             <View style={[styles.statusDot, { backgroundColor: isOnline ? "#38A169" : "#F5A623" }]} />
-            <Text style={styles.statusText}>{isOnline ? "Connected" : "Offline mode"}</Text>
+            <Text style={styles.statusText}>{isOnline ? t("home.status_connected") : t("home.status_offline")}</Text>
           </View>
         </View>
 
@@ -245,7 +245,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
           <View style={styles.syncBanner}>
             <Text style={styles.syncBannerIcon}>⚠</Text>
             <Text style={styles.syncBannerText}>
-              {queueCount} {queueCount === 1 ? "report" : "reports"} waiting to sync — connect to internet to upload
+              {t("home.sync_banner", { count: queueCount })}
             </Text>
           </View>
         )}
@@ -268,7 +268,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
         {queueCount === 0 && (
           <View style={styles.syncStatusRow}>
             <View style={styles.syncGreenDot} />
-            <Text style={styles.syncStatusText}>NO REPORTS PENDING SYNC</Text>
+            <Text style={styles.syncStatusText}>{t("home.sync_none")}</Text>
           </View>
         )}
 
@@ -286,7 +286,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
             style={styles.secondaryButton}
             onPress={() => navigation.navigate("Map")}
           >
-            <Text style={styles.secondaryButtonText}>🗺️  View Map</Text>
+            <Text style={styles.secondaryButtonText}>🗺️  {t("home.view_map")}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.secondaryButton}
@@ -302,9 +302,9 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
         {recentReports.length > 0 && (
           <View style={styles.recentSection}>
             <View style={styles.recentHeader}>
-              <Text style={styles.recentLabel}>RECENT REPORTS</Text>
+              <Text style={styles.recentLabel}>{t("home.recent_reports")}</Text>
               <TouchableOpacity onPress={() => navigation.navigate("MyReports")}>
-                <Text style={styles.recentSeeAll}>See all</Text>
+                <Text style={styles.recentSeeAll}>{t("home.see_all")}</Text>
               </TouchableOpacity>
             </View>
             {recentReports.map((report: any) => {
@@ -344,7 +344,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
         <TouchableOpacity style={styles.navItem}>
           <View style={styles.activeNavPill}>
             <Text style={styles.navIconActive}>🏠</Text>
-            <Text style={styles.navLabelActive}>HOME</Text>
+            <Text style={styles.navLabelActive}>{t("home.nav_home")}</Text>
           </View>
         </TouchableOpacity>
         <TouchableOpacity
@@ -352,14 +352,14 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
           onPress={() => navigation.navigate("Map")}
         >
           <Text style={styles.navIconInactive}>🗺</Text>
-          <Text style={styles.navLabelInactive}>MAP</Text>
+          <Text style={styles.navLabelInactive}>{t("home.nav_map")}</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.navItem}
           onPress={() => navigation.navigate("MyReports")}
         >
           <Text style={styles.navIconInactive}>📋</Text>
-          <Text style={styles.navLabelInactive}>REPORTS</Text>
+          <Text style={styles.navLabelInactive}>{t("home.nav_reports")}</Text>
         </TouchableOpacity>
       </View>
 

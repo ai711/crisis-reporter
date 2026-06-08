@@ -6,6 +6,7 @@ import {
 import { useNavigation } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
+import { useTranslation } from "react-i18next";
 
 const { width: screenWidth } = Dimensions.get("window");
 const scale = (size: number) => Math.round((screenWidth / 375) * size);
@@ -19,22 +20,23 @@ type SideMenuProps = {
 
 type MenuItem = {
   key: string;
-  label: string;
+  labelKey: string;
   icon: React.ComponentProps<typeof MaterialIcons>["name"];
   primary?: boolean;
 };
 
 const MENU_ITEMS: MenuItem[] = [
-  { key: "ReportScreen",         label: "Report an Incident",      icon: "campaign",  primary: true },
-  { key: "SafetyTipsScreen",     label: "Safety Tips",             icon: "security" },
-  { key: "ReporterProfileScreen",label: "Reporter Profile",        icon: "person" },
-  { key: "BadgesScreen",         label: "Badges & Certifications", icon: "star" },
-  { key: "SettingsScreen",       label: "Settings",                icon: "settings" },
+  { key: "ReportScreen",         labelKey: "menu.report_incident", icon: "campaign",  primary: true },
+  { key: "SafetyTipsScreen",     labelKey: "menu.safety_tips",     icon: "security" },
+  { key: "ReporterProfileScreen",labelKey: "menu.profile",         icon: "person" },
+  { key: "BadgesScreen",         labelKey: "menu.badges",          icon: "star" },
+  { key: "SettingsScreen",       labelKey: "menu.settings",        icon: "settings" },
 ];
 
 export default function SideMenu({ visible, onClose }: SideMenuProps) {
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
 
   const handleNavigate = (screenKey: string) => {
     onClose();
@@ -86,7 +88,7 @@ export default function SideMenu({ visible, onClose }: SideMenuProps) {
                     >
                       <View style={styles.menuItemLeft}>
                         <MaterialIcons name={item.icon} size={scale(22)} color="#FFFFFF" />
-                        <Text style={styles.primaryItemLabel}>{item.label}</Text>
+                        <Text style={styles.primaryItemLabel}>{t(item.labelKey)}</Text>
                       </View>
                       <MaterialIcons name="chevron-right" size={scale(18)} color="rgba(255,255,255,0.7)" />
                     </TouchableOpacity>
@@ -99,7 +101,7 @@ export default function SideMenu({ visible, onClose }: SideMenuProps) {
                     >
                       <View style={styles.menuItemLeft}>
                         <MaterialIcons name={item.icon} size={scale(22)} color="#414751" />
-                        <Text style={styles.menuItemLabel}>{item.label}</Text>
+                        <Text style={styles.menuItemLabel}>{t(item.labelKey)}</Text>
                       </View>
                       <MaterialIcons name="chevron-right" size={scale(18)} color="#C1C7D2" />
                     </TouchableOpacity>
@@ -110,7 +112,7 @@ export default function SideMenu({ visible, onClose }: SideMenuProps) {
               {/* Footer */}
               <View style={[styles.footer, { paddingBottom: insets.bottom + 20 }]}>
                 <View style={styles.footerDivider} />
-                <Text style={styles.footerText}>Crisis Reporter v1.0</Text>
+                <Text style={styles.footerText}>{t("menu.version")}</Text>
               </View>
 
             </View>

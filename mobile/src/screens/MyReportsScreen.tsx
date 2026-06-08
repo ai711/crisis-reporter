@@ -6,6 +6,7 @@ import {
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
+import { useTranslation } from 'react-i18next';
 import * as SecureStore from 'expo-secure-store';
 import api, { API_BASE } from '../services/api';
 import {
@@ -93,17 +94,14 @@ const formatTime = (isoString: string | null | undefined): string => {
 const isFailed = (report: QueuedReport): boolean =>
   report.status === 'failed' || (report.status === 'pending' && report.retry_count >= 5);
 
-const formatDamageLevel = (level: string | null | undefined): string => {
-  if (!level) return '—';
-  const map: Record<string, string> = {
-    complete: 'Completely Damaged',
-    completely_destroyed: 'Completely Damaged',
-    partial: 'Partially Damaged',
-    partially_damaged: 'Partially Damaged',
-    minimal: 'Minimal / No Damage',
-    minimal_no_damage: 'Minimal / No Damage',
-  };
-  return map[level] ?? level;
+// Damage level key lookup — maps raw values to mobile en.json keys
+const DAMAGE_KEY_MAP: Record<string, string> = {
+  complete:            'report.complete',
+  completely_destroyed:'report.complete',
+  partial:             'report.partial',
+  partially_damaged:   'report.partial',
+  minimal:             'report.minimal',
+  minimal_no_damage:   'report.minimal',
 };
 
 const getDamagePill = (level: string | null | undefined) => {
@@ -118,6 +116,11 @@ const getDamagePill = (level: string | null | undefined) => {
 export default function MyReportsScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
+  const { t } = useTranslation();
+  const formatDamageLevel = (level: string | null | undefined): string => {
+    if (!level) return '—';
+    return t(DAMAGE_KEY_MAP[level] ?? level, { defaultValue: level });
+  };
 
   // undefined = still loading from SecureStore; null = no ID; string = has ID
   const [reporterId, setReporterId] = useState<string | null | undefined>(undefined);

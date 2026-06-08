@@ -198,6 +198,65 @@ const PRESSING_NEEDS_LABELS: Record<string, string> = {
   other: "Other — please specify",
 };
 
+// Maps raw state values → i18n keys for the review section
+const Q1_KEY_MAP: Record<string, string> = {
+  minimal: "report.minimal",
+  partial:  "report.partial",
+  complete: "report.complete",
+};
+const Q2_KEY_MAP: Record<string, string> = {
+  residential:    "questions.q2.opt_residential",
+  commercial:     "questions.q2.opt_commercial",
+  government:     "questions.q2.opt_government",
+  utility:        "questions.q2.opt_utility",
+  transport_comm: "questions.q2.opt_transport",
+  community:      "questions.q2.opt_community",
+  public_spaces:  "questions.q2.opt_public_spaces",
+  other:          "questions.q2.opt_other",
+};
+const Q4_KEY_MAP: Record<string, string> = {
+  earthquake:        "questions.q4.opt_earthquake",
+  flood:             "questions.q4.opt_flood",
+  tsunami:           "questions.q4.opt_tsunami",
+  hurricane_cyclone: "questions.q4.opt_hurricane_cyclone",
+  wildfire:          "questions.q4.opt_wildfire",
+  explosion:         "questions.q4.opt_explosion",
+  chemical_incident: "questions.q4.opt_chemical_incident",
+  conflict:          "questions.q4.opt_conflict",
+  civil_unrest:      "questions.q4.opt_civil_unrest",
+};
+const Q5_KEY_MAP: Record<string, string> = {
+  yes: "questions.q5.opt_yes",
+  no:  "questions.q5.opt_no",
+};
+const Q6_KEY_MAP: Record<string, string> = {
+  no_damage: "questions.q6.opt_no_damage",
+  minor:     "questions.q6.opt_minor",
+  moderate:  "questions.q6.opt_moderate",
+  severe:    "questions.q6.opt_severe",
+  destroyed: "questions.q6.opt_destroyed",
+  unknown:   "questions.q6.opt_unknown",
+};
+const Q7_KEY_MAP: Record<string, string> = {
+  functional:      "questions.q7.opt_fully",
+  partial:         "questions.q7.opt_partially",
+  disrupted:       "questions.q7.opt_largely",
+  not_functioning: "questions.q7.opt_not_functioning",
+  unknown:         "questions.q7.opt_unknown",
+};
+const Q8_KEY_MAP: Record<string, string> = {
+  food_water:     "questions.q8.opt_food_water",
+  cash:           "questions.q8.opt_cash",
+  healthcare:     "questions.q8.opt_healthcare",
+  shelter:        "questions.q8.opt_shelter",
+  livelihoods:    "questions.q8.opt_livelihoods",
+  wash:           "questions.q8.opt_wash",
+  basic_services: "questions.q8.opt_basic_services",
+  protection:     "questions.q8.opt_protection",
+  local_support:  "questions.q8.opt_local_support",
+  other:          "questions.q8.opt_other",
+};
+
 interface ReportScreenProps { navigation: any; }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -1527,32 +1586,32 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
         </Text>
 
         <View style={styles.confirmSummaryCard}>
-          <Text style={styles.confirmSummaryHeader}>REPORT SUMMARY</Text>
+          <Text style={styles.confirmSummaryHeader}>{t('review.report_summary_header')}</Text>
           {submittedReportId ? (
             <View style={styles.confirmSummaryRow}>
-              <Text style={styles.confirmSummaryLabel}>Report ID</Text>
+              <Text style={styles.confirmSummaryLabel}>{t('review.confirm_report_id')}</Text>
               <Text style={styles.confirmSummaryValue} numberOfLines={1}>{String(submittedReportId).slice(0, 16)}</Text>
             </View>
           ) : null}
           <View style={styles.confirmSummaryRow}>
-            <Text style={styles.confirmSummaryLabel}>Damage level</Text>
-            <Text style={styles.confirmSummaryValue}>{DAMAGE_LABELS[damageLevel] ?? damageLevel}</Text>
+            <Text style={styles.confirmSummaryLabel}>{t('review.confirm_damage_level')}</Text>
+            <Text style={styles.confirmSummaryValue}>{t(Q1_KEY_MAP[damageLevel] ?? damageLevel, { defaultValue: DAMAGE_LABELS[damageLevel] ?? damageLevel })}</Text>
           </View>
           <View style={styles.confirmSummaryRow}>
-            <Text style={styles.confirmSummaryLabel}>Location</Text>
+            <Text style={styles.confirmSummaryLabel}>{t('review.confirm_location')}</Text>
             <Text style={styles.confirmSummaryValue} numberOfLines={2}>
               {editableBuildingName || selectedBuilding?.name || locationAddress || locationLandmark || locationBuildingName || '—'}
             </Text>
           </View>
           <View style={[styles.confirmSummaryRow, { borderBottomWidth: 0 }]}>
-            <Text style={styles.confirmSummaryLabel}>Submitted</Text>
+            <Text style={styles.confirmSummaryLabel}>{t('review.confirm_submitted')}</Text>
             <Text style={styles.confirmSummaryValue}>
               {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </Text>
           </View>
           <View style={styles.confirmSummaryFootNote}>
             <MaterialIcons name="info-outline" size={scale(14)} color="#9CA3AF" />
-            <Text style={styles.confirmSummaryFootNoteText}>Your report has been received by UNDP staff.</Text>
+            <Text style={styles.confirmSummaryFootNoteText}>{t('review.confirm_received_note')}</Text>
           </View>
         </View>
 
@@ -1586,7 +1645,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
             style={styles.confirmTextLink}
             onPress={() => { resetForm(); navigation.navigate("Home"); }}
           >
-            <Text style={styles.confirmTextLinkText}>View My Reports</Text>
+            <Text style={styles.confirmTextLinkText}>{t('review.confirm_view_reports')}</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -1602,7 +1661,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
           await syncQueue(API_URL);
           setWasQueued(false);
         } catch {
-          Alert.alert('Still offline', 'Internet is not available yet. Your report is saved and will send automatically.');
+          Alert.alert(t('review.still_offline_title'), t('review.still_offline_body'));
         }
       } else {
         Alert.alert('Still offline', 'Internet is not available yet. Your report is saved and will send automatically.');
@@ -1631,14 +1690,14 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
         {/* Pending sync card */}
         <View style={styles.offlineSyncCard}>
           <View style={styles.offlineSyncAccent} />
-          <Text style={styles.offlineSyncHeader}>PENDING SYNC</Text>
+          <Text style={styles.offlineSyncHeader}>{t('review.queue_pending_sync')}</Text>
           <View style={styles.offlineSyncRow}>
             <MaterialIcons name="wifi-off" size={scale(18)} color="#F5A623" />
-            <Text style={styles.offlineSyncText}>Currently offline</Text>
+            <Text style={styles.offlineSyncText}>{t('review.queue_currently_offline')}</Text>
           </View>
           <View style={styles.offlineSyncRow}>
             <MaterialIcons name="cloud" size={scale(18)} color="#F5A623" />
-            <Text style={styles.offlineSyncText}>1 report waiting to upload</Text>
+            <Text style={styles.offlineSyncText}>{t('review.queue_waiting_upload')}</Text>
           </View>
           <View style={styles.offlineSyncRow}>
             <Text style={styles.offlineSyncLabel}>{t('review.queueSummaryLocation')}</Text>
@@ -1648,9 +1707,9 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
           </View>
           <View style={styles.offlineSyncRow}>
             <Text style={styles.offlineSyncLabel}>{t('review.queueSummaryDamage')}</Text>
-            <Text style={styles.offlineSyncValue}>{damageLevel || '—'}</Text>
+            <Text style={styles.offlineSyncValue}>{t(Q1_KEY_MAP[damageLevel] ?? damageLevel, { defaultValue: DAMAGE_LABELS[damageLevel] ?? damageLevel })}</Text>
           </View>
-          <Text style={styles.offlineSyncNote}>Your report will upload automatically when internet is available.</Text>
+          <Text style={styles.offlineSyncNote}>{t('review.queue_auto_upload')}</Text>
         </View>
 
         <View style={styles.confirmScreenButtons}>
@@ -1665,7 +1724,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
               <Text style={styles.confirmRetryBtnText}>{t('review.queueRetry')}</Text>
             </LinearGradient>
           </TouchableOpacity>
-          <Text style={styles.confirmRetryHelper}>Tap to attempt upload if you have a connection</Text>
+          <Text style={styles.confirmRetryHelper}>{t('review.queue_retry_helper')}</Text>
 
           <TouchableOpacity
             style={styles.confirmSecondaryBtn}
@@ -1685,18 +1744,18 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
             style={styles.confirmTextLink}
             onPress={() => {
               Alert.alert(
-                'Delete Report',
-                'This report will be permanently deleted and cannot be recovered.',
+                t('review.delete_report_title'),
+                t('review.delete_report_body'),
                 [
-                  { text: 'Cancel', style: 'cancel' },
-                  { text: 'Delete', style: 'destructive', onPress: () => { resetForm(); navigation.navigate('Home'); } },
+                  { text: t('common.cancel'), style: 'cancel' },
+                  { text: t('review.delete_confirm'), style: 'destructive', onPress: () => { resetForm(); navigation.navigate('Home'); } },
                 ]
               );
             }}
           >
-            <Text style={styles.confirmDeleteText}>Delete this report</Text>
+            <Text style={styles.confirmDeleteText}>{t('review.delete_report_link')}</Text>
           </TouchableOpacity>
-          <Text style={styles.confirmDeleteWarning}>DELETED REPORTS CANNOT BE RECOVERED</Text>
+          <Text style={styles.confirmDeleteWarning}>{t('review.delete_report_warning')}</Text>
         </View>
       </ScrollView>
     );
@@ -3083,14 +3142,14 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                 </View>
 
                 {[
-                  { label: t('review.q1Label'), value: damageLevel },
-                  { label: t('review.q2Label'), value: [...infrastructureTypes, ...(infrastructureOther ? [`Other: ${infrastructureOther}`] : [])].join(', ') },
+                  { label: t('review.q1Label'), value: t(Q1_KEY_MAP[damageLevel] ?? damageLevel, { defaultValue: DAMAGE_LABELS[damageLevel] ?? damageLevel }) },
+                  { label: t('review.q2Label'), value: [...infrastructureTypes.map((v) => t(Q2_KEY_MAP[v] ?? v, { defaultValue: INFRA_LABELS[v] ?? v })), ...(infrastructureOther ? [`${t('questions.q2.opt_other_prefix', { defaultValue: 'Other' })}: ${infrastructureOther}`] : [])].join(', ') },
                   { label: t('review.q3Label'), value: infrastructureName },
-                  { label: t('review.q4Label'), value: disasterType },
-                  { label: t('review.q5Label'), value: debrisBlocking },
-                  { label: t('review.q6Label'), value: electricityCondition },
-                  { label: t('review.q7Label'), value: healthServicesCondition },
-                  { label: t('review.q8Label'), value: [...pressingNeeds, ...(pressingNeedsOther ? [`Other: ${pressingNeedsOther}`] : [])].join(', ') },
+                  { label: t('review.q4Label'), value: t(Q4_KEY_MAP[disasterType] ?? disasterType, { defaultValue: DISASTER_LABELS[disasterType] ?? disasterType }) },
+                  { label: t('review.q5Label'), value: t(Q5_KEY_MAP[debrisBlocking] ?? debrisBlocking, { defaultValue: DEBRIS_LABELS[debrisBlocking] ?? debrisBlocking }) },
+                  { label: t('review.q6Label'), value: t(Q6_KEY_MAP[electricityCondition] ?? electricityCondition, { defaultValue: ELECTRICITY_LABELS[electricityCondition] ?? electricityCondition }) },
+                  { label: t('review.q7Label'), value: t(Q7_KEY_MAP[healthServicesCondition] ?? healthServicesCondition, { defaultValue: HEALTH_LABELS[healthServicesCondition] ?? healthServicesCondition }) },
+                  { label: t('review.q8Label'), value: [...pressingNeeds.map((v) => t(Q8_KEY_MAP[v] ?? v, { defaultValue: PRESSING_NEEDS_LABELS[v] ?? v })), ...(pressingNeedsOther ? [`${t('questions.q2.opt_other_prefix', { defaultValue: 'Other' })}: ${pressingNeedsOther}`] : [])].join(', ') },
                 ].map((item, index) => (
                   item.value ? (
                     <View key={index} style={styles.reviewRow}>
@@ -3125,7 +3184,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
             {(gpsCoords || locationGpsCoords) && (
               <View style={styles.reviewGpsRow}>
                 <View style={styles.reviewGpsDot} />
-                <Text style={styles.reviewGpsText}>GPS location captured and attached to this report</Text>
+                <Text style={styles.reviewGpsText}>{t('review.gps_captured_note')}</Text>
               </View>
             )}
             {photos.length === 0 && (
