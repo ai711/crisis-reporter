@@ -158,7 +158,13 @@ export default function HomePage() {
       assignedId = `local_${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}`;
     }
 
-    try { localStorage.setItem("cr_reporter_id", assignedId); } catch { /* ignore */ }
+    // Only persist real backend-assigned IDs to localStorage.
+    // "local_" fallback IDs are session-only: the backend has never seen them
+    // and any API call using one returns 404. Persisting them would cause
+    // cascading 404s on every subsequent session until the user clears storage.
+    if (assignedId && !assignedId.startsWith("local_")) {
+      try { localStorage.setItem("cr_reporter_id", assignedId); } catch { /* ignore */ }
+    }
     setReporter(assignedId, false);
     setLoginPromptBusy(false);
 

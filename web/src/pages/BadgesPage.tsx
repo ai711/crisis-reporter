@@ -118,7 +118,8 @@ export default function BadgesPage() {
 
   // Fetch reporter profile + safety progress
   useEffect(() => {
-    if (!reporterId) { setLoadingProfile(false); return; }
+    // Skip API call for session-only local IDs — backend has never seen them
+    if (!reporterId || reporterId.startsWith("local_")) { setLoadingProfile(false); return; }
 
     Promise.all([
       api.get<{ email: string | null; phone_number: string | null; first_name: string | null; last_name: string | null; created_at?: string }>(`/api/reporters/${reporterId}`),

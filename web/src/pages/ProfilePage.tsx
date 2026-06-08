@@ -99,7 +99,8 @@ export default function ProfilePage() {
 
   // ── Load profile ────────────────────────────────────────────────────────────
   useEffect(() => {
-    if (!reporterId) { setLoading(false); return; }
+    // Skip API call for session-only local IDs — backend has never seen them
+    if (!reporterId || reporterId.startsWith("local_")) { setLoading(false); return; }
     api
       .get<ReporterProfile>(`/api/reporters/${reporterId}`)
       .then((res) => {

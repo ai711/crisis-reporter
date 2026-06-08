@@ -32,6 +32,20 @@ const AboutPage = lazy(() => import("./pages/AboutPage"));
   } catch { /* localStorage unavailable */ }
 })();
 
+// ── Stale local-ID cleanup — runs once at module load.
+// When anonymous registration fails offline, HomePage stores a "local_XXXX"
+// fallback ID in cr_reporter_id. That ID is meaningless to the backend and
+// causes 404s on every reporter API call in subsequent sessions. Clear it so
+// the next session starts fresh and triggers a real registration.
+(function clearStaleLocalReporterId() {
+  try {
+    const id = localStorage.getItem("cr_reporter_id");
+    if (id && id.startsWith("local_")) {
+      localStorage.removeItem("cr_reporter_id");
+    }
+  } catch { /* localStorage unavailable */ }
+})();
+
 class ErrorBoundary extends React.Component<
   { children: React.ReactNode },
   { hasError: boolean; error: string }
