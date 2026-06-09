@@ -1856,47 +1856,24 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
     # ── Common / shared UI ────────────────────────────────────────────────────────
     ("COMMON_NEXT",                 "ui_common", "Next →"),
     ("COMMON_PREVIOUS",             "ui_common", "← Previous"),
-    ("COMMON_OPTIONAL",             "ui_common", "Optional"),
-    ("COMMON_REFRESH",              "ui_common", "Refresh"),
 
     # ── Terms & Conditions ────────────────────────────────────────────────────────
-    ("TERMS_TITLE",         "ui_terms", "Terms and Conditions"),
 
     # ── Onboarding ────────────────────────────────────────────────────────────────
-    ("ONBOARDING_SELECT_COUNTRY",       "ui_onboarding", "Select Your Country"),
-    ("ONBOARDING_COUNTRY_PLACEHOLDER",  "ui_onboarding", "Search for your country..."),
-    ("ONBOARDING_INACTIVE",             "ui_onboarding", "We are unable to provide any assistance for your region at this moment"),
-    ("ONBOARDING_CONTINUE",             "ui_onboarding", "Continue"),
 
     # ── Home screen ───────────────────────────────────────────────────────────────
-    ("HOME_QUEUED_REPORTS",     "ui_home", "{{count}} report(s) waiting to sync"),
-    ("HOME_NO_REPORTS_BODY",    "ui_home", "Your submitted reports will appear here"),
 
     # ── Report form ───────────────────────────────────────────────────────────────
-    ("REPORT_QUEUED",           "ui_report", "Report saved. Will sync when internet is available."),
-    ("REPORT_PHOTO_REQUIRED",   "ui_report", "At least one photo is required"),
-    ("REPORT_MAX_PHOTOS",       "ui_report", "Maximum 3 photos per report"),
-    ("REPORT_ADD_PHOTO",        "ui_report", "Add Photo"),
-    ("REPORT_SELECT_BUILDING",  "ui_report", "Select building on map"),
-    ("REPORT_REVIEW_TITLE",     "ui_report", "Review Your Report"),
-    ("REPORT_NO_CRISIS",        "ui_report", "No active crisis found. Please try again later."),
 
     # ── Settings ──────────────────────────────────────────────────────────────────
-    ("SETTINGS_ACCOUNT",        "ui_settings", "Account"),
 
     # ── Offline / connectivity ────────────────────────────────────────────────────
-    ("OFFLINE_BANNER",  "ui_offline", "You are offline. Reports will be saved and sent when you reconnect."),
-    ("OFFLINE_SYNCING", "ui_offline", "Syncing your reports..."),
 
     # ── Error messages ────────────────────────────────────────────────────────────
-    ("ERROR_REQUIRED",       "ui_error", "This field is required"),
-    ("ERROR_NETWORK",        "ui_error", "Network error. Please check your connection."),
-    ("ERROR_UNKNOWN",        "ui_error", "Something went wrong. Please try again."),
     ("ERROR_NO_INTERNET",    "ui_error", "No internet connection. Please check your connection and try again."),
     ("ERROR_TIMEOUT",        "ui_error", "This is taking longer than expected. Please try again."),
 
     # ── Profile ───────────────────────────────────────────────────────────────────
-    ("PROFILE_ANONYMOUS",       "ui_profile", "Anonymous Reporter"),
 
     # ── Login ─────────────────────────────────────────────────────────────────────
 
@@ -1913,8 +1890,6 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
     ("SAFETY_SLIDE_PROGRESS",   "ui_safety", "Slide {{n}} of {{total}}"),
 
     # ── Badges ────────────────────────────────────────────────────────────────────
-    ("BADGES_ANON_HEADING",     "ui_badges", "Badges are available to reporters with a verified account."),
-    ("BADGES_ANON_BODY",        "ui_badges", "Log in or create a free account to earn and view your badges."),
 
     # ── Disaster type labels (for display in UI) ─────────────────────────────────
 
@@ -1939,12 +1914,10 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
     ("common.back",               "ui_common", "← Back"),
     ("common.next",               "ui_common", "Next →"),
     ("common.edit",               "ui_common", "Edit"),
-    ("common.optional",           "ui_common", "Optional"),
     ("common.saving",             "ui_common", "Saving…"),
     ("common.go_back",            "ui_common", "Go Back"),
     ("common.go_home",            "ui_common", "Go to Home"),
     ("common.got_it",             "ui_common", "Got it"),
-    ("common.refresh",            "ui_common", "Refresh"),
 
     # app chrome
     ("app.name", "ui_common", "Crisis Reporter"),
@@ -1958,10 +1931,6 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
     ("terms.privacy",  "ui_terms", "Your data is secured by UNDP Privacy Protocols"),
 
     # onboarding
-    ("onboarding.selectCountry",       "ui_onboarding", "Select Your Country"),
-    ("onboarding.countryPlaceholder",  "ui_onboarding", "Search for your country..."),
-    ("onboarding.inactive",            "ui_onboarding", "We are unable to provide any assistance for your region at this moment"),
-    ("onboarding.continue",            "ui_onboarding", "Continue"),
     ("onboarding.more_languages_title","ui_onboarding", "More languages"),
     ("onboarding.more_languages_btn",  "ui_onboarding", "+ More"),
     ("onboarding.show_less",           "ui_onboarding", "Show less"),
@@ -1971,9 +1940,7 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
     ("home.reportButton",    "ui_home", "Report an Incident"),
     ("home.myReports",       "ui_home", "My Reports"),
     ("home.noReportsTitle",  "ui_home", "No reports yet"),
-    ("home.noReportsBody",   "ui_home", "Your submitted reports will appear here"),
     ("home.recentReports",   "ui_home", "YOUR RECENT REPORTS"),
-    ("home.queuedReports",   "ui_home", "{{count}} report(s) waiting to sync"),
     ("home.loadingReports",  "ui_home", "Loading your reports..."),
     ("home.pendingSync",     "ui_home", "Pending Sync"),
     ("home.offline",         "ui_home", "Offline"),
@@ -1994,7 +1961,6 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
     ("settings.title",            "ui_settings", "Settings"),
     ("settings.language",         "ui_settings", "Language"),
     ("settings.country",          "ui_settings", "Country"),
-    ("settings.account",          "ui_settings", "Account"),
     ("settings.login",            "ui_settings", "Log In"),
     ("settings.register",         "ui_settings", "Create Account"),
     ("settings.logout",           "ui_settings", "Log Out"),
@@ -2013,16 +1979,11 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
 
     # offline / connectivity
     ("offline.banner",  "ui_offline", "You are offline. Reports will be saved and sent when you reconnect."),
-    ("offline.syncing", "ui_offline", "Syncing your reports..."),
 
     # error messages
-    ("errors.required",     "ui_error", "This field is required"),
-    ("errors.networkError", "ui_error", "Network error. Please check your connection."),
-    ("errors.unknownError", "ui_error", "Something went wrong. Please try again."),
 
     # profile
     ("profile.title",              "ui_profile", "My Profile"),
-    ("profile.anonymous",          "ui_profile", "Anonymous Reporter"),
     ("profile.first_name",         "ui_profile", "First Name"),
     ("profile.last_name",          "ui_profile", "Last Name"),
     ("profile.email",              "ui_profile", "Email Address"),
@@ -2084,8 +2045,6 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
 
     # badges (dotted — BADGES_* UPPERCASE kept for mobile)
     ("badges.title",          "ui_badges", "Badges & Certifications"),
-    ("badges.anon_heading",   "ui_badges", "Badges are available to reporters with a verified account."),
-    ("badges.anon_body",      "ui_badges", "Log in or create a free account to earn and view your badges."),
     ("badges.subtitle",       "ui_badges", "Badges are awarded to reporters with a verified profile. Complete your profile to unlock badges."),
     ("badges.status_earned",  "ui_badges", "Earned ✓"),
     ("badges.status_claim",   "ui_badges", "Add email or phone to claim"),
@@ -2130,27 +2089,20 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
     ("report.other",             "ui_report", "Other"),
     ("report.description",       "ui_report", "Description (optional)"),
     ("report.photos",            "ui_report", "Photos"),
-    ("report.addPhoto",          "ui_report", "Add Photo"),
     ("report.takePhoto",         "ui_report", "Take a Photo"),
     ("report.uploadPhoto",       "ui_report", "Upload from Gallery"),
-    ("report.photoRequired",     "ui_report", "At least one photo is required"),
-    ("report.maxPhotos",         "ui_report", "Maximum 3 photos per report"),
     ("report.location",          "ui_report", "Location"),
     ("report.submit",            "ui_report", "Submit Report"),
     ("report.submitting",        "ui_report", "Submitting..."),
-    ("report.queued",            "ui_report", "Report saved. Will sync when internet is available."),
     ("report.success",           "ui_report", "Report submitted successfully"),
     ("report.error",             "ui_report", "Failed to submit report. Please try again."),
     ("report.success_title",     "ui_report", "Report Submitted"),
     ("report.submit_another",    "ui_report", "Submit Another Report"),
-    ("report.review_title",      "ui_report", "Review Your Report"),
     ("report.dupe_title",        "ui_report", "Possible duplicate report"),
     ("report.dupe_body",         "ui_report", "It looks like you have already submitted a report for this location. Are you sure you want to submit another?"),
     ("report.dupe_submit_anyway","ui_report", "Submit anyway"),
-    ("report.no_crisis",         "ui_report", "No active crisis found. Please try again later."),
     ("report.gps_button",        "ui_report", "Use My GPS Location"),
     ("report.gps_getting",       "ui_report", "Getting location…"),
-    ("report.selectBuilding",    "ui_report", "Select building on map"),
     ("report.back_to_review",    "ui_report", "Back to Review without changes"),
     ("report.select_at_least_one","ui_report","Select all that apply. At least one required."),
 
