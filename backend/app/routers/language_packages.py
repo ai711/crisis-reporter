@@ -1811,13 +1811,10 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
     ("Q2_OPT_OTHER",          "answer",   "Other (please specify)"),
     ("Q3_LABEL", "question", "What is the name of this infrastructure?"),
     ("Q4_LABEL",          "question", "What type of disaster caused this damage?"),
-    ("Q4_OPT_EARTHQUAKE", "answer",   "Earthquake"),
-    ("Q4_OPT_FLOOD",      "answer",   "Flood"),
     ("Q4_OPT_CYCLONE",    "answer",   "Cyclone / Typhoon / Hurricane"),
     ("Q4_OPT_LANDSLIDE",  "answer",   "Landslide"),
     ("Q4_OPT_FIRE",       "answer",   "Fire"),
     ("Q4_OPT_CONFLICT",   "answer",   "Conflict / War"),
-    ("Q4_OPT_OTHER",      "answer",   "Other"),
     ("Q5_LABEL",         "question", "Is there debris blocking access?"),
     ("Q5_OPT_YES",       "answer",   "Yes"),
     ("Q5_OPT_NO",        "answer",   "No"),
@@ -1848,86 +1845,37 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
     ("Q8_OPT_OTHER",        "answer",   "Other — please specify"),
 
     # ── Navigation / global chrome ────────────────────────────────────────────────
-    ("NAV_HOME",            "ui_nav",   "Home"),
-    ("NAV_MAP",             "ui_nav",   "Map"),
-    ("NAV_REPORTS",         "ui_nav",   "Reports"),
 
     # ── Common / shared UI ────────────────────────────────────────────────────────
-    ("COMMON_LOADING",              "ui_common", "Loading..."),
-    ("COMMON_LOADING_COUNTRIES",    "ui_common", "Loading countries…"),
-    ("COMMON_RETRY",                "ui_common", "Retry"),
-    ("COMMON_CANCEL",               "ui_common", "Cancel"),
-    ("COMMON_CONFIRM",              "ui_common", "Confirm"),
-    ("COMMON_BACK",                 "ui_common", "← Back"),
     ("COMMON_NEXT",                 "ui_common", "Next →"),
     ("COMMON_PREVIOUS",             "ui_common", "← Previous"),
-    ("COMMON_EDIT",                 "ui_common", "Edit"),
     ("COMMON_OPTIONAL",             "ui_common", "Optional"),
-    ("COMMON_SAVING",               "ui_common", "Saving…"),
-    ("COMMON_GO_BACK",              "ui_common", "Go Back"),
-    ("COMMON_GO_HOME",              "ui_common", "Go to Home"),
-    ("COMMON_GOT_IT",               "ui_common", "Got it"),
     ("COMMON_REFRESH",              "ui_common", "Refresh"),
 
     # ── Terms & Conditions ────────────────────────────────────────────────────────
     ("TERMS_TITLE",         "ui_terms", "Terms and Conditions"),
-    ("TERMS_SUBTITLE",      "ui_terms", "Please read and accept the terms below to continue."),
-    ("TERMS_ERROR",         "ui_terms", "You must accept the Terms and Conditions to continue."),
-    ("TERMS_AGREE",         "ui_terms", "I Agree"),
-    ("TERMS_DECLINE",       "ui_terms", "Decline"),
-    ("TERMS_PRIVACY",       "ui_terms", "Your data is secured by UNDP Privacy Protocols"),
 
     # ── Onboarding ────────────────────────────────────────────────────────────────
     ("ONBOARDING_SELECT_COUNTRY",       "ui_onboarding", "Select Your Country"),
-    ("ONBOARDING_SELECT_LANGUAGE",      "ui_onboarding", "Select Language"),
     ("ONBOARDING_COUNTRY_PLACEHOLDER",  "ui_onboarding", "Search for your country..."),
     ("ONBOARDING_INACTIVE",             "ui_onboarding", "We are unable to provide any assistance for your region at this moment"),
     ("ONBOARDING_CONTINUE",             "ui_onboarding", "Continue"),
-    ("ONBOARDING_MORE_LANGUAGES_TITLE", "ui_onboarding", "More languages"),
-    ("ONBOARDING_MORE_LANGUAGES_BTN",   "ui_onboarding", "+ More"),
-    ("ONBOARDING_SHOW_LESS",            "ui_onboarding", "Show less"),
-    ("ONBOARDING_LANG_LOAD_ERROR",      "ui_onboarding", "Could not load language. Check your connection and try again."),
 
     # ── Home screen ───────────────────────────────────────────────────────────────
-    ("HOME_REPORT_BUTTON",      "ui_home", "Report an Incident"),
     ("HOME_QUEUED_REPORTS",     "ui_home", "{{count}} report(s) waiting to sync"),
-    ("HOME_MY_REPORTS",         "ui_home", "My Reports"),
-    ("HOME_NO_REPORTS_TITLE",   "ui_home", "No reports yet"),
     ("HOME_NO_REPORTS_BODY",    "ui_home", "Your submitted reports will appear here"),
-    ("HOME_RECENT_REPORTS",     "ui_home", "YOUR RECENT REPORTS"),
 
     # ── Report form ───────────────────────────────────────────────────────────────
-    ("REPORT_TITLE",            "ui_report", "Report Damage"),
-    ("REPORT_SUBMIT",           "ui_report", "Submit Report"),
-    ("REPORT_SUBMITTING",       "ui_report", "Submitting..."),
-    ("REPORT_SUCCESS",          "ui_report", "Report submitted successfully"),
-    ("REPORT_ERROR",            "ui_report", "Failed to submit report. Please try again."),
     ("REPORT_QUEUED",           "ui_report", "Report saved. Will sync when internet is available."),
     ("REPORT_PHOTO_REQUIRED",   "ui_report", "At least one photo is required"),
     ("REPORT_MAX_PHOTOS",       "ui_report", "Maximum 3 photos per report"),
     ("REPORT_ADD_PHOTO",        "ui_report", "Add Photo"),
-    ("REPORT_TAKE_PHOTO",       "ui_report", "Take a Photo"),
-    ("REPORT_UPLOAD_PHOTO",     "ui_report", "Upload from Gallery"),
-    ("REPORT_GPS_BUTTON",       "ui_report", "Use My GPS Location"),
-    ("REPORT_GPS_GETTING",      "ui_report", "Getting location…"),
     ("REPORT_SELECT_BUILDING",  "ui_report", "Select building on map"),
-    ("REPORT_SUBMIT_ANOTHER",   "ui_report", "Submit Another Report"),
     ("REPORT_REVIEW_TITLE",     "ui_report", "Review Your Report"),
-    ("REPORT_DUPE_TITLE",       "ui_report", "Possible duplicate report"),
-    ("REPORT_DUPE_SUBMIT",      "ui_report", "Submit anyway"),
     ("REPORT_NO_CRISIS",        "ui_report", "No active crisis found. Please try again later."),
 
     # ── Settings ──────────────────────────────────────────────────────────────────
-    ("SETTINGS_TITLE",          "ui_settings", "Settings"),
-    ("SETTINGS_LANGUAGE",       "ui_settings", "Language"),
-    ("SETTINGS_COUNTRY",        "ui_settings", "Country"),
     ("SETTINGS_ACCOUNT",        "ui_settings", "Account"),
-    ("SETTINGS_LOGIN",          "ui_settings", "Log In"),
-    ("SETTINGS_REGISTER",       "ui_settings", "Create Account"),
-    ("SETTINGS_LOGOUT",         "ui_settings", "Log Out"),
-    ("SETTINGS_CHANGE_COUNTRY", "ui_settings", "Change Country"),
-    ("SETTINGS_CHANGE_LANGUAGE","ui_settings", "Change Language"),
-    ("SETTINGS_PRIVACY_POLICY", "ui_settings", "Privacy Policy"),
 
     # ── Offline / connectivity ────────────────────────────────────────────────────
     ("OFFLINE_BANNER",  "ui_offline", "You are offline. Reports will be saved and sent when you reconnect."),
@@ -1941,33 +1889,11 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
     ("ERROR_TIMEOUT",        "ui_error", "This is taking longer than expected. Please try again."),
 
     # ── Profile ───────────────────────────────────────────────────────────────────
-    ("PROFILE_TITLE",           "ui_profile", "My Profile"),
     ("PROFILE_ANONYMOUS",       "ui_profile", "Anonymous Reporter"),
-    ("PROFILE_FIRST_NAME",      "ui_profile", "First Name"),
-    ("PROFILE_LAST_NAME",       "ui_profile", "Last Name"),
-    ("PROFILE_EMAIL",           "ui_profile", "Email Address"),
-    ("PROFILE_PHONE",           "ui_profile", "Phone Number"),
-    ("PROFILE_SAVE_BTN",        "ui_profile", "Save Profile"),
-    ("PROFILE_SAVE_SUCCESS",    "ui_profile", "Profile saved"),
-    ("PROFILE_SAVE_ERROR",      "ui_profile", "Could not save profile. Please try again."),
-    ("PROFILE_ANON_GATE",       "ui_profile", "Create a free account to save your profile and earn badges."),
 
     # ── Login ─────────────────────────────────────────────────────────────────────
-    ("LOGIN_TITLE",             "ui_login", "Sign In"),
-    ("LOGIN_EMAIL_LABEL",       "ui_login", "Email"),
-    ("LOGIN_PASSWORD_LABEL",    "ui_login", "Password"),
-    ("LOGIN_SUBMIT_BTN",        "ui_login", "Sign In"),
-    ("LOGIN_SIGNING_IN",        "ui_login", "Signing in…"),
-    ("LOGIN_INVALID_CREDENTIALS","ui_login","Invalid email or password."),
-    ("LOGIN_NO_ACCOUNT",        "ui_login", "Don't have an account?"),
 
     # ── My Reports ────────────────────────────────────────────────────────────────
-    ("MY_REPORTS_EMPTY_TITLE",  "ui_my_reports", "No reports submitted yet"),
-    ("MY_REPORTS_LOAD_ERROR",   "ui_my_reports", "Failed to load reports. Please try again."),
-    ("MY_REPORTS_LOAD_MORE",    "ui_my_reports", "Load More"),
-    ("MY_REPORTS_LABEL_DAMAGE", "ui_my_reports", "Damage Level:"),
-    ("MY_REPORTS_LABEL_DATE",   "ui_my_reports", "Date:"),
-    ("MY_REPORTS_LABEL_STATUS", "ui_my_reports", "Status:"),
 
     # ── Safety Tips UI ────────────────────────────────────────────────────────────
     ("SAFETY_TITLE",            "ui_safety", "Safety Tips"),
@@ -1980,25 +1906,10 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
     ("SAFETY_SLIDE_PROGRESS",   "ui_safety", "Slide {{n}} of {{total}}"),
 
     # ── Badges ────────────────────────────────────────────────────────────────────
-    ("BADGES_TITLE",            "ui_badges", "Badges & Certifications"),
     ("BADGES_ANON_HEADING",     "ui_badges", "Badges are available to reporters with a verified account."),
     ("BADGES_ANON_BODY",        "ui_badges", "Log in or create a free account to earn and view your badges."),
-    ("BADGES_STATUS_EARNED",    "ui_badges", "Earned ✓"),
-    ("BADGES_STATUS_LOCKED",    "ui_badges", "Locked"),
-    ("BADGES_SAFETY_NAME",      "ui_badges", "Safety Training Completion"),
-    ("BADGES_SAFETY_DESC",      "ui_badges", "Complete all safety training modules in Crisis Reporter."),
-    ("BADGES_REFERRAL_NAME",    "ui_badges", "Community Referral"),
 
     # ── Disaster type labels (for display in UI) ─────────────────────────────────
-    ("DISASTER_EARTHQUAKE",         "disaster_label", "Earthquake"),
-    ("DISASTER_FLOOD",              "disaster_label", "Flood"),
-    ("DISASTER_TSUNAMI",            "disaster_label", "Tsunami"),
-    ("DISASTER_HURRICANE_CYCLONE",  "disaster_label", "Hurricane or Cyclone"),
-    ("DISASTER_WILDFIRE",           "disaster_label", "Wildfire"),
-    ("DISASTER_EXPLOSION",          "disaster_label", "Explosion"),
-    ("DISASTER_CHEMICAL_INCIDENT",  "disaster_label", "Chemical Incident"),
-    ("DISASTER_CONFLICT",           "disaster_label", "Conflict"),
-    ("DISASTER_CIVIL_UNREST",       "disaster_label", "Civil Unrest"),
 
     # ── Dotted-path keys — match en.json structure used by web/mobile pages ──────
     # The original UPPERCASE keys above were not resolvable by i18next dot-path
@@ -2020,7 +1931,6 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
     ("common.confirm",            "ui_common", "Confirm"),
     ("common.back",               "ui_common", "← Back"),
     ("common.next",               "ui_common", "Next →"),
-    ("common.previous",           "ui_common", "← Previous"),
     ("common.edit",               "ui_common", "Edit"),
     ("common.optional",           "ui_common", "Optional"),
     ("common.saving",             "ui_common", "Saving…"),
@@ -2042,7 +1952,6 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
 
     # onboarding
     ("onboarding.selectCountry",       "ui_onboarding", "Select Your Country"),
-    ("onboarding.selectLanguage",      "ui_onboarding", "Select Language"),
     ("onboarding.countryPlaceholder",  "ui_onboarding", "Search for your country..."),
     ("onboarding.inactive",            "ui_onboarding", "We are unable to provide any assistance for your region at this moment"),
     ("onboarding.continue",            "ui_onboarding", "Continue"),
@@ -2272,7 +2181,6 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
     ("settings.select_country",        "ui_settings", "Select Country"),
 
     # about page
-    ("about.title",      "ui_about", "About Crisis Reporter"),
     ("about.powered_by", "ui_about", "Powered by UNDP"),
     ("about.mission",    "ui_about", "Crisis Reporter is a UNDP initiative that enables community members to document and report damage to buildings and infrastructure following disasters and crises. Your contributions help humanitarian teams deploy resources where they are needed most."),
     ("about.version",    "ui_about", "Version"),
@@ -2366,8 +2274,6 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
 
     # Mobile side menu
     ("menu.report_incident", "ui_menu", "Report an Incident"),
-    ("menu.safety_tips",     "ui_menu", "Safety Tips"),
-    ("menu.profile",         "ui_menu", "Reporter Profile"),
     ("menu.badges",          "ui_menu", "Badges & Certifications"),
     ("menu.settings",        "ui_menu", "Settings"),
     ("menu.version",         "ui_menu", "Crisis Reporter v1.0"),
@@ -2393,19 +2299,11 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
     ("settings.verified",             "ui_settings", "Verified Reporter"),
     ("settings.anonymous",            "ui_settings", "Anonymous"),
     ("settings.not_set",              "ui_settings", "Not set"),
-    ("settings.section_about",        "ui_settings", "ABOUT"),
     ("settings.app_version",          "ui_settings", "App Version"),
     ("settings.version_value",        "ui_settings", "1.0.0"),
-    ("settings.terms_and_conditions", "ui_settings", "Terms and Conditions"),
-    ("settings.privacy_policy",       "ui_settings", "Privacy Policy"),
     ("settings.reset_app",            "ui_settings", "/ Reset App"),
-    ("settings.select_country",       "ui_settings", "Select Country"),
-    ("settings.search_countries",     "ui_settings", "Search countries..."),
-    ("settings.select_language",      "ui_settings", "Select Language"),
 
     # Mobile about screen
-    ("about.title",           "ui_about", "About"),
-    ("about.powered_by",      "ui_about", "Powered by UNDP"),
     ("about.section_about",   "ui_about", "ABOUT"),
     ("about.about_body",      "ui_about", "Crisis Reporter is a community-driven damage reporting platform built for UNDP. It enables rapid infrastructure assessment following sudden-onset disasters, helping UNDP coordinate crisis response faster and more effectively."),
     ("about.section_how",     "ui_about", "HOW IT WORKS"),
@@ -2419,8 +2317,6 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
     ("about.version_note",    "ui_about", "Crisis Reporter is built for UNDP's InnoCentive Crisis Mapping Challenge"),
 
     # Mobile common
-    ("common.back",   "ui_common", "← Back"),
-    ("common.cancel", "ui_common", "Cancel"),
 
     # Mobile confirmation / offline queue strings (ReportScreen)
     ("review.report_summary_header", "ui_report", "REPORT SUMMARY"),
@@ -2445,8 +2341,6 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
     ("review.delete_report_warning", "ui_report", "DELETED REPORTS CANNOT BE RECOVERED"),
 
     # Mobile FAQ (different content from web FAQ)
-    ("faq.contact_prompt", "ui_faq", "Still have questions?"),
-    ("faq.contact_link",   "ui_faq", "Contact Support"),
     ("faq_m.q1_question",  "ui_faq", "What is Crisis Reporter?"),
     ("faq_m.q1_answer",    "ui_faq", "Crisis Reporter is a UNDP tool that lets community members document damage to buildings and infrastructure after a disaster. Your reports help UNDP direct emergency resources to the right places faster."),
     ("faq_m.q2_question",  "ui_faq", "Do I need internet to submit a report?"),
@@ -2470,16 +2364,6 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
     ("faq_m.q11_question", "ui_faq", "How do I contact UNDP about a report?"),
     ("faq_m.q11_answer",   "ui_faq", "Crisis Reporter is for damage documentation only. For emergency assistance, contact your local emergency services. For questions about UNDP operations in your area, visit undp.org."),
     # ── Safety Tips: UPPERCASE UI keys ───────────────────────────────────────────
-    ("SAFETY_TITLE",                          "safety_ui", "Safety Tips"),
-    ("SAFETY_PART_B_TITLE",                   "safety_ui", "Reporting Guidelines"),
-    ("SAFETY_PART_C_TITLE",                   "safety_ui", "First Aid Essentials"),
-    ("SAFETY_COMPLETED",                      "safety_ui", "✓ Completed"),
-    ("SAFETY_MARK_COMPLETE",                  "safety_ui", "Mark as Complete"),
-    ("SAFETY_SLIDE_PROGRESS",                 "safety_ui", "Slide {{n}} of {{total}}"),
-    ("SAFETY_DO",                             "safety_ui", "DO"),
-    ("SAFETY_DONT",                           "safety_ui", "DON'T"),
-    ("COMMON_PREVIOUS",                       "safety_ui", "← Previous"),
-    ("COMMON_NEXT",                           "safety_ui", "Next →"),
     # Disaster type labels
     ("SAFETY_DISASTER_EARTHQUAKE_LABEL",        "safety_ui", "Earthquake"),
     ("SAFETY_DISASTER_FLOOD_LABEL",             "safety_ui", "Flood"),
@@ -2491,23 +2375,9 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
     ("SAFETY_DISASTER_CONFLICT_LABEL",          "safety_ui", "Conflict"),
     ("SAFETY_DISASTER_CIVIL_UNREST_LABEL",      "safety_ui", "Civil Unrest"),
     # ── Safety Tips: lowercase safety.* UI keys ───────────────────────────────────
-    ("safety.intro_text",              "safety_ui", "Learn how to stay safe and report effectively. Complete all three parts to earn your Safety Training badge."),
-    ("safety.part_a_card_title",       "safety_ui", "Part A — Safety Tips by Disaster Type"),
-    ("safety.part_b_card_title",       "safety_ui", "Part B — Reporting Guidelines"),
-    ("safety.part_c_card_title",       "safety_ui", "Part C — First Aid Tips"),
-    ("safety.n_of_9_completed",        "safety_ui", "{{n}} of 9 completed"),
     ("safety.continue_btn",            "safety_ui", "Continue →"),
-    ("safety.status_completed",        "safety_ui", "Completed"),
-    ("safety.status_not_started",      "safety_ui", "Not started"),
-    ("safety.part_b_desc",             "safety_ui", "Simple do's and don'ts for submitting a report safely and accurately during a crisis"),
-    ("safety.badge_teaser",            "safety_ui", "Complete all three parts to unlock your Safety Training Badge"),
     ("safety.badge_teaser_link",       "safety_ui", "View Badges →"),
-    ("safety.view_badges",             "safety_ui", "View Badges"),
     ("safety.done",                    "safety_ui", "Done"),
-    ("safety.tab_a",                   "safety_ui", "Part A — Safety Tips"),
-    ("safety.tap_hint",                "safety_ui", "Tap a disaster type to read the safety tips"),
-    ("safety.offline_ready",           "safety_ui", "Content works offline once loaded"),
-    ("safety.offline_ready_desc",      "safety_ui", "Available in all supported languages"),
     ("safety.offline_content_unavailable", "safety_ui", "Content not available offline"),
     ("safety.connect_to_load",         "safety_ui", "Connect to the internet to load Safety Tips"),
     ("safety.retry",                   "safety_ui", "Retry"),
