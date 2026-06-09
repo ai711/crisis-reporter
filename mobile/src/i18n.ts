@@ -15,6 +15,40 @@ const FETCH_TIMEOUT_MS = 8_000;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+/**
+ * Converts a flat key→value dict from the backend into the nested object
+ * structure that i18next expects when keys are dot-separated paths.
+ *
+ * Two key formats coexist in the backend pipeline:
+ *   - dotted  e.g. "common.back"   → nested into { common: { back: … } }
+ *   - UPPERCASE e.g. "SAFETY_DO"  → kept as top-level (no dot, pass through)
+ *
+ * Without this, i18next resolves t("common.back") by traversing the nested
+ * path on the bundle object — but a flat literal key "common.back" sits at
+ * the top level and is never found, so the lookup falls back to English.
+ */
+function unflattenStrings(flat: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(flat)) {
+    if (!k.includes(".")) {
+      // No dot → UPPERCASE_SNAKE key (SAFETY_DO, COMMON_NEXT…) — keep top-level
+      out[k] = v;
+    } else {
+      const parts = k.split(".");
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let cur = out as Record<string, any>;
+      for (let i = 0; i < parts.length - 1; i++) {
+        if (typeof cur[parts[i]] !== "object" || cur[parts[i]] === null) {
+          cur[parts[i]] = {};
+        }
+        cur = cur[parts[i]];
+      }
+      cur[parts[parts.length - 1]] = v;
+    }
+  }
+  return out;
+}
+
 async function safeFetch(url: string): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
@@ -66,7 +100,7 @@ export async function fetchLanguagePackageFromBackend(langCode: string): Promise
       if (cached) {
         const strings: Record<string, string> = JSON.parse(cached);
         if (Object.keys(strings).length > 0) {
-          i18n.addResourceBundle(langCode, "translation", strings, true, true);
+          i18n.addResourceBundle(langCode, "translation", unflattenStrings(strings), true, true);
         }
         return;
       }
@@ -91,8 +125,9 @@ export async function fetchLanguagePackageFromBackend(langCode: string): Promise
       }
     } catch { /* storage full — skip caching */ }
 
-    // Merge into i18next (flat keys like TERMS_TITLE, Q1_LABEL, etc.)
-    i18n.addResourceBundle(langCode, "translation", strings, true, true);
+    // Unflatten dotted keys (common.back → nested) and merge into i18next.
+    // UPPERCASE keys (SAFETY_DO, COMMON_NEXT…) pass through unchanged.
+    i18n.addResourceBundle(langCode, "translation", unflattenStrings(strings), true, true);
   } catch (e) {
     console.warn("[i18n] fetchLanguagePackageFromBackend failed for", langCode, e);
   }
@@ -112,7 +147,7 @@ export async function loadDynamicLanguagePackage(langCode: string): Promise<bool
     const translationMap: Record<string, string> = JSON.parse(stored);
     if (!translationMap || Object.keys(translationMap).length === 0) return false;
 
-    i18n.addResourceBundle(langCode, "translation", translationMap, true, true);
+    i18n.addResourceBundle(langCode, "translation", unflattenStrings(translationMap), true, true);
     return true;
   } catch (e) {
     console.warn("Failed to load dynamic language package:", e);
