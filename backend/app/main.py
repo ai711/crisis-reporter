@@ -45,7 +45,7 @@ from app.routers import (
     dashboard_sse,
 )
 from app.routers.question_packages import seed_initial_package
-from app.routers.language_packages import seed_string_keys
+from app.routers.language_packages import seed_string_keys, ensure_string_keys_synced
 from app.routers.countries import seed_countries
 
 
@@ -1032,6 +1032,11 @@ async def lifespan(app: FastAPI):
     Path(settings.LOCAL_UPLOAD_PATH).mkdir(parents=True, exist_ok=True)
     await seed_initial_package()
     await seed_string_keys()
+    # Sync Translation rows: create missing rows for new/reactivated keys and
+    # retire rows for keys removed from _SEED_KEYS. Belt-and-suspenders alongside
+    # the is_active filters in publish_language_package and get_queue_status.
+    async with AsyncSessionLocal() as db:
+        await ensure_string_keys_synced(db)
     await seed_countries()
     await seed_first_admin()
     await _seed_default_roles()

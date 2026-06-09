@@ -563,11 +563,14 @@ async def publish_language_package(
     Superadmin only. Fails if any active string key has no approved translation
     or if the review queue (draft/failed) is non-empty for this language.
     """
-    # Gate: review queue must be empty
+    # Gate: review queue must be empty (active keys only — retired-key translations are excluded)
     pending_result = await db.execute(
-        select(func.count(Translation.id)).where(
+        select(func.count(Translation.id))
+        .join(StringKey, StringKey.id == Translation.string_key_id)
+        .where(
             Translation.language_code == language_code,
             Translation.status.in_(["draft", "failed"]),
+            StringKey.is_active == True,
         )
     )
     pending_count = pending_result.scalar() or 0
@@ -1047,7 +1050,11 @@ async def get_queue_status(
             Translation.status,
             func.count(Translation.id),
         )
-        .where(Translation.status.in_(["draft", "failed"]))
+        .join(StringKey, StringKey.id == Translation.string_key_id)
+        .where(
+            Translation.status.in_(["draft", "failed"]),
+            StringKey.is_active == True,
+        )
         .group_by(Translation.language_code, Translation.status)
     )
     rows = result.all()
