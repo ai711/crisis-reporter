@@ -2620,20 +2620,45 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
 
 
 async def seed_string_keys() -> None:
-    """Idempotent, incremental seed — inserts only StringKey rows that don't yet
-    exist.  New keys added to _SEED_KEYS in future commits will be picked up on
-    the next startup without affecting existing translations."""
+    """Idempotent seed — inserts new StringKey rows and retires removed ones.
+
+    On every startup:
+    - Keys in _SEED_KEYS that do not yet exist → INSERT (is_active=True).
+    - Keys in _SEED_KEYS that were previously retired → re-activate.
+    - Keys that exist in the DB but are no longer in _SEED_KEYS → set
+      is_active=False (retired). Translations are preserved for audit.
+    """
     async with AsyncSessionLocal() as session:
-        # Load all existing keys in one query
-        existing_result = await session.execute(select(StringKey.key))
-        existing_keys: set[str] = {row[0] for row in existing_result.all()}
+        # Load all existing StringKey rows (need the ORM objects to mutate is_active)
+        existing_result = await session.execute(select(StringKey))
+        existing_map: dict[str, StringKey] = {
+            row.key: row for row in existing_result.scalars().all()
+        }
+
+        seed_key_set = {k for k, _c, _e in _SEED_KEYS}
 
         added = 0
         for key, category, english_text in _SEED_KEYS:
-            if key not in existing_keys:
+            if key not in existing_map:
                 session.add(StringKey(key=key, category=category, english_text=english_text))
                 added += 1
+            elif not existing_map[key].is_active:
+                # Re-activate a previously retired key that is back in _SEED_KEYS
+                existing_map[key].is_active = True
+                added += 1
 
-        if added:
+        # Retire keys that have been removed from _SEED_KEYS.
+        # Sets is_active=False so they are excluded from language packages and
+        # the dashboard key catalogue, but all translation records are kept.
+        retired = 0
+        for key, row in existing_map.items():
+            if key not in seed_key_set and row.is_active:
+                row.is_active = False
+                retired += 1
+
+        if added or retired:
             await session.commit()
-            log.info("Seeded %d new string keys (%d total defined)", added, len(_SEED_KEYS))
+            log.info(
+                "String-key seed: +%d new/reactivated, -%d retired (%d total in _SEED_KEYS)",
+                added, retired, len(seed_key_set),
+            )

@@ -1,8 +1,9 @@
 {
-  "app": { "name": "危机报告" },
+  "app": {
+    "name": "危机报告"
+  },
   "onboarding": {
     "selectCountry": "选择您的国家",
-    "selectLanguage": "选择语言",
     "countryPlaceholder": "搜索您的国家...",
     "inactive": "我们目前无法为您所在地区提供帮助",
     "continue": "继续"
@@ -114,15 +115,42 @@
     "title": "What can I report?",
     "close": "Close",
     "types": {
-      "earthquake": { "name": "Earthquake", "description": "Structural damage from ground shaking and tremors." },
-      "flood": { "name": "Flood", "description": "Water damage from overflow, heavy rain, or storm surge." },
-      "tsunami": { "name": "Tsunami", "description": "Coastal damage from large ocean waves following seismic events." },
-      "hurricane_cyclone": { "name": "Hurricane or Cyclone", "description": "Wind and rain damage from tropical storms." },
-      "wildfire": { "name": "Wildfire", "description": "Fire damage to buildings and infrastructure." },
-      "explosion": { "name": "Explosion", "description": "Blast damage from industrial or other explosive events." },
-      "chemical_incident": { "name": "Chemical Incident", "description": "Damage or hazard from chemical spill or release." },
-      "conflict": { "name": "Conflict", "description": "Damage from armed conflict or military activity." },
-      "civil_unrest": { "name": "Civil Unrest", "description": "Damage from protests, riots, or civil disturbance." }
+      "earthquake": {
+        "name": "Earthquake",
+        "description": "Structural damage from ground shaking and tremors."
+      },
+      "flood": {
+        "name": "Flood",
+        "description": "Water damage from overflow, heavy rain, or storm surge."
+      },
+      "tsunami": {
+        "name": "Tsunami",
+        "description": "Coastal damage from large ocean waves following seismic events."
+      },
+      "hurricane_cyclone": {
+        "name": "Hurricane or Cyclone",
+        "description": "Wind and rain damage from tropical storms."
+      },
+      "wildfire": {
+        "name": "Wildfire",
+        "description": "Fire damage to buildings and infrastructure."
+      },
+      "explosion": {
+        "name": "Explosion",
+        "description": "Blast damage from industrial or other explosive events."
+      },
+      "chemical_incident": {
+        "name": "Chemical Incident",
+        "description": "Damage or hazard from chemical spill or release."
+      },
+      "conflict": {
+        "name": "Conflict",
+        "description": "Damage from armed conflict or military activity."
+      },
+      "civil_unrest": {
+        "name": "Civil Unrest",
+        "description": "Damage from protests, riots, or civil disturbance."
+      }
     }
   },
   "photoScreen": {

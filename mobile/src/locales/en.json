@@ -4,7 +4,6 @@
   },
   "onboarding": {
     "selectCountry": "Select Your Country",
-    "selectLanguage": "Select Language",
     "countryPlaceholder": "Search for your country...",
     "inactive": "We are unable to provide any assistance for your region at this moment",
     "continue": "Continue"
