@@ -275,6 +275,31 @@ Runs in `backend/app/services/auto_flagging.py` as a FastAPI `BackgroundTask` (n
 - 6 UN languages: ar, zh, en, fr, ru, es (all `is_protected=TRUE`, cannot be deleted)
 - Content translation: on-demand only via Translate button; LibreTranslate (primary) or Google Translate
 
+### CRITICAL — i18n Coverage Rule
+Every `t('key')` call added to any `.tsx`/`.ts` file in `web/src` or `mobile/src` MUST have a corresponding entry in `_SEED_KEYS` in `backend/app/routers/language_packages.py`. Adding the key to `en.json` alone is **not sufficient** — `en.json` is an English-only fallback; `_SEED_KEYS` is what makes a string translatable for Arabic, Chinese, French, Russian, and Spanish speakers.
+
+**Two-system architecture (understand before editing):**
+- **System A (pipeline):** `_SEED_KEYS` → DB (`string_keys` + `translations` tables) → auto-translate → publish → apps download at runtime. Supports all 6 UN languages.
+- **System B (static fallback):** `web/src/locales/en.json` and `mobile/src/locales/en.json`. English only. Used as i18next fallback when the pipeline key is missing.
+
+**Rule:** if a string must be localized (i.e. shown to reporters), it belongs in `_SEED_KEYS`. `en.json` entries without a matching `_SEED_KEYS` entry are silently English-only for non-English users.
+
+**CI enforcement:**
+```bash
+# Run from repo root — checks all literal t() calls
+python scripts/check_i18n_coverage.py
+
+# Strict mode — also fails on pipeline-gap keys (in en.json but not _SEED_KEYS)
+python scripts/check_i18n_coverage.py --strict
+```
+Exit codes: 0 = pass, 1 = pipeline gap (strict only), 2 = English broken, 3 = both.
+
+**Checklist — run mentally before committing any frontend i18n change:**
+1. Added a new `t('some.key')` call? → Add `("some.key", "category", "English text")` to `_SEED_KEYS`.
+2. Added the key to `en.json`? → Also add to `_SEED_KEYS` (both are required).
+3. Removed a `t()` call? → Mark the `StringKey` as retired (set `is_active=False`), do not delete from `en.json` until all language packages are republished.
+4. Dynamic key (template literal)? → Add its prefix to `DYNAMIC_PREFIXES` in `scripts/check_i18n_coverage.py` so the CI script knows it's live.
+
 ### Export (backend/app/routers/exports.py)
 - 5 formats: Field Operations (CSV), Full Data (CSV), GIS (Shapefile), GeoPackage, RAPIDA Summary (CSV)
 - RAPIDA field mapping: `damage_level→damage_classification`, `gps_latitude/longitude→latitude/longitude`, `created_at→timestamp`, `infrastructure_types→infrastructure_type`
