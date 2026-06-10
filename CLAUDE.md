@@ -284,6 +284,16 @@ Every `t('key')` call added to any `.tsx`/`.ts` file in `web/src` or `mobile/src
 
 **Rule:** if a string must be localized (i.e. shown to reporters), it belongs in `_SEED_KEYS`. `en.json` entries without a matching `_SEED_KEYS` entry are silently English-only for non-English users.
 
+**What the CI script is:** `scripts/check_i18n_coverage.py` is a local quality-gate script that scans every `t('key')` call in the entire frontend codebase (web + mobile) and cross-checks them against `_SEED_KEYS` and `en.json`. Run it before committing any i18n change. "CI" stands for Continuous Integration — on a build server this would run automatically on every pull request; for now it is a manual pre-commit check.
+
+**Three checks performed:**
+
+| Check | Severity | Meaning | Action |
+|-------|----------|---------|--------|
+| **CHECK B** | 🔴 Always blocking | Key used in code, absent from both `en.json` AND `_SEED_KEYS`. Even English sees a broken/empty string. | Add key to both `en.json` and `_SEED_KEYS`. |
+| **CHECK A** | 🟡 Warning (`--strict` makes it fail) | Key in `en.json` (English fine) but absent from `_SEED_KEYS`. Non-English users always see English — silent bug. | Add key to `_SEED_KEYS`. |
+| **CHECK C** | ℹ️ Info only, never blocks | Key in `_SEED_KEYS` but no literal `t()` call found. May be a dead key OR a dynamic/template-literal key the grep can't see. | Review — if truly dead, retire it; if dynamic, add prefix to `DYNAMIC_PREFIXES`. |
+
 **CI enforcement:**
 ```bash
 # Run from repo root — checks all literal t() calls
@@ -291,14 +301,24 @@ python scripts/check_i18n_coverage.py
 
 # Strict mode — also fails on pipeline-gap keys (in en.json but not _SEED_KEYS)
 python scripts/check_i18n_coverage.py --strict
+
+# Suppress the dead-key info list (CHECK C) to reduce noise
+python scripts/check_i18n_coverage.py --no-dead
 ```
 Exit codes: 0 = pass, 1 = pipeline gap (strict only), 2 = English broken, 3 = both.
+
+**How the script detects `t()` calls:** it uses a Python file walker (no external tools — works on Windows) with the pattern `(?<![A-Za-z0-9_$])t\(['"]key['"]` — this correctly catches both `t('key')` and `t('key', { defaultValue: '...' })` forms while excluding false matches like `.get('window')` or `.createElement('canvas')`.
+
+**Dynamic keys — what `DYNAMIC_PREFIXES` is for:** some keys are built at runtime via template literals, e.g. `` t(`Q${n}_LABEL`) `` or `` t(`disaster_types.${v}`) ``. The script can never find these via static grep. They are listed in `DYNAMIC_PREFIXES` inside the script so CHECK B/C skip them rather than reporting them as broken or dead. If you add a new template-literal key pattern, add its prefix to `DYNAMIC_PREFIXES`.
+
+Current dynamic prefixes: `SAFETY_DISASTER_`, `disaster_types.`, `faq.q`, `faq_m.q`, `map.damage_`, `my_reports.damage_`, `Q1–Q8 _OPT_/*_LABEL`, `Q8_KEY_MAP`, `whatCanIReport.types` (returnObjects call).
 
 **Checklist — run mentally before committing any frontend i18n change:**
 1. Added a new `t('some.key')` call? → Add `("some.key", "category", "English text")` to `_SEED_KEYS`.
 2. Added the key to `en.json`? → Also add to `_SEED_KEYS` (both are required).
 3. Removed a `t()` call? → Mark the `StringKey` as retired (set `is_active=False`), do not delete from `en.json` until all language packages are republished.
 4. Dynamic key (template literal)? → Add its prefix to `DYNAMIC_PREFIXES` in `scripts/check_i18n_coverage.py` so the CI script knows it's live.
+5. After any of the above → run `python scripts/check_i18n_coverage.py` and confirm exit code 0 before committing.
 
 ### Export (backend/app/routers/exports.py)
 - 5 formats: Field Operations (CSV), Full Data (CSV), GIS (Shapefile), GeoPackage, RAPIDA Summary (CSV)
