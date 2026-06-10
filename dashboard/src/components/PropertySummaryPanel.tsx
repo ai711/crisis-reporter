@@ -489,6 +489,7 @@ const styles: Record<string, React.CSSProperties> = {
     display: "-webkit-box",
     WebkitLineClamp: 2,
     WebkitBoxOrient: "vertical",
+    maxHeight: "2.6em", // Firefox fallback: caps at 2 lines (lineHeight 1.3 × 2)
   },
   closeBtn: {
     background: "none",

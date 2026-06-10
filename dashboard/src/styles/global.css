@@ -482,6 +482,8 @@ body {
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.12); border-radius: 3px; }
+/* Firefox */
+* { scrollbar-width: thin; scrollbar-color: rgba(0,0,0,0.12) transparent; }
 
 /* --- Spinner animation (shared by PageSpinner component) --- */
 @keyframes cr-spin { to { transform: rotate(360deg); } }

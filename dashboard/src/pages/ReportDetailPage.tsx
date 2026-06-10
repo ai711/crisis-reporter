@@ -1456,6 +1456,7 @@ const styles: Record<string, React.CSSProperties> = {
     left: 12,
     background: "rgba(255,255,255,0.92)",
     backdropFilter: "blur(4px)",
+    WebkitBackdropFilter: "blur(4px)",
     padding: "12px 14px",
     borderRadius: 8,
     boxShadow: "0 2px 8px rgba(8,27,57,0.1)",

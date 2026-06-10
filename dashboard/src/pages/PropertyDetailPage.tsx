@@ -1126,7 +1126,7 @@ export default function PropertyDetailPage() {
                 {displayLat != null && displayLng != null && (
                   <div style={{
                     position: "absolute" as const, bottom: 8, left: 8,
-                    background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)",
+                    background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)",
                     borderRadius: "var(--radius-sm)", padding: "4px 8px",
                   }}>
                     <span style={{ fontSize: 10, color: "#fff", fontFamily: "monospace" }}>
