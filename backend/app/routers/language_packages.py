@@ -1114,7 +1114,7 @@ async def get_unified_queue(
             StringKey.english_text.label("source_text"),
         )
         .join(StringKey, StringKey.id == Translation.string_key_id)
-        .where(Translation.status.in_(statuses))
+        .where(Translation.status.in_(statuses), StringKey.is_active == True)
     )
     if lang_code:
         q = q.where(Translation.language_code == lang_code)
@@ -1228,11 +1228,17 @@ async def approve_all_translations(
         )
     await refresh_translation_lock_ttl(redis, body.language_code)
 
-    # Query all draft translations for this language
+    # Query all draft translations for this language, excluding retired keys.
+    # Retired-key translations are skipped here — the publish gate already
+    # excludes them, so approving them would inflate the approved count
+    # without ever contributing to a published package.
     result = await db.execute(
-        select(Translation).where(
+        select(Translation)
+        .join(StringKey, StringKey.id == Translation.string_key_id)
+        .where(
             Translation.language_code == body.language_code,
             Translation.status == "draft",
+            StringKey.is_active == True,
         )
     )
     drafts = result.scalars().all()
@@ -2907,6 +2913,24 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
     # ── Safety screen extras ──
     ("safety.title", "ui_safety", "Safety Tips"),
     ("safety.do",    "ui_safety", "DO"),
+
+    # ── Newly discovered CHECK B keys (added by CI enforcement) ──
+    ("location.offline_gps_background", "ui_location", "Your GPS coordinates are still being recorded in the background"),
+    ("navigation.my_reports", "ui_common", "View My Reports"),
+    ("report.address_label", "ui_report", "Address"),
+    ("report.address_placeholder", "ui_report", "Street address or area name"),
+    ("report.address_hint", "ui_report", "e.g. 14 Ataturk Street, Kadikoy"),
+    ("report.landmark_label", "ui_report", "Nearby Landmark"),
+    ("report.landmark_hint", "ui_report", "e.g. Near the school next to the central market"),
+    ("report.building_name_label_manual", "ui_report", "Building Name"),
+    ("report.building_name_placeholder", "ui_report", "Name of the specific building or structure"),
+    ("report.building_name_hint", "ui_report", "e.g. Residential Block 4B, Al-Nour Mosque"),
+    ("report.at_least_one_required", "ui_report", "* At least one field must be filled in to continue"),
+    ("report.location_tap_hint", "ui_report", "Tap a building or drop a pin"),
+    ("report.gps_attached", "ui_report", "GPS location captured and attached to this report"),
+    ("report.review_intro", "ui_report", "Please review your report before submitting. Tap any section to edit."),
+    ("report.review_privacy_note", "ui_report", "Your report will be reviewed by UNDP and used to coordinate crisis response"),
+    ("questions.q2.opt_other_prefix", "question", "Other"),
 
 ]
 

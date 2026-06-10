@@ -13,10 +13,6 @@
     "privacy": "Your data is secured by UNDP Privacy Protocols"
   },
   "onboarding": {
-    "selectCountry": "Select Your Country",
-    "countryPlaceholder": "Search for your country...",
-    "inactive": "We are unable to provide any assistance for your region at this moment",
-    "continue": "Continue",
     "more_languages_title": "More languages",
     "more_languages_btn": "+ More",
     "show_less": "Show less",
@@ -26,14 +22,12 @@
   },
   "home": {
     "reportButton": "Report an Incident",
-    "queuedReports": "{{count}} report(s) waiting to sync",
     "myReports": "My Reports",
     "whatCanReport": "What can I report?",
     "welcomeText": "Crisis Reporter helps you document damage to buildings and infrastructure after a disaster. You can report earthquakes, floods, conflicts, and other crises. Your reports help UNDP get help to the right places faster.",
     "welcomeGotIt": "Got it",
     "loadingReports": "Loading your reports...",
     "noReportsTitle": "No reports yet",
-    "noReportsBody": "Your submitted reports will appear here",
     "firstReportHint": "Tap \"Report an Incident\" to submit your first report",
     "recentReports": "YOUR RECENT REPORTS",
     "pendingSync": "Pending Sync",
@@ -63,26 +57,20 @@
     "description": "Description (optional)",
     "descriptionPlaceholder": "Describe the damage you observed...",
     "photos": "Photos",
-    "addPhoto": "Add Photo",
     "takePhoto": "Take a Photo",
     "uploadPhoto": "Upload from Gallery",
-    "photoRequired": "At least one photo is required",
-    "maxPhotos": "Maximum 3 photos per report",
     "location": "Location",
-    "selectBuilding": "Select building on map",
     "manualLocation": "Enter location manually",
     "address": "Address",
     "landmark": "Nearby Landmark",
     "buildingName": "Building Name",
     "submit": "Submit Report",
     "submitting": "Submitting...",
-    "queued": "Report saved. Will sync when internet is available.",
     "success": "Report submitted successfully",
     "error": "Failed to submit report. Please try again.",
     "success_title": "Report Submitted",
     "submit_another": "Submit Another Report",
     "validation_incomplete": "Please complete all required fields",
-    "no_crisis": "No active crisis found. Please try again later.",
     "take_another_photo": "+ Take Another Photo",
     "upload_another_photo": "+ Upload Another Photo",
     "drop_photo_here": "Drop your photo here",
@@ -116,7 +104,6 @@
     "q4_category_human": "Human-Made Crises",
     "select_at_least_one": "Select all that apply. At least one required.",
     "back_to_review": "Back to Review without changes",
-    "review_title": "Review Your Report",
     "review_photos": "Photos",
     "review_photo_required": "At least one photo is required. Please add a photo before submitting.",
     "review_location": "Location",
@@ -169,7 +156,20 @@
     "step_4_review": "STEP 4 — REVIEW",
     "photo_tips_title": "PHOTO TIPS",
     "no_photo_added": "No photo added yet",
-    "photos_added_count": "{{count}} of 3 photos added. You can add up to 3."
+    "photos_added_count": "{{count}} of 3 photos added. You can add up to 3.",
+    "address_label": "Address",
+    "address_placeholder": "Street address or area name",
+    "address_hint": "e.g. 14 Ataturk Street, Kadikoy",
+    "landmark_label": "Nearby Landmark",
+    "landmark_hint": "e.g. Near the school next to the central market",
+    "building_name_label_manual": "Building Name",
+    "building_name_placeholder": "Name of the specific building or structure",
+    "building_name_hint": "e.g. Residential Block 4B, Al-Nour Mosque",
+    "at_least_one_required": "* At least one field must be filled in to continue",
+    "location_tap_hint": "Tap a building or drop a pin",
+    "gps_attached": "GPS location captured and attached to this report",
+    "review_intro": "Please review your report before submitting. Tap any section to edit.",
+    "review_privacy_note": "Your report will be reviewed by UNDP and used to coordinate crisis response"
   },
   "map": {
     "loading": "Loading map...",
@@ -189,7 +189,6 @@
     "title": "Settings",
     "language": "Language",
     "country": "Country",
-    "account": "Account",
     "login": "Log In",
     "register": "Create Account",
     "logout": "Log Out",
@@ -210,8 +209,7 @@
     "lang_cache_note": "Using saved language data. Some text may not be fully updated."
   },
   "offline": {
-    "banner": "You are offline. Reports will be saved and sent when you reconnect.",
-    "syncing": "Syncing your reports..."
+    "banner": "You are offline. Reports will be saved and sent when you reconnect."
   },
   "stepper": {
     "step_photo": "Photo",
@@ -231,15 +229,11 @@
     "offline_gps_captured": "Your GPS location has been recorded and will be attached to this report.",
     "offline_no_gps": "GPS is not available. Your manual location details will be used to identify this report.",
     "connection_lost": "Connection lost. You can still select a building from the area already loaded, or enter your location manually below.",
-    "gps_unavailable_inline": "Your location could not be detected. You can still select a building on the map or use the search bar to find your location."
+    "gps_unavailable_inline": "Your location could not be detected. You can still select a building on the map or use the search bar to find your location.",
+    "offline_gps_background": "Your GPS coordinates are still being recorded in the background"
   },
   "confirmation": {
     "success_message": "Your report has been submitted. Thank you for helping crisis response teams get to the right places faster."
-  },
-  "errors": {
-    "required": "This field is required",
-    "networkError": "Network error. Please check your connection.",
-    "unknownError": "Something went wrong. Please try again."
   },
   "questions": {
     "please_select": "Please select an answer to continue."
@@ -280,16 +274,13 @@
     "back": "← Back",
     "next": "Next →",
     "edit": "Edit",
-    "optional": "Optional",
     "saving": "Saving…",
     "go_back": "Go Back",
     "go_home": "Go to Home",
-    "got_it": "Got it",
-    "refresh": "Refresh"
+    "got_it": "Got it"
   },
   "profile": {
     "title": "My Profile",
-    "anonymous": "Anonymous Reporter",
     "first_name": "First Name",
     "last_name": "Last Name",
     "email": "Email Address",
@@ -337,7 +328,7 @@
     "label_damage": "Damage Level:",
     "label_disaster_type": "Disaster Type:",
     "label_date": "Date:",
-    "label_status": "Status:",
+    "label_status": "Status",
     "back": "← Back to My Reports",
     "detail_title": "Report Details",
     "login_prompt": "Log in to see all your reports across sessions and devices.",
@@ -351,7 +342,6 @@
     "damage_partial": "Partially Damaged",
     "damage_minimal": "Minimal / No Damage",
     "status_submitted": "✓ Submitted",
-    "label_status": "Status",
     "label_infrastructure": "Infrastructure",
     "label_building": "Building",
     "label_photos": "Photos",
@@ -411,8 +401,6 @@
   },
   "badges": {
     "title": "Badges & Certifications",
-    "anon_heading": "Badges are available to reporters with a verified account.",
-    "anon_body": "Log in or create a free account to earn and view your badges.",
     "subtitle": "Badges are awarded to reporters with a verified profile. Complete your profile to unlock badges.",
     "status_earned": "Earned ✓",
     "status_claim": "Add email or phone to claim",
@@ -489,5 +477,8 @@
     "build_date": "Build Date",
     "built_with": "Built With",
     "legal": "This application is operated by the United Nations Development Programme (UNDP). Data submitted through this platform is used solely for humanitarian response coordination and is handled in accordance with UNDP's data privacy policies."
+  },
+  "navigation": {
+    "my_reports": "View My Reports"
   }
 }

@@ -36,7 +36,7 @@ Exit codes
   2 — CHECK B failures (always)
   3 — both CHECK A (strict) and CHECK B failures
 """
-import re, json, os, subprocess, sys, argparse
+import re, json, os, sys, argparse
 from collections import defaultdict
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -55,6 +55,7 @@ DYNAMIC_PREFIXES = [
     "Q1_LABEL", "Q2_LABEL", "Q3_LABEL", "Q4_LABEL",
     "Q5_LABEL", "Q6_LABEL", "Q7_LABEL", "Q8_LABEL",
     "Q8_KEY_MAP",         # used as dict key, not direct t() argument
+    "whatCanIReport.types", # t("whatCanIReport.types", { returnObjects: true }) — fetches whole subtree
 ]
 
 # ── helpers ────────────────────────────────────────────────────────────────────
@@ -90,19 +91,31 @@ def load_seed_keys(lang_pkg_path):
 def grep_literal_keys(src_dir):
     """
     Extract all literal string arguments passed to t() in .ts/.tsx files.
-    Handles both t('key') and t("key") forms.
+    Handles both:
+      - t('key')                  — single-arg form
+      - t("key", { options })     — multi-arg form (defaultValue, count, etc.)
     Skips template literals (those are dynamic, handled by DYNAMIC_PREFIXES).
+    Uses pure Python file walking so it works on any OS (no grep binary needed).
     """
-    result = subprocess.run(
-        ["grep", "-rh", "--include=*.ts", "--include=*.tsx",
-         r"-E", r"""t\(['"][^'"]+['"]\)""", src_dir],
-        capture_output=True, text=True
-    )
+    # Pattern requires:
+    #   - t is NOT preceded by a word character (letter, digit, _ or $)
+    #     so get('window'), createElement('canvas'), import('./x') are excluded
+    #   - t( is followed immediately by a quote, then the key
+    #   - Does NOT require a closing ) so t("key", { options }) is captured too
+    pat = re.compile(r"""(?<![A-Za-z0-9_$])t\(['"]([^'"]+)['"]""")
     keys = set()
-    for line in result.stdout.splitlines():
-        # Extract all t('...') and t("...") occurrences on this line
-        for m in re.finditer(r"""t\(['"]([^'"]+)['"]\)""", line):
-            keys.add(m.group(1))
+    for dirpath, _, filenames in os.walk(src_dir):
+        for fname in filenames:
+            if not (fname.endswith(".ts") or fname.endswith(".tsx")):
+                continue
+            fpath = os.path.join(dirpath, fname)
+            try:
+                with open(fpath, encoding="utf-8", errors="ignore") as f:
+                    content = f.read()
+            except Exception:
+                continue
+            for m in pat.finditer(content):
+                keys.add(m.group(1))
     return keys
 
 
@@ -168,18 +181,24 @@ def main():
         print("These t() calls have no match in en.json OR _SEED_KEYS.")
         print("English users see a missing-translation fallback right now.")
         print("="*60)
+        pat_broken = re.compile(r"""(?<![A-Za-z0-9_$])t\(['"]([^'"]+)['"]""")
         for k in check_b:
-            # Find which files call this key
-            files_web = subprocess.run(
-                ["grep", "-rl", "--include=*.ts", "--include=*.tsx", k, web_src],
-                capture_output=True, text=True
-            ).stdout.strip().replace(ROOT + os.sep, "")
-            files_mob = subprocess.run(
-                ["grep", "-rl", "--include=*.ts", "--include=*.tsx", k, mob_src],
-                capture_output=True, text=True
-            ).stdout.strip().replace(ROOT + os.sep, "")
-            locations = ", ".join(filter(None, [files_web, files_mob]))
-            print(f"  [BROKEN] {k}  ({locations})")
+            # Find which files call this key (pure Python walk — works on Windows)
+            hits = []
+            for src_dir in [web_src, mob_src]:
+                for dirpath, _, filenames in os.walk(src_dir):
+                    for fname in filenames:
+                        if not (fname.endswith(".ts") or fname.endswith(".tsx")):
+                            continue
+                        fpath = os.path.join(dirpath, fname)
+                        try:
+                            with open(fpath, encoding="utf-8", errors="ignore") as f:
+                                content = f.read()
+                        except Exception:
+                            continue
+                        if any(m.group(1) == k for m in pat_broken.finditer(content)):
+                            hits.append(os.path.relpath(fpath, ROOT))
+            print(f"  [BROKEN] {k}  ({', '.join(hits) if hits else 'location unknown'})")
         ok = False
         exit_code |= 2
 

@@ -2,15 +2,8 @@
   "app": {
     "name": "Crisis Reporter"
   },
-  "onboarding": {
-    "selectCountry": "Select Your Country",
-    "countryPlaceholder": "Search for your country...",
-    "inactive": "We are unable to provide any assistance for your region at this moment",
-    "continue": "Continue"
-  },
   "home": {
     "reportButton": "Report an Incident",
-    "queuedReports": "{{count}} report(s) waiting to sync",
     "myReports": "My Reports",
     "headline": "Ready to report?",
     "subtitle": "Help UNDP map damage in your area",
@@ -42,20 +35,15 @@
     "description": "Description (optional)",
     "descriptionPlaceholder": "Describe the damage you observed...",
     "photos": "Photos",
-    "addPhoto": "Add Photo",
     "takePhoto": "Take a Photo",
     "uploadPhoto": "Upload from Gallery",
-    "photoRequired": "At least one photo is required",
-    "maxPhotos": "Maximum 3 photos per report",
     "location": "Location",
-    "selectBuilding": "Select building on map",
     "manualLocation": "Enter location manually",
     "address": "Address",
     "landmark": "Nearby Landmark",
     "buildingName": "Building Name",
     "submit": "Submit Report",
     "submitting": "Submitting...",
-    "queued": "Report saved. Will sync when internet is available.",
     "success": "Report submitted successfully",
     "error": "Failed to submit report. Please try again."
   },
@@ -69,7 +57,6 @@
     "title": "Settings",
     "language": "Language",
     "country": "Country",
-    "account": "Account",
     "login": "Log In",
     "register": "Create Account",
     "logout": "Log Out",
@@ -116,13 +103,7 @@
     "cancel": "Cancel"
   },
   "offline": {
-    "banner": "You are offline. Reports will be saved and sent when you reconnect.",
-    "syncing": "Syncing your reports..."
-  },
-  "errors": {
-    "required": "This field is required",
-    "networkError": "Network error. Please check your connection.",
-    "unknownError": "Something went wrong. Please try again."
+    "banner": "You are offline. Reports will be saved and sent when you reconnect."
   },
   "tandc": {
     "title": "Terms & Conditions",
@@ -169,15 +150,42 @@
     "title": "What can I report?",
     "close": "Close",
     "types": {
-      "earthquake": { "name": "Earthquake", "description": "Structural damage from ground shaking and tremors." },
-      "flood": { "name": "Flood", "description": "Water damage from overflow, heavy rain, or storm surge." },
-      "tsunami": { "name": "Tsunami", "description": "Coastal damage from large ocean waves following seismic events." },
-      "hurricane_cyclone": { "name": "Hurricane or Cyclone", "description": "Wind and rain damage from tropical storms." },
-      "wildfire": { "name": "Wildfire", "description": "Fire damage to buildings and infrastructure." },
-      "explosion": { "name": "Explosion", "description": "Blast damage from industrial or other explosive events." },
-      "chemical_incident": { "name": "Chemical Incident", "description": "Damage or hazard from chemical spill or release." },
-      "conflict": { "name": "Conflict", "description": "Damage from armed conflict or military activity." },
-      "civil_unrest": { "name": "Civil Unrest", "description": "Damage from protests, riots, or civil disturbance." }
+      "earthquake": {
+        "name": "Earthquake",
+        "description": "Structural damage from ground shaking and tremors."
+      },
+      "flood": {
+        "name": "Flood",
+        "description": "Water damage from overflow, heavy rain, or storm surge."
+      },
+      "tsunami": {
+        "name": "Tsunami",
+        "description": "Coastal damage from large ocean waves following seismic events."
+      },
+      "hurricane_cyclone": {
+        "name": "Hurricane or Cyclone",
+        "description": "Wind and rain damage from tropical storms."
+      },
+      "wildfire": {
+        "name": "Wildfire",
+        "description": "Fire damage to buildings and infrastructure."
+      },
+      "explosion": {
+        "name": "Explosion",
+        "description": "Blast damage from industrial or other explosive events."
+      },
+      "chemical_incident": {
+        "name": "Chemical Incident",
+        "description": "Damage or hazard from chemical spill or release."
+      },
+      "conflict": {
+        "name": "Conflict",
+        "description": "Damage from armed conflict or military activity."
+      },
+      "civil_unrest": {
+        "name": "Civil Unrest",
+        "description": "Damage from protests, riots, or civil disturbance."
+      }
     }
   },
   "photoScreen": {
@@ -265,7 +273,8 @@
       "opt_community": "Community Infrastructure — schools, hospitals, community halls, public toilets, etc.",
       "opt_public_spaces": "Public Spaces / Recreation Infrastructure — stadiums, playgrounds, religious buildings, etc.",
       "opt_other": "Other — please specify",
-      "otherLimit": "100 characters maximum"
+      "otherLimit": "100 characters maximum",
+      "opt_other_prefix": "Other"
     },
     "q3": {
       "title": "Name or details of the infrastructure",
