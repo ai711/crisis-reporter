@@ -1,4 +1,5 @@
 import type { QueuedReport, QueuedPhoto, ReportSubmitRequest } from "../types";
+import { generateUUID } from "./uuid";
 
 const DB_NAME = "crisis_reporter";
 const DB_VERSION = 1;
@@ -31,7 +32,7 @@ export async function addToQueue(
   photos: QueuedPhoto[]
 ): Promise<string> {
   const db = await openDB();
-  const local_id = `local_${crypto.randomUUID()}`;
+  const local_id = `local_${generateUUID()}`;
 
   const queuedReport: QueuedReport = {
     local_id,
@@ -229,6 +230,33 @@ export async function syncQueue(apiBaseUrl: string): Promise<void> {
   } finally {
     isSyncing = false;
   }
+}
+
+// ── IndexedDB availability check (M4 — Safari private mode guard) ────────────
+//
+// Safari private mode enforces a 0-byte IndexedDB quota.  Any write attempt
+// throws a QuotaExceededError / NS_ERROR_DOM_INDEXEDDB_UNKNOWN_ERR.  We probe
+// availability once before entering the offline-queue path so the caller can
+// show a clear message instead of a generic "server error".
+
+export async function isIndexedDBAvailable(): Promise<boolean> {
+  if (!window.indexedDB) return false;
+  return new Promise<boolean>((resolve) => {
+    try {
+      const req = indexedDB.open("__cr_idb_probe__", 1);
+      req.onsuccess = () => {
+        req.result.close();
+        // Clean up the probe database asynchronously
+        try { indexedDB.deleteDatabase("__cr_idb_probe__"); } catch { /* ignore */ }
+        resolve(true);
+      };
+      req.onerror = () => resolve(false);
+      // Some browsers fire onblocked instead of onerror in private mode
+      req.onblocked = () => resolve(false);
+    } catch {
+      resolve(false);
+    }
+  });
 }
 
 // ── Auto-sync triggers ────────────────────────────────────────────────────────

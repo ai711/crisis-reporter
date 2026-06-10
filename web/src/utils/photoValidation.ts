@@ -4,6 +4,55 @@ export type ValidationResult =
 
 const HEIC_MAGIC = new Uint8Array([0x00, 0x00, 0x00]);
 
+// ── Image loading helper ──────────────────────────────────────────────────────
+// createImageBitmap is unavailable on iOS < 15 and some older Android WebViews.
+// Fall back to HTMLImageElement, which is universally supported.
+
+interface ImageSource {
+  width: number;
+  height: number;
+  drawTo: (ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D) => void;
+  close: () => void;
+}
+
+async function loadImageSource(file: Blob): Promise<ImageSource> {
+  if (typeof createImageBitmap !== "undefined") {
+    try {
+      const bitmap = await createImageBitmap(file);
+      return {
+        width: bitmap.width,
+        height: bitmap.height,
+        drawTo: (ctx) => ctx.drawImage(bitmap, 0, 0),
+        close: () => bitmap.close(),
+      };
+    } catch {
+      // Fall through to HTMLImageElement path
+    }
+  }
+
+  // HTMLImageElement fallback for iOS < 15 / old Android WebViews
+  return new Promise<ImageSource>((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve({
+        width: img.naturalWidth,
+        height: img.naturalHeight,
+        drawTo: (ctx) => ctx.drawImage(img, 0, 0),
+        close: () => { /* nothing to close for HTMLImageElement */ },
+      });
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("Image load failed"));
+    };
+    img.src = url;
+  });
+}
+
+// ── HEIC sniffing ─────────────────────────────────────────────────────────────
+
 async function sniffIsHeic(file: File): Promise<boolean> {
   try {
     const buf = await file.slice(0, 12).arrayBuffer();
@@ -18,13 +67,16 @@ async function sniffIsHeic(file: File): Promise<boolean> {
   }
 }
 
+// ── Canvas conversion (for BMP/TIFF) ─────────────────────────────────────────
+
 async function convertToJpegViaCanvas(file: Blob): Promise<File> {
-  const bitmap = await createImageBitmap(file);
+  const source = await loadImageSource(file);
   const canvas = document.createElement("canvas");
-  canvas.width = bitmap.width;
-  canvas.height = bitmap.height;
-  canvas.getContext("2d")?.drawImage(bitmap, 0, 0);
-  bitmap.close();
+  canvas.width = source.width;
+  canvas.height = source.height;
+  const ctx = canvas.getContext("2d");
+  if (ctx) source.drawTo(ctx);
+  source.close();
   return new Promise<File>((resolve, reject) => {
     canvas.toBlob(
       (blob) => {
@@ -37,9 +89,13 @@ async function convertToJpegViaCanvas(file: Blob): Promise<File> {
   });
 }
 
+// ── Duplicate detection ───────────────────────────────────────────────────────
+
 function compositeKey(f: File): string {
   return `${f.name}|${f.size}|${f.lastModified}`;
 }
+
+// ── Main validation ───────────────────────────────────────────────────────────
 
 export async function validatePhoto(
   file: File,
@@ -85,16 +141,16 @@ export async function validatePhoto(
   }
 
   // C10 — corruption check
-  let bitmap: ImageBitmap;
+  let source: ImageSource;
   try {
-    bitmap = await createImageBitmap(workingFile);
+    source = await loadImageSource(workingFile);
   } catch {
     return { ok: false, reason: "This photo could not be read. It may be corrupted. Please try a different photo." };
   }
 
   // C11 — minimum dimension check
-  if (bitmap.width < 100 || bitmap.height < 100) {
-    bitmap.close();
+  if (source.width < 100 || source.height < 100) {
+    source.close();
     return { ok: false, reason: "This photo is too small. Please select a clearer, larger image." };
   }
 
@@ -104,26 +160,26 @@ export async function validatePhoto(
     let ctx: OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D | null;
 
     if (typeof OffscreenCanvas !== "undefined") {
-      canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+      canvas = new OffscreenCanvas(source.width, source.height);
       ctx = (canvas as OffscreenCanvas).getContext("2d");
     } else {
       canvas = document.createElement("canvas");
-      (canvas as HTMLCanvasElement).width = bitmap.width;
-      (canvas as HTMLCanvasElement).height = bitmap.height;
+      (canvas as HTMLCanvasElement).width = source.width;
+      (canvas as HTMLCanvasElement).height = source.height;
       ctx = (canvas as HTMLCanvasElement).getContext("2d");
     }
 
     if (ctx) {
-      ctx.drawImage(bitmap, 0, 0);
-      const imageData = ctx.getImageData(0, 0, bitmap.width, bitmap.height);
+      source.drawTo(ctx);
+      const imageData = ctx.getImageData(0, 0, source.width, source.height);
       const data = imageData.data;
       let blankCount = 0;
       let totalSampled = 0;
       const stride = 20;
 
-      for (let y = 0; y < bitmap.height; y += stride) {
-        for (let x = 0; x < bitmap.width; x += stride) {
-          const i = (y * bitmap.width + x) * 4;
+      for (let y = 0; y < source.height; y += stride) {
+        for (let x = 0; x < source.width; x += stride) {
+          const i = (y * source.width + x) * 4;
           const r = data[i];
           const g = data[i + 1];
           const b = data[i + 2];
@@ -135,7 +191,7 @@ export async function validatePhoto(
       }
 
       if (totalSampled > 0 && blankCount / totalSampled >= 0.95) {
-        bitmap.close();
+        source.close();
         return { ok: false, reason: "This photo appears to be blank. Please take or select a photo that shows the damage." };
       }
     }
@@ -143,8 +199,8 @@ export async function validatePhoto(
     // Non-critical — if pixel sampling fails, let the photo through
   }
 
-  const { width, height } = bitmap;
-  bitmap.close();
+  const { width, height } = source;
+  source.close();
 
   // C13 — duplicate check
   const incomingKey = compositeKey(file);

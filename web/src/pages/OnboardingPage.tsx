@@ -139,7 +139,7 @@ function CountryModal({
             placeholder={t('settings.search_countries')}
             value={search}
             onChange={(e) => onSearch(e.target.value)}
-            autoFocus
+            // M3: no autoFocus — iOS keyboard pops open before modal transition, shifting the viewport
           />
         </div>
         <div style={s.countryList}>

@@ -1,6 +1,8 @@
 // Generates and persists a Web Session ID in the format CR-WEB-[15 alphanumeric chars].
 // Must be the very first module executed in main.tsx.
 
+import { generateUUID } from "./uuid";
+
 declare global {
   interface Window {
     __crWebSessionId?: string;
@@ -8,7 +10,7 @@ declare global {
 }
 
 function generateId(): string {
-  const alphanum = crypto.randomUUID().replace(/-/g, "").slice(0, 15);
+  const alphanum = generateUUID().replace(/-/g, "").slice(0, 15);
   return `CR-WEB-${alphanum}`;
 }
 

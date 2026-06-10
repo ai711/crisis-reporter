@@ -241,7 +241,10 @@ const s: Record<string, React.CSSProperties> = {
     maxWidth: 480,
     background: "#fff",
     borderRadius: "20px 20px 0 0",
-    padding: "12px 24px 40px",
+    // H3: top/side padding fixed; bottom uses env(safe-area-inset-bottom) so
+    // content clears the iPhone home indicator.  40px is the non-notch floor.
+    padding: "12px 24px 0",
+    paddingBottom: "max(40px, env(safe-area-inset-bottom, 40px))" as React.CSSProperties["paddingBottom"],
     zIndex: 8001,
     display: "flex",
     flexDirection: "column",

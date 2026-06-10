@@ -52,6 +52,7 @@ export default function SideMenu({ open, onClose }: SideMenuProps) {
   const [profile, setProfile] = useState<ReporterProfile | null>(null);
   const [canInstall, setCanInstall] = useState(false);
   const installPromptRef = useRef<BeforeInstallPromptEvent | null>(null);
+  const [canInstallIOS, setCanInstallIOS] = useState(false);
   const [hoveredRoute, setHoveredRoute] = useState<string | null>(null);
 
   const MENU_LABEL_KEYS: Record<string, string> = {
@@ -82,6 +83,23 @@ export default function SideMenu({ open, onClose }: SideMenuProps) {
     return () => { window.removeEventListener("beforeinstallprompt", handler); };
   }, []);
 
+  // ── iOS install detection ─────────────────────────────────────────────────
+  useEffect(() => {
+    const ua = navigator.userAgent;
+    // L4: navigator.platform is deprecated; fall back to feature sniffing for
+    // iPadOS 13+ which reports "MacIntel" but has maxTouchPoints > 1.
+    // Also check the more robust navigator.maxTouchPoints directly.
+    const isIOS =
+      /iphone|ipad|ipod/i.test(ua) ||
+      (/Macintosh/i.test(ua) && navigator.maxTouchPoints > 1);
+    const isStandalone =
+      window.matchMedia("(display-mode: standalone)").matches ||
+      (window.navigator as unknown as { standalone?: boolean }).standalone === true;
+    if (isIOS && !isStandalone) setCanInstallIOS(true);
+    // Hide button once installed
+    window.addEventListener("appinstalled", () => setCanInstallIOS(false));
+  }, []);
+
   async function handleInstall() {
     if (!installPromptRef.current) return;
     await installPromptRef.current.prompt();
@@ -91,6 +109,11 @@ export default function SideMenu({ open, onClose }: SideMenuProps) {
       setCanInstall(false);
     }
     onClose();
+  }
+
+  function handleIOSInstall() {
+    onClose();
+    window.dispatchEvent(new CustomEvent("cr:show-ios-install"));
   }
 
   const fetchProfile = useCallback(() => {
@@ -290,11 +313,42 @@ export default function SideMenu({ open, onClose }: SideMenuProps) {
         {/* Divider */}
         <div style={{ height: 1, background: "rgba(193,199,210,0.3)", flexShrink: 0, margin: "8px 0 0" }} />
 
-        {/* PWA Install button */}
+        {/* PWA Install button — Chrome / Android */}
         {canInstall && (
           <div style={{ padding: "12px 16px 4px", flexShrink: 0 }}>
             <button
               onClick={handleInstall}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+                width: "100%",
+                padding: "12px 16px",
+                background: "rgba(4,104,177,0.07)",
+                border: `1.5px solid ${BLUE}`,
+                borderRadius: 12,
+                cursor: "pointer",
+                textAlign: "left",
+              }}
+            >
+              <span className="material-symbols-outlined" style={{ color: BLUE, fontSize: 20 }}>install_mobile</span>
+              <div>
+                <p style={{ fontSize: 13, color: BLUE, fontWeight: 700, margin: 0, lineHeight: 1.3 }}>
+                  {t("sidemenu.install_app")}
+                </p>
+                <p style={{ fontSize: 11, color: "#4a6fa5", margin: 0, lineHeight: 1.3 }}>
+                  {t("sidemenu.add_to_home_screen")}
+                </p>
+              </div>
+            </button>
+          </div>
+        )}
+
+        {/* PWA Install button — iOS / Safari */}
+        {canInstallIOS && (
+          <div style={{ padding: "12px 16px 4px", flexShrink: 0 }}>
+            <button
+              onClick={handleIOSInstall}
               style={{
                 display: "flex",
                 alignItems: "center",

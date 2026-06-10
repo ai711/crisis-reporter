@@ -470,6 +470,17 @@
     "add_to_home_screen": "Add to home screen",
     "version": "Crisis Reporter v1.0"
   },
+  "ios_install": {
+    "title": "Install Crisis Reporter",
+    "body": "Add this app to your home screen for the best experience — works offline, no app store required.",
+    "step1_text": "Tap the Share button",
+    "step1_sub": "at the bottom of your Safari browser",
+    "step2_text": "Select \"Add to Home Screen\"",
+    "step2_sub": "scroll down in the share menu if needed",
+    "step3_text": "Tap \"Add\" to confirm",
+    "step3_sub": "Crisis Reporter will appear on your home screen",
+    "dismiss": "Maybe later"
+  },
   "about": {
     "title": "About Crisis Reporter",
     "powered_by": "Powered by UNDP",

@@ -20,10 +20,6 @@ type SaveStatus = "idle" | "success" | "error";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function isMobileBrowser(): boolean {
-  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-}
-
 function calcCompletion(
   firstName: string,
   lastName: string,
@@ -299,11 +295,12 @@ export default function ProfilePage() {
           <button style={s.editPhotoBtn} onClick={() => photoInputRef.current?.click()}>
             {displayPhoto ? t("profile.edit_photo") : t("profile.add_photo")}
           </button>
+          {/* M6: no capture= attribute here — letting the OS media picker decide avoids
+              locking iOS Safari into camera-only mode (which hides the gallery option) */}
           <input
             ref={photoInputRef}
             type="file"
             accept="image/jpeg,image/png,image/webp"
-            capture={isMobileBrowser() ? "environment" : undefined}
             style={{ display: "none" }}
             onChange={handlePhotoSelect}
           />

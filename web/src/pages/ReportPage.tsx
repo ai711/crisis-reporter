@@ -13,7 +13,8 @@ import { compressPhoto } from "../utils/photoCompression";
 import { extractExif } from "../utils/exifExtraction";
 import SubmissionStepper, { type StepperStep } from "../components/SubmissionStepper";
 import type { DamageLevel, QueuedPhoto } from "../types";
-import { addToQueue } from "../utils/offlineQueue";
+import { addToQueue, isIndexedDBAvailable } from "../utils/offlineQueue";
+import { generateUUID } from "../utils/uuid";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 const MAPTILER_KEY = import.meta.env.VITE_MAPTILER_KEY || "";
@@ -38,7 +39,8 @@ const EMPTY_FC = { type: "FeatureCollection" as const, features: [] as never[] }
 function isMobileBrowser(): boolean {
   return (
     /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
-    (navigator.maxTouchPoints > 1 && /MacIntel/.test(navigator.platform))
+    // L4: navigator.platform is deprecated; iPadOS 13+ reports "Macintosh" UA with touch points
+    (navigator.maxTouchPoints > 1 && /Macintosh/i.test(navigator.userAgent))
   );
 }
 
@@ -376,7 +378,7 @@ export default function ReportPage() {
 
   // F38 — local temp report ID generated at mount; refreshed on each new submission
   const [localReportId, setLocalReportId] = useState<string>(
-    () => `CR-WEB-TMP-${crypto.randomUUID()}`
+    () => `CR-WEB-TMP-${generateUUID()}`
   );
 
   // Building footprint source — fetched once from public settings, cached for session
@@ -399,6 +401,8 @@ export default function ReportPage() {
   // Draft restore banner state
   const [draftPrompt, setDraftPrompt] = useState<"idle" | "showing" | "dismissed">("idle");
   const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // M2: pagehide (iOS Safari) draft-save — holds a closure over the latest state
+  const saveDraftNowRef = useRef<() => void>(() => {});
 
   // Refs
   const isSubmittedRef = useRef(false);
@@ -507,11 +511,14 @@ export default function ReportPage() {
         // C3 — Fit to reporter's country bounding box; silent fallback to world view
         const cc = countryCode || localStorage.getItem("cr_country") || "";
         if (cc && MAPTILER_KEY) {
+          // M1: AbortSignal.timeout() not available on iOS < 16 — use AbortController
+          const bboxCtrl = new AbortController();
+          const bboxTid = window.setTimeout(() => bboxCtrl.abort(), 5000);
           fetch(
             `https://api.maptiler.com/geocoding/${encodeURIComponent(cc)}.json?key=${MAPTILER_KEY}&types=country`,
-            { signal: AbortSignal.timeout(5000) }
+            { signal: bboxCtrl.signal }
           )
-            .then((r) => (r.ok ? r.json() : null))
+            .then((r) => { window.clearTimeout(bboxTid); return r.ok ? r.json() : null; })
             .then((data: { features?: Array<{ bbox?: number[]; center?: [number, number] }> } | null) => {
               const feature = data?.features?.[0];
               if (!feature) return;
@@ -525,7 +532,7 @@ export default function ReportPage() {
                 mapInstance.flyTo({ center: feature.center, zoom: 6, duration: 800 });
               }
             })
-            .catch(() => { /* silent — map stays at world view */ });
+            .catch(() => { window.clearTimeout(bboxTid); /* silent — map stays at world view */ });
         }
       }
 
@@ -879,17 +886,46 @@ export default function ReportPage() {
     }
   }, [cameraActive, cameraStream]);
 
+  // M2: Keep saveDraftNowRef.current pointing at a fresh closure over the latest state.
+  // pagehide (fired by iOS Safari on navigation away) calls this for an immediate save.
+  useEffect(() => {
+    saveDraftNowRef.current = () => {
+      if (isSubmittedRef.current) return;
+      try {
+        localStorage.setItem(DRAFT_KEY, JSON.stringify({
+          savedAt: new Date().toISOString(),
+          step, damageQuestion, damageLevel,
+          infrastructureTypes, infrastructureOther, infrastructureName,
+          disasterType, debrisBlocking, electricityCondition,
+          healthServicesCondition, pressingNeeds, pressingNeedsOther,
+          additionalAnswers,
+          locationAddress, locationLandmark, locationBuildingName, locationNote,
+          gpsLatitude, gpsLongitude,
+          selectedBuildingId, selectedBuildingName,
+          buildingCentroidLat, buildingCentroidLng,
+          pinDropCoords, locationEntryMethod,
+        }));
+      } catch { /* localStorage full or unavailable */ }
+    };
+  }); // no deps — runs every render so the closure is always fresh
+
   // beforeunload fires on browser back, tab close, URL change, and external link clicks.
-  // It does NOT fire on React router navigate() calls — those are client-side.
-  // The App.tsx route guard handles in-app navigation guards separately if needed.
+  // pagehide is the iOS Safari equivalent — beforeunload is unreliable there.
+  // Neither fires on React router navigate() calls — those are client-side.
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (isSubmittedRef.current) return;
       e.preventDefault();
       e.returnValue = ""; // Required for Chrome — triggers the browser's generic prompt
     };
+    // M2: pagehide fires reliably on iOS Safari; save draft immediately from the ref
+    const handlePageHide = () => { saveDraftNowRef.current(); };
     window.addEventListener("beforeunload", handleBeforeUnload);
-    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+    window.addEventListener("pagehide", handlePageHide);
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      window.removeEventListener("pagehide", handlePageHide);
+    };
   }, []);
 
   // ── Draft auto-save ──────────────────────────────────────────────────────────
@@ -1208,7 +1244,7 @@ export default function ReportPage() {
     setShowAnswerPrompt(false);
     setEditingFromReview(false);
     setAdditionalAnswers({});
-    setLocalReportId(`CR-WEB-TMP-${crypto.randomUUID()}`);
+    setLocalReportId(`CR-WEB-TMP-${generateUUID()}`);
     setSubmissionSubmittedAt("");
     setReviewPhotoIndex(null);
     setReviewPhotoError("");
@@ -1387,15 +1423,20 @@ export default function ReportPage() {
     setPreparingPhotos(false);
 
     // E32 — Active probe before transmission: navigator.onLine is unreliable (true behind captive portals).
+    // M1: AbortSignal.timeout() is iOS 16+ only — use AbortController for wider compatibility.
     const isCurrentlyOnline = await (async () => {
+      const healthCtrl = new AbortController();
+      const healthTid = window.setTimeout(() => healthCtrl.abort(), 5000);
       try {
         const r = await fetch(`${API_URL}/api/health`, {
           method: "GET",
           cache: "no-store",
-          signal: AbortSignal.timeout(5000),
+          signal: healthCtrl.signal,
         });
+        window.clearTimeout(healthTid);
         return r.ok;
       } catch {
+        window.clearTimeout(healthTid);
         return false;
       }
     })();
@@ -1487,6 +1528,17 @@ export default function ReportPage() {
 
     // Offline path — queue the report and exit early before any network call
     if (!isCurrentlyOnline) {
+      // M4: Safari private mode enforces a 0-byte IndexedDB quota — check before writing
+      const idbOk = await isIndexedDBAvailable();
+      if (!idbOk) {
+        setError(
+          "Offline storage is unavailable. This can happen in private/incognito browsing mode. " +
+          "Please open Crisis Reporter in a regular browser window to submit your report offline."
+        );
+        setSubmitError("server_error");
+        setSubmitting(false);
+        return;
+      }
       try {
         const queuedPhotos: QueuedPhoto[] = compressedPhotos.map((file, i) => ({
           blob: file,
@@ -3510,7 +3562,7 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 0,
     border: "none",
     borderBottom: "2px solid #0468B1",
-    fontSize: 15,
+    fontSize: 16, // H1: must be ≥16px to prevent iOS Safari auto-zoom on focus
     outline: "none",
     background: "transparent",
     boxSizing: "border-box" as const,
@@ -3585,7 +3637,7 @@ const styles: Record<string, React.CSSProperties> = {
     padding: "12px 16px",
     borderRadius: 8,
     border: "1px solid #e0e0e0",
-    fontSize: 15,
+    fontSize: 16, // H1: must be ≥16px to prevent iOS Safari auto-zoom on focus
     outline: "none",
     background: "#fff",
     boxSizing: "border-box" as const,

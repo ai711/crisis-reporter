@@ -9,6 +9,7 @@ import api, { tokenStorage } from "../services/api";
 import CrisisTypeModal from "../components/CrisisTypeModal";
 import { loadLanguagePackageFromCache } from "../i18n";
 import { getPendingItems } from "../utils/offlineQueue";
+import { generateUUID } from "../utils/uuid";
 import type { QueuedReport } from "../types";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
@@ -155,7 +156,7 @@ export default function HomePage() {
         localStorage.setItem("cr_reporter_id", res.data.reporter_id);
       }
     } catch {
-      assignedId = `local_${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}`;
+      assignedId = `local_${generateUUID().replace(/-/g, "").slice(0, 12)}`;
     }
 
     // Only persist real backend-assigned IDs to localStorage.

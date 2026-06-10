@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import SideMenu from "./SideMenu";
+import IOSInstallBanner from "./IOSInstallBanner";
 
 const TAB_ROUTES = ["/", "/map", "/my-reports"];
 
@@ -18,6 +19,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="app-container">
       <SideMenu open={menuOpen} onClose={() => setMenuOpen(false)} />
+      <IOSInstallBanner />
 
       {isTabRoute && (
         <header className="page-header">
@@ -43,7 +45,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           display: "flex",
           flexDirection: "column",
           ...(isMapPage ? { overflow: "hidden" } : {}),
-          ...(isTabRoute && !isMapPage ? { paddingBottom: 80 } : {}),
+          // H3: account for bottom nav height (64px) + iPhone home-bar safe area
+          ...(isTabRoute && !isMapPage ? { paddingBottom: "max(80px, calc(64px + env(safe-area-inset-bottom, 0px)))" } : {}),
         }}
       >
         {children}
