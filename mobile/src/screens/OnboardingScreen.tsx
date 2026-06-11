@@ -57,7 +57,9 @@ const UN_LANGUAGES = [
 
 const UN_LANG_CODES = ["ar", "zh", "en", "fr", "ru", "es"];
 
-const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
+const { width: _screenWidthRaw, height: _screenHeightRaw } = Dimensions.get("window");
+const screenWidth = _screenWidthRaw || 375;
+const screenHeight = _screenHeightRaw || 667;
 const scale = (size: number) => Math.round((screenWidth / 375) * size);
 const H_PAD = screenWidth * 0.06;
 

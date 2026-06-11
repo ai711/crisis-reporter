@@ -1,7 +1,10 @@
-import { useEffect } from "react";
+import { useState, useEffect } from "react";
+import { I18nManager } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 // Background sync — must be imported before any React component so the task
 // definition (TaskManager.defineTask) runs at module scope.
 import { registerBackgroundSync } from "./src/utils/backgroundSync";
+import ErrorBoundary from "./src/components/ErrorBoundary";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -91,11 +94,26 @@ function Navigation() {
 }
 
 export default function App() {
+  const [rtlReady, setRtlReady] = useState(false);
+
+  useEffect(() => {
+    // Apply RTL direction before the first screen renders so Arabic users
+    // see correct mirrored layout from the very first frame.
+    AsyncStorage.getItem("cr_language")
+      .then((lang) => { I18nManager.forceRTL(lang === "ar"); })
+      .catch(() => {})
+      .finally(() => setRtlReady(true));
+  }, []);
+
+  if (!rtlReady) return null;
+
   return (
-    <SafeAreaProvider>
-      <QueryClientProvider client={queryClient}>
-        <Navigation />
-      </QueryClientProvider>
-    </SafeAreaProvider>
+    <ErrorBoundary>
+      <SafeAreaProvider>
+        <QueryClientProvider client={queryClient}>
+          <Navigation />
+        </QueryClientProvider>
+      </SafeAreaProvider>
+    </ErrorBoundary>
   );
 }

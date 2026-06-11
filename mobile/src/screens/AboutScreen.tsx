@@ -7,7 +7,8 @@ import { useNavigation } from '@react-navigation/native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 
-const { width: screenWidth } = Dimensions.get('window');
+const { width: _screenWidthRaw } = Dimensions.get('window');
+const screenWidth = _screenWidthRaw || 375;
 const scale = (size: number) => Math.round(screenWidth / 375 * size);
 
 export default function AboutScreen() {

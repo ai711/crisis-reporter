@@ -9,6 +9,7 @@ export const API_BASE = BASE_URL;
 const api = axios.create({
   baseURL: BASE_URL,
   headers: { "Content-Type": "application/json" },
+  timeout: 20000,
 });
 
 // ── Token storage — SecureStore for native security ───────────────────────────

@@ -39,7 +39,8 @@ const MAPTILER_KEY = process.env.EXPO_PUBLIC_MAPTILER_KEY ?? "";
 const MAP_STYLE_URL = `https://api.maptiler.com/maps/dataviz-light/style.json?key=${MAPTILER_KEY}`;
 const ANSWERS_KEY = 'cr_draft_answers';
 
-const { width: screenWidth } = Dimensions.get('window');
+const { width: _screenWidthRaw } = Dimensions.get('window');
+const screenWidth = _screenWidthRaw || 375;
 const scale = (size: number) => Math.round(screenWidth / 375 * size);
 
 // ── Overpass types ─────────────────────────────────────────────────────────────
@@ -90,10 +91,12 @@ function buildBuildingsFC(data: OverpassResponse): GeoJSON.FeatureCollection {
 }
 
 function computeCentroid(ring: number[][]): [number, number] {
+  if (!ring || ring.length === 0) return [0, 0];
   const pts =
     ring[0][0] === ring[ring.length - 1][0] && ring[0][1] === ring[ring.length - 1][1]
       ? ring.slice(0, -1)
       : ring;
+  if (pts.length === 0) return [0, 0];
   const lng = pts.reduce((s, p) => s + p[0], 0) / pts.length;
   const lat = pts.reduce((s, p) => s + p[1], 0) / pts.length;
   return [lng, lat];
@@ -105,15 +108,20 @@ async function fetchBuildingsForBounds(
   const query =
     `[out:json][timeout:25][bbox:${south.toFixed(6)},${west.toFixed(6)},${north.toFixed(6)},${east.toFixed(6)}];` +
     `(way["building"];relation["building"]["type"="multipolygon"];);out body;>;out skel qt;`;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 30000);
   try {
     const res = await fetch("https://overpass-api.de/api/interpreter", {
       method: "POST",
       body: new URLSearchParams({ data: query }),
+      signal: controller.signal,
     });
+    clearTimeout(timeoutId);
     if (!res.ok) return null;
     const data: OverpassResponse = await res.json();
     return buildBuildingsFC(data);
   } catch {
+    clearTimeout(timeoutId);
     return null;
   }
 }
@@ -394,6 +402,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
   const cameraRef = useRef<CameraRef | null>(null);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const buildingTappedRef = useRef(false);
+  const isMountedRef = useRef(true);
   // Stores the local_id of the most recently queued offline report so the delete
   // and retry handlers can reference the specific queue entry.
   const queuedLocalIdRef = useRef<string | null>(null);
@@ -463,9 +472,11 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
     checkAndSyncQuestions();
   }, []);
 
-  // Cleanup debounce timer on unmount
+  // Cleanup debounce timer on unmount; mark component as unmounted
   useEffect(() => {
+    isMountedRef.current = true;
     return () => {
+      isMountedRef.current = false;
       if (debounceTimer.current) clearTimeout(debounceTimer.current);
     };
   }, []);
@@ -731,12 +742,13 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
     const { zoom, bounds } = event.nativeEvent;
     setMapZoom(zoom);
     if (zoom < 14) return;
+    if (!bounds || bounds.length < 4) return;
 
     const [west, south, east, north] = bounds;
     if (debounceTimer.current) clearTimeout(debounceTimer.current);
     debounceTimer.current = setTimeout(async () => {
       const fc = await fetchBuildingsForBounds(west, south, east, north);
-      if (fc) setBuildingsFC(fc);
+      if (fc && isMountedRef.current) setBuildingsFC(fc);
     }, 1000);
   };
 
@@ -787,8 +799,11 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
 
     const f = features[0];
     const props = f.properties as { osm_id: number; name: string; building: string };
-    const geom = f.geometry as GeoJSON.Polygon;
-    const ring = geom.coordinates[0];
+    const geom = f.geometry as GeoJSON.Geometry;
+    // Only handle Polygon geometry — MultiPolygon buildings from Overpass are skipped
+    if (!geom || geom.type !== 'Polygon') return;
+    const ring = (geom as GeoJSON.Polygon).coordinates[0];
+    if (!ring || ring.length < 3) return;
     const [centLng, centLat] = computeCentroid(ring);
 
     setPendingBuilding({
@@ -838,7 +853,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
         setManualExpanded(true);
         return;
       }
-      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
       const lat = loc.coords.latitude;
       const lng = loc.coords.longitude;
       setGpsCoords({ lat, lng });
@@ -922,7 +937,12 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
     }
 
     // --- STEP 3: Format conversion if needed ---
+    // width/height are declared here so the conversion result can populate them,
+    // avoiding a separate manipulateAsync call just for dimensions (OOM risk on
+    // low-RAM devices when multiple large temp files coexist).
     let formatConverted = false;
+    let width = 0;
+    let height = 0;
     if (needsConversion) {
       try {
         const converted = await ImageManipulator.manipulateAsync(
@@ -931,6 +951,8 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
           { compress: 1, format: ImageManipulator.SaveFormat.JPEG }
         );
         workingUri = converted.uri;
+        width = converted.width;
+        height = converted.height;
         formatConverted = true;
       } catch {
         Alert.alert('Cannot Use This Photo', t('photoScreen.validationFormat'));
@@ -938,15 +960,15 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
       }
     }
 
-    // --- STEP 4: Get image dimensions ---
-    let width = 0;
-    let height = 0;
-    try {
-      const imageInfo = await ImageManipulator.manipulateAsync(workingUri, []);
-      width = imageInfo.width;
-      height = imageInfo.height;
-    } catch {
-      // Cannot get dimensions — continue with 0,0
+    // --- STEP 4: Get image dimensions (skipped when conversion already returned them) ---
+    if (width === 0 || height === 0) {
+      try {
+        const imageInfo = await ImageManipulator.manipulateAsync(workingUri, []);
+        width = imageInfo.width;
+        height = imageInfo.height;
+      } catch {
+        // Cannot get dimensions — continue with 0,0
+      }
     }
 
     if (width > 0 && height > 0 && (width < 100 || height < 100)) {
@@ -1289,7 +1311,8 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
       const locs: Array<{ lat: number; lng: number; crisis_id: string; timestamp: number }> =
         raw ? JSON.parse(raw) : [];
       locs.push({ lat: gpsCoords.lat, lng: gpsCoords.lng, crisis_id: crisisId, timestamp: Date.now() });
-      await AsyncStorage.setItem("cr_submitted_locations", JSON.stringify(locs));
+      // Keep the last 200 entries — older ones have already passed the 7-day duplicate window
+      await AsyncStorage.setItem("cr_submitted_locations", JSON.stringify(locs.slice(-200)));
     } catch { /* non-critical */ }
   };
 
@@ -1487,7 +1510,11 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
           formData.append("report_id", reportId);
           formData.append("display_order", String(i));
           formData.append("file", { uri: photos[i].uri, name: `photo_${i}.jpg`, type: photos[i].mimeType } as any);
-          await api.post("/api/photos", formData, { headers: { "Content-Type": "multipart/form-data" } });
+          // 120 s per photo — generous for 2G/EDGE field networks; no global Axios timeout
+          await api.post("/api/photos", formData, {
+            headers: { "Content-Type": "multipart/form-data" },
+            timeout: 120000,
+          });
         }
 
         await saveSubmittedLocation();

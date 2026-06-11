@@ -9,15 +9,17 @@ Four router prefixes:
 """
 
 import asyncio
+import json
 import logging
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import httpx
+import redis.asyncio as _redis_asyncio
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from pydantic import BaseModel, field_validator
-from sqlalchemy import select, func, or_
+from sqlalchemy import select, func, or_, update as sql_update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -49,8 +51,10 @@ VALID_CATEGORIES = {
 
 TRANSLATION_BATCH_SIZE = 5  # change here only to tune concurrency
 
-# Tracks in-progress auto-translation per language code; cleared on completion.
-_translation_progress: dict[str, dict] = {}
+# Redis key prefix for batch progress. Stored in Redis (not in-memory) so progress
+# survives multi-worker deployments and is visible across processes.
+_PROGRESS_KEY_PREFIX = "translation_batch_progress"
+_PROGRESS_TTL = 7200  # 2 hours — auto-expires if the background task crashes
 
 # ── Four routers ───────────────────────────────────────────────────────────────
 
@@ -636,13 +640,17 @@ async def publish_language_package(
     for prev in prev_result.scalars().all():
         prev.status = "archived"
 
-    # Generate next version number
-    count_result = await db.execute(
-        select(func.count(LanguagePackage.id)).where(
-            LanguagePackage.language_code == language_code
-        )
+    # Generate next version number using MAX to survive language delete/re-add cycles.
+    # COUNT would reset to 0 if the language record were ever deleted and recreated.
+    versions_result = await db.execute(
+        select(LanguagePackage.version).where(LanguagePackage.language_code == language_code)
     )
-    next_version = f"1.{(count_result.scalar() or 0)}"
+    existing_minors = [
+        int(v.split(".")[1])
+        for (v,) in versions_result.all()
+        if "." in v and v.split(".")[1].isdigit()
+    ]
+    next_version = f"1.{(max(existing_minors) + 1) if existing_minors else 0}"
 
     # Total strings in this published package = ALL active keys.
     # The gate above guarantees every active key has either an approved or an
@@ -791,19 +799,19 @@ async def ensure_string_keys_synced(db: AsyncSession) -> dict:
                 ))
                 created += 1
 
-    # Retire translations whose StringKey is now inactive
-    retired_result = await db.execute(
-        select(Translation)
-        .join(StringKey, StringKey.id == Translation.string_key_id)
+    # Retire translations whose StringKey is now inactive — bulk UPDATE for efficiency
+    retire_result = await db.execute(
+        sql_update(Translation)
         .where(
-            StringKey.is_active == False,
+            Translation.string_key_id.in_(
+                select(StringKey.id).where(StringKey.is_active == False)
+            ),
             Translation.status != "retired",
         )
+        .values(status="retired")
+        .execution_options(synchronize_session=False)
     )
-    retired_rows = retired_result.scalars().all()
-    for t in retired_rows:
-        t.status = "retired"
-    retired = len(retired_rows)
+    retired = retire_result.rowcount
 
     await db.commit()
     log.info("ensure_string_keys_synced: created=%d retired=%d", created, retired)
@@ -1041,6 +1049,7 @@ class RejectResponse(BaseModel):
 
 @translations_router.get("/queue-status")
 async def get_queue_status(
+    request: Request,
     db: AsyncSession = Depends(get_db),
     _=Depends(get_current_dashboard_user),
 ) -> dict:
@@ -1068,9 +1077,11 @@ async def get_queue_status(
         elif st == "failed":
             lang_data[lang_code]["failed_count"] += count
 
-    # Get language names
-    lang_result = await db.execute(select(Language))
-    lang_name_map = {l.code: l.name for l in lang_result.scalars().all()}
+    # Only load language names when there is something to display
+    lang_name_map: dict[str, str] = {}
+    if lang_data:
+        lang_result = await db.execute(select(Language))
+        lang_name_map = {l.code: l.name for l in lang_result.scalars().all()}
 
     by_language = [
         {
@@ -1083,11 +1094,23 @@ async def get_queue_status(
     ]
     total_pending = sum(d["draft_count"] + d["failed_count"] for d in by_language)
 
+    # Read batch progress from Redis — works across multiple workers
+    batch_progress = None
+    try:
+        redis = request.app.state.redis
+        keys = await redis.keys(f"{_PROGRESS_KEY_PREFIX}:*")
+        if keys:
+            raw = await redis.get(keys[0])
+            if raw:
+                batch_progress = json.loads(raw)
+    except Exception as exc:
+        log.warning("Failed to read batch_progress from Redis: %s", exc)
+
     return {
         "has_pending": total_pending > 0,
         "total_pending": total_pending,
         "by_language": by_language,
-        "batch_progress": next(iter(_translation_progress.values()), None),
+        "batch_progress": batch_progress,
     }
 
 
@@ -1250,7 +1273,7 @@ async def approve_all_translations(
     # does not roll back the approvals
     for t in drafts:
         t.status = "approved"
-        t.reviewed_by = str(current_user.id)
+        t.reviewed_by = current_user.full_name
 
     await db.commit()
 
@@ -1338,127 +1361,172 @@ async def list_translations(
 
 
 async def _run_auto_translation(language_code: str) -> None:
-    async with AsyncSessionLocal() as db:
-        try:
-            missing_trans_result = await db.execute(
-                select(Translation).where(
-                    Translation.language_code == language_code,
-                    Translation.status == "missing",
+    progress_key = f"{_PROGRESS_KEY_PREFIX}:{language_code}"
+    redis_client = _redis_asyncio.from_url(settings.REDIS_URL, decode_responses=True)
+    try:
+        async with AsyncSessionLocal() as db:
+            try:
+                # Only translate strings for ACTIVE keys — retired/inactive keys must be excluded
+                missing_trans_result = await db.execute(
+                    select(Translation)
+                    .join(StringKey, StringKey.id == Translation.string_key_id)
+                    .where(
+                        Translation.language_code == language_code,
+                        Translation.status == "missing",
+                        StringKey.is_active == True,
+                    )
                 )
-            )
-            missing_translations = missing_trans_result.scalars().all()
-            if not missing_translations:
-                return
+                missing_translations = missing_trans_result.scalars().all()
+                if not missing_translations:
+                    await redis_client.delete(progress_key)
+                    return
 
-            sk_ids = [t.string_key_id for t in missing_translations]
-            sk_result = await db.execute(select(StringKey).where(StringKey.id.in_(sk_ids)))
-            sk_map = {sk.id: sk for sk in sk_result.scalars().all()}
+                sk_ids = [t.string_key_id for t in missing_translations]
+                sk_result = await db.execute(select(StringKey).where(StringKey.id.in_(sk_ids)))
+                sk_map = {sk.id: sk for sk in sk_result.scalars().all()}
 
-            trans_to_translate = [
-                (t, sk_map[t.string_key_id])
-                for t in missing_translations
-                if t.string_key_id in sk_map
-            ]
-            if not trans_to_translate:
-                return
+                trans_to_translate = [
+                    (t, sk_map[t.string_key_id])
+                    for t in missing_translations
+                    if t.string_key_id in sk_map
+                ]
+                if not trans_to_translate:
+                    await redis_client.delete(progress_key)
+                    return
 
-            total_keys = len(trans_to_translate)
-            translated = 0
-            failed = 0
-            errors: list[str] = []
+                total_keys = len(trans_to_translate)
+                translated = 0
+                failed = 0
+                errors: list[str] = []
 
-            batches = [
-                trans_to_translate[i:i + TRANSLATION_BATCH_SIZE]
-                for i in range(0, total_keys, TRANSLATION_BATCH_SIZE)
-            ]
+                batches = [
+                    trans_to_translate[i:i + TRANSLATION_BATCH_SIZE]
+                    for i in range(0, total_keys, TRANSLATION_BATCH_SIZE)
+                ]
 
-            # Exponential backoff delays for 429/403 responses (seconds).
-            # Concurrent requests flood public rate-limited APIs, so translations
-            # are processed one-at-a-time; batches exist only for DB commit cadence.
-            _BACKOFF = [5.0, 15.0, 45.0]
+                # Exponential backoff delays for 429/403 responses (seconds).
+                # Concurrent requests flood public rate-limited APIs, so translations
+                # are processed one-at-a-time; batches exist only for DB commit cadence.
+                _BACKOFF = [5.0, 15.0, 45.0]
 
-            async def _translate_single(key_id, key_name, english_text, target_lang) -> dict:
-                last_exc: Exception | None = None
-                for attempt in range(len(_BACKOFF) + 1):
-                    if attempt > 0:
-                        wait = _BACKOFF[attempt - 1]
-                        log.warning(
-                            "HTTP error translating %s (attempt %d/%d), retrying after %.0fs",
-                            key_name, attempt, len(_BACKOFF), wait,
-                        )
-                        await asyncio.sleep(wait)
+                async def _translate_single(translation_id, key_name, english_text, target_lang) -> dict:
+                    last_exc: Exception | None = None
+                    for attempt in range(len(_BACKOFF) + 1):
+                        if attempt > 0:
+                            wait = _BACKOFF[attempt - 1]
+                            log.warning(
+                                "HTTP error translating %s (attempt %d/%d), retrying after %.0fs",
+                                key_name, attempt, len(_BACKOFF), wait,
+                            )
+                            await asyncio.sleep(wait)
+                        try:
+                            t_text, svc = await translate_text(english_text, target_lang)
+                            if svc == "libretranslate":
+                                await asyncio.sleep(2.0)
+                            return {"translation_id": translation_id, "key_name": key_name, "translated_text": t_text, "service_used": svc, "error": None}
+                        except httpx.HTTPStatusError as exc:
+                            if exc.response.status_code in (429, 403):
+                                last_exc = exc
+                                continue
+                            return {"translation_id": translation_id, "key_name": key_name, "translated_text": None, "service_used": None, "error": str(exc)}
+                        except Exception as exc:
+                            return {"translation_id": translation_id, "key_name": key_name, "translated_text": None, "service_used": None, "error": str(exc)}
+                    return {"translation_id": translation_id, "key_name": key_name, "translated_text": None, "service_used": None, "error": str(last_exc)}
+
+                for batch_idx, batch in enumerate(batches):
+                    progress = {
+                        "completed": batch_idx * TRANSLATION_BATCH_SIZE,
+                        "total": total_keys,
+                        "current_batch": batch_idx + 1,
+                        "language_code": language_code,
+                    }
                     try:
-                        t_text, svc = await translate_text(english_text, target_lang)
-                        if svc == "libretranslate":
-                            await asyncio.sleep(2.0)
-                        return {"key_id": key_id, "key_name": key_name, "translated_text": t_text, "service_used": svc, "error": None}
-                    except httpx.HTTPStatusError as exc:
-                        if exc.response.status_code in (429, 403):
-                            last_exc = exc
-                            continue
-                        return {"key_id": key_id, "key_name": key_name, "translated_text": None, "service_used": None, "error": str(exc)}
+                        await redis_client.setex(progress_key, _PROGRESS_TTL, json.dumps(progress))
                     except Exception as exc:
-                        return {"key_id": key_id, "key_name": key_name, "translated_text": None, "service_used": None, "error": str(exc)}
-                return {"key_id": key_id, "key_name": key_name, "translated_text": None, "service_used": None, "error": str(last_exc)}
+                        log.warning("Failed to write batch_progress to Redis: %s", exc)
 
-            for batch_idx, batch in enumerate(batches):
-                _translation_progress[language_code] = {
-                    "completed": batch_idx * TRANSLATION_BATCH_SIZE,
-                    "total": total_keys,
-                    "current_batch": batch_idx + 1,
-                }
+                    trans_map_batch = {t.id: t for t, _ in batch}
 
-                trans_map_batch = {t.id: t for t, _ in batch}
+                    # Sequential — not concurrent — to avoid hammering public rate limits
+                    results = []
+                    for t, sk in batch:
+                        results.append(await _translate_single(t.id, sk.key, sk.english_text, language_code))
 
-                # Sequential — not concurrent — to avoid hammering public rate limits
-                results = []
-                for t, sk in batch:
-                    results.append(await _translate_single(t.id, sk.key, sk.english_text, language_code))
+                    for result in results:
+                        if result["error"]:
+                            failed += 1
+                            errors.append(f"{result['key_name']}: {result['error']}")
+                            log.warning("auto_translate failed for key %s: %s", result["key_name"], result["error"])
+                        else:
+                            t_obj = trans_map_batch.get(result["translation_id"])
+                            if t_obj is not None:
+                                t_obj.translated_text = result["translated_text"]
+                                t_obj.status = "draft"
+                                t_obj.translated_by = result["service_used"]
+                                translated += 1
+                                log.info("Translated key %s via %s", result["key_name"], result["service_used"])
 
-                for result in results:
-                    if result["error"]:
-                        failed += 1
-                        errors.append(f"{result['key_name']}: {result['error']}")
-                        log.warning("auto_translate failed for key %s: %s", result["key_name"], result["error"])
-                    else:
-                        t_obj = trans_map_batch.get(result["key_id"])
-                        if t_obj is not None:
-                            t_obj.translated_text = result["translated_text"]
-                            t_obj.status = "draft"
-                            t_obj.translated_by = result["service_used"]
-                            translated += 1
-                            log.info("Translated key %s via %s", result["key_name"], result["service_used"])
+                    await db.commit()
 
-                await db.commit()
+                try:
+                    await redis_client.delete(progress_key)
+                except Exception:
+                    pass
 
-            _translation_progress.pop(language_code, None)
-
-            if translated > 0:
-                await write_translation_audit(
-                    db,
-                    event_type="translation_auto_generated",
-                    lang_code=language_code,
-                    details={"translated": translated, "failed": failed},
-                    performed_by="auto",
-                    dashboard_user_id="",
-                )
-                await db.commit()
-        except Exception as exc:
-            _translation_progress.pop(language_code, None)
-            log.error("_run_auto_translation background task failed for %s: %s", language_code, exc)
+                if translated > 0:
+                    await write_translation_audit(
+                        db,
+                        event_type="translation_auto_generated",
+                        lang_code=language_code,
+                        details={"translated": translated, "failed": failed},
+                        performed_by="auto",
+                        dashboard_user_id="",
+                    )
+                    await db.commit()
+            except Exception as exc:
+                try:
+                    await redis_client.delete(progress_key)
+                except Exception:
+                    pass
+                log.error("_run_auto_translation background task failed for %s: %s", language_code, exc)
+    finally:
+        await redis_client.aclose()
 
 
 @translations_router.post("/auto-translate")
 async def auto_translate(
     body: AutoTranslateRequest,
+    request: Request,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user=Depends(require_admin),
 ) -> dict:
+    redis = request.app.state.redis
+    progress_key = f"{_PROGRESS_KEY_PREFIX}:{body.language_code}"
+
+    # Concurrency guard — reject if a run is already in progress for this language
+    try:
+        if await redis.exists(progress_key):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={
+                    "status": "already_running",
+                    "language_code": body.language_code,
+                    "message": "Auto-translation is already running for this language",
+                },
+            )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        log.warning("Failed to check Redis for running translation: %s", exc)
+
     missing_count_result = await db.execute(
-        select(func.count(Translation.id)).where(
+        select(func.count(Translation.id))
+        .join(StringKey, StringKey.id == Translation.string_key_id)
+        .where(
             Translation.language_code == body.language_code,
             Translation.status == "missing",
+            StringKey.is_active == True,
         )
     )
     missing_count = missing_count_result.scalar() or 0
@@ -1466,8 +1534,19 @@ async def auto_translate(
     if missing_count == 0:
         return {"status": "no_op", "language_code": body.language_code, "translated": 0, "skipped": 0, "failed": 0}
 
+    # Seed the progress key immediately so concurrent requests are rejected before
+    # the background task starts and so the frontend can start polling right away.
+    try:
+        await redis.setex(
+            progress_key,
+            _PROGRESS_TTL,
+            json.dumps({"completed": 0, "total": missing_count, "current_batch": 0, "language_code": body.language_code}),
+        )
+    except Exception as exc:
+        log.warning("Failed to seed progress key in Redis: %s", exc)
+
     background_tasks.add_task(_run_auto_translation, body.language_code)
-    return {"status": "translation_started", "language_code": body.language_code}
+    return {"status": "translation_started", "language_code": body.language_code, "missing_count": missing_count}
 
 
 @translations_router.patch(
@@ -1500,7 +1579,7 @@ async def approve_translation(
     sk = sk_result.scalar_one_or_none()
 
     translation.status = "approved"
-    translation.reviewed_by = str(current_user.id)
+    translation.reviewed_by = current_user.full_name
 
     await write_translation_audit(
         db,
@@ -1619,6 +1698,19 @@ async def update_translation(
     )
     sk = sk_result.scalar_one_or_none()
 
+    try:
+        await write_translation_audit(
+            db,
+            event_type="translation_updated",
+            lang_code=translation.language_code,
+            string_key=sk.key if sk else None,
+            performed_by=current_user.full_name,
+            dashboard_user_id=str(current_user.id),
+        )
+        await db.commit()
+    except Exception as exc:
+        log.warning("Failed to write translation_updated audit log: %s", exc)
+
     return TranslationOut(
         id=str(translation.id),
         string_key=sk.key if sk else "",
@@ -1680,6 +1772,19 @@ async def create_translation(
     await db.commit()
     await db.refresh(t)
 
+    try:
+        await write_translation_audit(
+            db,
+            event_type="translation_created",
+            lang_code=body.language_code,
+            string_key=sk.key,
+            performed_by=current_user.full_name,
+            dashboard_user_id=str(current_user.id),
+        )
+        await db.commit()
+    except Exception as exc:
+        log.warning("Failed to write translation_created audit log: %s", exc)
+
     return TranslationOut(
         id=str(t.id),
         string_key=sk.key,
@@ -1709,8 +1814,9 @@ class RegenerateAllDraftRequest(BaseModel):
 @translations_router.post("/regenerate-single", response_model=TranslationOut)
 async def regenerate_single_translation(
     body: RegenerateSingleRequest,
+    request: Request,
     db: AsyncSession = Depends(get_db),
-    _=Depends(get_current_dashboard_user),
+    current_user=Depends(get_current_dashboard_user),
 ) -> TranslationOut:
     """Retranslate a single draft translation using the translation service."""
     result = await db.execute(
@@ -1719,6 +1825,8 @@ async def regenerate_single_translation(
     translation = result.scalar_one_or_none()
     if not translation:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Translation not found")
+
+    await _assert_lock(request, translation.language_code, str(current_user.id))
 
     sk_result = await db.execute(
         select(StringKey).where(StringKey.id == translation.string_key_id)
@@ -1742,6 +1850,20 @@ async def regenerate_single_translation(
     await db.commit()
     await db.refresh(translation)
 
+    try:
+        await write_translation_audit(
+            db,
+            event_type="translation_regenerated",
+            lang_code=body.language_code,
+            string_key=sk.key,
+            details={"service_used": service_used},
+            performed_by=current_user.full_name,
+            dashboard_user_id=str(current_user.id),
+        )
+        await db.commit()
+    except Exception as exc:
+        log.warning("Failed to write translation_regenerated audit log: %s", exc)
+
     return TranslationOut(
         id=str(translation.id),
         string_key=sk.key,
@@ -1760,14 +1882,20 @@ async def regenerate_single_translation(
 @translations_router.post("/regenerate-all-draft")
 async def regenerate_all_draft_translations(
     body: RegenerateAllDraftRequest,
+    request: Request,
     db: AsyncSession = Depends(get_db),
-    _=Depends(get_current_dashboard_user),
+    current_user=Depends(require_admin),
 ) -> dict:
-    """Retranslate all draft translations for a language in batches."""
+    """Retranslate all draft translations for a language — sequential with retry."""
+    await _assert_lock(request, body.language_code, str(current_user.id))
+
     result = await db.execute(
-        select(Translation).where(
+        select(Translation)
+        .join(StringKey, StringKey.id == Translation.string_key_id)
+        .where(
             Translation.language_code == body.language_code,
             Translation.status == "draft",
+            StringKey.is_active == True,
         )
     )
     drafts = result.scalars().all()
@@ -1779,29 +1907,59 @@ async def regenerate_all_draft_translations(
     sk_result = await db.execute(select(StringKey).where(StringKey.id.in_(sk_ids)))
     sk_map = {sk.id: sk for sk in sk_result.scalars().all()}
 
+    _BACKOFF = [5.0, 15.0, 45.0]
     regenerated = 0
     batches = [
         drafts[i:i + TRANSLATION_BATCH_SIZE]
         for i in range(0, len(drafts), TRANSLATION_BATCH_SIZE)
     ]
 
-    async def _regen_single(t: Translation) -> bool:
-        sk = sk_map.get(t.string_key_id)
-        if not sk:
-            return False
-        try:
-            t_text, service_used = await translate_text(sk.english_text, body.language_code)
-            t.translated_text = t_text
-            t.translated_by = service_used
-            return True
-        except Exception as exc:
-            log.warning("regenerate_all_draft failed for key %s: %s", sk.key, exc)
-            return False
-
     for batch in batches:
-        results = await asyncio.gather(*[_regen_single(t) for t in batch])
-        regenerated += sum(1 for r in results if r)
+        for t in batch:
+            sk = sk_map.get(t.string_key_id)
+            if not sk:
+                continue
+            last_exc: Exception | None = None
+            for attempt in range(len(_BACKOFF) + 1):
+                if attempt > 0:
+                    wait = _BACKOFF[attempt - 1]
+                    log.warning(
+                        "HTTP error regenerating %s (attempt %d/%d), retrying after %.0fs",
+                        sk.key, attempt, len(_BACKOFF), wait,
+                    )
+                    await asyncio.sleep(wait)
+                try:
+                    t_text, service_used = await translate_text(sk.english_text, body.language_code)
+                    t.translated_text = t_text
+                    t.translated_by = service_used
+                    regenerated += 1
+                    break
+                except httpx.HTTPStatusError as exc:
+                    if exc.response.status_code in (429, 403):
+                        last_exc = exc
+                        continue
+                    log.warning("regenerate_all_draft HTTP error for key %s: %s", sk.key, exc)
+                    break
+                except Exception as exc:
+                    log.warning("regenerate_all_draft failed for key %s: %s", sk.key, exc)
+                    break
+            else:
+                if last_exc:
+                    log.warning("regenerate_all_draft exhausted retries for key %s: %s", sk.key, last_exc)
         await db.commit()
+
+    try:
+        await write_translation_audit(
+            db,
+            event_type="translations_bulk_regenerated",
+            lang_code=body.language_code,
+            details={"regenerated": regenerated, "total_drafts": len(drafts)},
+            performed_by=current_user.full_name,
+            dashboard_user_id=str(current_user.id),
+        )
+        await db.commit()
+    except Exception as exc:
+        log.warning("Failed to write translations_bulk_regenerated audit log: %s", exc)
 
     return {"regenerated_count": regenerated, "language_code": body.language_code}
 
@@ -1992,6 +2150,9 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
     ("settings.select_language",  "ui_settings", "Select Language"),
     ("settings.lang_load_error",  "ui_settings", "Could not load the language package. Please check your connection and try again."),
     ("settings.lang_cache_note",  "ui_settings", "Using saved language data. Some text may not be fully updated."),
+    ("settings.rtl_restart_title","ui_settings", "Restart Required"),
+    ("settings.rtl_restart_body", "ui_settings", "The app needs to restart to apply the new text direction."),
+    ("settings.rtl_restart_btn",  "ui_settings", "Restart Now"),
 
     # offline / connectivity
     ("offline.banner",  "ui_offline", "You are offline. Reports will be saved and sent when you reconnect."),

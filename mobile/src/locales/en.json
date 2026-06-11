@@ -74,7 +74,10 @@
     "reset_app": "/ Reset App",
     "select_country": "Select Country",
     "search_countries": "Search countries...",
-    "select_language": "Select Language"
+    "select_language": "Select Language",
+    "rtl_restart_title": "Restart Required",
+    "rtl_restart_body": "The app needs to restart to apply the new text direction.",
+    "rtl_restart_btn": "Restart Now"
   },
   "menu": {
     "report_incident": "Report an Incident",

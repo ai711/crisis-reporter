@@ -22,7 +22,8 @@ import type { QueuedReport } from '../types';
 import NetInfo from '@react-native-community/netinfo';
 
 // ── Scale ──────────────────────────────────────────────────────────────────────
-const { width: screenWidth } = Dimensions.get('window');
+const { width: _screenWidthRaw } = Dimensions.get('window');
+const screenWidth = _screenWidthRaw || 375;
 const scale = (size: number) => Math.round((screenWidth / 375) * size);
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -135,20 +136,21 @@ export default function MyReportsScreen() {
   const [loadingMore, setLoadingMore] = useState(false);
 
   const skeletonOpacity = useRef(new Animated.Value(0.4)).current;
+  const skeletonAnimRef = useRef<Animated.CompositeAnimation | null>(null);
 
   useEffect(() => {
-    const anim = Animated.loop(
-      Animated.sequence([
-        Animated.timing(skeletonOpacity, { toValue: 0.8, duration: 800, useNativeDriver: true }),
-        Animated.timing(skeletonOpacity, { toValue: 0.4, duration: 800, useNativeDriver: true }),
-      ])
-    );
     if (loading) {
-      anim.start();
+      skeletonAnimRef.current = Animated.loop(
+        Animated.sequence([
+          Animated.timing(skeletonOpacity, { toValue: 0.8, duration: 800, useNativeDriver: true }),
+          Animated.timing(skeletonOpacity, { toValue: 0.4, duration: 800, useNativeDriver: true }),
+        ])
+      );
+      skeletonAnimRef.current.start();
     } else {
-      anim.stop();
+      skeletonAnimRef.current?.stop();
     }
-    return () => anim.stop();
+    return () => skeletonAnimRef.current?.stop();
   }, [loading, skeletonOpacity]);
 
   // ── Load reporter ID from SecureStore ─────────────────────────────────────

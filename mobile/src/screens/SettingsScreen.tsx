@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView,
-  Modal, FlatList, TextInput, Alert, Dimensions, Linking,
+  Modal, FlatList, TextInput, Alert, Dimensions, Linking, I18nManager,
 } from "react-native";
+import * as Updates from "expo-updates";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -12,7 +13,8 @@ import { useAuthStore } from "../stores/authStore";
 import { logoutReporter } from "../services/auth";
 import api from "../services/api";
 
-const { width: screenWidth } = Dimensions.get("window");
+const { width: _screenWidthRaw } = Dimensions.get("window");
+const screenWidth = _screenWidthRaw || 375;
 const scale = (size: number) => Math.round((screenWidth / 375) * size);
 
 type Country = { code: string; name: string };
@@ -126,6 +128,17 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
     setLanguage(langCode);
     i18n.changeLanguage(langCode);
     await AsyncStorage.setItem("cr_language", langCode);
+
+    // RTL direction changes (switching to/from Arabic) require a full JS reload.
+    const needsRTLChange = (langCode === "ar") !== I18nManager.isRTL;
+    if (needsRTLChange) {
+      I18nManager.forceRTL(langCode === "ar");
+      Alert.alert(
+        t("settings.rtl_restart_title"),
+        t("settings.rtl_restart_body"),
+        [{ text: t("settings.rtl_restart_btn"), onPress: () => Updates.reloadAsync() }]
+      );
+    }
   };
 
   const handleLogout = async () => {

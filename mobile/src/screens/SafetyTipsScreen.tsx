@@ -19,7 +19,8 @@ import api from '../services/api';
 import { useAuthStore } from '../stores/authStore';
 import { enqueueProgress } from '../utils/progressQueue';
 
-const { width: screenWidth } = Dimensions.get('window');
+const { width: _screenWidthRaw } = Dimensions.get('window');
+const screenWidth = _screenWidthRaw || 375;
 const scale = (size: number) => Math.round((screenWidth / 375) * size);
 
 type ViewState =

@@ -27,7 +27,8 @@ import * as Location from 'expo-location';
 import { MaterialIcons } from '@expo/vector-icons';
 import api from '../services/api';
 
-const { width: screenWidth } = Dimensions.get('window');
+const { width: _screenWidthRaw } = Dimensions.get('window');
+const screenWidth = _screenWidthRaw || 375;
 const scale = (size: number) => Math.round((screenWidth / 375) * size);
 
 // Light grey streets style — matches web and report submission map

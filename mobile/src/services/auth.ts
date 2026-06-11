@@ -48,13 +48,12 @@ export async function getOrCreateDeviceId(): Promise<string> {
   const stored = await SecureStore.getItemAsync("cr_device_id");
   if (stored) return stored;
 
-  let deviceId: string;
-
-  if (Platform.OS === "android") {
-    deviceId = Application.getAndroidId() || `android_${Math.random().toString(36).slice(2)}`;
-  } else {
-    deviceId = `mobile_${Math.random().toString(36).slice(2)}`;
-  }
+  // Always generate in CR-DEV-{random} format to match initDeviceId.
+  // Falling back to the raw Android ID would produce a different format and
+  // could create a split identity if initDeviceId runs after this call.
+  const rand = Math.random().toString(36).substring(2, 10) +
+               Math.random().toString(36).substring(2, 10);
+  const deviceId = `CR-DEV-${rand}`;
 
   await SecureStore.setItemAsync("cr_device_id", deviceId);
   return deviceId;
@@ -70,7 +69,7 @@ export async function createAnonymousSession(
 
   const response = await api.post("/api/reporter/auth/anonymous", {
     device_id: deviceId,
-    platform: "android",
+    platform: Platform.OS,
     country_code: countryCode,
     language_code: languageCode,
   });
@@ -91,7 +90,7 @@ export async function registerReporter(
     email,
     password,
     device_id: deviceId,
-    platform: "android",
+    platform: Platform.OS,
     country_code: countryCode,
     language_code: languageCode,
   });
@@ -115,7 +114,7 @@ export async function loginReporter(
     email,
     password,
     device_id: deviceId,
-    platform: "android",
+    platform: Platform.OS,
   });
 
   const tokens: AuthTokens = response.data;

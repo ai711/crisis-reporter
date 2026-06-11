@@ -15,7 +15,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import SideMenu from "../components/SideMenu";
 import { fetchLanguagePackageFromBackend } from "../i18n";
 
-const { width: screenWidth } = Dimensions.get("window");
+const { width: _screenWidthRaw } = Dimensions.get("window");
+const screenWidth = _screenWidthRaw || 375;
 const scale = (size: number) => Math.round((screenWidth / 375) * size);
 
 // Module-level flag — survives navigation, ensures one check per app session

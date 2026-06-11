@@ -1,8 +1,40 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as FileSystem from "expo-file-system";
+import { documentDirectory } from "expo-file-system/legacy";
 import type { QueuedReport, QueuedPhoto, ReportSubmitRequest } from "../types";
 import { tokenStorage } from "../services/api";
 
+// Persistent photo storage — survives Android low-storage cache clears
+// documentDirectory is from the legacy path because expo-file-system v19 moved
+// it out of the default namespace export.
+const PHOTO_STORE_DIR = (documentDirectory ?? "") + "cr_queued_photos/";
+
+async function ensurePhotoDir(): Promise<void> {
+  const info = await FileSystem.getInfoAsync(PHOTO_STORE_DIR);
+  if (!info.exists) {
+    await FileSystem.makeDirectoryAsync(PHOTO_STORE_DIR, { intermediates: true });
+  }
+}
+
 const QUEUE_KEY = "cr_report_queue";
+
+// ── Queue write mutex ─────────────────────────────────────────────────────────
+// Serialises all queue reads+writes so concurrent callers (e.g. addToQueue
+// called from the UI while syncQueue is mid-flight) never race on the
+// AsyncStorage blob.
+
+let _queueMutex: Promise<void> = Promise.resolve();
+
+function withQueueLock<T>(fn: () => Promise<T>): Promise<T> {
+  const next = _queueMutex.then(() => fn());
+  // Absorb rejections on the chain so a failed op doesn't permanently poison
+  // the mutex for future callers.
+  _queueMutex = next.then(
+    () => {},
+    () => {}
+  );
+  return next;
+}
 
 // ── Queue change listeners ────────────────────────────────────────────────────
 
@@ -33,27 +65,49 @@ async function saveQueue(queue: QueuedReport[]): Promise<void> {
   await AsyncStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
 }
 
-export async function addToQueue(
+export function addToQueue(
   report: ReportSubmitRequest,
   photos: QueuedPhoto[]
 ): Promise<string> {
   const local_id = `local_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-  const queue = await getQueue();
+  return withQueueLock(async () => {
+    // Copy photos to documentDirectory before persisting the queue entry.
+    // Android can clear the Expo cache directory under low-storage pressure;
+    // documentDirectory is never cleared by the OS.
+    let persistedPhotos = photos;
+    try {
+      await ensurePhotoDir();
+      persistedPhotos = await Promise.all(
+        photos.map(async (photo, i) => {
+          const dest = `${PHOTO_STORE_DIR}${local_id}_${i}.jpg`;
+          try {
+            await FileSystem.copyAsync({ from: photo.uri, to: dest });
+            return { ...photo, persistent_uri: dest };
+          } catch {
+            return photo; // Fall back to original URI if copy fails
+          }
+        })
+      );
+    } catch {
+      persistedPhotos = photos; // Fall back if directory creation fails
+    }
 
-  const queuedReport: QueuedReport = {
-    local_id,
-    report: { ...report, local_id },
-    photos,
-    status: "pending",
-    retry_count: 0,
-    created_at: new Date().toISOString(),
-    last_attempt_at: null,
-  };
+    const queue = await getQueue();
+    const queuedReport: QueuedReport = {
+      local_id,
+      report: { ...report, local_id },
+      photos: persistedPhotos,
+      status: "pending",
+      retry_count: 0,
+      created_at: new Date().toISOString(),
+      last_attempt_at: null,
+    };
 
-  queue.push(queuedReport);
-  await saveQueue(queue);
-  await notifyQueueChange();
-  return local_id;
+    queue.push(queuedReport);
+    await saveQueue(queue);
+    await notifyQueueChange();
+    return local_id;
+  });
 }
 
 export async function getQueueCount(): Promise<number> {
@@ -61,28 +115,46 @@ export async function getQueueCount(): Promise<number> {
   return queue.filter((item) => item.status === "pending").length;
 }
 
-export async function updateItemStatus(
+export function updateItemStatus(
   local_id: string,
   status: QueuedReport["status"],
   retry_count?: number
 ): Promise<void> {
-  const queue = await getQueue();
-  const index = queue.findIndex((item) => item.local_id === local_id);
-  if (index === -1) return;
+  return withQueueLock(async () => {
+    const queue = await getQueue();
+    const index = queue.findIndex((item) => item.local_id === local_id);
+    if (index === -1) return;
 
-  queue[index].status = status;
-  queue[index].last_attempt_at = new Date().toISOString();
-  if (retry_count !== undefined) {
-    queue[index].retry_count = retry_count;
-  }
+    queue[index].status = status;
+    queue[index].last_attempt_at = new Date().toISOString();
+    if (retry_count !== undefined) {
+      queue[index].retry_count = retry_count;
+    }
 
-  await saveQueue(queue);
+    await saveQueue(queue);
+  });
 }
 
-export async function removeFromQueue(local_id: string): Promise<void> {
-  const queue = await getQueue();
-  const filtered = queue.filter((item) => item.local_id !== local_id);
-  await saveQueue(filtered);
+export function removeFromQueue(local_id: string): Promise<void> {
+  return withQueueLock(async () => {
+    const queue = await getQueue();
+    const item = queue.find((i) => i.local_id === local_id);
+    const filtered = queue.filter((i) => i.local_id !== local_id);
+    await saveQueue(filtered);
+
+    // Clean up persistent photo copies to free documentDirectory space
+    if (item) {
+      for (const photo of item.photos) {
+        if (photo.persistent_uri) {
+          try {
+            await FileSystem.deleteAsync(photo.persistent_uri, { idempotent: true });
+          } catch {
+            // Non-critical — stale files are small and bounded
+          }
+        }
+      }
+    }
+  });
 }
 
 // ── Local submitted-report history (anonymous fallback) ───────────────────────
@@ -157,16 +229,18 @@ export async function resetItemForRetry(local_id: string): Promise<void> {
 
 // Called once at startup — any item still in "syncing" state means the app was
 // killed mid-flight; it will never be retried unless explicitly reset to "pending".
-export async function resetStuckItems(): Promise<void> {
-  const queue = await getQueue();
-  const hasStuck = queue.some((i) => i.status === "syncing");
-  if (!hasStuck) return;
+export function resetStuckItems(): Promise<void> {
+  return withQueueLock(async () => {
+    const queue = await getQueue();
+    const hasStuck = queue.some((i) => i.status === "syncing");
+    if (!hasStuck) return;
 
-  const reset = queue.map((i) =>
-    i.status === "syncing" ? { ...i, status: "pending" as const } : i
-  );
-  await saveQueue(reset);
-  await notifyQueueChange();
+    const reset = queue.map((i) =>
+      i.status === "syncing" ? { ...i, status: "pending" as const } : i
+    );
+    await saveQueue(reset);
+    await notifyQueueChange();
+  });
 }
 
 // Attempt a silent token refresh before the sync pass so that a 15-minute
@@ -242,11 +316,20 @@ export async function syncQueue(apiBaseUrl: string): Promise<void> {
 
         // Upload photos
         for (const photo of item.photos) {
+          // Prefer persistent_uri (documentDirectory) over the original cache URI
+          // which Android may have cleared under low-storage pressure.
+          const uploadUri = photo.persistent_uri ?? photo.uri;
+
+          // Pre-flight: skip if the file was lost (items queued before G1
+          // deployment won't have persistent_uri and may have a stale cache URI).
+          const fileInfo = await FileSystem.getInfoAsync(uploadUri);
+          if (!fileInfo.exists) continue;
+
           const formData = new FormData();
           formData.append("report_id", reportId);
           formData.append("display_order", String(photo.display_order));
           formData.append("file", {
-            uri: photo.uri,
+            uri: uploadUri,
             name: photo.filename,
             type: photo.content_type,
           } as any);
@@ -256,14 +339,23 @@ export async function syncQueue(apiBaseUrl: string): Promise<void> {
             photoHeaders["Authorization"] = `Bearer ${accessToken}`;
           }
 
-          const photoResponse = await fetch(`${apiBaseUrl}/api/photos`, {
-            method: "POST",
-            headers: photoHeaders,
-            body: formData,
-          });
-
-          if (!photoResponse.ok && photoResponse.status === 401) {
-            throw new Error("auth_expired");
+          // 120 s per photo — generous for 2G/EDGE field networks
+          const photoController = new AbortController();
+          const photoTimeoutId = setTimeout(() => photoController.abort(), 120000);
+          try {
+            const photoResponse = await fetch(`${apiBaseUrl}/api/photos`, {
+              method: "POST",
+              headers: photoHeaders,
+              body: formData,
+              signal: photoController.signal,
+            });
+            clearTimeout(photoTimeoutId);
+            if (!photoResponse.ok && photoResponse.status === 401) {
+              throw new Error("auth_expired");
+            }
+          } catch (photoErr) {
+            clearTimeout(photoTimeoutId);
+            throw photoErr;
           }
         }
 

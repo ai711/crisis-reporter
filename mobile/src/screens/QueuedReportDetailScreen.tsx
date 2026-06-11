@@ -6,6 +6,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
+import NetInfo from '@react-native-community/netinfo';
 import type { QueuedReport } from '../types';
 import {
   removeFromQueue,
@@ -66,6 +67,11 @@ export default function QueuedReportDetailScreen() {
       : t('my_reports.offline_label');
 
   const handleRetry = async () => {
+    const netState = await NetInfo.fetch();
+    if (!netState.isConnected || netState.isInternetReachable === false) {
+      Alert.alert(t('review.still_offline_title'), t('review.still_offline_body'));
+      return;
+    }
     setRetrying(true);
     try {
       await resetItemForRetry(qr.local_id);
