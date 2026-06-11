@@ -26,7 +26,7 @@ import {
   type PressEventWithFeatures,
 } from "@maplibre/maplibre-react-native";
 import { useAuthStore } from "../stores/authStore";
-import api from "../services/api";
+import api, { API_BASE } from "../services/api";
 import * as Device from 'expo-device';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as FileSystem from 'expo-file-system';
@@ -38,7 +38,6 @@ import type { DamageLevel, QueuedPhoto, ProcessedPhoto } from "../types";
 const MAPTILER_KEY = process.env.EXPO_PUBLIC_MAPTILER_KEY ?? "";
 const MAP_STYLE_URL = `https://api.maptiler.com/maps/dataviz-light/style.json?key=${MAPTILER_KEY}`;
 const ANSWERS_KEY = 'cr_draft_answers';
-const API_URL = "https://crisis-reporter-production.up.railway.app";
 
 const { width: screenWidth } = Dimensions.get('window');
 const scale = (size: number) => Math.round(screenWidth / 375 * size);
@@ -178,9 +177,9 @@ const ELECTRICITY_LABELS: Record<string, string> = {
 };
 
 const HEALTH_LABELS: Record<string, string> = {
-  functional: "Fully functional",
-  partial: "Partially functional",
-  disrupted: "Largely disrupted",
+  fully_functional: "Fully functional",
+  partially_functional: "Partially functional",
+  largely_disrupted: "Largely disrupted",
   not_functioning: "Not functioning at all",
   unknown: "Unknown",
 };
@@ -205,56 +204,57 @@ const Q1_KEY_MAP: Record<string, string> = {
   complete: "report.complete",
 };
 const Q2_KEY_MAP: Record<string, string> = {
-  residential:    "questions.q2.opt_residential",
-  commercial:     "questions.q2.opt_commercial",
-  government:     "questions.q2.opt_government",
-  utility:        "questions.q2.opt_utility",
-  transport_comm: "questions.q2.opt_transport",
-  community:      "questions.q2.opt_community",
-  public_spaces:  "questions.q2.opt_public_spaces",
-  other:          "questions.q2.opt_other",
+  residential:    "Q2_OPT_RESIDENTIAL",
+  commercial:     "Q2_OPT_COMMERCIAL",
+  government:     "Q2_OPT_GOVERNMENT",
+  utility:        "Q2_OPT_UTILITY",
+  transport_comm: "Q2_OPT_TRANSPORT_COMM",
+  community:      "Q2_OPT_COMMUNITY",
+  public_spaces:  "Q2_OPT_PUBLIC_SPACES",
+  other:          "Q2_OPT_OTHER",
 };
 const Q4_KEY_MAP: Record<string, string> = {
-  earthquake:        "questions.q4.opt_earthquake",
-  flood:             "questions.q4.opt_flood",
-  tsunami:           "questions.q4.opt_tsunami",
-  hurricane_cyclone: "questions.q4.opt_hurricane_cyclone",
-  wildfire:          "questions.q4.opt_wildfire",
-  explosion:         "questions.q4.opt_explosion",
-  chemical_incident: "questions.q4.opt_chemical_incident",
-  conflict:          "questions.q4.opt_conflict",
-  civil_unrest:      "questions.q4.opt_civil_unrest",
+  earthquake:        "Q4_OPT_EARTHQUAKE",
+  flood:             "Q4_OPT_FLOOD",
+  tsunami:           "Q4_OPT_TSUNAMI",
+  hurricane_cyclone: "Q4_OPT_HURRICANE_CYCLONE",
+  wildfire:          "Q4_OPT_WILDFIRE",
+  explosion:         "Q4_OPT_EXPLOSION",
+  chemical_incident: "Q4_OPT_CHEMICAL_INCIDENT",
+  conflict:          "Q4_OPT_CONFLICT",
+  civil_unrest:      "Q4_OPT_CIVIL_UNREST",
 };
 const Q5_KEY_MAP: Record<string, string> = {
-  yes: "questions.q5.opt_yes",
-  no:  "questions.q5.opt_no",
+  yes:       "Q5_OPT_YES",
+  no:        "Q5_OPT_NO",
+  partially: "Q5_OPT_PARTIALLY",
 };
 const Q6_KEY_MAP: Record<string, string> = {
-  no_damage: "questions.q6.opt_no_damage",
-  minor:     "questions.q6.opt_minor",
-  moderate:  "questions.q6.opt_moderate",
-  severe:    "questions.q6.opt_severe",
-  destroyed: "questions.q6.opt_destroyed",
-  unknown:   "questions.q6.opt_unknown",
+  no_damage: "Q6_OPT_NO_DAMAGE",
+  minor:     "Q6_OPT_MINOR",
+  moderate:  "Q6_OPT_MODERATE",
+  severe:    "Q6_OPT_SEVERE",
+  destroyed: "Q6_OPT_DESTROYED",
+  unknown:   "Q6_OPT_UNKNOWN",
 };
 const Q7_KEY_MAP: Record<string, string> = {
-  functional:      "questions.q7.opt_fully",
-  partial:         "questions.q7.opt_partially",
-  disrupted:       "questions.q7.opt_largely",
-  not_functioning: "questions.q7.opt_not_functioning",
-  unknown:         "questions.q7.opt_unknown",
+  fully_functional:     "Q7_OPT_FULLY_FUNCTIONAL",
+  partially_functional: "Q7_OPT_PARTIALLY_FUNCTIONAL",
+  largely_disrupted:    "Q7_OPT_LARGELY_DISRUPTED",
+  not_functioning:      "Q7_OPT_NOT_FUNCTIONING",
+  unknown:              "Q7_OPT_UNKNOWN",
 };
 const Q8_KEY_MAP: Record<string, string> = {
-  food_water:     "questions.q8.opt_food_water",
-  cash:           "questions.q8.opt_cash",
-  healthcare:     "questions.q8.opt_healthcare",
-  shelter:        "questions.q8.opt_shelter",
-  livelihoods:    "questions.q8.opt_livelihoods",
-  wash:           "questions.q8.opt_wash",
-  basic_services: "questions.q8.opt_basic_services",
-  protection:     "questions.q8.opt_protection",
-  local_support:  "questions.q8.opt_local_support",
-  other:          "questions.q8.opt_other",
+  food_water:     "Q8_OPT_FOOD_WATER",
+  cash:           "Q8_OPT_CASH",
+  healthcare:     "Q8_OPT_HEALTHCARE",
+  shelter:        "Q8_OPT_SHELTER",
+  livelihoods:    "Q8_OPT_LIVELIHOODS",
+  wash:           "Q8_OPT_WASH",
+  basic_services: "Q8_OPT_BASIC_SVC",
+  protection:     "Q8_OPT_PROTECTION",
+  local_support:  "Q8_OPT_LOCAL_SUPPORT",
+  other:          "Q8_OPT_OTHER",
 };
 
 interface ReportScreenProps { navigation: any; }
@@ -1658,7 +1658,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
       const netState = await NetInfo.fetch();
       if (netState.isConnected === true && netState.isInternetReachable !== false) {
         try {
-          await syncQueue(API_URL);
+          await syncQueue(API_BASE);
           setWasQueued(false);
         } catch {
           Alert.alert(t('review.still_offline_title'), t('review.still_offline_body'));
@@ -2774,9 +2774,9 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                     <Text style={styles.questionTitleLarge}>{qTitle(7, t('questions.q7.title'))}</Text>
                     <View style={styles.optionGrid2Col}>
                       {qOptions(7, [
-                        { value: "functional",    label: t('questions.q7.opt_fully') },
-                        { value: "partial",       label: t('questions.q7.opt_partially') },
-                        { value: "disrupted",     label: t('questions.q7.opt_largely') },
+                        { value: "fully_functional",    label: t('questions.q7.opt_fully') },
+                        { value: "partially_functional", label: t('questions.q7.opt_partially') },
+                        { value: "largely_disrupted",    label: t('questions.q7.opt_largely') },
                         { value: "not_functioning", label: t('questions.q7.opt_not_functioning') },
                         { value: "unknown",       label: t('questions.q7.opt_unknown') },
                       ]).map(({ value, label }) => {

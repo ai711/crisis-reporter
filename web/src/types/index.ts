@@ -40,15 +40,28 @@ export interface LocationData {
   gps_longitude: number | null;
   gps_accuracy_meters: number | null;
   gps_available: boolean;
+  gps_denied?: boolean | null;
   location_address: string | null;
   location_landmark: string | null;
   location_building_name: string | null;
+  building_centroid_lat?: number | null;
+  building_centroid_lng?: number | null;
+  building_name_osm?: string | null;
+  building_name_reporter?: string | null;
+  location_note?: string | null;
+  location_entry_method?: string | null;
+  location_internet_available?: boolean | null;
+  building_type?: string | null;
+  pin_drop_lat?: number | null;
+  pin_drop_lng?: number | null;
 }
 
 export interface ReportSubmitRequest {
-  crisis_id: string;
+  crisis_id?: string;
   damage_level: DamageLevel;
-  infrastructure_type: string;
+  infrastructure_types: string[];      // plural array — matches backend
+  infrastructure_other?: string;
+  infrastructure_name?: string;
   platform: Platform;
   submitted_at: string;
   location: LocationData;
@@ -56,11 +69,17 @@ export interface ReportSubmitRequest {
   reporter_id?: string;
   building_id?: string;
   building_name?: string;
-  description?: string;
   language_code: string;
   app_version?: string;
   was_queued: boolean;
   queued_at?: string;
+  // UNDP question fields
+  disaster_type?: string;
+  debris_blocking?: string;
+  electricity_condition?: string;
+  health_services_condition?: string;
+  pressing_needs?: string[];
+  pressing_needs_other?: string;
   // Anti-spam signals — captured silently client-side
   browser_timezone?: string;
   screen_resolution?: string;
@@ -69,8 +88,9 @@ export interface ReportSubmitRequest {
 
 export interface ReportSubmitResponse {
   report_id: string;
-  flag_status: FlagStatus;
+  serial_number?: number | null;
   message: string;
+  // flag_status intentionally omitted — internal concept, must not reach reporter clients
 }
 
 // ── Offline Queue ─────────────────────────────────────────────────────────────
@@ -94,13 +114,3 @@ export interface QueuedReport {
   last_attempt_at: string | null;
 }
 
-// ── Map ───────────────────────────────────────────────────────────────────────
-
-export interface MapPin {
-  building_id: string | null;
-  latitude: number;
-  longitude: number;
-  damage_level: DamageLevel;
-  report_count: number;
-  flag_status: FlagStatus;
-}

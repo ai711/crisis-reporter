@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "../stores/authStore";
 import api from "../services/api";
 
@@ -228,6 +229,7 @@ function IconClose() {
 
 export default function MapPage() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { countryCode } = useAuthStore();
 
   const mapContainer = useRef<HTMLDivElement>(null);
@@ -445,6 +447,14 @@ export default function MapPage() {
         </div>
       )}
 
+      {/* CTA: Report an Incident — always visible, floats above bottom nav */}
+      <button
+        style={s.reportFab}
+        onClick={() => navigate("/report")}
+      >
+        {t('home.reportButton')}
+      </button>
+
       {/* D33/D34: Pin detail panel — right panel on desktop, bottom sheet on mobile */}
       {selectedPin && (
         <>
@@ -596,6 +606,25 @@ const s: Record<string, React.CSSProperties> = {
     pointerEvents: "none",
     whiteSpace: "nowrap",
     zIndex: 10,
+  },
+  // CTA: Report an Incident FAB — centre-bottom, above nav bar
+  reportFab: {
+    position: "absolute",
+    bottom: 96,
+    left: "50%",
+    transform: "translateX(-50%)",
+    background: "#0468B1",
+    color: "#fff",
+    border: "none",
+    borderRadius: 28,
+    padding: "14px 28px",
+    fontSize: 15,
+    fontWeight: 700,
+    cursor: "pointer",
+    boxShadow: "0 4px 16px rgba(4,104,177,0.40)",
+    whiteSpace: "nowrap" as const,
+    zIndex: 10,
+    letterSpacing: "0.01em",
   },
   // D35: GPS recentre button — sits above fixed bottom nav (~80px)
   gpsBtn: {

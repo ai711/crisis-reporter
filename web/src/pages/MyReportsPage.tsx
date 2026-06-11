@@ -580,8 +580,8 @@ export default function MyReportsPage() {
           </div>
           <p style={styles.cardDate}>🕐 {formatDateTime(qr.created_at)}</p>
           <p style={styles.cardLocation}>📍 {loc}</p>
-          {qr.report.infrastructure_type && (
-            <p style={styles.cardMeta}>🏗 {qr.report.infrastructure_type}</p>
+          {qr.report.infrastructure_types?.length > 0 && (
+            <p style={styles.cardMeta}>🏗 {qr.report.infrastructure_types.join(', ')}</p>
           )}
           {isFailed && (
             <p style={styles.cardMeta}>{t("my_reports.failed_attempts", { count: qr.retry_count })}</p>

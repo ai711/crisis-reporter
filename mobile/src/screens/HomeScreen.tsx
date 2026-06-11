@@ -8,7 +8,7 @@ import { useTranslation } from "react-i18next";
 import { useAuthStore } from "../stores/authStore";
 import { getQueueCount, syncQueue, onQueueChange } from "../utils/offlineQueue";
 import { registerAnonymously } from "../services/auth";
-import api from "../services/api";
+import api, { API_BASE } from "../services/api";
 import NetInfo from "@react-native-community/netinfo";
 import * as SecureStore from "expo-secure-store";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -17,8 +17,6 @@ import { fetchLanguagePackageFromBackend } from "../i18n";
 
 const { width: screenWidth } = Dimensions.get("window");
 const scale = (size: number) => Math.round((screenWidth / 375) * size);
-
-const API_URL = "https://crisis-reporter-production.up.railway.app";
 
 // Module-level flag — survives navigation, ensures one check per app session
 const packageSyncDone = { current: false };
@@ -85,7 +83,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
       const online = state.isConnected ?? false;
       setIsOnline(online);
       if (online) {
-        syncQueue(API_URL).then(() => getQueueCount().then(setQueueCount));
+        syncQueue(API_BASE).then(() => getQueueCount().then(setQueueCount));
       }
     });
 

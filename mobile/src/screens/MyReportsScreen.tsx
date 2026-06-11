@@ -12,6 +12,7 @@ import api, { API_BASE } from '../services/api';
 import {
   getQueue,
   removeFromQueue,
+  resetItemForRetry,
   onQueueChange,
   syncQueue,
   getLocalSubmittedReports,
@@ -248,7 +249,7 @@ export default function MyReportsScreen() {
 
   // ── Queue actions ─────────────────────────────────────────────────────────
 
-  const handleRetry = async (_report: QueuedReport) => {
+  const handleRetry = async (report: QueuedReport) => {
     const netState = await NetInfo.fetch();
     if (!netState.isConnected || !netState.isInternetReachable) {
       Alert.alert(
@@ -258,6 +259,7 @@ export default function MyReportsScreen() {
       return;
     }
     try {
+      await resetItemForRetry(report.local_id);
       await syncQueue(API_BASE);
       await loadQueue();
       if (!isAnonymousId(reporterId)) {

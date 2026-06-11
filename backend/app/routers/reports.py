@@ -617,10 +617,11 @@ async def get_map_reports(
     limit: int = Query(default=200, le=500),
     db: AsyncSession = Depends(get_db),
 ):
-    """Returns geolocated reports for map display. No authentication required."""
+    """Returns geolocated, verified reports for map display. No authentication required."""
     conditions = [
         Report.gps_latitude.isnot(None),
         Report.gps_longitude.isnot(None),
+        Report.flag_status.in_(["green", "orange"]),
     ]
     if crisis_id:
         conditions.append(Report.crisis_id == crisis_id)

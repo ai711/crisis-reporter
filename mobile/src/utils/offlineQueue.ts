@@ -147,7 +147,13 @@ async function saveLocalSubmittedRecord(
 
 // ── Sync engine ───────────────────────────────────────────────────────────────
 
+const MAX_RETRIES = 5;
+
 let isSyncing = false;
+
+export async function resetItemForRetry(local_id: string): Promise<void> {
+  return updateItemStatus(local_id, "pending", 0);
+}
 
 export async function syncQueue(apiBaseUrl: string): Promise<void> {
   if (isSyncing) return;
@@ -156,7 +162,7 @@ export async function syncQueue(apiBaseUrl: string): Promise<void> {
   try {
     const queue = await getQueue();
     const pending = queue.filter(
-      (item) => item.status === "pending" && item.retry_count < 5
+      (item) => item.status === "pending" && item.retry_count < MAX_RETRIES
     );
 
     for (const item of pending) {
@@ -179,6 +185,7 @@ export async function syncQueue(apiBaseUrl: string): Promise<void> {
         });
 
         if (!reportResponse.ok) {
+          if (reportResponse.status === 401) throw new Error("auth_expired");
           throw new Error(`Failed: ${reportResponse.status}`);
         }
 
@@ -201,11 +208,15 @@ export async function syncQueue(apiBaseUrl: string): Promise<void> {
             photoHeaders["Authorization"] = `Bearer ${accessToken}`;
           }
 
-          await fetch(`${apiBaseUrl}/api/photos`, {
+          const photoResponse = await fetch(`${apiBaseUrl}/api/photos`, {
             method: "POST",
             headers: photoHeaders,
             body: formData,
           });
+
+          if (!photoResponse.ok && photoResponse.status === 401) {
+            throw new Error("auth_expired");
+          }
         }
 
         // Persist a local record before removing so anonymous users can
@@ -213,12 +224,15 @@ export async function syncQueue(apiBaseUrl: string): Promise<void> {
         await saveLocalSubmittedRecord(item, reportId);
         await removeFromQueue(item.local_id);
         await notifyQueueChange();
-      } catch {
-        await updateItemStatus(
-          item.local_id,
-          "pending",
-          item.retry_count + 1
-        );
+      } catch (syncErr) {
+        const isAuthExpired =
+          syncErr instanceof Error && syncErr.message === "auth_expired";
+        const nextRetry = isAuthExpired ? item.retry_count : item.retry_count + 1;
+        const nextStatus = (!isAuthExpired && nextRetry >= MAX_RETRIES) ? "failed" : "pending";
+        await updateItemStatus(item.local_id, nextStatus, nextRetry);
+        await notifyQueueChange();
+        // Auth expired — no point trying other items; let app refresh the token
+        if (isAuthExpired) break;
       }
     }
   } finally {

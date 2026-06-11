@@ -55,7 +55,7 @@ const INFRA_LABELS: Record<string, string> = {
   commercial: "Commercial Infrastructure",
   government: "Government Building",
   utility: "Utility Infrastructure",
-  transport_communication: "Transport & Communication Infrastructure",
+  transport_comm: "Transport & Communication Infrastructure",
   community: "Community Infrastructure",
   public_spaces: "Public Spaces / Recreation Infrastructure",
   other: "Other",
@@ -124,7 +124,7 @@ const HEALTH_LABELS: Record<string, string> = {
 
 const PRESSING_NEEDS_LABELS: Record<string, string> = {
   food_water: "Food assistance and safe drinking water",
-  cash_financial: "Cash or financial assistance",
+  cash: "Cash or financial assistance",
   healthcare: "Access to healthcare and essential medicines",
   shelter: "Shelter, housing repair, or temporary accommodation",
   livelihoods: "Restoration of livelihoods or income sources",
@@ -138,7 +138,7 @@ const PRESSING_NEEDS_LABELS: Record<string, string> = {
 // Maps PRESSING_NEEDS_LABELS keys to their UPPERCASE seed keys (non-trivial mappings only)
 const Q8_KEY_MAP: Record<string, string> = {
   food_water:      "Q8_OPT_FOOD_WATER",
-  cash_financial:  "Q8_OPT_CASH",
+  cash:            "Q8_OPT_CASH",
   healthcare:      "Q8_OPT_HEALTHCARE",
   shelter:         "Q8_OPT_SHELTER",
   livelihoods:     "Q8_OPT_LIVELIHOODS",
@@ -2540,7 +2540,7 @@ export default function ReportPage() {
                   { value: "commercial", label: "Commercial Infrastructure" },
                   { value: "government", label: "Government Building" },
                   { value: "utility", label: "Utility Infrastructure" },
-                  { value: "transport_communication", label: "Transport and Communication Infrastructure" },
+                  { value: "transport_comm", label: "Transport and Communication Infrastructure" },
                   { value: "community", label: "Community Infrastructure" },
                   { value: "public_spaces", label: "Public Spaces / Recreation Infrastructure" },
                   { value: "other", label: "Other (please specify)" },
@@ -2716,7 +2716,7 @@ export default function ReportPage() {
                 <p style={styles.photoHint}>{t('report.select_at_least_one')}</p>
                 {qOptions(8, [
                   { value: "food_water", label: "Food assistance and safe drinking water" },
-                  { value: "cash_financial", label: "Cash or financial assistance" },
+                  { value: "cash", label: "Cash or financial assistance" },
                   { value: "healthcare", label: "Access to healthcare and essential medicines" },
                   { value: "shelter", label: "Shelter, housing repair, or temporary accommodation" },
                   { value: "livelihoods", label: "Restoration of livelihoods or income sources" },

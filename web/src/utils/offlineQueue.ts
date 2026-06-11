@@ -139,6 +139,8 @@ export async function resetItemForRetry(local_id: string): Promise<void> {
 
 // ── Sync engine ───────────────────────────────────────────────────────────────
 
+const MAX_RETRIES = 5;
+
 let isSyncing = false;
 
 export async function syncQueue(apiBaseUrl: string): Promise<void> {
@@ -152,8 +154,11 @@ export async function syncQueue(apiBaseUrl: string): Promise<void> {
     const pending = await getPendingItems();
 
     for (const item of pending) {
-      // Skip items that have failed too many times
-      if (item.retry_count >= 5) continue;
+      // Promote exhausted items to "failed" so the UI can surface them
+      if (item.retry_count >= MAX_RETRIES) {
+        await updateItemStatus(item.local_id, "failed", item.retry_count);
+        continue;
+      }
 
       await updateItemStatus(item.local_id, "syncing");
 
@@ -217,11 +222,13 @@ export async function syncQueue(apiBaseUrl: string): Promise<void> {
       } catch (syncErr) {
         const isAuthExpired =
           syncErr instanceof Error && syncErr.message === "auth_expired";
+        const nextRetry = isAuthExpired ? item.retry_count : item.retry_count + 1;
+        const nextStatus = (!isAuthExpired && nextRetry >= MAX_RETRIES) ? "failed" : "pending";
         await updateItemStatus(
           item.local_id,
-          "pending",
+          nextStatus,
           // Don't burn a retry on auth expiry — the token just needs refreshing
-          isAuthExpired ? item.retry_count : item.retry_count + 1
+          nextRetry
         );
         // Auth expired — no point trying other items this pass
         if (isAuthExpired) break;

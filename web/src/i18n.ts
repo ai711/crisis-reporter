@@ -2,14 +2,24 @@ import i18n from "i18next";
 import { initReactI18next } from "react-i18next";
 
 import en from "./locales/en.json";
+import ar from "./locales/ar.json";
+import zh from "./locales/zh.json";
+import fr from "./locales/fr.json";
+import ru from "./locales/ru.json";
+import es from "./locales/es.json";
 
-// English is the only build-time bundle.
-// All other languages are fetched exclusively from the backend string translation pipeline.
-// Hardcoded locale files are NOT used — the pipeline is the single source of truth for all
-// non-English text. Missing keys fall back to English via fallbackLng.
+// All 6 UN languages are bundled for offline fallback.
+// The backend pipeline fetch (loadLanguagePackage) overwrites bundled strings with
+// the latest published translations when online.  When fully offline on first visit,
+// bundled strings ensure the app is usable in any supported language.
 i18n.use(initReactI18next).init({
   resources: {
     en: { translation: en },
+    ar: { translation: ar },
+    zh: { translation: zh },
+    fr: { translation: fr },
+    ru: { translation: ru },
+    es: { translation: es },
   },
   lng: "en",
   fallbackLng: "en",

@@ -183,7 +183,8 @@
     "damage_minimal": "Minimal / No Damage",
     "pin_reported": "Reported: ",
     "pin_id": "ID: ",
-    "loading_reports": "Loading reports…"
+    "loading_reports": "Loading reports…",
+    "one_report_received": "1 verified report"
   },
   "settings": {
     "title": "Settings",

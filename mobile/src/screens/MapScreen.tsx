@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
+import { useTranslation } from 'react-i18next';
 import {
   Map as MLMap,
   Camera,
@@ -33,7 +34,7 @@ const scale = (size: number) => Math.round((screenWidth / 375) * size);
 const MAPTILER_KEY = process.env.EXPO_PUBLIC_MAPTILER_KEY ?? '';
 const MAP_STYLE_URL = `https://api.maptiler.com/maps/streets-v2/style.json?key=${MAPTILER_KEY}`;
 
-type DamageLevel = 'minimal' | 'partial' | 'destroyed';
+type DamageLevel = 'minimal' | 'partial' | 'complete';
 
 type ReportPin = {
   id: string;
@@ -48,19 +49,19 @@ type ReportPin = {
 const PIN_COLOURS: Record<DamageLevel, string> = {
   minimal: '#38A169',
   partial: '#F2994A',
-  destroyed: '#E53E3E',
+  complete: '#E53E3E',
 };
 
 const PIN_LABELS: Record<DamageLevel, string> = {
   minimal: 'Minimal / No Damage',
   partial: 'Partially Damaged',
-  destroyed: 'Completely Destroyed',
+  complete: 'Completely Damaged',
 };
 
 const normaliseDamageLevel = (raw: any): DamageLevel => {
   if (!raw) return 'minimal';
   const val = typeof raw === 'string' ? raw.toLowerCase() : '';
-  if (val.includes('destroy') || val.includes('complet')) return 'destroyed';
+  if (val.includes('complet') || val.includes('destroy')) return 'complete';
   if (val.includes('partial')) return 'partial';
   return 'minimal';
 };
@@ -88,6 +89,7 @@ function overpassToGeoJSON(elements: any[]): GeoJSON.FeatureCollection {
 }
 
 export default function MapScreen() {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
   const [reports, setReports] = useState<ReportPin[]>([]);
@@ -367,12 +369,12 @@ export default function MapScreen() {
             style={styles.navItem}
             onPress={() => navigation.navigate('Home')}
           >
-            <Text style={styles.navIconInactive}>🏠</Text>
+            <MaterialIcons name="home" size={scale(22)} color="#9CA3AF" />
             <Text style={styles.navLabelInactive}>HOME</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.navItem}>
             <View style={styles.activeNavPill}>
-              <Text style={styles.navIconActive}>🗺</Text>
+              <MaterialIcons name="map" size={scale(22)} color="#0468B1" />
               <Text style={styles.navLabelActive}>MAP</Text>
             </View>
           </TouchableOpacity>
@@ -380,7 +382,7 @@ export default function MapScreen() {
             style={styles.navItem}
             onPress={() => navigation.navigate('MyReports')}
           >
-            <Text style={styles.navIconInactive}>📋</Text>
+            <MaterialIcons name="list-alt" size={scale(22)} color="#9CA3AF" />
             <Text style={styles.navLabelInactive}>REPORTS</Text>
           </TouchableOpacity>
         </View>
@@ -518,7 +520,7 @@ export default function MapScreen() {
                     size={scale(14)}
                     color="#9CA3AF"
                   />
-                  <Text style={styles.popupReportsText}>1 report received</Text>
+                  <Text style={styles.popupReportsText}>{t('map.one_report_received', { defaultValue: '1 verified report' })}</Text>
                 </View>
                 <Text style={styles.popupCoords}>
                   {selectedReport.latitude.toFixed(5)},{' '}
@@ -539,18 +541,27 @@ export default function MapScreen() {
         </TouchableOpacity>
       </Modal>
 
+      {/* Report CTA — floating pill above bottom nav */}
+      <TouchableOpacity
+        style={[styles.reportCta, { bottom: insets.bottom + 72 }]}
+        onPress={() => navigation.navigate('Report')}
+        activeOpacity={0.88}
+      >
+        <Text style={styles.reportCtaText}>{t('home.reportButton', { defaultValue: 'Report an Incident' })}</Text>
+      </TouchableOpacity>
+
       {/* Bottom navigation — Map tab is active */}
       <View style={[styles.bottomNav, styles.bottomNavAbsolute, { paddingBottom: insets.bottom }]}>
         <TouchableOpacity
           style={styles.navItem}
           onPress={() => navigation.navigate('Home')}
         >
-          <Text style={styles.navIconInactive}>🏠</Text>
+          <MaterialIcons name="home" size={scale(22)} color="#9CA3AF" />
           <Text style={styles.navLabelInactive}>HOME</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.navItem}>
           <View style={styles.activeNavPill}>
-            <Text style={styles.navIconActive}>🗺</Text>
+            <MaterialIcons name="map" size={scale(22)} color="#0468B1" />
             <Text style={styles.navLabelActive}>MAP</Text>
           </View>
         </TouchableOpacity>
@@ -558,7 +569,7 @@ export default function MapScreen() {
           style={styles.navItem}
           onPress={() => navigation.navigate('MyReports')}
         >
-          <Text style={styles.navIconInactive}>📋</Text>
+          <MaterialIcons name="list-alt" size={scale(22)} color="#9CA3AF" />
           <Text style={styles.navLabelInactive}>REPORTS</Text>
         </TouchableOpacity>
       </View>
@@ -567,6 +578,31 @@ export default function MapScreen() {
 }
 
 const styles = StyleSheet.create({
+  // ── Report CTA ──────────────────────────────────────────────────────────
+  reportCta: {
+    position: 'absolute',
+    alignSelf: 'center',
+    left: '50%' as any,
+    transform: [{ translateX: -120 }],
+    width: 240,
+    backgroundColor: '#0468B1',
+    borderRadius: 28,
+    paddingVertical: 14,
+    paddingHorizontal: 28,
+    alignItems: 'center',
+    shadowColor: '#0468B1',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.40,
+    shadowRadius: 12,
+    elevation: 8,
+    zIndex: 15,
+  },
+  reportCtaText: {
+    color: '#FFFFFF',
+    fontSize: scale(15),
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
   // ── Shared ──────────────────────────────────────────────────────────────
   header: {
     paddingHorizontal: 20,
@@ -838,19 +874,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 2,
   },
-  navIconActive: {
-    fontSize: scale(24),
-    color: '#0468B1',
-  },
   navLabelActive: {
     fontSize: scale(10),
     fontWeight: '600',
     color: '#0468B1',
     letterSpacing: 1.2,
-  },
-  navIconInactive: {
-    fontSize: scale(24),
-    color: '#717782',
   },
   navLabelInactive: {
     fontSize: scale(10),

@@ -1823,11 +1823,20 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
     ("Q2_OPT_PUBLIC_SPACES",  "answer",   "Public Spaces / Recreation Infrastructure"),
     ("Q2_OPT_OTHER",          "answer",   "Other (please specify)"),
     ("Q3_LABEL", "question", "What is the name of this infrastructure?"),
-    ("Q4_LABEL",          "question", "What type of disaster caused this damage?"),
-    ("Q4_OPT_CYCLONE",    "answer",   "Cyclone / Typhoon / Hurricane"),
-    ("Q4_OPT_LANDSLIDE",  "answer",   "Landslide"),
-    ("Q4_OPT_FIRE",       "answer",   "Fire"),
-    ("Q4_OPT_CONFLICT",   "answer",   "Conflict / War"),
+    ("Q4_LABEL",                 "question", "What type of disaster caused this damage?"),
+    ("Q4_OPT_EARTHQUAKE",        "answer",   "Earthquake"),
+    ("Q4_OPT_FLOOD",             "answer",   "Flood"),
+    ("Q4_OPT_TSUNAMI",           "answer",   "Tsunami"),
+    ("Q4_OPT_HURRICANE_CYCLONE", "answer",   "Hurricane or Cyclone"),
+    ("Q4_OPT_WILDFIRE",          "answer",   "Wildfire"),
+    ("Q4_OPT_EXPLOSION",         "answer",   "Explosion"),
+    ("Q4_OPT_CHEMICAL_INCIDENT", "answer",   "Chemical Incident"),
+    ("Q4_OPT_CONFLICT",          "answer",   "Conflict / War"),
+    ("Q4_OPT_CIVIL_UNREST",      "answer",   "Civil Unrest"),
+    # Legacy Q4 keys — kept for backwards compatibility with any existing translations
+    ("Q4_OPT_CYCLONE",           "answer",   "Cyclone / Typhoon / Hurricane"),
+    ("Q4_OPT_LANDSLIDE",         "answer",   "Landslide"),
+    ("Q4_OPT_FIRE",              "answer",   "Fire"),
     ("Q5_LABEL",         "question", "Is there debris blocking access?"),
     ("Q5_OPT_YES",       "answer",   "Yes"),
     ("Q5_OPT_NO",        "answer",   "No"),
@@ -1856,6 +1865,9 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
     ("Q8_OPT_PROTECTION",   "answer",   "Protection services and psychosocial support"),
     ("Q8_OPT_LOCAL_SUPPORT","answer",   "Support from local authorities and community organizations"),
     ("Q8_OPT_OTHER",        "answer",   "Other — please specify"),
+
+    # ── Map view ─────────────────────────────────────────────────────────────────
+    ("map.one_report_received",     "ui_map",    "1 verified report"),
 
     # ── Navigation / global chrome ────────────────────────────────────────────────
 
