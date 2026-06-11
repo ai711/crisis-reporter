@@ -17,7 +17,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import i18n, { loadLanguagePackage, loadLanguagePackageFromCache } from "./i18n";
 import App from "./App.tsx";
 import "./index.css";
-import { registerSyncTriggers } from "./utils/offlineQueue";
+import { registerSyncTriggers, resetStuckItems, registerBackgroundSync } from "./utils/offlineQueue";
 import { fetchAndCacheCountries } from "./utils/countryListCache";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
@@ -67,8 +67,16 @@ const queryClient = new QueryClient({
     }
   } catch { /* ignore */ }
 
+  // ── Reset any items stuck in "syncing" from a previous session that was killed
+  // mid-flight. Must run before registerSyncTriggers so the sync pass picks them up.
+  await resetStuckItems().catch(() => { /* non-critical */ });
+
   // ── Register offline sync triggers.
   registerSyncTriggers(API_URL);
+
+  // ── Register the Web Background Sync tag (no-op on iOS Safari).
+  // This allows the SW to trigger a sync pass while the tab is backgrounded.
+  registerBackgroundSync().catch(() => { /* non-critical */ });
 
   // ── PWA install prompt — capture the browser's beforeinstallprompt event
   // so we can trigger it on demand from the side menu.
@@ -87,6 +95,18 @@ const queryClient = new QueryClient({
       if (!reloading) {
         reloading = true;
         window.location.reload();
+      }
+    });
+
+    // ── Background sync message handler — the service worker posts TRIGGER_SYNC
+    // when a background sync event fires while a window is open. We call the
+    // full sync engine here (with access to localStorage tokens) rather than
+    // trying to replicate it inside the SW context.
+    navigator.serviceWorker.addEventListener("message", (event) => {
+      if (event.data?.type === "TRIGGER_SYNC") {
+        import("./utils/offlineQueue").then(({ syncQueue }) => {
+          syncQueue(API_URL);
+        });
       }
     });
   }

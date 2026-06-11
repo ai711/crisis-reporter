@@ -6,7 +6,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
 import { useAuthStore } from "../stores/authStore";
-import { getQueueCount, syncQueue, onQueueChange } from "../utils/offlineQueue";
+import { getQueueCount, syncQueue, onQueueChange, resetStuckItems } from "../utils/offlineQueue";
 import { registerAnonymously } from "../services/auth";
 import api, { API_BASE } from "../services/api";
 import NetInfo from "@react-native-community/netinfo";
@@ -78,6 +78,11 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
     const unsubscribeQueue = onQueueChange((count) => {
       setQueueCount(count);
     });
+
+    // Reset any items stuck in "syncing" from a prior session that was killed
+    // mid-flight — must run before the NetInfo listener fires so the sync pass
+    // picks them up as "pending" rather than skipping them.
+    resetStuckItems().catch(() => { /* non-critical */ });
 
     const unsubscribeNet = NetInfo.addEventListener((state) => {
       const online = state.isConnected ?? false;
@@ -238,14 +243,20 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
         {/* Gap between headline group and button area */}
         <View style={{ height: 32 }} />
 
-        {/* Offline sync amber banner — shown when queue > 0 */}
+        {/* Offline sync amber banner — shown when queue > 0; tap navigates to My Reports */}
         {queueCount > 0 && (
-          <View style={styles.syncBanner}>
+          <TouchableOpacity
+            style={styles.syncBanner}
+            activeOpacity={0.8}
+            onPress={() => navigation.navigate("MyReports")}
+            accessibilityRole="button"
+            accessibilityLabel={`${queueCount} pending reports. Tap to view.`}
+          >
             <Text style={styles.syncBannerIcon}>⚠</Text>
             <Text style={styles.syncBannerText}>
               {t("home.sync_banner", { count: queueCount })}
             </Text>
-          </View>
+          </TouchableOpacity>
         )}
 
         {/* Primary report button */}

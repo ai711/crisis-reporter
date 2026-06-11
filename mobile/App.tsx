@@ -1,4 +1,7 @@
 import { useEffect } from "react";
+// Background sync — must be imported before any React component so the task
+// definition (TaskManager.defineTask) runs at module scope.
+import { registerBackgroundSync } from "./src/utils/backgroundSync";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -22,6 +25,7 @@ import BadgesScreen from "./src/screens/BadgesScreen";
 import FAQScreen from "./src/screens/FAQScreen";
 import AboutScreen from "./src/screens/AboutScreen";
 import ReportDetailScreen from "./src/screens/ReportDetailScreen";
+import QueuedReportDetailScreen from "./src/screens/QueuedReportDetailScreen";
 
 const Stack = createNativeStackNavigator();
 
@@ -39,6 +43,9 @@ function Navigation() {
 
   useEffect(() => {
     initDeviceId();
+    // Register the background fetch task so offline reports sync even when
+    // the app is fully killed (minimum 15-minute OS interval).
+    registerBackgroundSync().catch(() => { /* non-critical */ });
   }, []);
 
   useEffect(() => {
@@ -73,6 +80,7 @@ function Navigation() {
             <Stack.Screen name="FAQScreen" component={FAQScreen} options={{ headerShown: false }} />
             <Stack.Screen name="AboutScreen" component={AboutScreen} options={{ headerShown: false }} />
             <Stack.Screen name="ReportDetailScreen" component={ReportDetailScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="QueuedReportDetailScreen" component={QueuedReportDetailScreen} options={{ headerShown: false }} />
             {/* Reuse OnboardingScreen for viewing T&C from Settings (step 3 only). */}
             <Stack.Screen name="TermsScreen" component={OnboardingScreen} initialParams={{ initialStep: 3 }} options={{ headerShown: false }} />
           </>

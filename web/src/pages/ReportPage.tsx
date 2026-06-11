@@ -364,7 +364,7 @@ export default function ReportPage() {
   const [preparingPhotos, setPreparingPhotos] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
-  const [_wasQueued, setWasQueued] = useState(false);
+  const [wasQueued, setWasQueued] = useState(false);
   const [_submittedReportId, setSubmittedReportId] = useState<string | null>(null);
   const [showDupeWarning, setShowDupeWarning] = useState(false);
   const [error, setError] = useState("");
@@ -1674,9 +1674,80 @@ export default function ReportPage() {
     }
   };
 
-  // ── Success screen ────────────────────────────────────────────────────────────
+  // ── Offline queue confirmation screen ─────────────────────────────────────────
 
-  if (submitted) {
+  if (submitted && wasQueued) {
+    const locationSummary = selectedBuildingName
+      ? selectedBuildingName
+      : pinDropCoords
+        ? `${pinDropCoords.lat.toFixed(5)}, ${pinDropCoords.lng.toFixed(5)}`
+        : locationAddress || t('report.review_not_specified');
+
+    return (
+      <div style={styles.container}>
+        <div style={styles.successContainer}>
+          {/* Cloud icon */}
+          <div style={{ ...styles.confirmCheckCircle, background: "linear-gradient(135deg, #F5A623 0%, #E89010 100%)" }}>
+            <span className="material-symbols-outlined" style={{ fontSize: 48, color: "#FFFFFF", fontVariationSettings: "'FILL' 1, 'wght' 700" }}>cloud_upload</span>
+          </div>
+
+          <h2 style={styles.successTitle}>{t('review.queueTitle')}</h2>
+          <p style={styles.successText}>{t('review.queueMessage')}</p>
+
+          {/* Pending sync card */}
+          <div style={{ width: "100%", background: "#FFF8EE", border: "1px solid #F5A623", borderRadius: 16, padding: 20, display: "flex", flexDirection: "column" as const, gap: 12, position: "relative" as const, overflow: "hidden", marginBottom: 28 }}>
+            <div style={{ position: "absolute" as const, top: 0, left: 0, bottom: 0, width: 4, background: "#F5A623", borderRadius: "4px 0 0 4px" }} />
+            <p style={{ fontSize: 10, fontWeight: 700, color: "#B07310", textTransform: "uppercase" as const, letterSpacing: "0.1em", margin: 0 }}>{t('review.queue_pending_sync')}</p>
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+              <div style={{ background: "#FEF3E0", borderRadius: 8, padding: 8, flexShrink: 0 }}>
+                <span className="material-symbols-outlined" style={{ fontSize: 20, color: "#F5A623", display: "block" }}>location_on</span>
+              </div>
+              <div style={{ textAlign: "left" as const }}>
+                <span style={{ fontSize: 12, color: "#9B6A10", display: "block" }}>{t('review.queueSummaryLocation')}</span>
+                <span style={{ fontSize: 15, fontWeight: 600, color: "#1B1C1C" }}>{locationSummary}</span>
+              </div>
+            </div>
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+              <div style={{ background: "#FEF3E0", borderRadius: 8, padding: 8, flexShrink: 0 }}>
+                <span className="material-symbols-outlined" style={{ fontSize: 20, color: "#F5A623", display: "block" }}>home_repair_service</span>
+              </div>
+              <div style={{ textAlign: "left" as const }}>
+                <span style={{ fontSize: 12, color: "#9B6A10", display: "block" }}>{t('review.queueSummaryDamage')}</span>
+                <span style={{ fontSize: 15, fontWeight: 600, color: "#1B1C1C" }}>{DAMAGE_LABELS[damageLevel] ?? damageLevel}</span>
+              </div>
+            </div>
+            <p style={{ fontSize: 13, color: "#9B6A10", margin: 0, fontStyle: "italic", textAlign: "left" as const }}>{t('review.queue_auto_upload')}</p>
+          </div>
+
+          {/* Action buttons */}
+          <div style={{ width: "100%", display: "flex", flexDirection: "column" as const, gap: 12 }}>
+            <button
+              style={{ width: "100%", height: 56, background: "linear-gradient(to bottom, #0468B1, #00508A)", color: "#FFFFFF", border: "none", borderRadius: 12, fontSize: 16, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 4px 12px rgba(4,104,177,0.25)" }}
+              onClick={resetForm}
+            >
+              {t('review.queueSubmitAnother')}
+            </button>
+            <button
+              style={{ width: "100%", height: 56, background: "transparent", border: "2px solid #0468B1", borderRadius: 12, fontSize: 16, fontWeight: 700, color: "#0468B1", cursor: "pointer", fontFamily: "inherit" }}
+              onClick={() => navigate("/")}
+            >
+              {t('review.queueGoHome')}
+            </button>
+            <button
+              style={{ width: "100%", height: 48, background: "transparent", border: "none", fontSize: 15, fontWeight: 600, color: "#0468B1", cursor: "pointer", fontFamily: "inherit" }}
+              onClick={() => navigate("/my-reports")}
+            >
+              {t('navigation.my_reports', 'View My Reports')}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Online success screen ──────────────────────────────────────────────────────
+
+  if (submitted && !wasQueued) {
     const locationSummary = selectedBuildingName
       ? selectedBuildingName
       : pinDropCoords

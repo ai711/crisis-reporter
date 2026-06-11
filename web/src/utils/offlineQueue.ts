@@ -121,6 +121,18 @@ export async function getQueueCount(): Promise<number> {
   });
 }
 
+export async function getQueueItem(local_id: string): Promise<QueuedReport | null> {
+  const db = await openDB();
+
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, "readonly");
+    const store = tx.objectStore(STORE_NAME);
+    const request = store.get(local_id);
+    request.onsuccess = () => resolve((request.result as QueuedReport) ?? null);
+    request.onerror = () => reject(request.error);
+  });
+}
+
 export async function getAllQueueItems(): Promise<QueuedReport[]> {
   const db = await openDB();
 
@@ -137,11 +149,75 @@ export async function resetItemForRetry(local_id: string): Promise<void> {
   return updateItemStatus(local_id, "pending", 0);
 }
 
+// Called once at startup — any item still in "syncing" state means the app was
+// killed mid-flight; it will never be retried unless explicitly reset to "pending".
+export async function resetStuckItems(): Promise<void> {
+  const db = await openDB();
+
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, "readwrite");
+    const store = tx.objectStore(STORE_NAME);
+    const request = store.getAll();
+
+    request.onsuccess = () => {
+      const items = request.result as QueuedReport[];
+      const stuck = items.filter((i) => i.status === "syncing");
+      let remaining = stuck.length;
+
+      if (remaining === 0) return resolve();
+
+      for (const item of stuck) {
+        item.status = "pending";
+        const put = store.put(item);
+        put.onsuccess = () => { if (--remaining === 0) resolve(); };
+        put.onerror = () => reject(put.error);
+      }
+    };
+
+    request.onerror = () => reject(request.error);
+  });
+}
+
 // ── Sync engine ───────────────────────────────────────────────────────────────
 
 const MAX_RETRIES = 5;
 
 let isSyncing = false;
+
+// Attempt a silent token refresh before the sync pass so that a 15-minute
+// access-token expiry doesn't stall the entire queue.  Returns the fresh
+// access token (or the existing one if still valid, or null for anonymous users).
+async function refreshAccessTokenIfNeeded(apiBaseUrl: string): Promise<string | null> {
+  const currentToken = localStorage.getItem("cr_access_token");
+  const refreshToken  = localStorage.getItem("cr_refresh_token");
+
+  if (!refreshToken) return currentToken; // Anonymous user — no token to refresh
+
+  try {
+    const res = await fetch(`${apiBaseUrl}/api/reporter/auth/refresh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data.access_token) {
+        localStorage.setItem("cr_access_token", data.access_token);
+        if (data.refresh_token) {
+          localStorage.setItem("cr_refresh_token", data.refresh_token);
+        }
+        return data.access_token;
+      }
+    }
+    // Refresh endpoint returned a non-200 (e.g. 401 = refresh token expired).
+    // Fall back to the current access token — the per-item auth_expired handler
+    // will surface the issue on first use.
+    return currentToken;
+  } catch {
+    return currentToken; // Network error — carry on with existing token
+  }
+}
 
 export async function syncQueue(apiBaseUrl: string): Promise<void> {
   // Sync lock — prevents concurrent sync passes
@@ -152,6 +228,11 @@ export async function syncQueue(apiBaseUrl: string): Promise<void> {
 
   try {
     const pending = await getPendingItems();
+    if (pending.length === 0) return;
+
+    // Proactively refresh the access token once for the whole pass rather than
+    // letting each item hit a 401 and burning time on per-item retries.
+    const accessToken = await refreshAccessTokenIfNeeded(apiBaseUrl);
 
     for (const item of pending) {
       // Promote exhausted items to "failed" so the UI can surface them
@@ -163,8 +244,7 @@ export async function syncQueue(apiBaseUrl: string): Promise<void> {
       await updateItemStatus(item.local_id, "syncing");
 
       try {
-        // Submit report
-        const accessToken = localStorage.getItem("cr_access_token");
+        // Submit report — use the pre-refreshed token for all items in this pass
         const headers: Record<string, string> = {
           "Content-Type": "application/json",
         };
@@ -216,6 +296,26 @@ export async function syncQueue(apiBaseUrl: string): Promise<void> {
             throw new Error(`Photo upload failed: ${photoResponse.status}`);
           }
         }
+
+        // Persist a local record so My Reports shows this report even when
+        // the reporter is anonymous or the JWT has since expired.
+        // Schema matches the shape written by the online ReportPage.tsx submit path.
+        try {
+          const stored: Array<Record<string, unknown>> = JSON.parse(
+            localStorage.getItem("cr_local_reports") || "[]"
+          );
+          stored.push({
+            id: reportId,
+            damage_level: item.report.damage_level,
+            gps_latitude: item.report.location?.gps_latitude ?? null,
+            gps_longitude: item.report.location?.gps_longitude ?? null,
+            location_address: item.report.location?.location_address ?? null,
+            submitted_at: item.created_at,
+            created_at: new Date().toISOString(),
+          });
+          if (stored.length > 100) stored.splice(0, stored.length - 100);
+          localStorage.setItem("cr_local_reports", JSON.stringify(stored));
+        } catch { /* non-critical */ }
 
         // Remove from queue on success
         await removeFromQueue(item.local_id);
@@ -272,6 +372,8 @@ export function registerSyncTriggers(apiBaseUrl: string): void {
   // Sync when internet connection is restored
   window.addEventListener("online", () => {
     syncQueue(apiBaseUrl);
+    // Re-register the background sync tag so the SW picks it up too
+    registerBackgroundSync();
   });
 
   // Sync when app becomes visible again (iOS PWA support)
@@ -280,4 +382,25 @@ export function registerSyncTriggers(apiBaseUrl: string): void {
       syncQueue(apiBaseUrl);
     }
   });
+
+  // Proactive cold-start sync — if the browser is already online when this
+  // function runs (page load / refresh), neither event above will fire because
+  // there is no transition from an offline or hidden state. Trigger one pass now.
+  if (navigator.onLine) {
+    syncQueue(apiBaseUrl);
+  }
+}
+
+// Register (or re-register) a Web Background Sync tag so the SW can trigger
+// syncQueue even when the tab is backgrounded (but not fully closed).
+// Browsers that don't support SyncManager (iOS Safari) silently skip this.
+export async function registerBackgroundSync(): Promise<void> {
+  if (!("serviceWorker" in navigator) || !("SyncManager" in window)) return;
+  try {
+    const registration = await navigator.serviceWorker.ready;
+    await (registration as ServiceWorkerRegistration & { sync: { register(tag: string): Promise<void> } }).sync.register("sync-reports");
+  } catch {
+    // Background sync not available or permission denied — the foreground
+    // online/visibilitychange triggers still provide coverage.
+  }
 }

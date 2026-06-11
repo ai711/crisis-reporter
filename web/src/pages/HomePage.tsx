@@ -219,9 +219,16 @@ export default function HomePage() {
 
         {/* ── Recent reports: offline queue + API history ── */}
         <div>
-          {/* Offline pending reports — always shown if any exist */}
+          {/* Offline pending reports — always shown if any exist; tapping navigates to My Reports */}
           {offlineReports.length > 0 && (
-            <div>
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={() => navigate('/my-reports')}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') navigate('/my-reports'); }}
+              style={{ cursor: 'pointer' }}
+              aria-label={`${offlineReports.length} pending reports. Tap to view.`}
+            >
               <div style={s.sectionLabel}>
                 ⏳ {t('home.pendingSync', 'Pending Sync')} ({offlineReports.length})
               </div>

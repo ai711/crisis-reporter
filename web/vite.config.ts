@@ -7,6 +7,14 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: "autoUpdate",
+      // injectManifest lets us ship a custom service worker (src/sw.ts) that
+      // handles the Workbox precaching manifest AND our background-sync handler.
+      strategies: "injectManifest",
+      srcDir: "src",
+      filename: "sw.ts",
+      injectManifest: {
+        globPatterns: ["**/*.{js,css,html,ico,png,svg,json,woff2}"],
+      },
       includeAssets: ["favicon.ico", "apple-touch-icon.png", "masked-icon.svg"],
       manifest: {
         name: "Crisis Reporter",
@@ -34,37 +42,6 @@ export default defineConfig({
             sizes: "512x512",
             type: "image/png",
             purpose: "any maskable",
-          },
-        ],
-      },
-      workbox: {
-        cleanupOutdatedCaches: true,
-        globPatterns: ["**/*.{js,css,html,ico,png,svg,json,woff2}"],
-        runtimeCaching: [
-          {
-            // Cache map tiles
-            urlPattern: /^https:\/\/api\.maptiler\.com\/.*/i,
-            handler: "CacheFirst",
-            options: {
-              cacheName: "map-tiles",
-              expiration: {
-                maxEntries: 500,
-                maxAgeSeconds: 60 * 60 * 24 * 7, // 7 days
-              },
-            },
-          },
-          {
-            // Cache GET API responses only — never cache mutations (POST/PUT/DELETE)
-            urlPattern: ({ request }) =>
-              request.method === "GET" && /\/api\//.test(request.url),
-            handler: "NetworkFirst",
-            options: {
-              cacheName: "crisis-reporter-api-cache",
-              expiration: {
-                maxEntries: 100,
-                maxAgeSeconds: 60 * 5, // 5 minutes
-              },
-            },
           },
         ],
       },

@@ -481,5 +481,16 @@
   },
   "navigation": {
     "my_reports": "View My Reports"
+  },
+  "review": {
+    "queueTitle": "Report Saved",
+    "queueMessage": "No internet connection. Your report has been saved and will be sent automatically when internet returns.",
+    "queue_pending_sync": "PENDING SYNC",
+    "queue_auto_upload": "Your report will upload automatically when internet is available.",
+    "queueRetry": "Retry now",
+    "queueSubmitAnother": "Submit another report",
+    "queueGoHome": "Go to Home",
+    "queueSummaryDamage": "Damage level",
+    "queueSummaryLocation": "Location"
   }
 }

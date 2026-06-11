@@ -217,6 +217,7 @@ export default function MyReportsPage() {
   const [fullDetail, setFullDetail]         = useState<ReportDetailFull | null>(null);
   const [deletingId, setDeletingId]         = useState<string | null>(null);
   const [retryingId, setRetryingId]         = useState<string | null>(null);
+  const [selectedOfflineReport, setSelectedOfflineReport] = useState<QueuedReport | null>(null);
 
   // ── Load offline queue ────────────────────────────────────────────────────
 
@@ -569,7 +570,15 @@ export default function MyReportsPage() {
         : { bg: "rgba(245,166,35,0.12)", color: "#F5A623", label: t("my_reports.offline_label") };
 
     return (
-      <div key={qr.local_id} style={styles.card}>
+      <div
+        key={qr.local_id}
+        style={{ ...styles.card, cursor: "pointer" }}
+        role="button"
+        tabIndex={0}
+        onClick={() => setSelectedOfflineReport(qr)}
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setSelectedOfflineReport(qr); }}
+        aria-label={`Queued report — ${loc}. Tap to view details.`}
+      >
         <div style={styles.thumbnailPlaceholder}>
           <span style={{ fontSize: 22 }}>{isFailed ? "⚠" : isSyncing ? "⬆" : "⏳"}</span>
         </div>
@@ -608,6 +617,122 @@ export default function MyReportsPage() {
       </div>
     );
   };
+
+  // ── Offline report detail view (mobile full-screen / desktop panel) ──────────
+
+  if (selectedOfflineReport) {
+    const qr = selectedOfflineReport;
+    const loc =
+      qr.report.location?.location_building_name ||
+      qr.report.location?.location_address ||
+      (qr.report.location?.gps_latitude != null
+        ? `${qr.report.location.gps_latitude.toFixed(5)}, ${(qr.report.location.gps_longitude ?? 0).toFixed(5)}`
+        : t("my_reports.location_not_recorded"));
+    const dmgLbl   = damageLabel(qr.report.damage_level as string);
+    const isFailed = qr.retry_count >= 5;
+    const blobUrls: string[] = qr.photos.map((p) =>
+      URL.createObjectURL(p.blob)
+    );
+
+    const closeDetail = () => {
+      // Revoke blob URLs to avoid memory leaks
+      blobUrls.forEach((u) => URL.revokeObjectURL(u));
+      setSelectedOfflineReport(null);
+    };
+
+    const handleOfflineRetry = async () => {
+      closeDetail();
+      setRetryingId(qr.local_id);
+      try {
+        await resetItemForRetry(qr.local_id);
+        await syncQueue(API_BASE);
+      } finally {
+        setRetryingId(null);
+        refreshOfflineReports();
+      }
+    };
+
+    const handleOfflineDelete = async () => {
+      if (!window.confirm(t("my_reports.action_delete") + "?")) return;
+      closeDetail();
+      setDeletingId(qr.local_id);
+      try {
+        await removeFromQueue(qr.local_id);
+      } finally {
+        setDeletingId(null);
+        refreshOfflineReports();
+      }
+    };
+
+    return (
+      <div style={styles.container}>
+        <style>{`@keyframes cr-spin { to { transform: rotate(360deg); } }`}</style>
+        <div style={{ flex: 1, padding: "0 16px 32px", overflowY: "auto" as const }}>
+          <button onClick={closeDetail} style={styles.backBtn}>
+            {t("my_reports.back")}
+          </button>
+          <h3 style={styles.detailTitle}>{t("my_reports.detail_title")}</h3>
+
+          {/* Pending sync banner */}
+          <div style={{ background: "#FFF8EE", border: "1px solid #F5A623", borderRadius: 12, padding: "10px 14px", display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+            <span style={{ fontSize: 20 }}>{isFailed ? "⚠" : "⏳"}</span>
+            <span style={{ fontSize: 13, fontWeight: 600, color: "#9B6A10" }}>
+              {isFailed
+                ? t("my_reports.offline_upload_failed")
+                : t("my_reports.offline_label") + " — " + t("review.queue_auto_upload")}
+            </span>
+          </div>
+
+          {/* Detail rows */}
+          {[
+            { label: t("my_reports.label_damage"), value: dmgLbl },
+            { label: t("my_reports.label_location"), value: loc },
+            { label: t("my_reports.label_date"), value: new Date(qr.created_at).toLocaleString() },
+            qr.report.infrastructure_types?.length
+              ? { label: t("my_reports.label_infrastructure"), value: qr.report.infrastructure_types.join(", ") }
+              : null,
+          ].filter(Boolean).map((row, i) => (
+            <div key={i} style={{ borderBottom: "1px solid #EEE", padding: "10px 0", display: "flex", flexDirection: "column" as const, gap: 2 }}>
+              <span style={{ fontSize: 11, color: "#9CA3AF", textTransform: "uppercase" as const, fontWeight: 600 }}>{(row as {label:string;value:string}).label}</span>
+              <span style={{ fontSize: 15, color: "#1B1C1C" }}>{(row as {label:string;value:string}).value}</span>
+            </div>
+          ))}
+
+          {/* Photos */}
+          {blobUrls.length > 0 && (
+            <div style={{ marginTop: 16 }}>
+              <span style={{ fontSize: 11, color: "#9CA3AF", textTransform: "uppercase" as const, fontWeight: 600 }}>{t("my_reports.label_photos")}</span>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginTop: 8 }}>
+                {blobUrls.map((url, i) => (
+                  <img key={i} src={url} alt={`Photo ${i + 1}`}
+                    style={{ width: "100%", aspectRatio: "1", objectFit: "cover" as const, borderRadius: 8, display: "block" }}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Actions */}
+          <div style={{ display: "flex", gap: 10, marginTop: 24 }}>
+            {isFailed && (
+              <button
+                style={{ flex: 1, height: 44, background: "#0468B1", color: "#fff", border: "none", borderRadius: 10, fontSize: 15, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
+                onClick={handleOfflineRetry}
+              >
+                {t("my_reports.action_retry")}
+              </button>
+            )}
+            <button
+              style={{ flex: 1, height: 44, background: "transparent", color: "#E53E3E", border: "1px solid #E53E3E", borderRadius: 10, fontSize: 15, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
+              onClick={handleOfflineDelete}
+            >
+              {t("my_reports.action_delete")}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // ── Mobile: full-screen detail view ──────────────────────────────────────
 

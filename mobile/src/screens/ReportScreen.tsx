@@ -30,7 +30,7 @@ import api, { API_BASE } from "../services/api";
 import * as Device from 'expo-device';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as FileSystem from 'expo-file-system';
-import { addToQueue, syncQueue } from "../utils/offlineQueue";
+import { addToQueue, syncQueue, getQueue, removeFromQueue } from "../utils/offlineQueue";
 import NetInfo from "@react-native-community/netinfo";
 import StepIndicator from "../components/StepIndicator";
 import type { DamageLevel, QueuedPhoto, ProcessedPhoto } from "../types";
@@ -394,6 +394,9 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
   const cameraRef = useRef<CameraRef | null>(null);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const buildingTappedRef = useRef(false);
+  // Stores the local_id of the most recently queued offline report so the delete
+  // and retry handlers can reference the specific queue entry.
+  const queuedLocalIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     setFlowStartedAt(new Date().toISOString());
@@ -1454,7 +1457,9 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
         display_order: i,
       }));
       // ReportSubmitRequest type predates multi-type infra fields — cast to bypass
-      await addToQueue({ ...reportPayload, was_queued: true } as any, queuedPhotos);
+      const localId = await addToQueue({ ...reportPayload, was_queued: true } as any, queuedPhotos);
+      // Store so the delete and retry handlers can reference this specific queue entry
+      queuedLocalIdRef.current = localId;
       await saveSubmittedLocation();
       setSubmittedReportId(null);
       setWasQueued(true);
@@ -1643,7 +1648,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
 
           <TouchableOpacity
             style={styles.confirmTextLink}
-            onPress={() => { resetForm(); navigation.navigate("Home"); }}
+            onPress={() => { resetForm(); navigation.navigate("MyReports"); }}
           >
             <Text style={styles.confirmTextLinkText}>{t('review.confirm_view_reports')}</Text>
           </TouchableOpacity>
@@ -1659,7 +1664,16 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
       if (netState.isConnected === true && netState.isInternetReachable !== false) {
         try {
           await syncQueue(API_BASE);
-          setWasQueued(false);
+          // syncQueue swallows errors internally — verify the item is actually gone
+          // before transitioning to the success screen
+          const queue = await getQueue();
+          const stillQueued = queue.some(item => item.local_id === queuedLocalIdRef.current);
+          if (!stillQueued) {
+            // Item was removed from queue → sync succeeded
+            setWasQueued(false);
+          } else {
+            Alert.alert(t('review.still_offline_title'), t('review.still_offline_body'));
+          }
         } catch {
           Alert.alert(t('review.still_offline_title'), t('review.still_offline_body'));
         }
@@ -1748,7 +1762,19 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                 t('review.delete_report_body'),
                 [
                   { text: t('common.cancel'), style: 'cancel' },
-                  { text: t('review.delete_confirm'), style: 'destructive', onPress: () => { resetForm(); navigation.navigate('Home'); } },
+                  {
+                    text: t('review.delete_confirm'),
+                    style: 'destructive',
+                    onPress: async () => {
+                      // Remove the queue entry before navigating away
+                      if (queuedLocalIdRef.current) {
+                        await removeFromQueue(queuedLocalIdRef.current);
+                        queuedLocalIdRef.current = null;
+                      }
+                      resetForm();
+                      navigation.navigate('Home');
+                    },
+                  },
                 ]
               );
             }}

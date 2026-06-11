@@ -155,6 +155,50 @@ export async function resetItemForRetry(local_id: string): Promise<void> {
   return updateItemStatus(local_id, "pending", 0);
 }
 
+// Called once at startup — any item still in "syncing" state means the app was
+// killed mid-flight; it will never be retried unless explicitly reset to "pending".
+export async function resetStuckItems(): Promise<void> {
+  const queue = await getQueue();
+  const hasStuck = queue.some((i) => i.status === "syncing");
+  if (!hasStuck) return;
+
+  const reset = queue.map((i) =>
+    i.status === "syncing" ? { ...i, status: "pending" as const } : i
+  );
+  await saveQueue(reset);
+  await notifyQueueChange();
+}
+
+// Attempt a silent token refresh before the sync pass so that a 15-minute
+// access-token expiry doesn't stall the entire queue with auth_expired failures.
+async function refreshAccessTokenIfNeeded(apiBaseUrl: string): Promise<string | null> {
+  const refreshToken = await tokenStorage.getRefreshToken();
+  if (!refreshToken) return tokenStorage.getAccessToken(); // Anonymous — nothing to refresh
+
+  try {
+    const res = await fetch(`${apiBaseUrl}/api/reporter/auth/refresh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data.access_token) {
+        const newRefresh = data.refresh_token ?? refreshToken;
+        // setTokens requires reporterId — preserve the existing one
+        const reporterId = (await tokenStorage.getReporterId()) ?? "";
+        await tokenStorage.setTokens(data.access_token, newRefresh, reporterId);
+        return data.access_token;
+      }
+    }
+    // Non-200 (e.g. 401 = refresh token expired) — fall back to existing token
+    return tokenStorage.getAccessToken();
+  } catch {
+    return tokenStorage.getAccessToken(); // Network error — carry on
+  }
+}
+
 export async function syncQueue(apiBaseUrl: string): Promise<void> {
   if (isSyncing) return;
   isSyncing = true;
@@ -165,11 +209,15 @@ export async function syncQueue(apiBaseUrl: string): Promise<void> {
       (item) => item.status === "pending" && item.retry_count < MAX_RETRIES
     );
 
+    if (pending.length === 0) return;
+
+    // Proactively refresh the access token once for the whole pass.
+    const accessToken = await refreshAccessTokenIfNeeded(apiBaseUrl);
+
     for (const item of pending) {
       await updateItemStatus(item.local_id, "syncing");
 
       try {
-        const accessToken = await tokenStorage.getAccessToken();
         const headers: Record<string, string> = {
           "Content-Type": "application/json",
         };
@@ -177,7 +225,7 @@ export async function syncQueue(apiBaseUrl: string): Promise<void> {
           headers["Authorization"] = `Bearer ${accessToken}`;
         }
 
-        // Submit report
+        // Submit report — use the pre-refreshed token
         const reportResponse = await fetch(`${apiBaseUrl}/api/reports`, {
           method: "POST",
           headers,

@@ -391,7 +391,14 @@ export default function MyReportsScreen() {
               const damagePill = getDamagePill(report.report.damage_level);
               const infraType = (report.report as any).infrastructure_type as string | null | undefined;
               return (
-                <View key={report.local_id} style={styles.reportCard}>
+                <TouchableOpacity
+                  key={report.local_id}
+                  style={styles.reportCard}
+                  activeOpacity={0.85}
+                  onPress={() => navigation.navigate('QueuedReportDetailScreen', { queuedReport: report })}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Queued report — ${getQueuedLocationLabel(report)}. Tap to view details.`}
+                >
                   {/* ROW 1: Status pill + date */}
                   <View style={styles.cardRow1}>
                     <View style={[
@@ -439,20 +446,20 @@ export default function MyReportsScreen() {
                   <View style={styles.cardActions}>
                     <TouchableOpacity
                       style={styles.retryBtn}
-                      onPress={() => handleRetry(report)}
+                      onPress={(e) => { e.stopPropagation?.(); handleRetry(report); }}
                     >
                       <MaterialIcons name="refresh" color="#0468B1" size={scale(15)} />
                       <Text style={styles.retryBtnText}>Retry</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={styles.deleteBtn}
-                      onPress={() => handleDelete(report)}
+                      onPress={(e) => { e.stopPropagation?.(); handleDelete(report); }}
                     >
                       <MaterialIcons name="delete" color="#E53E3E" size={scale(15)} />
                       <Text style={styles.deleteBtnText}>Delete</Text>
                     </TouchableOpacity>
                   </View>
-                </View>
+                </TouchableOpacity>
               );
             })}
           </View>
