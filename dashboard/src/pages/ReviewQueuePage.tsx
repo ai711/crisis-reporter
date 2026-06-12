@@ -953,8 +953,8 @@ function Tab1({ currentUserName }: { currentUserName: string }) {
                         {row.infrastructure_types.join(", ") || "—"}
                       </td>
                       <td style={{ fontSize: 12 }}>{row.crisis_type ?? "—"}</td>
-                      <td>
-                        <div style={{ display: "flex", gap: 4, flexWrap: "wrap", maxWidth: 260 }}>
+                      <td style={{ maxWidth: 260, overflow: "hidden" }}>
+                        <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
                           {row.flag_reasons.map((r) => (
                             <span key={r} style={s.flagPill}>
                               {flagReasonLabel(r)}
@@ -2182,10 +2182,13 @@ const s: Record<string, React.CSSProperties> = {
     padding: "2px 8px",
     fontSize: 11,
     fontWeight: 600,
-    whiteSpace: "nowrap",
+    whiteSpace: "normal",
+    wordBreak: "break-word" as const,
+    overflowWrap: "break-word" as const,
     display: "inline-flex",
     alignItems: "center",
     gap: 3,
+    maxWidth: "100%",
   },
   linkBtn: {
     background: "none",

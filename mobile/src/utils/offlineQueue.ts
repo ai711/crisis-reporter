@@ -1,6 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as FileSystem from "expo-file-system";
 import { documentDirectory } from "expo-file-system/legacy";
+import * as Notifications from "expo-notifications";
 import type { QueuedReport, QueuedPhoto, ReportSubmitRequest } from "../types";
 import { tokenStorage } from "../services/api";
 
@@ -217,6 +218,19 @@ async function saveLocalSubmittedRecord(
   }
 }
 
+// ── Notification helper ───────────────────────────────────────────────────────
+
+async function showSyncNotification(title: string, body: string): Promise<void> {
+  try {
+    const { status } = await Notifications.getPermissionsAsync();
+    if (status !== "granted") return;
+    await Notifications.scheduleNotificationAsync({
+      content: { title, body, sound: true },
+      trigger: null,
+    });
+  } catch { /* non-critical */ }
+}
+
 // ── Sync engine ───────────────────────────────────────────────────────────────
 
 const MAX_RETRIES = 5;
@@ -364,6 +378,10 @@ export async function syncQueue(apiBaseUrl: string): Promise<void> {
         await saveLocalSubmittedRecord(item, reportId);
         await removeFromQueue(item.local_id);
         await notifyQueueChange();
+        void showSyncNotification(
+          "Report uploaded",
+          "Your offline report has been successfully submitted."
+        );
       } catch (syncErr) {
         const isAuthExpired =
           syncErr instanceof Error && syncErr.message === "auth_expired";
@@ -371,6 +389,12 @@ export async function syncQueue(apiBaseUrl: string): Promise<void> {
         const nextStatus = (!isAuthExpired && nextRetry >= MAX_RETRIES) ? "failed" : "pending";
         await updateItemStatus(item.local_id, nextStatus, nextRetry);
         await notifyQueueChange();
+        if (nextStatus === "failed") {
+          void showSyncNotification(
+            "Upload failed — tap to retry",
+            "A report could not be uploaded after multiple attempts. Open the app to retry."
+          );
+        }
         // Auth expired — no point trying other items; let app refresh the token
         if (isAuthExpired) break;
       }

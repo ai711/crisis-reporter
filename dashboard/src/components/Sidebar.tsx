@@ -116,7 +116,6 @@ export default function Sidebar() {
           <BrandShield />
           <div>
             <div className="sidebar-brand-name">Crisis Reporter</div>
-            <div className="sidebar-brand-sub">Sovereign Lens Dashboard</div>
           </div>
         </div>
       </div>

@@ -45,7 +45,8 @@
     "submit": "Submit Report",
     "submitting": "Submitting...",
     "success": "Report submitted successfully",
-    "error": "Failed to submit report. Please try again."
+    "error": "Failed to submit report. Please try again.",
+    "question_number": "Question {{number}} of {{total}}"
   },
   "map": {
     "loading": "Loading map...",
@@ -243,6 +244,8 @@
     "editBuildingName": "Edit building name",
     "pinDropInstruction": "Tap anywhere on the map to place a pin, or drag the pin to the exact location.",
     "searchResultsEmpty": "No results found. Try a different search term.",
+    "hideManualEntry": "Hide manual entry",
+    "expandManualEntry": "Enter location manually instead",
     "duplicateWarningTitle": "Possible duplicate report",
     "duplicateWarningBody": "A report for this location was recently submitted. Do you want to continue with a new report?",
     "duplicateWarningContinue": "Continue",

@@ -25,8 +25,9 @@ const UN_LANGUAGES = [
   { code: "es", name: "Español" },
 ];
 
-function getLanguageName(code: string): string {
-  return UN_LANGUAGES.find((l) => l.code === code)?.name ?? code.toUpperCase();
+function getLanguageName(code: string, languages?: { code: string; name: string }[]): string {
+  const list = languages ?? UN_LANGUAGES;
+  return list.find((l) => l.code === code)?.name ?? UN_LANGUAGES.find((l) => l.code === code)?.name ?? code.toUpperCase();
 }
 
 // ── Icons ─────────────────────────────────────────────────────────────────────
@@ -106,12 +107,28 @@ export default function SettingsPage() {
   const [langCacheNote, setLangCacheNote] = useState(false);
   const prevLangCodeRef = useRef(currentLangCode);
 
+  // Available languages fetched from backend (falls back to UN_LANGUAGES)
+  const [availableLanguages, setAvailableLanguages] = useState<{ code: string; name: string }[]>(UN_LANGUAGES);
+  const [availableLangsLoaded, setAvailableLangsLoaded] = useState(false);
+
   // Country modal state
   const [countries, setCountries] = useState<Country[]>([]);
   const [countriesLoading, setCountriesLoading] = useState(false);
   const [countriesError, setCountriesError] = useState("");
   const [countrySearch, setCountrySearch] = useState("");
   const [inactiveCountry, setInactiveCountry] = useState<Country | null>(null);
+
+  // Fetch available languages when language modal first opens
+  useEffect(() => {
+    if (modal !== "language" || availableLangsLoaded) return;
+    api
+      .get<{ code: string; name: string }[]>("/api/language-packages/available")
+      .then((res) => {
+        if (res.data && res.data.length > 0) setAvailableLanguages(res.data);
+      })
+      .catch(() => { /* silent — keep UN_LANGUAGES fallback */ })
+      .finally(() => setAvailableLangsLoaded(true));
+  }, [modal, availableLangsLoaded]);
 
   // Fetch countries only when the country modal first opens
   useEffect(() => {
@@ -243,7 +260,7 @@ export default function SettingsPage() {
             <button style={s.row} onClick={() => setModal("language")}>
               <span style={s.rowLabel}>{t('settings.change_language')}</span>
               <div style={s.rowRight}>
-                <span style={s.rowValue}>{getLanguageName(currentLangCode)}</span>
+                <span style={s.rowValue}>{getLanguageName(currentLangCode, availableLanguages)}</span>
                 <IconChevron />
               </div>
             </button>
@@ -377,7 +394,7 @@ export default function SettingsPage() {
                 <p style={s.langCacheNote}>{t('settings.lang_cache_note')}</p>
               )}
               <div style={s.langGrid}>
-                {UN_LANGUAGES.map((lang) => {
+                {availableLanguages.map((lang) => {
                   const isSelected = currentLangCode === lang.code;
                   const isLoading = langLoadingCode === lang.code;
                   return (

@@ -242,6 +242,10 @@ export async function syncQueue(apiBaseUrl: string): Promise<void> {
       // Promote exhausted items to "failed" so the UI can surface them
       if (item.retry_count >= MAX_RETRIES) {
         await updateItemStatus(item.local_id, "failed", item.retry_count);
+        showSyncNotification(
+          "Upload failed — tap to retry",
+          "A report could not be uploaded after multiple attempts. Open the app to retry."
+        );
         continue;
       }
 
@@ -329,8 +333,12 @@ export async function syncQueue(apiBaseUrl: string): Promise<void> {
           localStorage.setItem("cr_local_reports", JSON.stringify(stored));
         } catch { /* non-critical */ }
 
-        // Remove from queue on success
+        // Remove from queue on success and notify the reporter
         await removeFromQueue(item.local_id);
+        showSyncNotification(
+          "Report uploaded",
+          "Your offline report has been successfully submitted."
+        );
       } catch (syncErr) {
         const isAuthExpired =
           syncErr instanceof Error && syncErr.message === "auth_expired";
@@ -376,6 +384,30 @@ export async function isIndexedDBAvailable(): Promise<boolean> {
       resolve(false);
     }
   });
+}
+
+// ── Notification helpers ──────────────────────────────────────────────────────
+
+function showSyncNotification(title: string, body: string): void {
+  if (!("Notification" in window) || Notification.permission !== "granted") return;
+  try {
+    const opts: NotificationOptions = { body, icon: "/icons/icon-192x192.png", tag: "cr-sync" };
+    // Use SW notification when available so it works even when the tab is backgrounded
+    if ("serviceWorker" in navigator && navigator.serviceWorker.controller) {
+      navigator.serviceWorker.ready
+        .then((reg) => reg.showNotification(title, opts))
+        .catch(() => { try { new Notification(title, opts); } catch { /* ignore */ } });
+    } else {
+      new Notification(title, opts);
+    }
+  } catch { /* notifications are non-critical — ignore all errors */ }
+}
+
+export async function requestSyncNotificationPermission(): Promise<void> {
+  if (!("Notification" in window) || Notification.permission !== "default") return;
+  try {
+    await Notification.requestPermission();
+  } catch { /* ignore — browser may not support the promise form */ }
 }
 
 // ── Auto-sync triggers ────────────────────────────────────────────────────────

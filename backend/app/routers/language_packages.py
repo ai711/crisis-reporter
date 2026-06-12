@@ -3116,6 +3116,7 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
 
     # ── Newly discovered CHECK B keys (added by CI enforcement) ──
     ("location.offline_gps_background", "ui_location", "Your GPS coordinates are still being recorded in the background"),
+    ("location.permission_note", "ui_location", "Crisis Reporter needs your location to help identify the building you are reporting."),
     ("navigation.my_reports", "ui_common", "View My Reports"),
     ("report.address_label", "ui_report", "Address"),
     ("report.address_placeholder", "ui_report", "Street address or area name"),
@@ -3126,11 +3127,16 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
     ("report.building_name_placeholder", "ui_report", "Name of the specific building or structure"),
     ("report.building_name_hint", "ui_report", "e.g. Residential Block 4B, Al-Nour Mosque"),
     ("report.at_least_one_required", "ui_report", "* At least one field must be filled in to continue"),
+    ("report.address_required_offline", "ui_report", "* Address is required to continue when GPS is unavailable"),
+    ("report.question_number", "ui_report", "Question {{number}} of {{total}}"),
+    ("report.q3_infra_name_placeholder", "placeholder", "e.g. Main Street Bridge"),
+    ("report.building_name_optional_placeholder", "placeholder", "Building name (optional)"),
     ("report.location_tap_hint", "ui_report", "Tap a building or drop a pin"),
-    ("report.gps_attached", "ui_report", "GPS location captured and attached to this report"),
     ("report.review_intro", "ui_report", "Please review your report before submitting. Tap any section to edit."),
     ("report.review_privacy_note", "ui_report", "Your report will be reviewed by UNDP and used to coordinate crisis response"),
     ("questions.q2.opt_other_prefix", "question", "Other"),
+    ("locationScreen.hideManualEntry", "ui_location", "Hide manual entry"),
+    ("locationScreen.expandManualEntry", "ui_location", "Enter location manually instead"),
 
 ]
 

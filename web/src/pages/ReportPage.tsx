@@ -13,7 +13,7 @@ import { compressPhoto } from "../utils/photoCompression";
 import { extractExif } from "../utils/exifExtraction";
 import SubmissionStepper, { type StepperStep } from "../components/SubmissionStepper";
 import type { DamageLevel, QueuedPhoto } from "../types";
-import { addToQueue, isIndexedDBAvailable } from "../utils/offlineQueue";
+import { addToQueue, isIndexedDBAvailable, requestSyncNotificationPermission } from "../utils/offlineQueue";
 import { generateUUID } from "../utils/uuid";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
@@ -423,6 +423,14 @@ export default function ReportPage() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const gpsMarkerRef = useRef<maplibregl.Marker | null>(null); // B9
   const pinMarkerRef = useRef<maplibregl.Marker | null>(null); // B6
+  const contentScrollRef = useRef<HTMLDivElement>(null);
+
+  // Scroll content to top whenever the review step becomes active
+  useEffect(() => {
+    if (step === "review") {
+      contentScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }, [step]);
 
   // Manage blob URLs for photo previews — create once per photos change, revoke on cleanup
   useEffect(() => {
@@ -1322,14 +1330,13 @@ export default function ReportPage() {
     setDraftPrompt("dismissed");
   };
 
-  // G5 — Valid if any usable coordinate or text field is filled
-  const isLocationValid = (): boolean =>
-    (gpsLatitude !== null && gpsLongitude !== null) ||
-    buildingCentroidLat !== null ||
-    pinDropCoords !== null ||
-    locationAddress.trim().length > 0 ||
-    locationLandmark.trim().length > 0 ||
-    locationBuildingName.trim().length > 0;
+  // G5 — Valid if any usable coordinate or text field is filled.
+  // When offline without GPS, address is specifically required (asterisk is enforced).
+  const isLocationValid = (): boolean => {
+    if ((gpsLatitude !== null && gpsLongitude !== null) || buildingCentroidLat !== null || pinDropCoords !== null) return true;
+    if (locationOffline && gpsLatitude === null) return locationAddress.trim().length > 0;
+    return locationAddress.trim().length > 0 || locationLandmark.trim().length > 0 || locationBuildingName.trim().length > 0;
+  };
 
   const toggleInfraType = (value: string) => {
     setInfrastructureTypes((prev) =>
@@ -1569,6 +1576,8 @@ export default function ReportPage() {
         }));
         await addToQueue({ ...reportPayload, was_queued: true } as any, queuedPhotos);
         try { localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ }
+        // Request notification permission so we can alert when this report uploads later
+        void requestSyncNotificationPermission();
         setWasQueued(true);
         setSubmitted(true);
       } catch {
@@ -2043,7 +2052,7 @@ export default function ReportPage() {
       })()}
 
       {/* Content */}
-      <div style={{ ...styles.content, overflow: step === "location" ? "hidden" : "auto" }}>
+      <div ref={contentScrollRef} style={{ ...styles.content, overflow: (step === "location" && (!locationOffline || connectionLostMidSession)) ? "hidden" : "auto" }}>
 
         {/* Step 1 — Photos */}
         {step === "photos" && (
@@ -2141,7 +2150,7 @@ export default function ReportPage() {
 
         {/* Step 2 — Location */}
         {step === "location" && (
-          <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+          <div style={{ height: locationOffline && !connectionLostMidSession ? "auto" : "100%", display: "flex", flexDirection: "column", minHeight: "100%" }}>
 
             {/* D2/E1 — Amber banner: offline on arrival OR mid-session drop */}
             {locationOffline && (
@@ -2387,7 +2396,7 @@ export default function ReportPage() {
                   <input
                     style={styles.input}
                     type="text"
-                    placeholder="Building name (optional)"
+                    placeholder={t('report.building_name_optional_placeholder', 'Building name (optional)')}
                     value={selectedBuildingName}
                     onChange={(e) => setSelectedBuildingName(e.target.value)}
                   />
@@ -2419,7 +2428,7 @@ export default function ReportPage() {
               {/* Online, GPS not yet captured, not denied — asking for permission */}
               {!locationOffline && gpsLatitude === null && !gpsDenied && (
                 <p style={styles.permNote}>
-                  Crisis Reporter needs your location to help identify the building you are reporting.
+                  {t('location.permission_note', 'Crisis Reporter needs your location to help identify the building you are reporting.')}
                 </p>
               )}
 
@@ -2454,7 +2463,7 @@ export default function ReportPage() {
                 <div style={{ display: "flex", flexDirection: "column", gap: locationOffline ? 16 : 8 }}>
                   {/* Address */}
                   <div>
-                    {locationOffline && <label style={styles.fieldLabel}>{t('report.address_label', 'Address')} *</label>}
+                    {locationOffline && <label style={styles.fieldLabel}>{t('report.address_label', 'Address')}{gpsLatitude === null ? ' *' : ''}</label>}
                     <input
                       style={styles.input}
                       type="text"
@@ -2512,9 +2521,9 @@ export default function ReportPage() {
                     )}
                   </div>
 
-                  {locationOffline && (
+                  {locationOffline && gpsLatitude === null && (
                     <p style={{ fontSize: 11, color: "#717782", margin: 0 }}>
-                      {t('report.at_least_one_required', '* At least one field must be filled in to continue')}
+                      {t('report.address_required_offline', '* Address is required to continue when GPS is unavailable')}
                     </p>
                   )}
                 </div>
@@ -2591,7 +2600,7 @@ export default function ReportPage() {
         {step === "damage" && (
           <div style={styles.step}>
             <div style={{ marginBottom: 4 }}>
-              <p style={styles.questionProgress}>Question {damageQuestion} of {totalQuestions}</p>
+              <p style={styles.questionProgress}>{t('report.question_number', { number: damageQuestion, total: totalQuestions, defaultValue: `Question ${damageQuestion} of ${totalQuestions}` })}</p>
               <div style={{ height: 6, background: "#E4E2E1", borderRadius: 3, overflow: "hidden" }}>
                 <div style={{ height: "100%", width: `${(damageQuestion / totalQuestions) * 100}%`, background: "#0468B1", borderRadius: 3, transition: "width 0.3s ease" }} />
               </div>
@@ -2682,7 +2691,7 @@ export default function ReportPage() {
                   style={styles.input}
                   type="text"
                   maxLength={200}
-                  placeholder="e.g. Main Street Bridge"
+                  placeholder={t('report.q3_infra_name_placeholder', 'e.g. Main Street Bridge')}
                   value={infrastructureName}
                   onChange={(e) => { setInfrastructureName(e.target.value); setShowAnswerPrompt(false); }}
                 />
@@ -3261,7 +3270,7 @@ export default function ReportPage() {
             <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
               <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#006d37", flexShrink: 0 }} />
               <span style={{ fontSize: 12, fontWeight: 500, color: "#006d37" }}>
-                {t('report.gps_attached', 'GPS location captured and attached to this report')}
+                {t('review.gps_captured_note', 'GPS location captured and attached to this report')}
               </span>
             </div>
           )}

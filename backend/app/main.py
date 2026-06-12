@@ -774,6 +774,23 @@ WHERE r.id = sub.id""",
     "SELECT setval('reports_serial_seq', COALESCE((SELECT MAX(serial_number) FROM reports), 0) + 1, false)",
     "ALTER TABLE reports ALTER COLUMN serial_number SET DEFAULT nextval('reports_serial_seq')",
     "CREATE UNIQUE INDEX IF NOT EXISTS uix_reports_serial_number ON reports(serial_number)",
+    # Deduplicate local_id before creating the unique index — historical reports submitted
+    # before the app-layer dedup check existed may share the same local_id. Keep the oldest
+    # report for each local_id and NULL the rest so the index creation below can succeed.
+    # Idempotent: if no duplicates exist the UPDATE touches zero rows.
+    """DO $$
+BEGIN
+  UPDATE reports SET local_id = NULL
+  WHERE id IN (
+    SELECT id FROM (
+      SELECT id,
+             ROW_NUMBER() OVER (PARTITION BY local_id ORDER BY created_at ASC, id ASC) AS rn
+      FROM reports
+      WHERE local_id IS NOT NULL
+    ) sub
+    WHERE rn > 1
+  );
+END $$""",
     # Partial unique index on local_id — prevents race-condition duplicate inserts when the
     # same local_report_id is sent twice before the first INSERT is committed.
     # Partial (WHERE local_id IS NOT NULL) because anonymous/online reports may have no local_id.
@@ -1014,6 +1031,22 @@ ON CONFLICT DO NOTHING""",
     # Required for Rule 2 auto-flagging (IP blocked reporter match) in auto_flagging.py.
     "ALTER TABLE reporters ADD COLUMN IF NOT EXISTS ip_address_hash VARCHAR(64)",
     "CREATE INDEX IF NOT EXISTS ix_reporters_ip_address_hash ON reporters(ip_address_hash)",
+    # Assign serial numbers to reports that still have NULL — uses the sequence so new
+    # numbers never conflict with existing ones. The earlier ROW_NUMBER backfill fails when
+    # serial_number=1 is already taken; this DO block avoids that by calling nextval() which
+    # always returns the next unused value. Idempotent: no NULL rows → no-op.
+    """DO $$
+DECLARE
+  r RECORD;
+  next_sn INTEGER;
+BEGIN
+  FOR r IN
+    SELECT id FROM reports WHERE serial_number IS NULL ORDER BY created_at ASC, id ASC
+  LOOP
+    next_sn := nextval('reports_serial_seq');
+    UPDATE reports SET serial_number = next_sn WHERE id = r.id;
+  END LOOP;
+END $$""",
 ]
 
 

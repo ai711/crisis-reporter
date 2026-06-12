@@ -360,17 +360,20 @@ export default function OnboardingPage() {
 
   const fetchMoreLanguages = async () => {
     try {
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-      const res = await fetch(`${API_URL}/api/languages/public`);
-      if (!res.ok) return;
-      const data = await res.json();
-      // data is an array of language objects with code and name
-      setAllLanguages(data);
-      setShowAllLanguages(true);
-    } catch (e) {
-      console.warn('Failed to fetch languages:', e);
+      const res = await api.get<{ code: string; name: string }[]>("/api/language-packages/available");
+      if (res.data && res.data.length > 0) {
+        setAllLanguages(res.data);
+        setShowAllLanguages(true);
+      }
+    } catch {
+      // silent — pills remain visible as fallback
     }
   };
+
+  // Auto-fetch all available languages on mount so the full list is always shown
+  useEffect(() => {
+    fetchMoreLanguages();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleCountrySelect = (country: CachedCountry) => {
     setSelectedCountry(country);

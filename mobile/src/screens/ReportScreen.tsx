@@ -406,6 +406,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
   // Stores the local_id of the most recently queued offline report so the delete
   // and retry handlers can reference the specific queue entry.
   const queuedLocalIdRef = useRef<string | null>(null);
+  const reviewScrollRef = useRef<ScrollView>(null);
 
   useEffect(() => {
     setFlowStartedAt(new Date().toISOString());
@@ -568,6 +569,13 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
 
     return () => unsubscribe();
   }, [step, locationScenario, locationGpsCoords]);
+
+  // Scroll review page to top when entering the review step
+  useEffect(() => {
+    if (step === 'review') {
+      reviewScrollRef.current?.scrollTo({ x: 0, y: 0, animated: false });
+    }
+  }, [step]);
 
   // Pre-fill Q3 infrastructure name from OSM building name when entering questions step
   useEffect(() => {
@@ -871,12 +879,13 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
     if (locationScenario === 'online_gps' || locationScenario === 'online_no_gps') {
       return !!(selectedBuilding || pinCoords || gpsCoords || locationGpsCoords);
     }
-    if (locationScenario === 'offline_gps' || locationScenario === 'offline_no_gps') {
-      return !!(
-        locationAddress?.trim() ||
-        locationLandmark?.trim() ||
-        locationBuildingName?.trim()
-      );
+    if (locationScenario === 'offline_gps') {
+      // GPS coords captured — valid regardless of text fields
+      return !!locationGpsCoords;
+    }
+    if (locationScenario === 'offline_no_gps') {
+      // No GPS — address is the required minimum (matches the * label on that field)
+      return !!(locationAddress?.trim());
     }
     return false;
   };
@@ -2123,7 +2132,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                 {/* Manual location toggle */}
                 <TouchableOpacity onPress={() => setManualExpanded(!manualExpanded)}>
                   <Text style={styles.manualToggle}>
-                    {manualExpanded ? "Hide manual entry ▲" : "Enter location manually instead ▼"}
+                    {manualExpanded ? `${t('locationScreen.hideManualEntry')} ▲` : `${t('locationScreen.expandManualEntry')} ▼`}
                   </Text>
                 </TouchableOpacity>
 
@@ -2131,19 +2140,19 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                   <View style={{ gap: 8 }}>
                     <TextInput
                       style={styles.input}
-                      placeholder="Address"
+                      placeholder={t('locationScreen.manualAddress')}
                       value={locationAddress}
                       onChangeText={setLocationAddress}
                     />
                     <TextInput
                       style={styles.input}
-                      placeholder="Landmark (e.g. Near central market)"
+                      placeholder={t('locationScreen.manualLandmarkPlaceholder')}
                       value={locationLandmark}
                       onChangeText={setLocationLandmark}
                     />
                     <TextInput
                       style={styles.input}
-                      placeholder="Building Name"
+                      placeholder={t('locationScreen.manualBuildingName')}
                       value={locationBuildingName}
                       onChangeText={setLocationBuildingName}
                     />
@@ -2189,7 +2198,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
               )}
 
               {/* Manual entry fields */}
-              <Text style={styles.manualFieldLabel}>{t('locationScreen.manualAddress')} *</Text>
+              <Text style={styles.manualFieldLabel}>{t('locationScreen.manualAddress')}{locationScenario === 'offline_no_gps' ? ' *' : ''}</Text>
               <TextInput
                 style={styles.manualInput}
                 placeholder={t('locationScreen.manualAddressPlaceholder')}
@@ -2645,7 +2654,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
               <View style={styles.step}>
                 {/* Question progress */}
                 <Text style={styles.questionProgressLabel}>
-                  QUESTION {damageQuestion} OF {8 + additionalQuestions.length}
+                  {t('report.question_number', { number: damageQuestion, total: 8 + additionalQuestions.length })}
                 </Text>
                 <View style={styles.questionProgressTrack}>
                   <View style={[styles.questionProgressFill, {
@@ -3054,6 +3063,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
 
           {/* Scrollable content */}
           <ScrollView
+            ref={reviewScrollRef}
             style={styles.reviewScroll}
             contentContainerStyle={styles.reviewScrollContent}
             showsVerticalScrollIndicator={false}

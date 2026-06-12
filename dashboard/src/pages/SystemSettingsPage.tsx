@@ -878,6 +878,35 @@ function LangStatusPill({ lang }: { lang: LanguageLifecycle }) {
   );
 }
 
+function InfoBadge({ title }: { title: string }) {
+  return (
+    <span
+      title={title}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        width: 16,
+        height: 16,
+        borderRadius: "50%",
+        background: "rgba(4,104,177,0.1)",
+        color: "var(--c-primary-container)",
+        fontSize: 10,
+        fontWeight: 800,
+        cursor: "help",
+        marginLeft: 6,
+        verticalAlign: "middle",
+        lineHeight: 1,
+        userSelect: "none" as const,
+        flexShrink: 0,
+        letterSpacing: 0,
+      }}
+    >
+      i
+    </span>
+  );
+}
+
 function LanguagesTab() {
   const queryClient = useQueryClient();
   const { user } = useAuthStore();
@@ -1612,19 +1641,19 @@ function LanguagesTab() {
                 <th style={s.th}>Language</th>
                 <th style={s.th}>
                   Status
-                  <span title="Protected: built-in UN languages that cannot be changed. Active: available to reporters. Pending: added but not yet published. Deprecated/Deactivated: being phased out." style={{ fontSize: 12, color: "#9ca3af", cursor: "help", marginLeft: 4, verticalAlign: "middle" }}>ⓘ</span>
+                  <InfoBadge title="Protected: built-in UN languages that cannot be changed. Active: available to reporters. Pending: added but not yet published. Deprecated/Deactivated: being phased out." />
                 </th>
                 <th style={s.th}>
                   Reporter Visible
-                  <span title="Whether this language appears in the reporter app. Only Active and Protected languages are visible to reporters." style={{ fontSize: 12, color: "#9ca3af", cursor: "help", marginLeft: 4, verticalAlign: "middle" }}>ⓘ</span>
+                  <InfoBadge title="Whether this language appears in the reporter app. Only Active and Protected languages are visible to reporters." />
                 </th>
                 <th style={{ ...s.th, textAlign: "right" as const }}>
                   Translation Status
-                  <span title="Shows how many strings are translated for this language. Missing: not yet translated. Draft: translated but not reviewed. Approved: reviewed and ready to publish. Published: live and visible to reporters." style={{ fontSize: 12, color: "#9ca3af", cursor: "help", marginLeft: 4, verticalAlign: "middle" }}>ⓘ</span>
+                  <InfoBadge title="Shows how many strings are translated for this language. Missing: not yet translated. Draft: translated but not reviewed. Approved: reviewed and ready to publish. Published: live and visible to reporters." />
                 </th>
                 <th style={{ ...s.th, textAlign: "right" as const }}>
                   Actions
-                  <span title="Available actions depend on the language status and your role. Only Superadmins can publish." style={{ fontSize: 12, color: "#9ca3af", cursor: "help", marginLeft: 4, verticalAlign: "middle" }}>ⓘ</span>
+                  <InfoBadge title="Available actions depend on the language status and your role. Only Superadmins can publish." />
                 </th>
               </tr>
             </thead>
