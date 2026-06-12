@@ -2816,46 +2816,15 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
     ("questions.q3.placeholder",      "answer", "Enter the name or description of the building or structure"),
 
     # ── Q4 disaster-type options (mobile uses questions.q4.opt_*; web uses disaster_types.* dynamically) ──
-    ("questions.q4.opt_earthquake",        "answer", "Earthquake"),
-    ("questions.q4.opt_flood",             "answer", "Flood"),
-    ("questions.q4.opt_tsunami",           "answer", "Tsunami"),
-    ("questions.q4.opt_hurricane_cyclone", "answer", "Hurricane or Cyclone"),
-    ("questions.q4.opt_wildfire",          "answer", "Wildfire"),
-    ("questions.q4.opt_explosion",         "answer", "Explosion"),
-    ("questions.q4.opt_chemical_incident", "answer", "Chemical Incident"),
     ("questions.q4.opt_conflict",          "answer", "Conflict"),
-    ("questions.q4.opt_civil_unrest",      "answer", "Civil Unrest"),
 
     # ── Q5 options (mobile; web uses Q5_OPT_* dynamically via qOptions) ──
-    ("questions.q5.opt_yes",  "answer", "Yes"),
-    ("questions.q5.opt_no",   "answer", "No"),
 
     # ── Q6 options (mobile; web uses Q6_OPT_* dynamically) ──
-    ("questions.q6.opt_no_damage", "answer", "No damage observed"),
-    ("questions.q6.opt_minor",     "answer", "Minor damage — service disruptions but quickly repairable"),
-    ("questions.q6.opt_moderate",  "answer", "Moderate damage — partial outages requiring repairs"),
-    ("questions.q6.opt_severe",    "answer", "Severe damage — major infrastructure damaged, prolonged outages"),
-    ("questions.q6.opt_destroyed", "answer", "Completely destroyed — no electricity infrastructure functioning"),
-    ("questions.q6.opt_unknown",   "answer", "Unknown / cannot be assessed"),
 
     # ── Q7 options (mobile; web uses Q7_OPT_* dynamically) ──
-    ("questions.q7.opt_fully",           "answer", "Fully functional"),
-    ("questions.q7.opt_partially",       "answer", "Partially functional"),
-    ("questions.q7.opt_largely",         "answer", "Largely disrupted"),
-    ("questions.q7.opt_not_functioning", "answer", "Not functioning at all"),
-    ("questions.q7.opt_unknown",         "answer", "Unknown"),
 
     # ── Q8 options (mobile uses questions.q8.opt_*; web uses Q8_KEY_MAP literal keys) ──
-    ("questions.q8.opt_food_water",    "answer", "Food assistance and safe drinking water"),
-    ("questions.q8.opt_cash",          "answer", "Cash or financial assistance"),
-    ("questions.q8.opt_healthcare",    "answer", "Access to healthcare and essential medicines"),
-    ("questions.q8.opt_shelter",       "answer", "Shelter, housing repair, or temporary accommodation"),
-    ("questions.q8.opt_livelihoods",   "answer", "Restoration of livelihoods or income sources"),
-    ("questions.q8.opt_wash",          "answer", "Water, sanitation, and hygiene (toilets, washing facilities)"),
-    ("questions.q8.opt_basic_services","answer", "Restoration of basic services and infrastructure (electricity, roads, schools)"),
-    ("questions.q8.opt_protection",    "answer", "Protection services and psychosocial support"),
-    ("questions.q8.opt_local_support", "answer", "Support from local authorities and community organizations"),
-    ("questions.q8.opt_other",         "answer", "Other — please specify"),
 
     # ── Questions UI chrome (recovery modal, hints) ──
     ("questions.recoveryTitle",          "ui_report", "Resume previous report?"),

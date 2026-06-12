@@ -277,25 +277,25 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
     {
       groupLabel: t('questions.q4.group_natural'),
       options: [
-        { value: 'earthquake', label: t('questions.q4.opt_earthquake') },
-        { value: 'flood', label: t('questions.q4.opt_flood') },
-        { value: 'tsunami', label: t('questions.q4.opt_tsunami') },
-        { value: 'hurricane_cyclone', label: t('questions.q4.opt_hurricane_cyclone') },
-        { value: 'wildfire', label: t('questions.q4.opt_wildfire') },
+        { value: 'earthquake', label: t('Q4_OPT_EARTHQUAKE', 'Earthquake') },
+        { value: 'flood', label: t('Q4_OPT_FLOOD', 'Flood') },
+        { value: 'tsunami', label: t('Q4_OPT_TSUNAMI', 'Tsunami') },
+        { value: 'hurricane_cyclone', label: t('Q4_OPT_HURRICANE_CYCLONE', 'Hurricane or Cyclone') },
+        { value: 'wildfire', label: t('Q4_OPT_WILDFIRE', 'Wildfire') },
       ],
     },
     {
       groupLabel: t('questions.q4.group_technological'),
       options: [
-        { value: 'explosion', label: t('questions.q4.opt_explosion') },
-        { value: 'chemical_incident', label: t('questions.q4.opt_chemical_incident') },
+        { value: 'explosion', label: t('Q4_OPT_EXPLOSION', 'Explosion') },
+        { value: 'chemical_incident', label: t('Q4_OPT_CHEMICAL_INCIDENT', 'Chemical Incident') },
       ],
     },
     {
       groupLabel: t('questions.q4.group_humanmade'),
       options: [
         { value: 'conflict', label: t('questions.q4.opt_conflict') },
-        { value: 'civil_unrest', label: t('questions.q4.opt_civil_unrest') },
+        { value: 'civil_unrest', label: t('Q4_OPT_CIVIL_UNREST', 'Civil Unrest') },
       ],
     },
   ];
@@ -2782,8 +2782,8 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                   <>
                     <Text style={styles.questionTitleLarge}>{qTitle(5, t('questions.q5.title'))}</Text>
                     {qOptions(5, [
-                      { value: "yes", label: t('questions.q5.opt_yes') },
-                      { value: "no", label: t('questions.q5.opt_no') },
+                      { value: "yes", label: t('Q5_OPT_YES', 'Yes') },
+                      { value: "no", label: t('Q5_OPT_NO', 'No') },
                     ]).map(({ value, label }) => {
                       const isSelected = debrisBlocking === value;
                       return (
@@ -2809,12 +2809,12 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                     <Text style={styles.questionTitleLarge}>{qTitle(6, t('questions.q6.title'))}</Text>
                     <View style={styles.optionGrid2Col}>
                       {qOptions(6, [
-                        { value: "no_damage", label: t('questions.q6.opt_no_damage') },
-                        { value: "minor", label: t('questions.q6.opt_minor') },
-                        { value: "moderate", label: t('questions.q6.opt_moderate') },
-                        { value: "severe", label: t('questions.q6.opt_severe') },
-                        { value: "destroyed", label: t('questions.q6.opt_destroyed') },
-                        { value: "unknown", label: t('questions.q6.opt_unknown') },
+                        { value: "no_damage", label: t('Q6_OPT_NO_DAMAGE', 'No damage observed') },
+                        { value: "minor", label: t('Q6_OPT_MINOR', 'Minor damage — service disruptions but quickly repairable') },
+                        { value: "moderate", label: t('Q6_OPT_MODERATE', 'Moderate damage — partial outages requiring repairs') },
+                        { value: "severe", label: t('Q6_OPT_SEVERE', 'Severe damage — major infrastructure damaged, prolonged outages') },
+                        { value: "destroyed", label: t('Q6_OPT_DESTROYED', 'Completely destroyed — no electricity infrastructure functioning') },
+                        { value: "unknown", label: t('Q6_OPT_UNKNOWN', 'Unknown / cannot be assessed') },
                       ]).map(({ value, label }) => {
                         const isSelected = electricityCondition === value;
                         return (
@@ -2836,11 +2836,11 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                     <Text style={styles.questionTitleLarge}>{qTitle(7, t('questions.q7.title'))}</Text>
                     <View style={styles.optionGrid2Col}>
                       {qOptions(7, [
-                        { value: "fully_functional",    label: t('questions.q7.opt_fully') },
-                        { value: "partially_functional", label: t('questions.q7.opt_partially') },
-                        { value: "largely_disrupted",    label: t('questions.q7.opt_largely') },
-                        { value: "not_functioning", label: t('questions.q7.opt_not_functioning') },
-                        { value: "unknown",       label: t('questions.q7.opt_unknown') },
+                        { value: "fully_functional",    label: t('Q7_OPT_FULLY_FUNCTIONAL', 'Fully functional') },
+                        { value: "partially_functional", label: t('Q7_OPT_PARTIALLY_FUNCTIONAL', 'Partially functional') },
+                        { value: "largely_disrupted",    label: t('Q7_OPT_LARGELY_DISRUPTED', 'Largely disrupted') },
+                        { value: "not_functioning", label: t('Q7_OPT_NOT_FUNCTIONING', 'Not functioning at all') },
+                        { value: "unknown",       label: t('Q7_OPT_UNKNOWN', 'Unknown') },
                       ]).map(({ value, label }) => {
                         const isSelected = healthServicesCondition === value;
                         return (
@@ -2862,16 +2862,16 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                     <Text style={styles.questionTitleLarge}>{qTitle(8, t('questions.q8.title'))}</Text>
                     <Text style={styles.questionSubtitle}>{t('questions.q8.hint')}</Text>
                     {qOptions(8, [
-                      { value: "food_water", label: t('questions.q8.opt_food_water') },
-                      { value: "cash",       label: t('questions.q8.opt_cash') },
-                      { value: "healthcare", label: t('questions.q8.opt_healthcare') },
-                      { value: "shelter", label: t('questions.q8.opt_shelter') },
-                      { value: "livelihoods", label: t('questions.q8.opt_livelihoods') },
-                      { value: "wash", label: t('questions.q8.opt_wash') },
-                      { value: "basic_services", label: t('questions.q8.opt_basic_services') },
-                      { value: "protection", label: t('questions.q8.opt_protection') },
-                      { value: "local_support", label: t('questions.q8.opt_local_support') },
-                      { value: "other", label: t('questions.q8.opt_other') },
+                      { value: "food_water", label: t('Q8_OPT_FOOD_WATER', 'Food assistance and safe drinking water') },
+                      { value: "cash",       label: t('Q8_OPT_CASH', 'Cash or financial assistance') },
+                      { value: "healthcare", label: t('Q8_OPT_HEALTHCARE', 'Access to healthcare and essential medicines') },
+                      { value: "shelter", label: t('Q8_OPT_SHELTER', 'Shelter, housing repair, or temporary accommodation') },
+                      { value: "livelihoods", label: t('Q8_OPT_LIVELIHOODS', 'Restoration of livelihoods or income sources') },
+                      { value: "wash", label: t('Q8_OPT_WASH', 'Water, sanitation, and hygiene (toilets, washing facilities)') },
+                      { value: "basic_services", label: t('Q8_OPT_BASIC_SVC', 'Restoration of basic services and infrastructure (electricity, roads, schools)') },
+                      { value: "protection", label: t('Q8_OPT_PROTECTION', 'Protection services and psychosocial support') },
+                      { value: "local_support", label: t('Q8_OPT_LOCAL_SUPPORT', 'Support from local authorities and community organizations') },
+                      { value: "other", label: t('Q8_OPT_OTHER', 'Other — please specify') },
                     ]).map(({ value, label }) => {
                       const isSelected = pressingNeeds.includes(value);
                       return (
