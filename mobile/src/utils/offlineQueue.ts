@@ -5,12 +5,16 @@ import * as Notifications from "expo-notifications";
 import type { QueuedReport, QueuedPhoto, ReportSubmitRequest } from "../types";
 import { tokenStorage } from "../services/api";
 
-// Persistent photo storage — survives Android low-storage cache clears
+// Persistent photo storage — survives Android low-storage cache clears.
 // documentDirectory is from the legacy path because expo-file-system v19 moved
 // it out of the default namespace export.
-const PHOTO_STORE_DIR = (documentDirectory ?? "") + "cr_queued_photos/";
+// null on non-managed environments (e.g. bare web); all callers have fallbacks.
+const PHOTO_STORE_DIR: string | null = documentDirectory != null
+  ? `${documentDirectory}cr_queued_photos/`
+  : null;
 
 async function ensurePhotoDir(): Promise<void> {
+  if (PHOTO_STORE_DIR == null) throw new Error("documentDirectory unavailable");
   const info = await FileSystem.getInfoAsync(PHOTO_STORE_DIR);
   if (!info.exists) {
     await FileSystem.makeDirectoryAsync(PHOTO_STORE_DIR, { intermediates: true });
@@ -59,7 +63,12 @@ const notifyQueueChange = async () => {
 
 export async function getQueue(): Promise<QueuedReport[]> {
   const data = await AsyncStorage.getItem(QUEUE_KEY);
-  return data ? JSON.parse(data) : [];
+  if (!data) return [];
+  try {
+    return JSON.parse(data);
+  } catch {
+    return [];
+  }
 }
 
 async function saveQueue(queue: QueuedReport[]): Promise<void> {
@@ -80,7 +89,7 @@ export function addToQueue(
       await ensurePhotoDir();
       persistedPhotos = await Promise.all(
         photos.map(async (photo, i) => {
-          const dest = `${PHOTO_STORE_DIR}${local_id}_${i}.jpg`;
+          const dest = `${PHOTO_STORE_DIR!}${local_id}_${i}.jpg`;
           try {
             await FileSystem.copyAsync({ from: photo.uri, to: dest });
             return { ...photo, persistent_uri: dest };
@@ -108,6 +117,46 @@ export function addToQueue(
     await saveQueue(queue);
     await notifyQueueChange();
     return local_id;
+  });
+}
+
+// Queues photo uploads only for a report that was already created on the server.
+// Used when the report POST succeeded but photo uploads failed mid-submit —
+// avoids re-submitting the report and creating a duplicate.
+export async function queuePhotosForReport(reportId: string, photos: QueuedPhoto[]): Promise<void> {
+  const local_id = `photo_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  await withQueueLock(async () => {
+    let persistedPhotos = photos;
+    try {
+      await ensurePhotoDir();
+      persistedPhotos = await Promise.all(
+        photos.map(async (photo, i) => {
+          const dest = `${PHOTO_STORE_DIR!}${local_id}_${i}.jpg`;
+          try {
+            await FileSystem.copyAsync({ from: photo.uri, to: dest });
+            return { ...photo, persistent_uri: dest };
+          } catch {
+            return photo;
+          }
+        })
+      );
+    } catch {
+      persistedPhotos = photos;
+    }
+
+    const queue = await getQueue();
+    queue.push({
+      local_id,
+      report: {} as ReportSubmitRequest,
+      photos: persistedPhotos,
+      status: "pending",
+      retry_count: 0,
+      created_at: new Date().toISOString(),
+      last_attempt_at: null,
+      existing_report_id: reportId,
+    });
+    await saveQueue(queue);
+    await notifyQueueChange();
   });
 }
 
@@ -292,10 +341,13 @@ export async function syncQueue(apiBaseUrl: string): Promise<void> {
   isSyncing = true;
 
   try {
-    const queue = await getQueue();
-    const pending = queue.filter(
-      (item) => item.status === "pending" && item.retry_count < MAX_RETRIES
-    );
+    // Read inside the lock so a concurrent addToQueue can't produce a torn snapshot.
+    const pending = await withQueueLock(async () => {
+      const queue = await getQueue();
+      return queue.filter(
+        (item) => item.status === "pending" && item.retry_count < MAX_RETRIES
+      );
+    });
 
     if (pending.length === 0) return;
 
@@ -313,20 +365,26 @@ export async function syncQueue(apiBaseUrl: string): Promise<void> {
           headers["Authorization"] = `Bearer ${accessToken}`;
         }
 
-        // Submit report — use the pre-refreshed token
-        const reportResponse = await fetch(`${apiBaseUrl}/api/reports`, {
-          method: "POST",
-          headers,
-          body: JSON.stringify(item.report),
-        });
+        // Submit report — skip if the report already exists on the server
+        // (photo-only retry items carry existing_report_id to avoid duplicates).
+        let reportId: string;
+        if (item.existing_report_id) {
+          reportId = item.existing_report_id;
+        } else {
+          const reportResponse = await fetch(`${apiBaseUrl}/api/reports`, {
+            method: "POST",
+            headers,
+            body: JSON.stringify(item.report),
+          });
 
-        if (!reportResponse.ok) {
-          if (reportResponse.status === 401) throw new Error("auth_expired");
-          throw new Error(`Failed: ${reportResponse.status}`);
+          if (!reportResponse.ok) {
+            if (reportResponse.status === 401) throw new Error("auth_expired");
+            throw new Error(`Failed: ${reportResponse.status}`);
+          }
+
+          const reportData = await reportResponse.json();
+          reportId = reportData.report_id;
         }
-
-        const reportData = await reportResponse.json();
-        const reportId = reportData.report_id;
 
         // Upload photos
         for (const photo of item.photos) {
@@ -373,9 +431,12 @@ export async function syncQueue(apiBaseUrl: string): Promise<void> {
           }
         }
 
-        // Persist a local record before removing so anonymous users can
-        // still see the report in My Reports history.
-        await saveLocalSubmittedRecord(item, reportId);
+        // Persist a local record so anonymous users can see the report in
+        // My Reports history. Skip for photo-only retries — the record was
+        // already saved when the report itself was first submitted.
+        if (!item.existing_report_id) {
+          await saveLocalSubmittedRecord(item, reportId);
+        }
         await removeFromQueue(item.local_id);
         await notifyQueueChange();
         void showSyncNotification(

@@ -210,13 +210,16 @@ export default function OnboardingScreen() {
   };
 
   const handleAgree = async () => {
+    // View-only mode (opened from Settings to re-read T&C): just go back.
+    // Do NOT overwrite the original consent timestamp or re-trigger onboarding.
+    if (isTermsViewOnly) {
+      navigation.goBack();
+      return;
+    }
     const ts = new Date().toISOString();
     await AsyncStorage.setItem("cr_tandc_accepted_at", ts);
     useAuthStore.getState().setTAndCAcceptedAt(ts);
     useAuthStore.getState().setOnboarded();
-    // If we arrived here from Settings (view-only), go back instead of
-    // re-triggering the onboarding completion nav flow.
-    if (isTermsViewOnly) navigation.goBack();
   };
 
   const handleDecline = () => {

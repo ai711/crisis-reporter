@@ -8,19 +8,14 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // ── Device ID ─────────────────────────────────────────────────────────────────
 
-/**
- * Called once at app launch. Generates a CR-DEV-prefixed device ID on first
- * install and reads the OS-level Android ID. Both are written to SecureStore
- * and reflected into the auth store. Idempotent — no-op if already generated.
- */
-export async function initDeviceId(): Promise<void> {
+// Shared promise so initDeviceId (called at app launch) and getOrCreateDeviceId
+// (called at registration/submit) never race on first install. Whichever runs
+// first sets this; subsequent callers await the same resolved promise.
+let _deviceIdPromise: Promise<string> | null = null;
+
+async function _resolveDeviceId(): Promise<string> {
   const existing = await SecureStore.getItemAsync("cr_device_id");
-  if (existing) {
-    useAuthStore.getState().setDeviceId(existing);
-    const osId = await SecureStore.getItemAsync("cr_os_device_id");
-    if (osId) useAuthStore.getState().setOsDeviceId(osId);
-    return;
-  }
+  if (existing) return existing;
 
   const rand = Math.random().toString(36).substring(2, 10) +
                Math.random().toString(36).substring(2, 10);
@@ -39,24 +34,25 @@ export async function initDeviceId(): Promise<void> {
   if (osDeviceId) {
     await SecureStore.setItemAsync("cr_os_device_id", osDeviceId);
   }
+  return deviceId;
+}
 
+/**
+ * Called once at app launch. Generates a CR-DEV-prefixed device ID on first
+ * install and reads the OS-level Android ID. Both are written to SecureStore
+ * and reflected into the auth store. Idempotent — no-op if already generated.
+ */
+export async function initDeviceId(): Promise<void> {
+  if (!_deviceIdPromise) _deviceIdPromise = _resolveDeviceId();
+  const deviceId = await _deviceIdPromise;
   useAuthStore.getState().setDeviceId(deviceId);
-  useAuthStore.getState().setOsDeviceId(osDeviceId);
+  const osId = await SecureStore.getItemAsync("cr_os_device_id");
+  if (osId) useAuthStore.getState().setOsDeviceId(osId);
 }
 
 export async function getOrCreateDeviceId(): Promise<string> {
-  const stored = await SecureStore.getItemAsync("cr_device_id");
-  if (stored) return stored;
-
-  // Always generate in CR-DEV-{random} format to match initDeviceId.
-  // Falling back to the raw Android ID would produce a different format and
-  // could create a split identity if initDeviceId runs after this call.
-  const rand = Math.random().toString(36).substring(2, 10) +
-               Math.random().toString(36).substring(2, 10);
-  const deviceId = `CR-DEV-${rand}`;
-
-  await SecureStore.setItemAsync("cr_device_id", deviceId);
-  return deviceId;
+  if (!_deviceIdPromise) _deviceIdPromise = _resolveDeviceId();
+  return _deviceIdPromise;
 }
 
 // ── Auth API calls ────────────────────────────────────────────────────────────

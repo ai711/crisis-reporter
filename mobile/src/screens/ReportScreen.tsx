@@ -30,7 +30,7 @@ import api, { API_BASE } from "../services/api";
 import * as Device from 'expo-device';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as FileSystem from 'expo-file-system';
-import { addToQueue, syncQueue, getQueue, removeFromQueue } from "../utils/offlineQueue";
+import { addToQueue, syncQueue, getQueue, removeFromQueue, queuePhotosForReport } from "../utils/offlineQueue";
 import NetInfo from "@react-native-community/netinfo";
 import StepIndicator from "../components/StepIndicator";
 import type { DamageLevel, QueuedPhoto, ProcessedPhoto } from "../types";
@@ -401,6 +401,8 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
   // Map refs
   const cameraRef = useRef<CameraRef | null>(null);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchDebounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchAbortController = useRef<AbortController | null>(null);
   const buildingTappedRef = useRef(false);
   const isMountedRef = useRef(true);
   // Stores the local_id of the most recently queued offline report so the delete
@@ -479,6 +481,8 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
     return () => {
       isMountedRef.current = false;
       if (debounceTimer.current) clearTimeout(debounceTimer.current);
+      if (searchDebounceTimer.current) clearTimeout(searchDebounceTimer.current);
+      searchAbortController.current?.abort();
     };
   }, []);
 
@@ -760,33 +764,50 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
     }, 1000);
   };
 
-  const handleSearch = async (query: string) => {
+  const handleSearch = (query: string) => {
     setSearchQuery(query);
+
+    if (searchDebounceTimer.current) clearTimeout(searchDebounceTimer.current);
+
     if (query.trim().length < 3) {
       setSearchResults([]);
       setShowSearchResults(false);
       return;
     }
-    setSearchLoading(true);
-    try {
-      const encoded = encodeURIComponent(query);
-      const response = await fetch(
-        `https://api.maptiler.com/geocoding/${encoded}.json?key=${MAPTILER_KEY}&limit=5`
-      );
-      const data = await response.json();
-      const results = (data.features ?? []).map((f: any) => ({
-        id: f.id,
-        place_name: f.place_name ?? f.text ?? '',
-        center: f.center as [number, number],
-      }));
-      setSearchResults(results);
-      setShowSearchResults(results.length > 0);
-    } catch {
-      setSearchResults([]);
-      setShowSearchResults(false);
-    } finally {
-      setSearchLoading(false);
-    }
+
+    searchDebounceTimer.current = setTimeout(async () => {
+      // Cancel the previous in-flight request so a stale response
+      // can never overwrite results for the current query.
+      searchAbortController.current?.abort();
+      searchAbortController.current = new AbortController();
+
+      if (isMountedRef.current) setSearchLoading(true);
+      try {
+        const encoded = encodeURIComponent(query);
+        const response = await fetch(
+          `https://api.maptiler.com/geocoding/${encoded}.json?key=${MAPTILER_KEY}&limit=5`,
+          { signal: searchAbortController.current.signal }
+        );
+        const data = await response.json();
+        const results = (data.features ?? []).map((f: any) => ({
+          id: f.id,
+          place_name: f.place_name ?? f.text ?? '',
+          center: f.center as [number, number],
+        }));
+        if (isMountedRef.current) {
+          setSearchResults(results);
+          setShowSearchResults(results.length > 0);
+        }
+      } catch (err) {
+        // Ignore AbortError — it means a newer query superseded this one.
+        if (err instanceof Error && err.name !== 'AbortError' && isMountedRef.current) {
+          setSearchResults([]);
+          setShowSearchResults(false);
+        }
+      } finally {
+        if (isMountedRef.current) setSearchLoading(false);
+      }
+    }, 350);
   };
 
   const handleSearchResultSelect = (result: { center: [number, number]; place_name: string }) => {
@@ -1146,20 +1167,20 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
 
   const handleReplacePhoto = async (index: number) => {
     Alert.alert(
-      'Replace Photo',
-      'Choose a source',
+      t('photoScreen.replaceTitle'),
+      t('photoScreen.replaceSource'),
       [
         {
-          text: 'Take a Photo',
+          text: t('report.takePhoto'),
           onPress: async () => {
             const { status } = await ImagePicker.requestCameraPermissionsAsync();
             if (status !== 'granted') {
               Alert.alert(
-                'Camera Access Needed',
-                'Camera access is not available. You can enable it in your phone settings.',
+                t('photoScreen.cameraAccessTitle'),
+                t('photoScreen.cameraAccessMsg'),
                 [
-                  { text: 'Open Settings', onPress: () => Linking.openSettings() },
-                  { text: 'OK', style: 'cancel' },
+                  { text: t('photoScreen.openSettings'), onPress: () => Linking.openSettings() },
+                  { text: t('tandc.declineAlertButton'), style: 'cancel' },
                 ]
               );
               return;
@@ -1182,16 +1203,16 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
           },
         },
         {
-          text: 'Upload from Gallery',
+          text: t('report.uploadPhoto'),
           onPress: async () => {
             const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
             if (status !== 'granted') {
               Alert.alert(
-                'Gallery Access Needed',
-                'Gallery access is not available. You can enable it in your phone settings.',
+                t('photoScreen.galleryAccessTitle'),
+                t('photoScreen.galleryAccessMsg'),
                 [
-                  { text: 'Open Settings', onPress: () => Linking.openSettings() },
-                  { text: 'OK', style: 'cancel' },
+                  { text: t('photoScreen.openSettings'), onPress: () => Linking.openSettings() },
+                  { text: t('tandc.declineAlertButton'), style: 'cancel' },
                 ]
               );
               return;
@@ -1213,7 +1234,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
             }
           },
         },
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('photoScreen.removeCancel'), style: 'cancel' },
       ]
     );
   };
@@ -1493,6 +1514,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
       // Store so the delete and retry handlers can reference this specific queue entry
       queuedLocalIdRef.current = localId;
       await saveSubmittedLocation();
+      if (!isMountedRef.current) return;
       setSubmittedReportId(null);
       setWasQueued(true);
       setSubmitted(true);
@@ -1507,16 +1529,17 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 30000);
 
+      let onlineReportId: string | null = null;
       try {
         const response = await api.post("/api/reports", reportPayload, {
           signal: controller.signal,
         });
         clearTimeout(timeoutId);
-        const reportId = response.data.report_id;
+        onlineReportId = response.data.report_id;
 
         for (let i = 0; i < photos.length; i++) {
           const formData = new FormData();
-          formData.append("report_id", reportId);
+          formData.append("report_id", onlineReportId!);
           formData.append("display_order", String(i));
           formData.append("file", { uri: photos[i].uri, name: `photo_${i}.jpg`, type: photos[i].mimeType } as any);
           // 120 s per photo — generous for 2G/EDGE field networks; no global Axios timeout
@@ -1527,15 +1550,36 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
         }
 
         await saveSubmittedLocation();
-        setSubmittedReportId(reportId as string);
-        setWasQueued(false);
-        setSubmitted(true);
+        if (isMountedRef.current) {
+          setSubmittedReportId(onlineReportId);
+          setWasQueued(false);
+          setSubmitted(true);
+        }
       } catch {
         clearTimeout(timeoutId);
-        await queueReport();
+        if (onlineReportId) {
+          // Report reached the server; only photo uploads failed.
+          // Queue photos only — re-submitting the full report would create a duplicate.
+          await registerPushToken();
+          const queuedPhotos: QueuedPhoto[] = photos.map((p, i) => ({
+            uri: p.uri,
+            filename: `photo_${i}.jpg`,
+            content_type: p.mimeType,
+            display_order: i,
+          }));
+          await queuePhotosForReport(onlineReportId, queuedPhotos);
+          await saveSubmittedLocation();
+          if (isMountedRef.current) {
+            setSubmittedReportId(onlineReportId);
+            setWasQueued(true);
+            setSubmitted(true);
+          }
+        } else {
+          await queueReport();
+        }
       }
     } finally {
-      setSubmitting(false);
+      if (isMountedRef.current) setSubmitting(false);
     }
   };
 
@@ -2360,7 +2404,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
               }}
             >
               <MaterialIcons name="sync" size={scale(22)} color="#414751" style={styles.optionIconView} />
-              <Text style={styles.optionLabel}>Replace</Text>
+              <Text style={styles.optionLabel}>{t('photoScreen.replaceButton')}</Text>
             </TouchableOpacity>
 
             <View style={styles.optionDivider} />

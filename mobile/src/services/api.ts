@@ -2,7 +2,7 @@ import axios from "axios";
 import type { InternalAxiosRequestConfig } from "axios";
 import * as SecureStore from "expo-secure-store";
 
-const BASE_URL = "https://crisis-reporter-production.up.railway.app";
+const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "https://crisis-reporter-production.up.railway.app";
 
 export const API_BASE = BASE_URL;
 

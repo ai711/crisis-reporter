@@ -5,8 +5,9 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 // definition (TaskManager.defineTask) runs at module scope.
 import { registerBackgroundSync } from "./src/utils/backgroundSync";
 import ErrorBoundary from "./src/components/ErrorBoundary";
-import { NavigationContainer } from "@react-navigation/native";
+import { NavigationContainer, createNavigationContainerRef } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import * as Notifications from "expo-notifications";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import NetInfo from "@react-native-community/netinfo";
@@ -30,6 +31,21 @@ import AboutScreen from "./src/screens/AboutScreen";
 import ReportDetailScreen from "./src/screens/ReportDetailScreen";
 import QueuedReportDetailScreen from "./src/screens/QueuedReportDetailScreen";
 
+// Show notifications even when the app is foregrounded.
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+  }),
+});
+
+// Module-level ref so the notification tap listener (outside component tree)
+// can call navigate() after the container is ready.
+const navigationRef = createNavigationContainerRef<any>();
+
 const Stack = createNativeStackNavigator();
 
 const queryClient = new QueryClient({
@@ -49,6 +65,15 @@ function Navigation() {
     // Register the background fetch task so offline reports sync even when
     // the app is fully killed (minimum 15-minute OS interval).
     registerBackgroundSync().catch(() => { /* non-critical */ });
+
+    // Navigate to My Reports when the user taps a sync notification
+    // (both foreground and background/killed-app taps).
+    const notifSub = Notifications.addNotificationResponseReceivedListener(() => {
+      if (navigationRef.isReady()) {
+        navigationRef.navigate("MyReports" as never);
+      }
+    });
+    return () => notifSub.remove();
   }, []);
 
   useEffect(() => {
@@ -65,7 +90,7 @@ function Navigation() {
   }, []);
 
   return (
-    <NavigationContainer>
+    <NavigationContainer ref={navigationRef}>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {!isOnboarded ? (
           <Stack.Screen name="Onboarding" component={OnboardingScreen} />

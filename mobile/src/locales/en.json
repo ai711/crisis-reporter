@@ -196,7 +196,15 @@
     "validationGif": "Animated or GIF files cannot be used. Please select a standard photo.",
     "validationTooSmall": "This image is too small to use. Please take a new photo.",
     "validationDuplicate": "This photo is already added to your report.",
-    "validationBlank": "This photo appears to be blank. Please take a new photo."
+    "validationBlank": "This photo appears to be blank. Please take a new photo.",
+    "replaceTitle": "Replace Photo",
+    "replaceSource": "Choose a source",
+    "replaceButton": "Replace",
+    "cameraAccessTitle": "Camera Access Needed",
+    "cameraAccessMsg": "Camera access is not available. You can enable it in your phone settings.",
+    "galleryAccessTitle": "Gallery Access Needed",
+    "galleryAccessMsg": "Gallery access is not available. You can enable it in your phone settings.",
+    "openSettings": "Open Settings"
   },
   "steps": {
     "photo": "Photo",

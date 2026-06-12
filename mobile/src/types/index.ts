@@ -106,4 +106,7 @@ export interface QueuedReport {
   retry_count: number;
   created_at: string;
   last_attempt_at: string | null;
+  // When set, the report already exists on the server — syncQueue skips the
+  // POST /api/reports step and only uploads photos for this report_id.
+  existing_report_id?: string;
 }

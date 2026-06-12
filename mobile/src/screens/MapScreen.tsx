@@ -135,12 +135,12 @@ export default function MapScreen() {
     setLoading(true);
     try {
       const [reportsRes, crisesRes] = await Promise.allSettled([
-        api.get('/api/reports?limit=200'),
+        api.get('/api/reports/map?limit=200'),
         api.get('/api/crises/active'),
       ]);
 
       if (reportsRes.status === 'fulfilled') {
-        const pins: ReportPin[] = reportsRes.value.data
+        const pins: ReportPin[] = (reportsRes.value.data.reports ?? [])
           .filter((r: any) => r.gps_latitude && r.gps_longitude)
           .map((r: any) => ({
             id: r.id,

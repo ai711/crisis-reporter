@@ -2966,6 +2966,14 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
     ("photoScreen.removeTitle",          "ui_report", "Remove this photo?"),
     ("photoScreen.removeConfirm",        "ui_report", "Remove"),
     ("photoScreen.removeCancel",         "ui_report", "Cancel"),
+    ("photoScreen.replaceTitle",         "ui_report", "Replace Photo"),
+    ("photoScreen.replaceSource",        "ui_report", "Choose a source"),
+    ("photoScreen.replaceButton",        "ui_report", "Replace"),
+    ("photoScreen.cameraAccessTitle",    "ui_report", "Camera Access Needed"),
+    ("photoScreen.cameraAccessMsg",      "ui_report", "Camera access is not available. You can enable it in your phone settings."),
+    ("photoScreen.galleryAccessTitle",   "ui_report", "Gallery Access Needed"),
+    ("photoScreen.galleryAccessMsg",     "ui_report", "Gallery access is not available. You can enable it in your phone settings."),
+    ("photoScreen.openSettings",         "ui_report", "Open Settings"),
 
     # ── Location screen (mobile) ──
     ("locationScreen.searchPlaceholder",          "ui_location", "Search for a street, landmark, or building..."),
