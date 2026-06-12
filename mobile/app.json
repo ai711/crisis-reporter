@@ -48,6 +48,7 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
+      "./plugins/withFixHermesc",
       "expo-secure-store",
       "@maplibre/maplibre-react-native",
       [
