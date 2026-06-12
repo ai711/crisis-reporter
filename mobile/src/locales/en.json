@@ -24,33 +24,21 @@
     "damageLevel": "Damage Level",
     "minimal": "Minimal or No Damage",
     "partial": "Partially Damaged",
-    "complete": "Completely Destroyed",
-    "infrastructureType": "Infrastructure Type",
-    "residential": "Residential Building",
-    "commercial": "Commercial Building",
-    "school": "School",
-    "hospital": "Hospital",
-    "road": "Road or Bridge",
-    "other": "Other",
     "description": "Description (optional)",
     "descriptionPlaceholder": "Describe the damage you observed...",
-    "photos": "Photos",
     "takePhoto": "Take a Photo",
     "uploadPhoto": "Upload from Gallery",
     "location": "Location",
     "manualLocation": "Enter location manually",
-    "address": "Address",
-    "landmark": "Nearby Landmark",
     "buildingName": "Building Name",
     "submit": "Submit Report",
     "submitting": "Submitting...",
-    "success": "Report submitted successfully",
     "error": "Failed to submit report. Please try again.",
-    "question_number": "Question {{number}} of {{total}}"
+    "question_number": "Question {{number}} of {{total}}",
+    "complete": "Completely Damaged"
   },
   "map": {
     "loading": "Loading map...",
-    "selectLocation": "Tap a building to select it",
     "gpsUnavailable": "GPS unavailable — please select location manually",
     "searchPlaceholder": "Search for a location...",
     "one_report_received": "1 verified report"
@@ -81,11 +69,8 @@
     "rtl_restart_btn": "Restart Now"
   },
   "menu": {
-    "report_incident": "Report an Incident",
     "safety_tips": "Safety Tips",
     "profile": "Reporter Profile",
-    "badges": "Badges & Certifications",
-    "settings": "Settings",
     "version": "Crisis Reporter v1.0"
   },
   "about": {

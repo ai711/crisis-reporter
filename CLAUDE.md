@@ -311,7 +311,7 @@ Exit codes: 0 = pass, 1 = pipeline gap (strict only), 2 = English broken, 3 = bo
 
 **Dynamic keys — what `DYNAMIC_PREFIXES` is for:** some keys are built at runtime via template literals, e.g. `` t(`Q${n}_LABEL`) `` or `` t(`disaster_types.${v}`) ``. The script can never find these via static grep. They are listed in `DYNAMIC_PREFIXES` inside the script so CHECK B/C skip them rather than reporting them as broken or dead. If you add a new template-literal key pattern, add its prefix to `DYNAMIC_PREFIXES`.
 
-Current dynamic prefixes: `SAFETY_DISASTER_`, `disaster_types.`, `faq.q`, `faq_m.q`, `map.damage_`, `my_reports.damage_`, `Q1–Q8 _OPT_/*_LABEL`, `Q8_KEY_MAP`, `whatCanIReport.types` (returnObjects call).
+Current dynamic prefixes: `SAFETY_DISASTER_`, `SAFETY_TIP_`, `disaster_types.`, `faq.q`, `faq_m.q`, `map.damage_`, `my_reports.damage_`, `Q1–Q8 _OPT_/*_LABEL`, `Q8_KEY_MAP`, `whatCanIReport.types` (returnObjects call), `stepper.step_` (dict lookup in SubmissionStepper).
 
 **Checklist — run mentally before committing any frontend i18n change:**
 1. Added a new `t('some.key')` call? → Add `("some.key", "category", "English text")` to `_SEED_KEYS`.

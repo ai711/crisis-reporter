@@ -45,6 +45,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 # Exclude them from the "dead seed key" warning.
 DYNAMIC_PREFIXES = [
     "SAFETY_DISASTER_",   # t(`SAFETY_DISASTER_${id}_LABEL`)
+    "SAFETY_TIP_",        # t(`SAFETY_TIP_${part}${disaster}_SLIDE_${n}_${field}`)
     "disaster_types.",    # t(`disaster_types.${v}`)
     "faq.q",              # t(`${baseKey}_answer`) etc.
     "faq_m.q",            # same pattern, mobile FAQ
@@ -56,6 +57,7 @@ DYNAMIC_PREFIXES = [
     "Q5_LABEL", "Q6_LABEL", "Q7_LABEL", "Q8_LABEL",
     "Q8_KEY_MAP",         # used as dict key, not direct t() argument
     "whatCanIReport.types", # t("whatCanIReport.types", { returnObjects: true }) — fetches whole subtree
+    "stepper.step_",      # t(I18N_KEYS[step]) dict lookup in SubmissionStepper.tsx
 ]
 
 # ── helpers ────────────────────────────────────────────────────────────────────

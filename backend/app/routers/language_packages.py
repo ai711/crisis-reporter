@@ -2190,7 +2190,6 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
     ("profile.title",              "ui_profile", "My Profile"),
     ("profile.first_name",         "ui_profile", "First Name"),
     ("profile.last_name",          "ui_profile", "Last Name"),
-    ("profile.email",              "ui_profile", "Email Address"),
     ("profile.phone",              "ui_profile", "Phone Number"),
     ("profile.save_btn",           "ui_profile", "Save Profile"),
     ("profile.save_success",       "ui_profile", "Profile saved"),
@@ -2199,7 +2198,6 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
     ("profile.anon_gate_subtext",  "ui_profile", "You can still submit reports anonymously without an account."),
     ("profile.anon_note",          "ui_profile", "All profile fields are optional. You can submit reports anonymously."),
     ("profile.edit_photo",         "ui_profile", "Edit photo"),
-    ("profile.completion_label",   "ui_profile", "Profile {{completion}}% complete"),
 
     # login
     ("login.title",               "ui_login", "Sign In"),
@@ -2232,7 +2230,7 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
     ("my_reports.description",     "ui_my_reports", "Description"),
     ("my_reports.report_number",   "ui_my_reports", "Report #{{n}}"),
 
-    # stepper
+    # stepper — all 5 used via dict lookup: t(I18N_KEYS[step]) in SubmissionStepper.tsx
     ("stepper.step_photo",     "ui_stepper", "Photo"),
     ("stepper.step_location",  "ui_stepper", "Location"),
     ("stepper.step_questions", "ui_stepper", "Questions"),
@@ -2251,21 +2249,13 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
     ("badges.title",          "ui_badges", "Badges & Certifications"),
     ("badges.subtitle",       "ui_badges", "Badges are awarded to reporters with a verified profile. Complete your profile to unlock badges."),
     ("badges.status_earned",  "ui_badges", "Earned ✓"),
-    ("badges.status_claim",   "ui_badges", "Add email or phone to claim"),
     ("badges.status_locked",  "ui_badges", "Locked"),
-    ("badges.status_coming_soon","ui_badges","Coming Soon"),
     ("badges.safety_name",    "ui_badges", "Safety Training Completion"),
     ("badges.safety_desc_locked","ui_badges","Complete all safety training modules in Crisis Reporter."),
     ("badges.referral_name",  "ui_badges", "Community Referral"),
-    ("badges.modules_progress","ui_badges","{{n}} of {{total}} modules complete"),
 
     # safety tabs (dotted — t("safety.*") calls in SafetyTipsPage tab labels)
     ("safety.tab_a",            "ui_safety", "Part A: Disaster Tips"),
-    ("safety.tab_b",            "ui_safety", "Part B: Reporting"),
-    ("safety.tab_c",            "ui_safety", "Part C: First Aid"),
-    ("safety.complete",         "ui_safety", "✓ Complete"),
-    ("safety.progress_label",   "ui_safety", "Disaster types completed"),
-    ("safety.all_complete_banner","ui_safety","Safety Training Complete — you are now eligible for the Safety Training Badge"),
 
     # disaster type labels (dotted — used in dropdowns / display)
     ("disaster_types.earthquake",       "disaster_label", "Earthquake"),
@@ -2282,22 +2272,13 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
     ("report.title",             "ui_report", "Report Damage"),
     ("report.minimal",           "ui_report", "Minimal or No Damage"),
     ("report.partial",           "ui_report", "Partially Damaged"),
-    ("report.complete",          "ui_report", "Completely Destroyed"),
-    ("report.infrastructureType","ui_report", "Infrastructure Type"),
-    ("report.residential",       "ui_report", "Residential Building"),
-    ("report.commercial",        "ui_report", "Commercial Building"),
-    ("report.school",            "ui_report", "School"),
-    ("report.hospital",          "ui_report", "Hospital"),
-    ("report.road",              "ui_report", "Road or Bridge"),
-    ("report.other",             "ui_report", "Other"),
+    ("report.complete",          "ui_report", "Completely Damaged"),
     ("report.description",       "ui_report", "Description (optional)"),
-    ("report.photos",            "ui_report", "Photos"),
     ("report.takePhoto",         "ui_report", "Take a Photo"),
     ("report.uploadPhoto",       "ui_report", "Upload from Gallery"),
     ("report.location",          "ui_report", "Location"),
     ("report.submit",            "ui_report", "Submit Report"),
     ("report.submitting",        "ui_report", "Submitting..."),
-    ("report.success",           "ui_report", "Report submitted successfully"),
     ("report.error",             "ui_report", "Failed to submit report. Please try again."),
     ("report.success_title",     "ui_report", "Report Submitted"),
     ("report.submit_another",    "ui_report", "Submit Another Report"),
@@ -2311,7 +2292,6 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
 
     # map
     ("map.loading",          "ui_map", "Loading map..."),
-    ("map.selectLocation",   "ui_map", "Tap a building to select it"),
     ("map.searchPlaceholder","ui_map", "Search for a location..."),
     ("map.zoom_hint",        "ui_map", "Zoom in to see buildings"),
     ("map.damage_complete",  "ui_map", "Completely Damaged"),
@@ -2328,8 +2308,6 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
     # report step labels + photo tips (visible in photos/location steps)
     ("report.step_1_of_5",        "ui_report", "STEP 1 OF 5 — ADD PHOTO"),
     ("report.step_2_of_5",        "ui_report", "STEP 2 OF 5 — ENTER LOCATION"),
-    ("report.step_3_of_5",        "ui_report", "STEP 3 OF 5 — ANSWER QUESTIONS"),
-    ("report.step_4_review",      "ui_report", "STEP 4 — REVIEW"),
     ("report.photo_tips_title",   "ui_report", "PHOTO TIPS"),
     ("report.no_photo_added",     "ui_report", "No photo added yet"),
     ("report.photos_added_count", "ui_report", "{{count}} of 3 photos added. You can add up to 3."),
@@ -2435,9 +2413,6 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
     # ── Mobile-only keys ──────────────────────────────────────────────────────────
 
     # Mobile side menu
-    ("menu.report_incident", "ui_menu", "Report an Incident"),
-    ("menu.badges",          "ui_menu", "Badges & Certifications"),
-    ("menu.settings",        "ui_menu", "Settings"),
     ("menu.version",         "ui_menu", "Crisis Reporter v1.0"),
 
     # Mobile home screen
@@ -2846,9 +2821,7 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
     ("report.msft_footprints_note",     "ui_report", "Microsoft Building Footprints active — building selection uses ML-detected footprints."),
     ("report.location_note_label",      "ui_report", "ADD A LOCATION NOTE (OPTIONAL)"),
     ("report.location_note_placeholder","ui_report", "e.g. Blue gate on the left, next to the pharmacy"),
-    ("report.landmark",                 "ui_report", "Nearby Landmark"),
     ("report.landmark_placeholder",     "ui_report", "Landmark (e.g. Near central market)"),
-    ("report.address",                  "ui_report", "Address"),
     ("report.show_manual_entry",        "ui_report", "Enter location manually instead ▼"),
     ("report.hide_manual_entry",        "ui_report", "Hide manual entry ▲"),
     ("report.location_changed_warning", "ui_report", "Your location has changed. Please confirm or update the infrastructure name."),
@@ -3081,7 +3054,6 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
 
     # ── Safety screen extras ──
     ("safety.title", "ui_safety", "Safety Tips"),
-    ("safety.do",    "ui_safety", "DO"),
 
     # ── Newly discovered CHECK B keys (added by CI enforcement) ──
     ("location.offline_gps_background", "ui_location", "Your GPS coordinates are still being recorded in the background"),
@@ -3095,7 +3067,6 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
     ("report.building_name_label_manual", "ui_report", "Building Name"),
     ("report.building_name_placeholder", "ui_report", "Name of the specific building or structure"),
     ("report.building_name_hint", "ui_report", "e.g. Residential Block 4B, Al-Nour Mosque"),
-    ("report.at_least_one_required", "ui_report", "* At least one field must be filled in to continue"),
     ("report.address_required_offline", "ui_report", "* Address is required to continue when GPS is unavailable"),
     ("report.question_number", "ui_report", "Question {{number}} of {{total}}"),
     ("report.q3_infra_name_placeholder", "placeholder", "e.g. Main Street Bridge"),
