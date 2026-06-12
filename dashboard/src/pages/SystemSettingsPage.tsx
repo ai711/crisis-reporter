@@ -923,6 +923,11 @@ function LanguagesTab() {
   const [auditTrailPage, setAuditTrailPage] = useState(1);
   const [regeneratingRowId, setRegeneratingRowId] = useState<string | null>(null);
   const [regeneratingAllDraft, setRegeneratingAllDraft] = useState(false);
+  const [translateBaseline, setTranslateBaseline] = useState<number>(0);
+  const [showAutoTranslateConfirm, setShowAutoTranslateConfirm] = useState<string | null>(null);
+  const [showRemoveLangConfirm, setShowRemoveLangConfirm] = useState<{ code: string; name: string } | null>(null);
+  const [showRegenerateAllConfirm, setShowRegenerateAllConfirm] = useState(false);
+  const [showRegenerateSingleConfirm, setShowRegenerateSingleConfirm] = useState<{ id: string; key: string } | null>(null);
 
   function showBanner(msg: string, ok = true) {
     setBanner({ msg, ok });
@@ -1058,10 +1063,15 @@ function LanguagesTab() {
     const entry = queueStatus.by_language.find((l) => l.lang_code === autoTranslatingLang);
     const draftCount = (entry?.draft_count ?? 0);
     const failedCount = (entry?.failed_count ?? 0);
-    const completed = draftCount + failedCount;
+    // Subtract baseline so the counter reflects only newly-translated strings,
+    // not pre-existing drafts that were already in the queue before the run started.
+    const completed = Math.max(0, draftCount + failedCount - translateBaseline);
     setTranslateProgress((prev) =>
       prev !== null ? { completed, total: prev.total } : null
     );
+    // Keep Languages table pills in sync during translation (string-keys is the
+    // data source for statusByLang, so refresh it on every queue-status poll).
+    queryClient.invalidateQueries({ queryKey: ["string-keys"] });
     const total = translateProgress?.total ?? 0;
     // Grace period: when within 1 of target, wait 3 more polls before declaring stall
     if (completed >= total - 1 && completed < total && total > 0) {
@@ -1083,11 +1093,12 @@ function LanguagesTab() {
         setTranslateMsg(msg);
         setTranslateStartTime(null);
         setNearCompleteCount(0);
+        setTranslateBaseline(0);
         await Promise.all([
           queryClient.invalidateQueries({ queryKey: ['languages'] }),
           queryClient.invalidateQueries({ queryKey: ['string-keys'] }),
           queryClient.invalidateQueries({ queryKey: ['translations', completedLang] }),
-          queryClient.invalidateQueries({ queryKey: ['queue-status'] }),
+          queryClient.invalidateQueries({ queryKey: ['queue-status-by-lang'] }),
         ]);
         setTimeout(() => setTranslateMsg(''), 8000);
       }, 1500);
@@ -1123,7 +1134,7 @@ function LanguagesTab() {
       let missing = 0, draft = 0, approved = 0, published = 0;
       for (const key of activeKeys) {
         const st = key.translations[lang.code];
-        if (!st || st === "missing" || st === "retired") missing++;
+        if (!st || st === "missing") missing++;
         else if (st === "draft" || st === "failed") draft++;
         else if (st === "approved") approved++;
         else if (st === "published") published++;
@@ -1194,16 +1205,22 @@ function LanguagesTab() {
     setEditedTexts({});
   }
 
-  async function handleAutoTranslate(langCode: string) {
+  function handleAutoTranslate(langCode: string) {
+    setShowAutoTranslateConfirm(langCode);
+  }
+
+  async function executeAutoTranslate(langCode: string) {
     const langName = languages.find((l) => l.code === langCode)?.name ?? langCode.toUpperCase();
-    const confirmed = window.confirm(
-      `Start auto-translation for ${langName}? This will translate all untranslated strings using the auto-translation engine. Existing translations will not be overwritten. This runs in the background and may take a few minutes.`
-    );
-    if (!confirmed) return;
+    setShowAutoTranslateConfirm(null);
+    // Capture pre-existing draft+failed count so the progress bar only counts
+    // strings that were *missing* when this run started, not pre-existing drafts.
+    const queueEntry = queueStatus?.by_language.find((l) => l.lang_code === langCode);
+    const baseline = (queueEntry?.draft_count ?? 0) + (queueEntry?.failed_count ?? 0);
+    setTranslateBaseline(baseline);
     setAutoTranslatingLang(langCode);
     setTranslateStartTime(Date.now());
     try {
-      await api.post<{ status: string; language_code: string }>(
+      const res = await api.post<{ status: string; language_code: string; missing_count?: number }>(
         "/api/translations/auto-translate",
         { language_code: langCode }
       );
@@ -1211,25 +1228,24 @@ function LanguagesTab() {
       queryClient.invalidateQueries({ queryKey: ["string-keys"] });
       queryClient.invalidateQueries({ queryKey: ["queue-status-by-lang"] });
       setSelectedLang(langCode);
-      // FIX 9: initialise progress from the Missing pill count (status === "missing" rows only)
-      const missingCount = statusByLang[langCode]?.missing ?? 0;
+      // Use the authoritative count from the backend (strings queried at job-start
+      // time), falling back to the client-side missing count if unavailable.
+      const missingCount = res.data.missing_count ?? statusByLang[langCode]?.missing ?? 0;
       setTranslateProgress({ completed: 0, total: Math.max(missingCount, 1) });
       setTranslateMsg(`Auto-translation started for ${langName}. Check the Review Queue tab for progress.`);
       setTimeout(() => setTranslateMsg(""), 5000);
-      // FIX 3: scroll to progress banner after two render cycles complete
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           const el = document.getElementById('translate-progress-banner');
           if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
         });
       });
-      // autoTranslatingLang intentionally NOT cleared here — progress banner
-      // stays until user dismisses with ×
     } catch {
       showBanner("Auto-translate failed — check translation service configuration.", false);
       setAutoTranslatingLang(null);
       setTranslateProgress(null);
       setTranslateStartTime(null);
+      setTranslateBaseline(0);
     }
   }
 
@@ -1389,8 +1405,12 @@ function LanguagesTab() {
     }
   }
 
-  async function handleRemoveLang(code: string, name: string) {
-    if (!window.confirm(`Permanently remove language "${name}"? This cannot be undone.`)) return;
+  function handleRemoveLang(code: string, name: string) {
+    setShowRemoveLangConfirm({ code, name });
+  }
+
+  async function executeRemoveLang(code: string, name: string) {
+    setShowRemoveLangConfirm(null);
     try {
       await api.delete(`/api/languages/${code}`);
       queryClient.invalidateQueries({ queryKey: ["languages"] });
@@ -1727,7 +1747,7 @@ function LanguagesTab() {
                               </button>
                             );
                           }
-                          if (missingCount === 0) return null;
+                          if (missingCount === 0 || lang.status === "deprecated") return null;
                           const isOtherTranslating = autoTranslatingLang !== null && autoTranslatingLang !== lang.code;
                           if (isOtherTranslating) {
                             return (
@@ -1910,20 +1930,7 @@ function LanguagesTab() {
               {filterTab === "draft" && (
                 <button
                   style={{ ...sL.actionBtn, margin: "6px 8px", background: "#f0f4f8", color: "#4a5568", border: "1px solid #e2e8f0", opacity: regeneratingAllDraft ? 0.7 : 1 }}
-                  onClick={async () => {
-                    if (!window.confirm(`Regenerate all ${counts.draft} draft translations for ${selectedLangData?.name ?? selectedLang}? This will overwrite all current drafts with fresh translations.`)) return;
-                    setRegeneratingAllDraft(true);
-                    try {
-                      await api.post('/api/translations/regenerate-all-draft', { language_code: selectedLang });
-                      queryClient.invalidateQueries({ queryKey: ['translations', selectedLang] });
-                      queryClient.invalidateQueries({ queryKey: ['string-keys'] });
-                      showBanner('All draft translations are being regenerated.');
-                    } catch {
-                      showBanner('Failed to regenerate draft translations.', false);
-                    } finally {
-                      setRegeneratingAllDraft(false);
-                    }
-                  }}
+                  onClick={() => setShowRegenerateAllConfirm(true)}
                   disabled={regeneratingAllDraft}
                 >
                   {regeneratingAllDraft ? (
@@ -2051,18 +2058,7 @@ function LanguagesTab() {
                             <button
                               title="Regenerate translation"
                               style={{ padding: "4px 8px", background: "#f0f4f8", color: "#4a5568", border: "1px solid #e2e8f0", borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: "pointer" }}
-                              onClick={async () => {
-                                if (!window.confirm(`Regenerate translation for "${t.string_key}"? This will overwrite the current draft.`)) return;
-                                setRegeneratingRowId(t.id);
-                                try {
-                                  await api.post('/api/translations/regenerate-single', { translation_id: t.id, language_code: selectedLang });
-                                  queryClient.invalidateQueries({ queryKey: ['translations', selectedLang] });
-                                } catch {
-                                  showBanner('Failed to regenerate translation.', false);
-                                } finally {
-                                  setRegeneratingRowId(null);
-                                }
-                              }}
+                              onClick={() => setShowRegenerateSingleConfirm({ id: t.id, key: t.string_key })}
                             >
                               ↻
                             </button>
@@ -2316,6 +2312,145 @@ function LanguagesTab() {
           }}
           existingCodes={languages.map((l) => l.code)}
         />
+      )}
+
+      {/* ── Auto-translate Confirmation Modal ───────────────────────────── */}
+      {showAutoTranslateConfirm && (
+        <div style={s.overlay} onClick={() => setShowAutoTranslateConfirm(null)}>
+          <div style={{ ...s.modal, maxWidth: 460 }} onClick={(e) => e.stopPropagation()}>
+            <div style={s.modalHeader}>
+              <h2 style={s.modalTitle}>Start Auto-Translation</h2>
+              <button style={s.closeBtn} onClick={() => setShowAutoTranslateConfirm(null)}>✕</button>
+            </div>
+            <div style={{ padding: "20px 24px" }}>
+              <p style={{ fontSize: 14, color: "#4a5568", margin: 0, lineHeight: 1.6 }}>
+                Start auto-translation for <strong>{languages.find((l) => l.code === showAutoTranslateConfirm)?.name ?? showAutoTranslateConfirm.toUpperCase()}</strong>?
+              </p>
+              <p style={{ fontSize: 13, color: "var(--c-text-muted)", margin: "10px 0 0", lineHeight: 1.5 }}>
+                All untranslated strings will be translated using the auto-translation engine. Existing translations will not be overwritten. This runs in the background and may take a few minutes.
+              </p>
+            </div>
+            <div style={{ ...s.modalFooter, padding: "0 24px 24px" }}>
+              <button style={s.cancelBtn} onClick={() => setShowAutoTranslateConfirm(null)}>Cancel</button>
+              <button style={{ ...s.submitBtn, background: "#d97706" }} onClick={() => executeAutoTranslate(showAutoTranslateConfirm)}>
+                Start Auto-Translation
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Remove Language Confirmation Modal ──────────────────────────── */}
+      {showRemoveLangConfirm && (
+        <div style={s.overlay} onClick={() => setShowRemoveLangConfirm(null)}>
+          <div style={{ ...s.modal, maxWidth: 440 }} onClick={(e) => e.stopPropagation()}>
+            <div style={s.modalHeader}>
+              <h2 style={s.modalTitle}>Remove Language</h2>
+              <button style={s.closeBtn} onClick={() => setShowRemoveLangConfirm(null)}>✕</button>
+            </div>
+            <div style={{ padding: "20px 24px" }}>
+              <div style={s.warningBanner}>
+                <span className="material-symbols-outlined" style={{ fontSize: 20, color: "#92400e", flexShrink: 0, fontVariationSettings: "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}>warning</span>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 14, color: "#92400e", marginBottom: 4 }}>This cannot be undone</div>
+                  <div style={{ fontSize: 13, color: "#92400e", lineHeight: 1.5 }}>
+                    Permanently remove <strong>{showRemoveLangConfirm.name}</strong>? All translation data for this language will be deleted.
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div style={{ ...s.modalFooter, padding: "0 24px 24px" }}>
+              <button style={s.cancelBtn} onClick={() => setShowRemoveLangConfirm(null)}>Cancel</button>
+              <button style={{ ...s.submitBtn, background: "#c53030" }} onClick={() => executeRemoveLang(showRemoveLangConfirm.code, showRemoveLangConfirm.name)}>
+                Remove Language
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Regenerate All Draft Confirmation Modal ──────────────────────── */}
+      {showRegenerateAllConfirm && (
+        <div style={s.overlay} onClick={() => setShowRegenerateAllConfirm(false)}>
+          <div style={{ ...s.modal, maxWidth: 460 }} onClick={(e) => e.stopPropagation()}>
+            <div style={s.modalHeader}>
+              <h2 style={s.modalTitle}>Regenerate All Draft</h2>
+              <button style={s.closeBtn} onClick={() => setShowRegenerateAllConfirm(false)}>✕</button>
+            </div>
+            <div style={{ padding: "20px 24px" }}>
+              <p style={{ fontSize: 14, color: "#4a5568", margin: 0, lineHeight: 1.6 }}>
+                Regenerate all <strong>{counts.draft}</strong> draft translations for <strong>{selectedLangData?.name ?? selectedLang}</strong>?
+              </p>
+              <p style={{ fontSize: 13, color: "var(--c-text-muted)", margin: "10px 0 0", lineHeight: 1.5 }}>
+                All current drafts will be overwritten with fresh translations from the translation engine.
+              </p>
+            </div>
+            <div style={{ ...s.modalFooter, padding: "0 24px 24px" }}>
+              <button style={s.cancelBtn} onClick={() => setShowRegenerateAllConfirm(false)}>Cancel</button>
+              <button
+                style={{ ...s.submitBtn, background: "#4a5568", opacity: regeneratingAllDraft ? 0.7 : 1 }}
+                disabled={regeneratingAllDraft}
+                onClick={async () => {
+                  setShowRegenerateAllConfirm(false);
+                  setRegeneratingAllDraft(true);
+                  try {
+                    await api.post('/api/translations/regenerate-all-draft', { language_code: selectedLang });
+                    queryClient.invalidateQueries({ queryKey: ['translations', selectedLang] });
+                    queryClient.invalidateQueries({ queryKey: ['string-keys'] });
+                    showBanner('All draft translations are being regenerated.');
+                  } catch {
+                    showBanner('Failed to regenerate draft translations.', false);
+                  } finally {
+                    setRegeneratingAllDraft(false);
+                  }
+                }}
+              >
+                Regenerate All
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Regenerate Single Translation Confirmation Modal ─────────────── */}
+      {showRegenerateSingleConfirm && (
+        <div style={s.overlay} onClick={() => setShowRegenerateSingleConfirm(null)}>
+          <div style={{ ...s.modal, maxWidth: 440 }} onClick={(e) => e.stopPropagation()}>
+            <div style={s.modalHeader}>
+              <h2 style={s.modalTitle}>Regenerate Translation</h2>
+              <button style={s.closeBtn} onClick={() => setShowRegenerateSingleConfirm(null)}>✕</button>
+            </div>
+            <div style={{ padding: "20px 24px" }}>
+              <p style={{ fontSize: 14, color: "#4a5568", margin: 0, lineHeight: 1.6 }}>
+                Regenerate translation for <strong>{showRegenerateSingleConfirm.key}</strong>?
+              </p>
+              <p style={{ fontSize: 13, color: "var(--c-text-muted)", margin: "10px 0 0", lineHeight: 1.5 }}>
+                The current draft will be overwritten with a fresh translation.
+              </p>
+            </div>
+            <div style={{ ...s.modalFooter, padding: "0 24px 24px" }}>
+              <button style={s.cancelBtn} onClick={() => setShowRegenerateSingleConfirm(null)}>Cancel</button>
+              <button
+                style={s.submitBtn}
+                onClick={async () => {
+                  const { id, key } = showRegenerateSingleConfirm;
+                  setShowRegenerateSingleConfirm(null);
+                  setRegeneratingRowId(id);
+                  try {
+                    await api.post('/api/translations/regenerate-single', { translation_id: id, language_code: selectedLang });
+                    queryClient.invalidateQueries({ queryKey: ['translations', selectedLang] });
+                  } catch {
+                    showBanner(`Failed to regenerate translation for "${key}".`, false);
+                  } finally {
+                    setRegeneratingRowId(null);
+                  }
+                }}
+              >
+                Regenerate
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ── Publish Confirmation Modal ───────────────────────────────────── */}

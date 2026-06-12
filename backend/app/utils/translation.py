@@ -51,7 +51,7 @@ async def _translate_via_libretranslate(text: str, target_lang: str, source_lang
         )
 
     translate_url = url_base.rstrip("/") + "/translate"
-    async with httpx.AsyncClient(timeout=30.0) as client:
+    async with httpx.AsyncClient(timeout=15.0) as client:
         resp = await client.post(
             translate_url,
             json={"q": text, "source": source_lang, "target": mapped_lang, "format": "text"},
@@ -85,5 +85,17 @@ async def translate_text(text: str, target_lang: str, source_lang: str = "en") -
         result = await _translate_via_libretranslate(text, target_lang, source_lang)
         return result, "libretranslate"
 
-    result = await _translate_via_libretranslate(text, target_lang, source_lang)
-    return result, "libretranslate"
+    # LibreTranslate is primary. Fall back to Google when the language is unsupported.
+    try:
+        result = await _translate_via_libretranslate(text, target_lang, source_lang)
+        return result, "libretranslate"
+    except ValueError as exc:
+        if settings.GOOGLE_TRANSLATE_API_KEY:
+            log.warning(
+                "LibreTranslate does not support [%s], falling back to Google: %s",
+                target_lang,
+                exc,
+            )
+            result = await _translate_via_google(text, target_lang, source_lang)
+            return result, "google"
+        raise
