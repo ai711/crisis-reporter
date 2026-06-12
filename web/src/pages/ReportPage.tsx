@@ -233,17 +233,21 @@ async function fetchBuildingsForMap(mapInstance: maplibregl.Map): Promise<void> 
   const n = bounds.getNorth().toFixed(6);
   const e = bounds.getEast().toFixed(6);
   const query = `[out:json][timeout:25][bbox:${s},${w},${n},${e}];(way["building"];relation["building"]["type"="multipolygon"];);out body;>;out skel qt;`;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 30000);
   try {
     const res = await fetch("https://overpass-api.de/api/interpreter", {
       method: "POST",
       body: new URLSearchParams({ data: query }),
+      signal: controller.signal,
     });
+    clearTimeout(timeoutId);
     if (!res.ok) return;
     const data: OverpassResponse = await res.json();
     (mapInstance.getSource("buildings") as maplibregl.GeoJSONSource | undefined)?.setData(
       buildingsGeoJSON(data)
     );
-  } catch { /* silent — buildings are non-critical */ }
+  } catch { clearTimeout(timeoutId); /* silent — buildings are non-critical */ }
 }
 
 function getStepperStep(
@@ -289,6 +293,8 @@ export default function ReportPage() {
   const [pressingNeedsOther, setPressingNeedsOther] = useState("");
   const [damageQuestion, setDamageQuestion] = useState(1);
   const [photos, setPhotos] = useState<File[]>([]);
+  const [photoUrls, setPhotoUrls] = useState<string[]>([]);
+  const [viewingPhotoUrl, setViewingPhotoUrl] = useState<string | null>(null);
 
   // Photo UI state
   const [photoError, setPhotoError] = useState("");
@@ -417,6 +423,21 @@ export default function ReportPage() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const gpsMarkerRef = useRef<maplibregl.Marker | null>(null); // B9
   const pinMarkerRef = useRef<maplibregl.Marker | null>(null); // B6
+
+  // Manage blob URLs for photo previews — create once per photos change, revoke on cleanup
+  useEffect(() => {
+    const urls = photos.map((f) => URL.createObjectURL(f));
+    setPhotoUrls(urls);
+    return () => { urls.forEach((u) => URL.revokeObjectURL(u)); };
+  }, [photos]);
+
+  // Manage blob URL for the full-screen photo viewer
+  useEffect(() => {
+    if (!viewingPhoto) { setViewingPhotoUrl(null); return; }
+    const url = URL.createObjectURL(viewingPhoto);
+    setViewingPhotoUrl(url);
+    return () => { URL.revokeObjectURL(url); };
+  }, [viewingPhoto]);
 
   useEffect(() => {
     const init = async () => {
@@ -1188,7 +1209,7 @@ export default function ReportPage() {
         timestamp: Date.now(),
         ...(selectedBuildingId ? { building_id: selectedBuildingId } : {}),
       });
-      localStorage.setItem("cr_submitted_locations", JSON.stringify(locs));
+      localStorage.setItem("cr_submitted_locations", JSON.stringify(locs.slice(-200)));
     } catch { /* non-critical */ }
   };
 
@@ -1580,6 +1601,7 @@ export default function ReportPage() {
         formData.append("file", compressedPhotos[i]);
         await api.post("/api/photos", formData, {
           headers: { "Content-Type": "multipart/form-data" },
+          timeout: 120000,
         });
       }
 
@@ -1867,7 +1889,7 @@ export default function ReportPage() {
           onClick={() => setSelectedPhotoIndex(selectedPhotoIndex === index ? null : index)}
         >
           <img
-            src={URL.createObjectURL(photo)}
+            src={photoUrls[index] ?? ""}
             style={{ width: "100%", height: "100%", objectFit: "cover" as const, borderRadius: 12, display: "block" }}
             alt={`Photo ${index + 1}`}
           />
@@ -2962,7 +2984,7 @@ export default function ReportPage() {
                             }}
                           >
                             <img
-                              src={URL.createObjectURL(photo)}
+                              src={photoUrls[idx] ?? ""}
                               alt={`Photo ${idx + 1}`}
                               style={{ width: "100%", height: "100%", objectFit: "cover" as const, borderRadius: 6, display: "block" }}
                             />
@@ -3351,7 +3373,7 @@ export default function ReportPage() {
             ×
           </button>
           <img
-            src={URL.createObjectURL(viewingPhoto)}
+            src={viewingPhotoUrl ?? ""}
             alt="Full size photo"
             style={styles.viewerImage}
             onClick={(e) => e.stopPropagation()}

@@ -83,6 +83,7 @@ export default function ProfilePage() {
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
+  const photoPreviewBlobRef = useRef<string | null>(null);
 
   // UI state
   const [loading, setLoading] = useState(true);
@@ -117,6 +118,10 @@ export default function ProfilePage() {
     return () => { if (successTimer.current) clearTimeout(successTimer.current); };
   }, []);
 
+  useEffect(() => {
+    return () => { if (photoPreviewBlobRef.current) URL.revokeObjectURL(photoPreviewBlobRef.current); };
+  }, []);
+
   const displayPhoto = photoPreview ?? photoUrl;
   const completion = calcCompletion(firstName, lastName, email, phone, displayPhoto);
   const initials = getInitials(firstName, lastName);
@@ -137,7 +142,10 @@ export default function ProfilePage() {
   const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setPhotoPreview(URL.createObjectURL(file));
+    if (photoPreviewBlobRef.current) URL.revokeObjectURL(photoPreviewBlobRef.current);
+    const url = URL.createObjectURL(file);
+    photoPreviewBlobRef.current = url;
+    setPhotoPreview(url);
     setPhotoFile(file);
     setIsDirty(true);
     e.target.value = "";
@@ -165,6 +173,10 @@ export default function ProfilePage() {
         );
         setPhotoUrl(res.data.profile_photo_url);
         setPhotoFile(null);
+        if (photoPreviewBlobRef.current) {
+          URL.revokeObjectURL(photoPreviewBlobRef.current);
+          photoPreviewBlobRef.current = null;
+        }
         setPhotoPreview(null);
       }
 

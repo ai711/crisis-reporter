@@ -186,8 +186,10 @@ function AppContent() {
   useEffect(() => {
     const BASE_URL = (import.meta.env.VITE_API_URL as string) || "http://127.0.0.1:8000";
     let cancelled = false;
-    fetch(`${BASE_URL}/api/content/tc`)
-      .then((r) => (r.ok ? r.json() : null))
+    const tcController = new AbortController();
+    const tcTimeoutId = setTimeout(() => tcController.abort(), 5000);
+    fetch(`${BASE_URL}/api/content/tc`, { signal: tcController.signal })
+      .then((r) => { clearTimeout(tcTimeoutId); return r.ok ? r.json() : null; })
       .then((data: { version?: number } | null) => {
         if (cancelled || !data?.version) return;
         const serverVersion = String(data.version);
@@ -206,8 +208,8 @@ function AppContent() {
           }
         }
       })
-      .catch(() => { /* network unavailable — defer to next mount */ });
-    return () => { cancelled = true; };
+      .catch(() => { clearTimeout(tcTimeoutId); /* network unavailable or aborted — defer to next mount */ });
+    return () => { cancelled = true; tcController.abort(); };
   }, []);
 
   return (

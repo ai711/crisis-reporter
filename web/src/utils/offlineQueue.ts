@@ -194,11 +194,15 @@ async function refreshAccessTokenIfNeeded(apiBaseUrl: string): Promise<string | 
   if (!refreshToken) return currentToken; // Anonymous user — no token to refresh
 
   try {
+    const refreshController = new AbortController();
+    const refreshTimeoutId = setTimeout(() => refreshController.abort(), 20000);
     const res = await fetch(`${apiBaseUrl}/api/reporter/auth/refresh`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ refresh_token: refreshToken }),
+      signal: refreshController.signal,
     });
+    clearTimeout(refreshTimeoutId);
 
     if (res.ok) {
       const data = await res.json();
@@ -252,11 +256,15 @@ export async function syncQueue(apiBaseUrl: string): Promise<void> {
           headers["Authorization"] = `Bearer ${accessToken}`;
         }
 
+        const reportController = new AbortController();
+        const reportTimeoutId = setTimeout(() => reportController.abort(), 20000);
         const reportResponse = await fetch(`${apiBaseUrl}/api/reports`, {
           method: "POST",
           headers,
           body: JSON.stringify(item.report),
+          signal: reportController.signal,
         });
+        clearTimeout(reportTimeoutId);
 
         if (!reportResponse.ok) {
           if (reportResponse.status === 401) throw new Error("auth_expired");
@@ -281,11 +289,15 @@ export async function syncQueue(apiBaseUrl: string): Promise<void> {
             photoHeaders["Authorization"] = `Bearer ${accessToken}`;
           }
 
+          const photoController = new AbortController();
+          const photoTimeoutId = setTimeout(() => photoController.abort(), 120000);
           const photoResponse = await fetch(`${apiBaseUrl}/api/photos`, {
             method: "POST",
             headers: photoHeaders,
             body: formData,
+            signal: photoController.signal,
           });
+          clearTimeout(photoTimeoutId);
 
           if (!photoResponse.ok) {
             // 401 means our token expired — stop retrying this session, let the
@@ -368,7 +380,11 @@ export async function isIndexedDBAvailable(): Promise<boolean> {
 
 // ── Auto-sync triggers ────────────────────────────────────────────────────────
 
+let _syncTriggersRegistered = false;
+
 export function registerSyncTriggers(apiBaseUrl: string): void {
+  if (_syncTriggersRegistered) return;
+  _syncTriggersRegistered = true;
   // Sync when internet connection is restored
   window.addEventListener("online", () => {
     syncQueue(apiBaseUrl);

@@ -192,16 +192,20 @@ async function fetchBuildings(mapInstance: maplibregl.Map): Promise<void> {
   const n = bounds.getNorth().toFixed(6);
   const e = bounds.getEast().toFixed(6);
   const query = `[out:json][timeout:25][bbox:${s},${w},${n},${e}];(way["building"];relation["building"]["type"="multipolygon"];);out body;>;out skel qt;`;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 30000);
   try {
     const res = await fetch("https://overpass-api.de/api/interpreter", {
       method: "POST",
       body: new URLSearchParams({ data: query }),
+      signal: controller.signal,
     });
+    clearTimeout(timeoutId);
     if (!res.ok) return;
     const data: OverpassResponse = await res.json();
     const source = mapInstance.getSource("buildings") as maplibregl.GeoJSONSource | undefined;
     source?.setData(buildingsGeoJSON(data));
-  } catch { /* silent — buildings non-critical */ }
+  } catch { clearTimeout(timeoutId); /* silent — buildings non-critical */ }
 }
 
 // ── Icons ─────────────────────────────────────────────────────────────────────
