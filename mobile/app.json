@@ -49,6 +49,7 @@
     },
     "plugins": [
       "./plugins/withFixHermesc",
+      "./plugins/withFixMainApplication",
       "expo-secure-store",
       "@maplibre/maplibre-react-native",
       [
