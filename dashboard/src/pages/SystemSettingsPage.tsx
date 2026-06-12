@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "../stores/authStore";
 import api from "../services/api";
 import Header from "../components/Header";
+import { Toast } from "../components/Toast";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -909,9 +910,9 @@ function LanguagesTab() {
   const [syncMsg, setSyncMsg] = useState<string>("");
   const [showPublishConfirm, setShowPublishConfirm] = useState(false);
   const [isPublishingApi, setIsPublishingApi] = useState(false);
-  const [publishMsg, setPublishMsg] = useState<{ text: string; type: "success" | "error" } | null>(null);
   const [publishModalError, setPublishModalError] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const [approvingAllDraft, setApprovingAllDraft] = useState(false);
   const [optimisticDraftClear, setOptimisticDraftClear] = useState(false);
   const [translateStartTime, setTranslateStartTime] = useState<number | null>(null);
@@ -1287,11 +1288,9 @@ function LanguagesTab() {
       queryClient.invalidateQueries({ queryKey: ["translation-audit"] });
       setHighlightedLang(publishingLang);
       setTimeout(() => setHighlightedLang(null), 3000);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
       setShowPublishConfirm(false);
-      setPublishMsg({ text: "Published successfully. Reporters will receive updates on next app open.", type: "success" });
-      setTimeout(() => setPublishMsg(null), 5000);
       setPublishingLang(null);
+      setToast({ message: "Published successfully. Reporters will receive updates on their next app open.", type: "success" });
     } catch (err: unknown) {
       const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? "Publish failed. Please try again.";
       setPublishModalError(detail);
@@ -1340,6 +1339,7 @@ function LanguagesTab() {
       queryClient.invalidateQueries({ queryKey: ["string-keys"] });
       queryClient.invalidateQueries({ queryKey: ["queue-status-by-lang"] });
       queryClient.invalidateQueries({ queryKey: ["translation-audit"] });
+      showBanner("Translation approved.");
     } catch {
       showBanner("Failed to approve translation.", false);
     } finally {
@@ -1564,19 +1564,7 @@ function LanguagesTab() {
           {translateMsg}
         </div>
       ) : null}
-      {publishMsg && (
-        <div style={{ background: publishMsg.type === "success" ? "#dcfce7" : "#fee2e2", color: publishMsg.type === "success" ? "#166534" : "#991b1b", padding: "8px 12px", borderRadius: 6, fontSize: 13, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <span>{publishMsg.text}</span>
-          {publishMsg.type === "error" && (
-            <button
-              style={{ ...sL.actionBtn, background: "var(--c-surface-lowest)", color: "#991b1b", border: "1px solid #fca5a5", marginLeft: 12 }}
-              onClick={() => { if (publishingLang) setShowPublishConfirm(true); }}
-            >
-              Retry
-            </button>
-          )}
-        </div>
-      )}
+      {toast && <Toast message={toast.message} type={toast.type} onDismiss={() => setToast(null)} />}
 
       {/* ── Language List ────────────────────────────────────────────────── */}
       <div style={sL.sectionCard}>
@@ -2347,6 +2335,7 @@ function LanguagesTab() {
             setShowAddLanguageModal(false);
             queryClient.invalidateQueries({ queryKey: ["languages"] });
             setSelectedLang(newLangCode);
+            showBanner("Language added. Run Auto-translate to generate translations.");
           }}
           existingCodes={languages.map((l) => l.code)}
         />
@@ -2517,7 +2506,7 @@ function LanguagesTab() {
             <div style={{ ...s.modalFooter, padding: "0 24px 24px" }}>
               <button
                 style={{ ...s.cancelBtn, opacity: isPublishingApi ? 0.6 : 1 }}
-                onClick={() => { setShowPublishConfirm(false); setPublishingLang(null); setPublishMsg(null); setPublishModalError(""); }}
+                onClick={() => { setShowPublishConfirm(false); setPublishingLang(null); setPublishModalError(""); }}
                 disabled={isPublishingApi}
               >
                 Cancel

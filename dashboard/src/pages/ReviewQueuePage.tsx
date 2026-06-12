@@ -4,6 +4,7 @@ import { CheckCircle, AlertTriangle, Lock, ShieldAlert, ClipboardCheck, Building
 import Header from "../components/Header";
 import PageSpinner from "../components/PageSpinner";
 import EmptyState from "../components/EmptyState";
+import { Toast } from "../components/Toast";
 import { useAuthStore } from "../stores/authStore";
 import {
   getReviewQueueCounts,
@@ -1049,6 +1050,7 @@ function Tab2({ currentUserName }: { currentUserName: string }) {
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [modal, setModal] = useState<Tab2Modal>(null);
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
   const filterParams: Record<string, string | number> = { limit: PAGE_SIZE };
   if (search) filterParams.search = search;
@@ -1095,10 +1097,15 @@ function Tab2({ currentUserName }: { currentUserName: string }) {
   }
 
   async function handleDismiss(row: Tab2Row, comment: string) {
-    await dismissPropertyFromReview(row.property_id, comment);
-    qc.invalidateQueries({ queryKey: ["review-queue-tab2"] });
-    qc.invalidateQueries({ queryKey: ["review-queue-counts"] });
-    setModal(null);
+    try {
+      await dismissPropertyFromReview(row.property_id, comment);
+      qc.invalidateQueries({ queryKey: ["review-queue-tab2"] });
+      qc.invalidateQueries({ queryKey: ["review-queue-counts"] });
+      setModal(null);
+      setToast({ message: "Property dismissed from review queue.", type: "success" });
+    } catch {
+      setToast({ message: "Failed to dismiss property. Please try again.", type: "error" });
+    }
   }
 
   const filtersActive = [pendingSearch, reviewReason, country, damageLevel, dateFrom, dateTo].filter(Boolean).length;
@@ -1115,6 +1122,7 @@ function Tab2({ currentUserName }: { currentUserName: string }) {
 
   return (
     <div>
+      {toast && <Toast message={toast.message} type={toast.type} onDismiss={() => setToast(null)} />}
       {/* Filter bar */}
       <div style={s.filterBar}>
         <span style={s.filterLabel}>Filters:</span>
@@ -1611,6 +1619,7 @@ function Tab4({ currentUserName: _currentUserName }: { currentUserName: string }
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [modal, setModal] = useState<Tab4Modal>(null);
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
   const filterParams: Record<string, string | number> = { limit: PAGE_SIZE };
   if (search) filterParams.search = search;
@@ -1654,17 +1663,27 @@ function Tab4({ currentUserName: _currentUserName }: { currentUserName: string }
   }
 
   async function handleConfirmBlock(row: Tab4Row, comment: string) {
-    await confirmAutoBlock(row.reporter_id, comment);
-    qc.invalidateQueries({ queryKey: ["review-queue-tab4"] });
-    qc.invalidateQueries({ queryKey: ["review-queue-counts"] });
-    setModal(null);
+    try {
+      await confirmAutoBlock(row.reporter_id, comment);
+      qc.invalidateQueries({ queryKey: ["review-queue-tab4"] });
+      qc.invalidateQueries({ queryKey: ["review-queue-counts"] });
+      setModal(null);
+      setToast({ message: "Reporter block confirmed. They will remain blocked indefinitely.", type: "success" });
+    } catch {
+      setToast({ message: "Failed to confirm block. Please try again.", type: "error" });
+    }
   }
 
   async function handleReverseBlock(row: Tab4Row, comment: string) {
-    await reverseAutoBlock(row.reporter_id, comment);
-    qc.invalidateQueries({ queryKey: ["review-queue-tab4"] });
-    qc.invalidateQueries({ queryKey: ["review-queue-counts"] });
-    setModal(null);
+    try {
+      await reverseAutoBlock(row.reporter_id, comment);
+      qc.invalidateQueries({ queryKey: ["review-queue-tab4"] });
+      qc.invalidateQueries({ queryKey: ["review-queue-counts"] });
+      setModal(null);
+      setToast({ message: "Auto-block reversed. Reporter can submit reports again.", type: "success" });
+    } catch {
+      setToast({ message: "Failed to reverse block. Please try again.", type: "error" });
+    }
   }
 
   const filtersActive = [pendingSearch, country, timeRemaining].filter(Boolean).length;
@@ -1678,6 +1697,7 @@ function Tab4({ currentUserName: _currentUserName }: { currentUserName: string }
 
   return (
     <div>
+      {toast && <Toast message={toast.message} type={toast.type} onDismiss={() => setToast(null)} />}
       {/* Filter bar */}
       <div style={s.filterBar}>
         <span style={s.filterLabel}>Filters:</span>

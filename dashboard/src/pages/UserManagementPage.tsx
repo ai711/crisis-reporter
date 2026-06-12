@@ -6,6 +6,7 @@ import { useAuthStore } from "../stores/authStore";
 import Header from "../components/Header";
 import PageSpinner from "../components/PageSpinner";
 import EmptyState from "../components/EmptyState";
+import { Toast } from "../components/Toast";
 import {
   getDashboardUsers,
   createDashboardUser,
@@ -339,6 +340,7 @@ export default function UserManagementPage() {
 
   const [showCreate, setShowCreate] = useState(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
   const isAdminOrSuper = currentUser?.role === "admin" || currentUser?.role === "superadmin";
 
@@ -402,13 +404,17 @@ export default function UserManagementPage() {
     try {
       await api.patch(`/api/dashboard/users/${userId}/status`, { is_active: !currentActive });
       queryClient.invalidateQueries({ queryKey: ["dashboard-users"] });
-    } catch { /* silent */ } finally {
+      setToast({ message: `User ${currentActive ? "deactivated" : "activated"} successfully.`, type: "success" });
+    } catch {
+      setToast({ message: "Failed to update user status. Please try again.", type: "error" });
+    } finally {
       setTogglingId(null);
     }
   }
 
   return (
     <div style={s.page}>
+      {toast && <Toast message={toast.message} type={toast.type} onDismiss={() => setToast(null)} />}
       <Header title="User Management" />
       {/* ── Sticky toolbar ── */}
       <div style={s.toolbar}>

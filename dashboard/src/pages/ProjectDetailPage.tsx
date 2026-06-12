@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from "react";
+import { Toast } from "../components/Toast";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import maplibregl, { GeoJSONSource } from "maplibre-gl";
@@ -614,6 +615,7 @@ export default function ProjectDetailPage() {
   const [addUserSelected, setAddUserSelected] = useState<DashboardUserSearchItem | null>(null);
   const [addUserAccessLevel, setAddUserAccessLevel] = useState<"view_only" | "view_and_edit">("view_only");
   const [addUserLoading, setAddUserLoading] = useState(false);
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
   const { data: userSearchResults = [] } = useQuery<DashboardUserSearchItem[]>({
     queryKey: ["dashboard-user-search", addUserSearch],
@@ -633,6 +635,9 @@ export default function ProjectDetailPage() {
       setAddUserSearch("");
       setAddUserSelected(null);
       refetchUsers();
+      setToast({ message: `${addUserSelected.full_name} added to project.`, type: "success" });
+    } catch {
+      setToast({ message: "Failed to add user to project. Please try again.", type: "error" });
     } finally {
       setAddUserLoading(false);
     }
@@ -643,7 +648,10 @@ export default function ProjectDetailPage() {
     try {
       await removeProjectUser(serialId, userId);
       refetchUsers();
-    } catch { /* silent */ }
+      setToast({ message: "User removed from project.", type: "success" });
+    } catch {
+      setToast({ message: "Failed to remove user. Please try again.", type: "error" });
+    }
   };
 
   const handleChangeAccess = async (userId: string, newLevel: string) => {
@@ -651,7 +659,10 @@ export default function ProjectDetailPage() {
     try {
       await updateProjectUserAccess(serialId, userId, newLevel);
       refetchUsers();
-    } catch { /* silent */ }
+      setToast({ message: "Access level updated.", type: "success" });
+    } catch {
+      setToast({ message: "Failed to update access level. Please try again.", type: "error" });
+    }
   };
 
   // ── Render guards ──────────────────────────────────────────────────────
@@ -690,6 +701,7 @@ export default function ProjectDetailPage() {
 
   return (
     <>
+      {toast && <Toast message={toast.message} type={toast.type} onDismiss={() => setToast(null)} />}
       <style>{`
         @keyframes pd-pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
         .pd-tab-btn:hover { background: #f0f4f8 !important; }
