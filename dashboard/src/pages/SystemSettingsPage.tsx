@@ -910,6 +910,8 @@ function LanguagesTab() {
   const [showPublishConfirm, setShowPublishConfirm] = useState(false);
   const [isPublishingApi, setIsPublishingApi] = useState(false);
   const [publishMsg, setPublishMsg] = useState<{ text: string; type: "success" | "error" } | null>(null);
+  const [publishModalError, setPublishModalError] = useState<string>("");
+  const [searchQuery, setSearchQuery] = useState("");
   const [approvingAllDraft, setApprovingAllDraft] = useState(false);
   const [optimisticDraftClear, setOptimisticDraftClear] = useState(false);
   const [translateStartTime, setTranslateStartTime] = useState<number | null>(null);
@@ -989,19 +991,20 @@ function LanguagesTab() {
     return () => window.removeEventListener("beforeunload", handleUnload);
   }, [selectedLang]);
 
-  // FIX 13: reset translation table page when language or tab changes
+  // FIX 13: reset translation table page when language, tab, or search changes
   useEffect(() => {
     setTransPage(1);
-  }, [selectedLang, filterTab]);
+  }, [selectedLang, filterTab, searchQuery]);
 
   // Auto-sync string keys on tab mount — ensures new app content surfaces as
   // Missing in the translation table without requiring a manual button click.
   useEffect(() => {
     api.post('/api/translations/sync-string-keys')
       .then(res => {
-        const { created } = res.data as { created: number; retired: number };
-        if (created > 0) {
-          setSyncMsg(`${created} new string${created > 1 ? 's' : ''} added to translation pipeline.`);
+        const { created, unretired } = res.data as { created: number; unretired: number; retired: number };
+        const surfaced = (created || 0) + (unretired || 0);
+        if (surfaced > 0) {
+          setSyncMsg(`${surfaced} string${surfaced > 1 ? 's' : ''} added to translation pipeline.`);
           setTimeout(() => setSyncMsg(''), 6000);
           queryClient.invalidateQueries({ queryKey: ['languages'] });
           queryClient.invalidateQueries({ queryKey: ['string-keys'] });
@@ -1168,6 +1171,16 @@ function LanguagesTab() {
     ? []
     : filterTab === "all" ? translations : translations.filter((t) => t.status === filterTab);
 
+  const searchLower = searchQuery.toLowerCase().trim();
+  const searchFiltered = !searchLower
+    ? filtered
+    : filtered.filter(
+        (t) =>
+          t.string_key.toLowerCase().includes(searchLower) ||
+          t.english_text.toLowerCase().includes(searchLower) ||
+          t.translated_text.toLowerCase().includes(searchLower)
+      );
+
   // FIX 12: language table pagination
   const LANG_PAGE_SIZE = 10;
   const totalLangPages = Math.ceil((languages.length || 1) / LANG_PAGE_SIZE);
@@ -1175,8 +1188,8 @@ function LanguagesTab() {
 
   // FIX 13: edit translations pagination
   const TRANS_PAGE_SIZE = 50;
-  const totalTransPages = Math.ceil((filtered.length || 1) / TRANS_PAGE_SIZE);
-  const pagedTrans = filtered.slice((transPage - 1) * TRANS_PAGE_SIZE, transPage * TRANS_PAGE_SIZE);
+  const totalTransPages = Math.ceil((searchFiltered.length || 1) / TRANS_PAGE_SIZE);
+  const pagedTrans = searchFiltered.slice((transPage - 1) * TRANS_PAGE_SIZE, transPage * TRANS_PAGE_SIZE);
 
   // Publish History pagination — 10 rows per page
   const PUBLISH_HISTORY_PAGE_SIZE = 10;
@@ -1203,6 +1216,7 @@ function LanguagesTab() {
     setSelectedLang(code);
     setFilterTab("draft");
     setEditedTexts({});
+    setSearchQuery("");
   }
 
   function handleAutoTranslate(langCode: string) {
@@ -1259,6 +1273,7 @@ function LanguagesTab() {
   async function executePublish() {
     if (!publishingLang) return;
     setIsPublishingApi(true);
+    setPublishModalError("");
     try {
       await api.post(`/api/language-packages/publish/${publishingLang}`);
       await Promise.all([
@@ -1279,10 +1294,7 @@ function LanguagesTab() {
       setPublishingLang(null);
     } catch (err: unknown) {
       const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? "Publish failed. Please try again.";
-      setShowPublishConfirm(false);
-      setPublishMsg({ text: detail, type: "error" });
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-      // publishingLang kept for retry
+      setPublishModalError(detail);
     } finally {
       setIsPublishingApi(false);
     }
@@ -1955,6 +1967,30 @@ function LanguagesTab() {
           )}
         </div>
 
+        {/* Search box */}
+        <div style={{ padding: "8px 16px 6px", display: "flex", alignItems: "center", gap: 10, borderBottom: "1px solid var(--c-surface-high)" }}>
+          <input
+            type="text"
+            placeholder="Search by key, English text, or translation…"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            style={{ ...s.input, width: 320, fontSize: 13, padding: "6px 10px" }}
+          />
+          {searchQuery && (
+            <>
+              <button
+                style={{ background: "none", border: "none", color: "var(--c-text-muted)", cursor: "pointer", fontSize: 12, padding: "4px 6px" }}
+                onClick={() => setSearchQuery("")}
+              >
+                ✕ Clear
+              </button>
+              <span style={{ fontSize: 12, color: "var(--c-text-muted)" }}>
+                {searchFiltered.length} result{searchFiltered.length !== 1 ? "s" : ""}
+              </span>
+            </>
+          )}
+        </div>
+
         {/* Service breakdown summary — C */}
         {!transLoading && (googleCount > 0 || libreCount > 0 || manualCount > 0) && (
           <div style={{ fontSize: 12, color: "#6b7280", padding: "6px 16px 4px", display: "flex", gap: 10, flexWrap: "wrap" as const }}>
@@ -1983,8 +2019,10 @@ function LanguagesTab() {
             <tbody>
               {transLoading ? (
                 <tr><td colSpan={7} style={{ ...s.td, textAlign: "center", color: "var(--c-text-muted)" }}>Loading translations…</td></tr>
-              ) : filtered.length === 0 ? (
-                <tr><td colSpan={7} style={{ ...s.td, textAlign: "center", color: "var(--c-text-muted)", fontStyle: "italic" }}>No {filterTab === "all" ? "" : filterTab + " "}translations.</td></tr>
+              ) : searchFiltered.length === 0 ? (
+                <tr><td colSpan={7} style={{ ...s.td, textAlign: "center", color: "var(--c-text-muted)", fontStyle: "italic" }}>
+                  {searchQuery ? `No results for "${searchQuery}".` : `No ${filterTab === "all" ? "" : filterTab + " "}translations.`}
+                </td></tr>
               ) : pagedTrans.map((t) => {
                 const isSaving = savingKeys.has(t.string_key);
                 const currentText = editedTexts[t.string_key] ?? t.translated_text;
@@ -2470,11 +2508,16 @@ function LanguagesTab() {
                 <span style={{ flexShrink: 0 }}>ℹ</span>
                 <span>If question changes are pending publication, their translations are included in this package and will be ready when the question package is published.</span>
               </p>
+              {publishModalError && (
+                <div style={{ marginTop: 16, background: "#fee2e2", border: "1px solid #fca5a5", borderRadius: 6, padding: "10px 14px", fontSize: 13, color: "#991b1b", lineHeight: 1.5 }}>
+                  {publishModalError}
+                </div>
+              )}
             </div>
             <div style={{ ...s.modalFooter, padding: "0 24px 24px" }}>
               <button
                 style={{ ...s.cancelBtn, opacity: isPublishingApi ? 0.6 : 1 }}
-                onClick={() => { setShowPublishConfirm(false); setPublishingLang(null); setPublishMsg(null); }}
+                onClick={() => { setShowPublishConfirm(false); setPublishingLang(null); setPublishMsg(null); setPublishModalError(""); }}
                 disabled={isPublishingApi}
               >
                 Cancel

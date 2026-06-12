@@ -751,10 +751,13 @@ async def ensure_string_keys_synced(db: AsyncSession) -> dict:
     active or protected Language.
 
     - Creates missing Translation rows with status='missing', translated_text=''.
+    - Un-retires Translation rows whose StringKey is now active again (resets to
+      'missing' so auto-translate picks them up). Existing translated_text is
+      preserved so a re-translate gets a meaningful starting point.
     - Marks Translation rows whose StringKey is now inactive as status='retired'
       (does not delete them).
 
-    Returns {"created": N, "retired": N}.
+    Returns {"created": N, "unretired": N, "retired": N}.
     """
     # All active string keys
     active_keys_result = await db.execute(
@@ -771,21 +774,41 @@ async def ensure_string_keys_synced(db: AsyncSession) -> dict:
     active_langs = active_langs_result.scalars().all()
 
     if not active_keys or not active_langs:
-        return {"created": 0, "retired": 0}
+        return {"created": 0, "unretired": 0, "retired": 0}
 
     active_key_ids = [k.id for k in active_keys]
     active_lang_codes = [l.code for l in active_langs]
 
-    # Existing (string_key_id, language_code) pairs
+    # Existing Translation rows for active key+lang pairs — track both status and pair
     existing_result = await db.execute(
-        select(Translation.string_key_id, Translation.language_code).where(
+        select(Translation.string_key_id, Translation.language_code, Translation.status).where(
             Translation.string_key_id.in_(active_key_ids),
             Translation.language_code.in_(active_lang_codes),
         )
     )
-    existing_pairs = {(row[0], row[1]) for row in existing_result.all()}
+    existing_rows = existing_result.all()
+    existing_pairs = {(row[0], row[1]) for row in existing_rows}
+    retired_pairs = {(row[0], row[1]) for row in existing_rows if row[2] == "retired"}
 
-    # Create missing Translation rows
+    # Un-retire Translation rows for keys that are active again — these got stranded
+    # when a key was temporarily removed from _SEED_KEYS and then re-added. The unique
+    # constraint (string_key_id, language_code) means we can't create a new row, so we
+    # must reset the existing retired row back to 'missing'.
+    unretired = 0
+    if retired_pairs:
+        unretire_result = await db.execute(
+            sql_update(Translation)
+            .where(
+                Translation.string_key_id.in_(active_key_ids),
+                Translation.language_code.in_(active_lang_codes),
+                Translation.status == "retired",
+            )
+            .values(status="missing")
+            .execution_options(synchronize_session=False)
+        )
+        unretired = unretire_result.rowcount
+
+    # Create brand-new Translation rows for pairs that have never existed
     created = 0
     for key in active_keys:
         for lang in active_langs:
@@ -814,8 +837,11 @@ async def ensure_string_keys_synced(db: AsyncSession) -> dict:
     retired = retire_result.rowcount
 
     await db.commit()
-    log.info("ensure_string_keys_synced: created=%d retired=%d", created, retired)
-    return {"created": created, "retired": retired}
+    log.info(
+        "ensure_string_keys_synced: created=%d unretired=%d retired=%d",
+        created, unretired, retired,
+    )
+    return {"created": created, "unretired": unretired, "retired": retired}
 
 
 # ── /api/string-keys ─────────────────────────────────────────────────────────
@@ -1311,9 +1337,10 @@ async def sync_string_keys(
     every active/protected language. Idempotent — safe to run multiple times."""
     result = await ensure_string_keys_synced(db)
     log.info(
-        "sync_string_keys called by %s: created=%d retired=%d",
+        "sync_string_keys called by %s: created=%d unretired=%d retired=%d",
         current_user.full_name,
         result["created"],
+        result.get("unretired", 0),
         result["retired"],
     )
     return result
