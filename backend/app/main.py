@@ -1047,6 +1047,32 @@ BEGIN
     UPDATE reports SET serial_number = next_sn WHERE id = r.id;
   END LOOP;
 END $$""",
+
+    # One-time country active-status reset (2026-06-13):
+    # Activate all 193 UN member states except 15 sanctioned / severely access-restricted countries.
+    # Restricted (inactive): KP AF SY RU MM IR CU VE ER SO YE SD ML BY NI
+    """
+UPDATE countries
+SET is_active = CASE
+    WHEN code IN ('KP','AF','SY','RU','MM','IR','CU','VE','ER','SO','YE','SD','ML','BY','NI')
+        THEN FALSE
+    ELSE TRUE
+END
+WHERE code IN (
+    'DZ','AO','BJ','BW','BF','BI','CV','CM','CF','TD','KM','CG','CD','CI','DJ','EG','GQ',
+    'ER','SZ','ET','GA','GM','GH','GN','GW','KE','LS','LR','LY','MG','MW','ML','MR','MU',
+    'MA','MZ','NA','NE','NG','RW','ST','SN','SC','SL','SO','ZA','SS','SD','TZ','TG','TN',
+    'UG','ZM','ZW','AG','AR','BS','BB','BZ','BO','BR','CA','CL','CO','CR','CU','DM','DO',
+    'EC','SV','GD','GT','GY','HT','HN','JM','MX','NI','PA','PY','PE','KN','LC','VC','SR',
+    'TT','US','UY','VE','AF','AM','AZ','BH','BD','BT','BN','KH','CN','CY','GE','IN','ID',
+    'IR','IQ','IL','JP','JO','KZ','KW','KG','LA','LB','MY','MV','MN','MM','NP','KP','OM',
+    'PK','PH','QA','SA','SG','KR','LK','SY','TJ','TH','TL','TR','TM','AE','UZ','VN','YE',
+    'AL','AD','AT','BY','BE','BA','BG','HR','CZ','DK','EE','FI','FR','DE','GR','HU','IS',
+    'IE','IT','LV','LI','LT','LU','MT','MD','MC','ME','NL','MK','NO','PL','PT','RO','RU',
+    'SM','RS','SK','SI','ES','SE','CH','UA','GB','AU','FJ','KI','MH','FM','NR','NZ','PW',
+    'PG','WS','SB','TO','TV','VU'
+)
+""",
 ]
 
 
