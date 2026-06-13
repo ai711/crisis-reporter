@@ -47,6 +47,7 @@ DYNAMIC_PREFIXES = [
     "SAFETY_DISASTER_",   # t(`SAFETY_DISASTER_${id}_LABEL`)
     "SAFETY_TIP_",        # t(`SAFETY_TIP_${part}${disaster}_SLIDE_${n}_${field}`)
     "disaster_types.",    # t(`disaster_types.${v}`)
+    "crisis_types.",      # t(`crisis_types.${ct.key}`) in CrisisTypeModal.tsx
     "faq.q",              # t(`${baseKey}_answer`) etc.
     "faq_m.q",            # same pattern, mobile FAQ
     "map.damage_",        # t(`map.damage_${level}`)

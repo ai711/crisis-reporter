@@ -51,7 +51,7 @@ export default function CrisisTypeModal({ onClose }: CrisisTypeModalProps) {
             <div key={ct.key}>
               <div style={s.item}>
                 <p style={s.itemName}>
-                  {t(`disaster_label.${ct.key}`, ct.name)}
+                  {t(`disaster_types.${ct.key}`, ct.name)}
                 </p>
                 <p style={s.itemDesc}>
                   {t(`crisis_types.${ct.key}`, ct.desc)}

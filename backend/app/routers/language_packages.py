@@ -2268,6 +2268,18 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
     ("disaster_types.conflict",         "disaster_label", "Conflict"),
     ("disaster_types.civil_unrest",     "disaster_label", "Civil Unrest"),
 
+    # crisis type descriptions — rendered in the web "What can I report?" popup
+    # (CrisisTypeModal.tsx uses t(`crisis_types.${key}`) as a template literal)
+    ("crisis_types.earthquake",        "disaster_label", "Structural damage to buildings and infrastructure caused by seismic activity"),
+    ("crisis_types.flood",             "disaster_label", "Water damage to properties, roads, and community areas"),
+    ("crisis_types.tsunami",           "disaster_label", "Coastal destruction caused by large ocean waves"),
+    ("crisis_types.hurricane_cyclone", "disaster_label", "Wind and water damage from tropical storm systems"),
+    ("crisis_types.wildfire",          "disaster_label", "Fire damage to buildings, land, and surrounding areas"),
+    ("crisis_types.explosion",         "disaster_label", "Blast damage to structures and nearby properties"),
+    ("crisis_types.chemical_incident", "disaster_label", "Damage or contamination caused by hazardous substances"),
+    ("crisis_types.conflict",          "disaster_label", "Damage to buildings and infrastructure in conflict-affected areas"),
+    ("crisis_types.civil_unrest",      "disaster_label", "Property damage resulting from civil disturbances"),
+
     # report form (most-used strings)
     ("report.title",             "ui_report", "Report Damage"),
     ("report.minimal",           "ui_report", "Minimal or No Damage"),
@@ -3057,6 +3069,28 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
     ("whatCanIReport.close", "ui_home", "Close"),
     ("whatCanIReport.title", "ui_home", "What can I report?"),
     ("whatCanIReport.link",  "ui_home", "What can I report?"),
+
+    # Mobile "What can I report?" popup disaster type subtree.
+    # Consumed via t("whatCanIReport.types", { returnObjects: true }) —
+    # i18next reconstructs the nested object from these flat dotted keys.
+    ("whatCanIReport.types.earthquake.name",            "ui_home", "Earthquake"),
+    ("whatCanIReport.types.earthquake.description",     "ui_home", "Structural damage from ground shaking and tremors."),
+    ("whatCanIReport.types.flood.name",                 "ui_home", "Flood"),
+    ("whatCanIReport.types.flood.description",          "ui_home", "Water damage from overflow, heavy rain, or storm surge."),
+    ("whatCanIReport.types.tsunami.name",               "ui_home", "Tsunami"),
+    ("whatCanIReport.types.tsunami.description",        "ui_home", "Coastal damage from large ocean waves following seismic events."),
+    ("whatCanIReport.types.hurricane_cyclone.name",     "ui_home", "Hurricane or Cyclone"),
+    ("whatCanIReport.types.hurricane_cyclone.description", "ui_home", "Wind and rain damage from tropical storms."),
+    ("whatCanIReport.types.wildfire.name",              "ui_home", "Wildfire"),
+    ("whatCanIReport.types.wildfire.description",       "ui_home", "Fire damage to buildings and infrastructure."),
+    ("whatCanIReport.types.explosion.name",             "ui_home", "Explosion"),
+    ("whatCanIReport.types.explosion.description",      "ui_home", "Blast damage from industrial or other explosive events."),
+    ("whatCanIReport.types.chemical_incident.name",     "ui_home", "Chemical Incident"),
+    ("whatCanIReport.types.chemical_incident.description", "ui_home", "Damage or hazard from chemical spill or release."),
+    ("whatCanIReport.types.conflict.name",              "ui_home", "Conflict"),
+    ("whatCanIReport.types.conflict.description",       "ui_home", "Damage from armed conflict or military activity."),
+    ("whatCanIReport.types.civil_unrest.name",          "ui_home", "Civil Unrest"),
+    ("whatCanIReport.types.civil_unrest.description",   "ui_home", "Damage from protests, riots, or civil disturbance."),
     ("welcomeCard.body",     "ui_home", "Crisis Reporter helps you document damage to buildings and infrastructure after a disaster. You can report earthquakes, floods, conflicts, and other crises. Your reports help UNDP get help to the right places faster."),
     ("welcomeCard.dismiss",  "ui_home", "Got it"),
 
