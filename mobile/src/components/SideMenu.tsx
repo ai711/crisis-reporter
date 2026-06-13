@@ -26,10 +26,14 @@ type MenuItem = {
 };
 
 const MENU_ITEMS: MenuItem[] = [
-  { key: "ReportScreen",         labelKey: "menu.report_incident", icon: "campaign",  primary: true },
+  { key: "Report",               labelKey: "menu.report_incident", icon: "campaign",  primary: true },
+  { key: "Map",                  labelKey: "menu.map",             icon: "map" },
+  { key: "MyReports",           labelKey: "menu.my_reports",      icon: "list-alt" },
   { key: "SafetyTipsScreen",     labelKey: "menu.safety_tips",     icon: "security" },
   { key: "ReporterProfileScreen",labelKey: "menu.profile",         icon: "person" },
   { key: "BadgesScreen",         labelKey: "menu.badges",          icon: "star" },
+  { key: "FAQScreen",            labelKey: "menu.faq",             icon: "help-outline" },
+  { key: "AboutScreen",          labelKey: "menu.about",           icon: "info-outline" },
   { key: "SettingsScreen",       labelKey: "menu.settings",        icon: "settings" },
 ];
 

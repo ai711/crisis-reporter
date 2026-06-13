@@ -1,14 +1,15 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  ActivityIndicator, Alert, RefreshControl, Dimensions, Animated,
+  ActivityIndicator, Alert, RefreshControl, Dimensions, Animated, Modal,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
+import SideMenu from '../components/SideMenu';
 import * as SecureStore from 'expo-secure-store';
-import api, { API_BASE } from '../services/api';
+import api, { API_BASE, tokenStorage } from '../services/api';
 import {
   getQueue,
   removeFromQueue,
@@ -52,12 +53,6 @@ interface SubmittedReportsResponse {
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
-const isAnonymousId = (id: string | null | undefined): boolean => {
-  if (!id) return true;
-  if (id.startsWith('CR-PENDING-')) return true;
-  return false;
-};
-
 const getQueuedLocationLabel = (report: QueuedReport): string => {
   const loc = report.report.location;
   if (loc.location_building_name) return loc.location_building_name;
@@ -96,6 +91,20 @@ const formatTime = (isoString: string | null | undefined): string => {
 const isFailed = (report: QueuedReport): boolean =>
   report.status === 'failed' || (report.status === 'pending' && report.retry_count >= 5);
 
+// A reporter is "anonymous" if they have no JWT access token — anonymous
+// reporters are registered by device ID only and never receive tokens.
+// The reporter_id UUID check alone is insufficient because anonymous reporters
+// also receive a UUID reporter_id (not a CR-PENDING- ID) after registration.
+const isAnonymousReporter = (
+  id: string | null | undefined,
+  hasJwt: boolean | undefined
+): boolean => {
+  if (!id) return true;
+  if (id.startsWith('CR-PENDING-')) return true;
+  if (!hasJwt) return true;
+  return false;
+};
+
 // Damage level key lookup — maps raw values to mobile en.json keys
 const DAMAGE_KEY_MAP: Record<string, string> = {
   complete:            'report.complete',
@@ -119,13 +128,16 @@ export default function MyReportsScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
   const { t } = useTranslation();
+  const [menuOpen, setMenuOpen] = useState(false);
   const formatDamageLevel = (level: string | null | undefined): string => {
     if (!level) return '—';
     return t(DAMAGE_KEY_MAP[level] ?? level, { defaultValue: level });
   };
 
-  // undefined = still loading from SecureStore; null = no ID; string = has ID
+  // undefined = still loading; null = not present; string = has value
   const [reporterId, setReporterId] = useState<string | null | undefined>(undefined);
+  // undefined = still loading; true = has JWT (verified); false = anonymous
+  const [hasToken, setHasToken] = useState<boolean | undefined>(undefined);
   const [queuedReports, setQueuedReports] = useState<QueuedReport[]>([]);
   const [submittedReports, setSubmittedReports] = useState<SubmittedReport[]>([]);
   const [localSubmittedReports, setLocalSubmittedReports] = useState<LocalSubmittedRecord[]>([]);
@@ -153,11 +165,15 @@ export default function MyReportsScreen() {
     return () => skeletonAnimRef.current?.stop();
   }, [loading, skeletonOpacity]);
 
-  // ── Load reporter ID from SecureStore ─────────────────────────────────────
+  // ── Load reporter ID and auth token from SecureStore ─────────────────────
 
   useEffect(() => {
-    SecureStore.getItemAsync('cr_reporter_id').then((id) => {
+    Promise.all([
+      SecureStore.getItemAsync('cr_reporter_id'),
+      tokenStorage.getAccessToken(),
+    ]).then(([id, token]) => {
       setReporterId(id ?? null);
+      setHasToken(!!token);
     });
   }, []);
 
@@ -197,24 +213,25 @@ export default function MyReportsScreen() {
     }
   }, []);
 
-  // ── Initial load — waits for reporter ID to be resolved ──────────────────
+  // ── Initial load — waits for reporter ID and token to be resolved ────────
 
   useEffect(() => {
-    if (reporterId === undefined) return; // SecureStore not yet read
+    if (reporterId === undefined || hasToken === undefined) return;
+    const isAnon = isAnonymousReporter(reporterId, hasToken);
     const init = async () => {
       setLoading(true);
       await loadQueue();
-      if (!isAnonymousId(reporterId)) {
+      if (!isAnon) {
         await loadSubmitted();
       } else {
-        // Anonymous — load any locally-saved submitted records.
+        // Anonymous — load any locally-saved submitted records from AsyncStorage.
         const local = await getLocalSubmittedReports();
         setLocalSubmittedReports(local);
       }
       setLoading(false);
     };
     init();
-  }, [reporterId, loadQueue, loadSubmitted]);
+  }, [reporterId, hasToken, loadQueue, loadSubmitted]);
 
   // ── Subscribe to offline queue changes ────────────────────────────────────
 
@@ -228,9 +245,10 @@ export default function MyReportsScreen() {
   // ── Pull-to-refresh ───────────────────────────────────────────────────────
 
   const handleRefresh = async () => {
+    const isAnon = isAnonymousReporter(reporterId, hasToken);
     setRefreshing(true);
     await loadQueue();
-    if (!isAnonymousId(reporterId)) {
+    if (!isAnon) {
       setNextCursor(null);
       await loadSubmitted();
     } else {
@@ -243,7 +261,7 @@ export default function MyReportsScreen() {
   // ── Load more submitted reports ───────────────────────────────────────────
 
   const handleLoadMore = async () => {
-    if (!nextCursor || loadingMore || isAnonymousId(reporterId)) return;
+    if (!nextCursor || loadingMore || isAnonymousReporter(reporterId, hasToken)) return;
     setLoadingMore(true);
     await loadSubmitted(nextCursor);
     setLoadingMore(false);
@@ -264,8 +282,11 @@ export default function MyReportsScreen() {
       await resetItemForRetry(report.local_id);
       await syncQueue(API_BASE);
       await loadQueue();
-      if (!isAnonymousId(reporterId)) {
+      if (!isAnonymousReporter(reporterId, hasToken)) {
         await loadSubmitted();
+      } else {
+        const local = await getLocalSubmittedReports();
+        setLocalSubmittedReports(local);
       }
     } catch {
       Alert.alert(
@@ -303,7 +324,15 @@ export default function MyReportsScreen() {
     return (
       <View style={styles.container}>
         <View style={[styles.header, { height: 56 + insets.top, paddingTop: insets.top }]}>
-          <Text style={styles.headerTitle}>My Reports</Text>
+          <TouchableOpacity
+            style={styles.headerMenuBtn}
+            onPress={() => setMenuOpen(true)}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <MaterialIcons name="menu" size={scale(24)} color="#1B1C1C" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>{t('home.nav_reports')}</Text>
+          <View style={styles.headerMenuBtn} />
         </View>
         <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
           {[0, 1, 2].map((i) => (
@@ -317,23 +346,24 @@ export default function MyReportsScreen() {
             style={styles.navItem}
             onPress={() => navigation.navigate('Home')}
           >
-            <Text style={styles.navIconInactive}>🏠</Text>
-            <Text style={styles.navLabelInactive}>HOME</Text>
+            <MaterialIcons name="home" size={scale(22)} color="#717782" />
+            <Text style={styles.navLabelInactive}>{t('home.nav_home')}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.navItem}
             onPress={() => navigation.navigate('Map')}
           >
-            <Text style={styles.navIconInactive}>🗺</Text>
-            <Text style={styles.navLabelInactive}>MAP</Text>
+            <MaterialIcons name="map" size={scale(22)} color="#717782" />
+            <Text style={styles.navLabelInactive}>{t('home.nav_map')}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.navItem}>
             <View style={styles.activeNavPill}>
-              <Text style={styles.navIconActive}>📋</Text>
-              <Text style={styles.navLabelActive}>REPORTS</Text>
+              <MaterialIcons name="list-alt" size={scale(22)} color="#0468B1" />
+              <Text style={styles.navLabelActive}>{t('home.nav_reports')}</Text>
             </View>
           </TouchableOpacity>
         </View>
+        <SideMenu visible={menuOpen} onClose={() => setMenuOpen(false)} />
       </View>
     );
   }
@@ -344,7 +374,15 @@ export default function MyReportsScreen() {
     <View style={styles.container}>
       {/* Header */}
       <View style={[styles.header, { height: 56 + insets.top, paddingTop: insets.top }]}>
-        <Text style={styles.headerTitle}>My Reports</Text>
+        <TouchableOpacity
+          style={styles.headerMenuBtn}
+          onPress={() => setMenuOpen(true)}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <MaterialIcons name="menu" size={scale(24)} color="#1B1C1C" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>{t('home.nav_reports')}</Text>
+        <View style={styles.headerMenuBtn} />
       </View>
 
       <ScrollView
@@ -360,7 +398,7 @@ export default function MyReportsScreen() {
       >
 
         {/* ── SECTION 1: ANONYMOUS LOGIN PROMPT ── */}
-        {isAnonymousId(reporterId) && (
+        {isAnonymousReporter(reporterId, hasToken) && (
           <View style={styles.loginPromptCard}>
             <MaterialIcons name="info" color="#0468B1" size={scale(24)} style={styles.loginPromptIcon} />
             <Text style={styles.loginPromptTitle}>Log in to see your full history</Text>
@@ -468,7 +506,7 @@ export default function MyReportsScreen() {
         )}
 
         {/* Anonymous: locally-saved submitted report history */}
-        {isAnonymousId(reporterId) && localSubmittedReports.length > 0 && (
+        {isAnonymousReporter(reporterId, hasToken) && localSubmittedReports.length > 0 && (
           <View>
             <Text style={styles.sectionHeader}>SUBMITTED (THIS DEVICE)</Text>
             {localSubmittedReports.map((report) => {
@@ -510,7 +548,7 @@ export default function MyReportsScreen() {
         )}
 
         {/* Empty state for anonymous with no queue AND no local history */}
-        {isAnonymousId(reporterId) && queuedReports.length === 0 && localSubmittedReports.length === 0 && (
+        {isAnonymousReporter(reporterId, hasToken) && queuedReports.length === 0 && localSubmittedReports.length === 0 && (
           <View style={styles.emptyState}>
             <MaterialIcons name="assignment" color="#C1C7D2" size={scale(56)} />
             <Text style={styles.emptyTitle}>No reports yet</Text>
@@ -519,7 +557,7 @@ export default function MyReportsScreen() {
         )}
 
         {/* ── SECTION 3: SUBMITTED REPORTS (logged-in reporters only) ── */}
-        {!isAnonymousId(reporterId) && (
+        {!isAnonymousReporter(reporterId, hasToken) && (
           <View>
             <Text style={styles.sectionHeader}>SUBMITTED</Text>
 
@@ -622,23 +660,24 @@ export default function MyReportsScreen() {
           style={styles.navItem}
           onPress={() => navigation.navigate('Home')}
         >
-          <Text style={styles.navIconInactive}>🏠</Text>
-          <Text style={styles.navLabelInactive}>HOME</Text>
+          <MaterialIcons name="home" size={scale(22)} color="#717782" />
+          <Text style={styles.navLabelInactive}>{t('home.nav_home')}</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.navItem}
           onPress={() => navigation.navigate('Map')}
         >
-          <Text style={styles.navIconInactive}>🗺</Text>
-          <Text style={styles.navLabelInactive}>MAP</Text>
+          <MaterialIcons name="map" size={scale(22)} color="#717782" />
+          <Text style={styles.navLabelInactive}>{t('home.nav_map')}</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.navItem}>
           <View style={styles.activeNavPill}>
-            <Text style={styles.navIconActive}>📋</Text>
-            <Text style={styles.navLabelActive}>REPORTS</Text>
+            <MaterialIcons name="list-alt" size={scale(22)} color="#0468B1" />
+            <Text style={styles.navLabelActive}>{t('home.nav_reports')}</Text>
           </View>
         </TouchableOpacity>
       </View>
+      <SideMenu visible={menuOpen} onClose={() => setMenuOpen(false)} />
     </View>
   );
 }
@@ -650,8 +689,10 @@ const styles = StyleSheet.create({
 
   header: {
     backgroundColor: 'rgba(255,255,255,0.92)',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
     paddingBottom: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: 'rgba(193,199,210,0.3)',
@@ -660,6 +701,12 @@ const styles = StyleSheet.create({
     fontSize: scale(17),
     fontWeight: '600',
     color: '#1B1C1C',
+  },
+  headerMenuBtn: {
+    width: 44,
+    height: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 
   scroll: { flex: 1 },
@@ -975,19 +1022,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 2,
   },
-  navIconActive: {
-    fontSize: scale(24),
-    color: '#0468B1',
-  },
   navLabelActive: {
     fontSize: scale(10),
     fontWeight: '600',
     color: '#0468B1',
     letterSpacing: 1.2,
-  },
-  navIconInactive: {
-    fontSize: scale(24),
-    color: '#717782',
+    marginTop: 2,
   },
   navLabelInactive: {
     fontSize: scale(10),

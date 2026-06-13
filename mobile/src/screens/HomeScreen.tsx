@@ -3,6 +3,7 @@ import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView,
   Modal, ActivityIndicator, Dimensions, Animated,
 } from "react-native";
+import { MaterialIcons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
 import { useAuthStore } from "../stores/authStore";
@@ -200,7 +201,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
           style={styles.iconBtn}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <Text style={styles.menuIcon}>☰</Text>
+          <MaterialIcons name="menu" size={scale(24)} color="#1B1C1C" />
         </TouchableOpacity>
         <Text style={styles.appName}>{t("app.name")}</Text>
         <TouchableOpacity
@@ -208,7 +209,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
           style={styles.iconBtn}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <Text style={styles.settingsIcon}>⚙</Text>
+          <MaterialIcons name="settings" size={scale(24)} color="#1B1C1C" />
         </TouchableOpacity>
       </View>
 
@@ -253,7 +254,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
             accessibilityRole="button"
             accessibilityLabel={`${queueCount} pending reports. Tap to view.`}
           >
-            <Text style={styles.syncBannerIcon}>⚠</Text>
+            <MaterialIcons name="warning-amber" size={scale(20)} color="#1B1C1C" />
             <Text style={styles.syncBannerText}>
               {t("home.sync_banner", { count: queueCount })}
             </Text>
@@ -269,7 +270,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
             onPressOut={handleReportPressOut}
             activeOpacity={1}
           >
-            <Text style={styles.reportButtonIcon}>📷</Text>
+            <MaterialIcons name="camera-alt" size={scale(22)} color="#FFFFFF" />
             <Text style={styles.reportButtonText}>{t("home.reportButton")}</Text>
           </TouchableOpacity>
         </Animated.View>
@@ -282,31 +283,21 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
           </View>
         )}
 
-        {/* Existing functional: "What can I report?" link */}
+        {/* "What can I report?" info card */}
         <TouchableOpacity
           onPress={() => setShowCrisisModal(true)}
-          style={styles.whatLink}
+          style={styles.whatCard}
+          activeOpacity={0.8}
         >
-          <Text style={styles.whatLinkText}>{t("whatCanIReport.link")}</Text>
+          <View style={styles.whatCardIconWrap}>
+            <MaterialIcons name="info-outline" size={scale(20)} color="#0468B1" />
+          </View>
+          <View style={styles.whatCardText}>
+            <Text style={styles.whatCardTitle}>{t("whatCanIReport.link")}</Text>
+            <Text style={styles.whatCardSubtitle}>Tap to see what types of damage you can report</Text>
+          </View>
+          <MaterialIcons name="chevron-right" size={scale(20)} color="#C1C7D2" />
         </TouchableOpacity>
-
-        {/* Existing functional: secondary navigation buttons */}
-        <View style={styles.secondaryActions}>
-          <TouchableOpacity
-            style={styles.secondaryButton}
-            onPress={() => navigation.navigate("Map")}
-          >
-            <Text style={styles.secondaryButtonText}>🗺️  {t("home.view_map")}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.secondaryButton}
-            onPress={() => navigation.navigate("MyReports")}
-          >
-            <Text style={styles.secondaryButtonText}>
-              📁  {t("home.myReports")}
-            </Text>
-          </TouchableOpacity>
-        </View>
 
         {/* Recent reports — shown for logged-in reporters with at least 1 report */}
         {recentReports.length > 0 && (
@@ -353,7 +344,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
       <View style={[styles.bottomNav, { paddingBottom: insets.bottom }]}>
         <TouchableOpacity style={styles.navItem}>
           <View style={styles.activeNavPill}>
-            <Text style={styles.navIconActive}>🏠</Text>
+            <MaterialIcons name="home" size={scale(22)} color="#0468B1" />
             <Text style={styles.navLabelActive}>{t("home.nav_home")}</Text>
           </View>
         </TouchableOpacity>
@@ -361,14 +352,14 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
           style={styles.navItem}
           onPress={() => navigation.navigate("Map")}
         >
-          <Text style={styles.navIconInactive}>🗺</Text>
+          <MaterialIcons name="map" size={scale(22)} color="#717782" />
           <Text style={styles.navLabelInactive}>{t("home.nav_map")}</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.navItem}
           onPress={() => navigation.navigate("MyReports")}
         >
-          <Text style={styles.navIconInactive}>📋</Text>
+          <MaterialIcons name="list-alt" size={scale(22)} color="#717782" />
           <Text style={styles.navLabelInactive}>{t("home.nav_reports")}</Text>
         </TouchableOpacity>
       </View>
@@ -421,8 +412,11 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
           <TouchableOpacity activeOpacity={1} style={styles.modalCard}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{t("whatCanIReport.title")}</Text>
-              <TouchableOpacity onPress={() => setShowCrisisModal(false)}>
-                <Text style={styles.modalClose}>{t("whatCanIReport.close")} ✕</Text>
+              <TouchableOpacity
+                onPress={() => setShowCrisisModal(false)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Text style={styles.modalClose}>✕</Text>
               </TouchableOpacity>
             </View>
             <ScrollView showsVerticalScrollIndicator={false}>
@@ -472,14 +466,6 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     alignItems: "center",
     justifyContent: "center",
-  },
-  menuIcon: {
-    fontSize: scale(22),
-    color: "#1B1C1C",
-  },
-  settingsIcon: {
-    fontSize: scale(22),
-    color: "#1B1C1C",
   },
   appName: {
     flex: 1,
@@ -593,10 +579,6 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     width: screenWidth * 0.88,
   },
-  syncBannerIcon: {
-    fontSize: scale(20),
-    color: "#1B1C1C",
-  },
   syncBannerText: {
     flex: 1,
     fontSize: scale(13),
@@ -622,9 +604,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 12,
     elevation: 4,
-  },
-  reportButtonIcon: {
-    fontSize: scale(20),
   },
   reportButtonText: {
     color: "#FFFFFF",
@@ -697,41 +676,40 @@ const styles = StyleSheet.create({
     textTransform: "capitalize",
   },
 
-  // ── "What can I report?" link ─────────────────────────────────────────────────
-  whatLink: {
+  // ── "What can I report?" info card ───────────────────────────────────────────
+  whatCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    marginTop: 16,
+    width: "100%",
+    gap: 12,
+    borderWidth: 1,
+    borderColor: "rgba(4,104,177,0.15)",
+  },
+  whatCardIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(4,104,177,0.1)",
     alignItems: "center",
     justifyContent: "center",
-    minWidth: 44,
-    minHeight: 44,
-    marginTop: 16,
   },
-  whatLinkText: {
+  whatCardText: { flex: 1 },
+  whatCardTitle: {
     fontSize: scale(14),
+    fontWeight: "600",
     color: "#0468B1",
-    textDecorationLine: "underline",
+  },
+  whatCardSubtitle: {
+    fontSize: scale(12),
+    color: "#717782",
+    marginTop: 2,
   },
 
-  // ── Secondary action buttons (existing functional) ────────────────────────────
-  secondaryActions: {
-    flexDirection: "row",
-    gap: 12,
-    marginTop: 8,
-    width: "100%",
-  },
-  secondaryButton: {
-    flex: 1,
-    backgroundColor: "#F6F3F2",
-    borderRadius: 16,
-    padding: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: 52,
-  },
-  secondaryButtonText: {
-    fontSize: scale(14),
-    fontWeight: "500",
-    color: "#414751",
-  },
 
   // ── Bottom navigation ─────────────────────────────────────────────────────────
   bottomNav: {
@@ -761,19 +739,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 2,
   },
-  navIconActive: {
-    fontSize: scale(24),
-    color: "#0468B1",
-  },
   navLabelActive: {
     fontSize: scale(10),
     fontWeight: "600",
     color: "#0468B1",
     letterSpacing: 1.2,
-  },
-  navIconInactive: {
-    fontSize: scale(24),
-    color: "#717782",
+    marginTop: 2,
   },
   navLabelInactive: {
     fontSize: scale(10),

@@ -30,7 +30,7 @@ import api, { API_BASE } from "../services/api";
 import * as Device from 'expo-device';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as FileSystem from 'expo-file-system';
-import { addToQueue, syncQueue, getQueue, removeFromQueue, queuePhotosForReport } from "../utils/offlineQueue";
+import { addToQueue, syncQueue, getQueue, removeFromQueue, queuePhotosForReport, saveDirectSubmittedRecord } from "../utils/offlineQueue";
 import NetInfo from "@react-native-community/netinfo";
 import StepIndicator from "../components/StepIndicator";
 import type { DamageLevel, QueuedPhoto, ProcessedPhoto } from "../types";
@@ -900,15 +900,18 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
   };
 
   const isLocationValid = (): boolean => {
-    if (locationScenario === 'online_gps' || locationScenario === 'online_no_gps') {
-      return !!(selectedBuilding || pinCoords || gpsCoords || locationGpsCoords);
+    if (locationScenario === 'online_gps') {
+      // GPS captured — coordinates are sufficient
+      return !!(gpsCoords || locationGpsCoords || selectedBuilding || pinCoords);
+    }
+    if (locationScenario === 'online_no_gps') {
+      // No GPS — map pin OR manual address required
+      return !!(selectedBuilding || pinCoords || locationAddress?.trim());
     }
     if (locationScenario === 'offline_gps') {
-      // GPS coords captured — valid regardless of text fields
       return !!locationGpsCoords;
     }
     if (locationScenario === 'offline_no_gps') {
-      // No GPS — address is the required minimum (matches the * label on that field)
       return !!(locationAddress?.trim());
     }
     return false;
@@ -1259,13 +1262,19 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
   const isDamageQuestionAnswered = (): boolean => {
     switch (damageQuestion) {
       case 1: return !!damageLevel;
-      case 2: return infrastructureTypes.length > 0;
+      case 2:
+        if (infrastructureTypes.length === 0) return false;
+        if (infrastructureTypes.includes("other") && infrastructureOther.trim().length === 0) return false;
+        return true;
       case 3: return infrastructureName.trim().length > 0;
       case 4: return !!disasterType;
       case 5: return !!debrisBlocking;
       case 6: return !!electricityCondition;
       case 7: return !!healthServicesCondition;
-      case 8: return pressingNeeds.length > 0;
+      case 8:
+        if (pressingNeeds.length === 0) return false;
+        if (pressingNeeds.includes("other") && pressingNeedsOther.trim().length === 0) return false;
+        return true;
       default: return false;
     }
   };
@@ -1553,6 +1562,16 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
         }
 
         await saveSubmittedLocation();
+        await saveDirectSubmittedRecord(onlineReportId!, {
+          damage_level: damageLevel,
+          gps_latitude: reportPayload.location.gps_latitude,
+          gps_longitude: reportPayload.location.gps_longitude,
+          location_address: reportPayload.location.location_address,
+          location_landmark: reportPayload.location.location_landmark,
+          building_name: reportPayload.location.location_building_name,
+          photo_count: photos.length,
+          infrastructure_type: infrastructureTypes[0] ?? null,
+        });
         if (isMountedRef.current) {
           setSubmittedReportId(onlineReportId);
           setWasQueued(false);
@@ -1572,6 +1591,16 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
           }));
           await queuePhotosForReport(onlineReportId, queuedPhotos);
           await saveSubmittedLocation();
+          await saveDirectSubmittedRecord(onlineReportId, {
+            damage_level: damageLevel,
+            gps_latitude: reportPayload.location.gps_latitude,
+            gps_longitude: reportPayload.location.gps_longitude,
+            location_address: reportPayload.location.location_address,
+            location_landmark: reportPayload.location.location_landmark,
+            building_name: reportPayload.location.location_building_name,
+            photo_count: photos.length,
+            infrastructure_type: infrastructureTypes[0] ?? null,
+          });
           if (isMountedRef.current) {
             setSubmittedReportId(onlineReportId);
             setWasQueued(true);
@@ -1588,7 +1617,9 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
 
   const handleSubmit = async () => {
     const submitTappedAt = new Date().toISOString();
-    if (!damageLevel || infrastructureTypes.length === 0 || !infrastructureName.trim() || !disasterType || !debrisBlocking || !electricityCondition || !healthServicesCondition || pressingNeeds.length === 0 || photos.length === 0) {
+    const otherInfraEmpty = infrastructureTypes.includes("other") && infrastructureOther.trim().length === 0;
+    const otherNeedsEmpty = pressingNeeds.includes("other") && pressingNeedsOther.trim().length === 0;
+    if (!damageLevel || infrastructureTypes.length === 0 || otherInfraEmpty || !infrastructureName.trim() || !disasterType || !debrisBlocking || !electricityCondition || !healthServicesCondition || pressingNeeds.length === 0 || otherNeedsEmpty || photos.length === 0) {
       Alert.alert("Required Fields", "Please complete all required fields.");
       return;
     }
@@ -1675,12 +1706,6 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
 
         <View style={styles.confirmSummaryCard}>
           <Text style={styles.confirmSummaryHeader}>{t('review.report_summary_header')}</Text>
-          {submittedReportId ? (
-            <View style={styles.confirmSummaryRow}>
-              <Text style={styles.confirmSummaryLabel}>{t('review.confirm_report_id')}</Text>
-              <Text style={styles.confirmSummaryValue} numberOfLines={1}>{String(submittedReportId).slice(0, 16)}</Text>
-            </View>
-          ) : null}
           <View style={styles.confirmSummaryRow}>
             <Text style={styles.confirmSummaryLabel}>{t('review.confirm_damage_level')}</Text>
             <Text style={styles.confirmSummaryValue}>{t(Q1_KEY_MAP[damageLevel] ?? damageLevel, { defaultValue: DAMAGE_LABELS[damageLevel] ?? damageLevel })}</Text>
@@ -2854,53 +2879,59 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                 {damageQuestion === 6 && (
                   <>
                     <Text style={styles.questionTitleLarge}>{qTitle(6, t('questions.q6.title'))}</Text>
-                    <View style={styles.optionGrid2Col}>
-                      {qOptions(6, [
-                        { value: "no_damage", label: t('Q6_OPT_NO_DAMAGE', 'No damage observed') },
-                        { value: "minor", label: t('Q6_OPT_MINOR', 'Minor damage — service disruptions but quickly repairable') },
-                        { value: "moderate", label: t('Q6_OPT_MODERATE', 'Moderate damage — partial outages requiring repairs') },
-                        { value: "severe", label: t('Q6_OPT_SEVERE', 'Severe damage — major infrastructure damaged, prolonged outages') },
-                        { value: "destroyed", label: t('Q6_OPT_DESTROYED', 'Completely destroyed — no electricity infrastructure functioning') },
-                        { value: "unknown", label: t('Q6_OPT_UNKNOWN', 'Unknown / cannot be assessed') },
-                      ]).map(({ value, label }) => {
-                        const isSelected = electricityCondition === value;
-                        return (
-                          <TouchableOpacity
-                            key={value}
-                            style={[styles.optionGridCell, isSelected && styles.optionGridCellSelected]}
-                            onPress={() => { setElectricityCondition(value); setShowQuestionHint(false); }}
-                          >
-                            <Text style={[styles.optionGridCellText, isSelected && styles.optionGridCellTextSelected]}>{label}</Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </View>
+                    {qOptions(6, [
+                      { value: "no_damage", label: t('Q6_OPT_NO_DAMAGE', 'No damage observed') },
+                      { value: "minor", label: t('Q6_OPT_MINOR', 'Minor damage — service disruptions but quickly repairable') },
+                      { value: "moderate", label: t('Q6_OPT_MODERATE', 'Moderate damage — partial outages requiring repairs') },
+                      { value: "severe", label: t('Q6_OPT_SEVERE', 'Severe damage — major infrastructure damaged, prolonged outages') },
+                      { value: "destroyed", label: t('Q6_OPT_DESTROYED', 'Completely destroyed — no electricity infrastructure functioning') },
+                      { value: "unknown", label: t('Q6_OPT_UNKNOWN', 'Unknown / cannot be assessed') },
+                    ]).map(({ value, label }) => {
+                      const isSelected = electricityCondition === value;
+                      return (
+                        <TouchableOpacity
+                          key={value}
+                          style={[styles.optionCard, isSelected && styles.optionCardSelected]}
+                          onPress={() => { setElectricityCondition(value); setShowQuestionHint(false); }}
+                        >
+                          <View style={styles.optionCardLeft}>
+                            <Text style={[styles.optionCardTitle, isSelected && styles.optionCardTitleSelected]}>{label}</Text>
+                          </View>
+                          <View style={[styles.optionCardRadio, isSelected && styles.optionCardRadioSelected]}>
+                            {isSelected && <View style={styles.optionCardRadioDot} />}
+                          </View>
+                        </TouchableOpacity>
+                      );
+                    })}
                   </>
                 )}
 
                 {damageQuestion === 7 && (
                   <>
                     <Text style={styles.questionTitleLarge}>{qTitle(7, t('questions.q7.title'))}</Text>
-                    <View style={styles.optionGrid2Col}>
-                      {qOptions(7, [
-                        { value: "fully_functional",    label: t('Q7_OPT_FULLY_FUNCTIONAL', 'Fully functional') },
-                        { value: "partially_functional", label: t('Q7_OPT_PARTIALLY_FUNCTIONAL', 'Partially functional') },
-                        { value: "largely_disrupted",    label: t('Q7_OPT_LARGELY_DISRUPTED', 'Largely disrupted') },
-                        { value: "not_functioning", label: t('Q7_OPT_NOT_FUNCTIONING', 'Not functioning at all') },
-                        { value: "unknown",       label: t('Q7_OPT_UNKNOWN', 'Unknown') },
-                      ]).map(({ value, label }) => {
-                        const isSelected = healthServicesCondition === value;
-                        return (
-                          <TouchableOpacity
-                            key={value}
-                            style={[styles.optionGridCell, isSelected && styles.optionGridCellSelected]}
-                            onPress={() => { setHealthServicesCondition(value); setShowQuestionHint(false); }}
-                          >
-                            <Text style={[styles.optionGridCellText, isSelected && styles.optionGridCellTextSelected]}>{label}</Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </View>
+                    {qOptions(7, [
+                      { value: "fully_functional",    label: t('Q7_OPT_FULLY_FUNCTIONAL', 'Fully functional') },
+                      { value: "partially_functional", label: t('Q7_OPT_PARTIALLY_FUNCTIONAL', 'Partially functional') },
+                      { value: "largely_disrupted",    label: t('Q7_OPT_LARGELY_DISRUPTED', 'Largely disrupted') },
+                      { value: "not_functioning", label: t('Q7_OPT_NOT_FUNCTIONING', 'Not functioning at all') },
+                      { value: "unknown",       label: t('Q7_OPT_UNKNOWN', 'Unknown') },
+                    ]).map(({ value, label }) => {
+                      const isSelected = healthServicesCondition === value;
+                      return (
+                        <TouchableOpacity
+                          key={value}
+                          style={[styles.optionCard, isSelected && styles.optionCardSelected]}
+                          onPress={() => { setHealthServicesCondition(value); setShowQuestionHint(false); }}
+                        >
+                          <View style={styles.optionCardLeft}>
+                            <Text style={[styles.optionCardTitle, isSelected && styles.optionCardTitleSelected]}>{label}</Text>
+                          </View>
+                          <View style={[styles.optionCardRadio, isSelected && styles.optionCardRadioSelected]}>
+                            {isSelected && <View style={styles.optionCardRadioDot} />}
+                          </View>
+                        </TouchableOpacity>
+                      );
+                    })}
                   </>
                 )}
 
@@ -3706,6 +3737,7 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
     shadowOffset: { width: 0, height: 1 },
     minHeight: 44,
+    marginBottom: 8,
   },
   optionCardSelected: {
     backgroundColor: 'rgba(4,104,177,0.06)',
@@ -3810,8 +3842,8 @@ const styles = StyleSheet.create({
     color: '#717782',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
-    marginTop: 12,
-    marginBottom: 6,
+    marginTop: 20,
+    marginBottom: 10,
   },
   questionHint: {
     fontSize: scale(13),
@@ -3999,7 +4031,7 @@ const styles = StyleSheet.create({
   // Location panel (scrollable area below map — online)
   locationPanel: {
     flexShrink: 0,
-    maxHeight: 320,
+    maxHeight: 220,
     backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,

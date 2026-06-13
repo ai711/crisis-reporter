@@ -10,7 +10,6 @@ import ru from "./locales/ru.json";
 import es from "./locales/es.json";
 import { API_BASE } from "./services/api";
 
-const UN_CODES = ["en", "fr", "ar", "zh", "ru", "es"];
 const FETCH_TIMEOUT_MS = 8_000;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -66,19 +65,34 @@ async function safeFetch(url: string): Promise<Response> {
 
 /**
  * Fetches the published language package from the backend for `langCode`,
- * caches it to AsyncStorage, and merges the `strings` object into i18next.
+ * caches it in AsyncStorage, merges the strings into i18next, and calls
+ * changeLanguage so react-i18next re-renders all mounted components.
  *
- * Version-aware: downloads only when the backend reports a newer version than
- * what is cached, so this is cheap to call on every startup.
+ * Mirrors the web's loadLanguagePackage:
+ *   • Version-aware — skips download when cached version matches server.
+ *   • Cache-first fallback — if the version endpoint fails (offline/timeout),
+ *     applies the cached bundle rather than attempting a failing download.
+ *   • Always calls changeLanguage after applying a bundle so every mounted
+ *     screen re-renders with the updated translations.
+ *   • English is excluded — served entirely from the bundled en.json.
  *
  * Never throws — all errors are caught and logged as warnings.
  */
 export async function fetchLanguagePackageFromBackend(langCode: string): Promise<void> {
+  // English is fully served by the bundled en.json — no pipeline fetch needed.
+  if (langCode === "en") return;
+
   try {
     const cacheKey = `cr_lang_package_${langCode}`;
     const versionKey = `cr_lang_version_${langCode}`;
 
-    // Step 1: Check the current published version
+    // Read both version and content from cache upfront — one AsyncStorage batch.
+    const [cachedVersion, cached] = await Promise.all([
+      AsyncStorage.getItem(versionKey),
+      AsyncStorage.getItem(cacheKey),
+    ]);
+
+    // Step 1: Check the published version on the server.
     let latestVersion: string | null = null;
     try {
       const versionRes = await safeFetch(
@@ -86,48 +100,58 @@ export async function fetchLanguagePackageFromBackend(langCode: string): Promise
       );
       if (versionRes.ok) {
         const versionData = await versionRes.json();
-        latestVersion = versionData.version ?? null;
+        // Normalise to string — backend may return a number or string.
+        latestVersion = versionData.version != null ? String(versionData.version) : null;
       }
     } catch {
-      // Version check failed — proceed to compare with cache anyway
+      // Version endpoint unreachable (offline or timeout).
     }
 
-    const cachedVersion = await AsyncStorage.getItem(versionKey);
-
-    // If versions match and we have a cache, use it without re-downloading
-    if (latestVersion && latestVersion === cachedVersion) {
-      const cached = await AsyncStorage.getItem(cacheKey);
-      if (cached) {
-        const strings: Record<string, string> = JSON.parse(cached);
-        if (Object.keys(strings).length > 0) {
-          i18n.addResourceBundle(langCode, "translation", unflattenStrings(strings), true, true);
-        }
-        return;
+    // Cache-hit path: server version matches what we have → no download needed.
+    if (latestVersion && latestVersion === cachedVersion && cached) {
+      const strings: Record<string, string> = JSON.parse(cached);
+      if (Object.keys(strings).length > 0) {
+        i18n.addResourceBundle(langCode, "translation", unflattenStrings(strings), true, true);
+        await i18n.changeLanguage(langCode);
       }
+      return;
     }
 
-    // Step 2: Download full package
+    // Offline/version-check-failed path: server unreachable but cache exists.
+    // Apply the cache immediately and skip the download attempt — a failing
+    // network call would just time out and waste 8 seconds.
+    if (!latestVersion && cached) {
+      const strings: Record<string, string> = JSON.parse(cached);
+      if (Object.keys(strings).length > 0) {
+        i18n.addResourceBundle(langCode, "translation", unflattenStrings(strings), true, true);
+        await i18n.changeLanguage(langCode);
+      }
+      return;
+    }
+
+    // Step 2: Download full package (new version available or no cache yet).
     const res = await safeFetch(
       `${API_BASE}/api/language-packages/active/${langCode}`
     );
     if (!res.ok) return;
 
     const data = await res.json();
-    // Always extract the nested `strings` dict — backend wraps in { version, language_code, strings }
+    // Backend wraps the flat strings dict in { version, language_code, strings }.
     const strings: Record<string, string> = data.strings ?? data;
     if (Object.keys(strings).length === 0) return;
 
-    // Persist to AsyncStorage for offline use
+    // Persist to AsyncStorage for offline use.
     try {
       await AsyncStorage.setItem(cacheKey, JSON.stringify(strings));
-      if (data.version) {
-        await AsyncStorage.setItem(versionKey, data.version);
+      if (data.version != null) {
+        await AsyncStorage.setItem(versionKey, String(data.version));
       }
     } catch { /* storage full — skip caching */ }
 
-    // Unflatten dotted keys (common.back → nested) and merge into i18next.
-    // UPPERCASE keys (SAFETY_DO, COMMON_NEXT…) pass through unchanged.
+    // Apply bundle and commit the language switch. changeLanguage triggers
+    // react-i18next to re-render all mounted screens with the updated strings.
     i18n.addResourceBundle(langCode, "translation", unflattenStrings(strings), true, true);
+    await i18n.changeLanguage(langCode);
   } catch (e) {
     console.warn("[i18n] fetchLanguagePackageFromBackend failed for", langCode, e);
   }
@@ -172,24 +196,33 @@ i18n.use(initReactI18next).init({
 });
 
 // ── Async language restore — runs immediately after module loads ───────────────
-// Reads the saved language from AsyncStorage and switches i18n to it.
-// For non-UN languages also loads the cached dynamic package.
-// Fire-and-forget background refresh keeps backend Q-key strings up to date.
+// Phase 1 (synchronous path): loads the cached bundle and calls changeLanguage
+// so the first render of every screen uses full pipeline translations, not the
+// sparse bundled fallback file.
+//
+// Phase 2 (background): fetchLanguagePackageFromBackend checks the server for a
+// newer version. If one is found it downloads, caches, and calls changeLanguage
+// again — re-rendering all mounted screens with the updated strings.
+// English is skipped in both phases — the bundled en.json is the source of truth.
 (async () => {
   try {
     const savedLanguage = await AsyncStorage.getItem("cr_language");
     const activeLang = savedLanguage || "en";
 
     if (savedLanguage && savedLanguage !== "en") {
-      // Non-UN languages: load from cached dynamic package first
-      if (!UN_CODES.includes(savedLanguage)) {
-        await loadDynamicLanguagePackage(savedLanguage);
-      }
+      // Apply cached backend package before changeLanguage so the full pipeline
+      // strings are in the bundle when react-i18next first renders components.
+      await loadDynamicLanguagePackage(savedLanguage);
       await i18n.changeLanguage(savedLanguage);
     }
 
-    // Background refresh for ALL languages — merges backend Q-key strings
-    fetchLanguagePackageFromBackend(activeLang).catch(() => {});
+    // Background version check + refresh. fetchLanguagePackageFromBackend now
+    // calls changeLanguage internally after applying any bundle update, so all
+    // mounted screens re-render automatically when the fetch completes.
+    // No manual i18n.emit needed — and English is excluded (no pipeline needed).
+    if (activeLang !== "en") {
+      fetchLanguagePackageFromBackend(activeLang).catch(() => {});
+    }
   } catch (e) {
     console.warn("[i18n] Async language restore failed:", e);
   }

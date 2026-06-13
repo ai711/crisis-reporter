@@ -104,8 +104,9 @@ OFFICIAL_LANG_NAME_TO_CODE: dict[str, str] = {
     "zulu": "zu",
     # Additional
     "filipino": "tl", "dhivehi": "dv", "sesotho": "st", "montenegrin": "sr",
-    "seychellois creole": "fr", "nauruan": "na", "palauan": "pau",
-    "tongan": "to", "tuvaluan": "tvl", "tetum": "tet",
+    "seychellois creole": "fr", "nauruan": "na", "tongan": "to",
+    # palauan/tuvaluan/tetum have no ISO 639-1 code — omitted so the stored
+    # language name is returned as-is rather than a non-standard 3-letter code.
 }
 
 

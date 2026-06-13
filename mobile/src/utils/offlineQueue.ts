@@ -8,9 +8,8 @@ import { tokenStorage } from "../services/api";
 import { syncRegistrationQueue } from "../services/auth";
 
 // Persistent photo storage — survives Android low-storage cache clears.
-// documentDirectory is from the legacy path because expo-file-system v19 moved
-// it out of the default namespace export.
-// null on non-managed environments (e.g. bare web); all callers have fallbacks.
+// documentDirectory must be imported from the legacy subpath because
+// expo-file-system v19+ moved it out of the default namespace export.
 const PHOTO_STORE_DIR: string | null = documentDirectory != null
   ? `${documentDirectory}cr_queued_photos/`
   : null;
@@ -269,6 +268,43 @@ async function saveLocalSubmittedRecord(
   }
 }
 
+export async function saveDirectSubmittedRecord(
+  reportId: string,
+  fields: {
+    damage_level: string | null;
+    gps_latitude: number | null;
+    gps_longitude: number | null;
+    location_address: string | null;
+    location_landmark: string | null;
+    building_name: string | null;
+    photo_count: number;
+    infrastructure_type: string | null;
+  }
+): Promise<void> {
+  try {
+    const existing = await getLocalSubmittedReports();
+    const record: LocalSubmittedRecord = {
+      id: reportId,
+      damage_level: fields.damage_level,
+      submitted_at: new Date().toISOString(),
+      gps_latitude: fields.gps_latitude,
+      gps_longitude: fields.gps_longitude,
+      location_address: fields.location_address,
+      location_landmark: fields.location_landmark,
+      building_name: fields.building_name,
+      photo_count: fields.photo_count,
+      first_photo_url: null,
+      disaster_type: null,
+      infrastructure_type: fields.infrastructure_type,
+      infrastructure_name: null,
+    };
+    const updated = [record, ...existing].slice(0, 50);
+    await AsyncStorage.setItem(ANON_SUBMITTED_KEY, JSON.stringify(updated));
+  } catch {
+    // Non-critical — silent failure.
+  }
+}
+
 // ── Notification helper ───────────────────────────────────────────────────────
 
 async function showSyncNotification(title: string, body: string): Promise<void> {
@@ -403,6 +439,20 @@ export async function syncQueue(apiBaseUrl: string): Promise<void> {
 
           const reportData = await reportResponse.json();
           reportId = reportData.report_id;
+
+          // Report is now on the server. Save the local history record
+          // immediately — even if photo uploads fail later, the reporter can
+          // see their submitted report in My Reports.
+          await saveLocalSubmittedRecord(item, reportId);
+
+          // Convert this queue item to photo-only so future retries don't
+          // re-POST the report and produce duplicates.
+          await withQueueLock(async () => {
+            const q = await getQueue();
+            const idx = q.findIndex((i) => i.local_id === item.local_id);
+            if (idx !== -1) q[idx].existing_report_id = reportId;
+            await saveQueue(q);
+          });
         }
 
         // Upload photos
@@ -411,8 +461,7 @@ export async function syncQueue(apiBaseUrl: string): Promise<void> {
           // which Android may have cleared under low-storage pressure.
           const uploadUri = photo.persistent_uri ?? photo.uri;
 
-          // Pre-flight: skip if the file was lost (items queued before G1
-          // deployment won't have persistent_uri and may have a stale cache URI).
+          // Pre-flight: skip if the file was lost.
           const fileInfo = await FileSystem.getInfoAsync(uploadUri);
           if (!fileInfo.exists) continue;
 
@@ -441,8 +490,13 @@ export async function syncQueue(apiBaseUrl: string): Promise<void> {
               signal: photoController.signal,
             });
             clearTimeout(photoTimeoutId);
-            if (!photoResponse.ok && photoResponse.status === 401) {
-              throw new Error("auth_expired");
+            if (!photoResponse.ok) {
+              if (photoResponse.status === 401) throw new Error("auth_expired");
+              // 5xx: transient server error — abort and retry the whole item.
+              if (photoResponse.status >= 500) throw new Error(`photo_server_error:${photoResponse.status}`);
+              // 4xx non-401: permanent client error (bad format, too large, etc.)
+              // Log it and skip this photo — retrying won't help.
+              console.warn(`[syncQueue] Photo upload skipped (HTTP ${photoResponse.status})`);
             }
           } catch (photoErr) {
             clearTimeout(photoTimeoutId);
@@ -450,12 +504,6 @@ export async function syncQueue(apiBaseUrl: string): Promise<void> {
           }
         }
 
-        // Persist a local record so anonymous users can see the report in
-        // My Reports history. Skip for photo-only retries — the record was
-        // already saved when the report itself was first submitted.
-        if (!item.existing_report_id) {
-          await saveLocalSubmittedRecord(item, reportId);
-        }
         await removeFromQueue(item.local_id);
         await notifyQueueChange();
         void showSyncNotification(

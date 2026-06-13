@@ -2961,6 +2961,8 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
     ("my_reports.pending_upload_label",  "ui_report", "Pending Upload ({{count}})"),
     ("my_reports.upload_issues_label",   "ui_report", "Upload Issues ({{count}})"),
     ("my_reports.failed_attempts",       "ui_report", "Failed after {{count}} attempt(s). Check connection."),
+    ("my_reports.retry_partial_title",   "ui_report", "Report uploaded"),
+    ("my_reports.retry_partial_body",    "ui_report", "Your report reached our servers. Photos are still uploading — you can see the report in My Reports now."),
 
     # ── Photo screen (mobile) ──
     ("photoScreen.guidelines.title",     "ui_report", "Photo guidelines"),

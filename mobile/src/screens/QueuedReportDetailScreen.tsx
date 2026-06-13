@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 import NetInfo from '@react-native-community/netinfo';
 import type { QueuedReport } from '../types';
 import {
+  getQueue,
   removeFromQueue,
   resetItemForRetry,
   syncQueue,
@@ -36,7 +37,7 @@ export default function QueuedReportDetailScreen() {
       <View style={[styles.centered, { paddingTop: insets.top }]}>
         <Text style={styles.errorText}>Report not found in queue.</Text>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Text style={styles.backBtnText}>← {t('my_reports.back')}</Text>
+          <Text style={styles.backBtnText}>{t('my_reports.back')}</Text>
         </TouchableOpacity>
       </View>
     );
@@ -76,6 +77,17 @@ export default function QueuedReportDetailScreen() {
     try {
       await resetItemForRetry(qr.local_id);
       await syncQueue(API_BASE);
+      // Check whether the item was successfully cleared from the queue.
+      const queue = await getQueue();
+      const stillPending = queue.find((i) => i.local_id === qr.local_id);
+      if (stillPending) {
+        // Report reached the backend but photos failed — navigate back so
+        // the user can see the updated "Submitted" record and pending photo state.
+        Alert.alert(
+          t('my_reports.retry_partial_title'),
+          t('my_reports.retry_partial_body')
+        );
+      }
       navigation.goBack();
     } catch {
       Alert.alert(t('review.still_offline_title'), t('review.still_offline_body'));
@@ -114,7 +126,7 @@ export default function QueuedReportDetailScreen() {
     >
       {/* Back button */}
       <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-        <Text style={styles.backBtnText}>← {t('my_reports.back')}</Text>
+        <Text style={styles.backBtnText}>{t('my_reports.back')}</Text>
       </TouchableOpacity>
 
       <Text style={styles.title}>{t('my_reports.detail_title')}</Text>
@@ -153,7 +165,7 @@ export default function QueuedReportDetailScreen() {
             {qr.photos.map((photo, i) => (
               <Image
                 key={i}
-                source={{ uri: photo.uri }}
+                source={{ uri: photo.persistent_uri ?? photo.uri }}
                 style={styles.photoThumb}
                 resizeMode="cover"
               />

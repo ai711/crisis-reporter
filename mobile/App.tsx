@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react";
-import { I18nManager } from "react-native";
+import { I18nManager, AppState } from "react-native";
+import type { AppStateStatus } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 // Background sync — must be imported before any React component so the task
 // definition (TaskManager.defineTask) runs at module scope.
 import { registerBackgroundSync } from "./src/utils/backgroundSync";
-import ErrorBoundary from "./src/components/ErrorBoundary";
 import { NavigationContainer, createNavigationContainerRef } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import * as Notifications from "expo-notifications";
@@ -14,6 +14,8 @@ import NetInfo from "@react-native-community/netinfo";
 import { useAuthStore } from "./src/stores/authStore";
 import { initDeviceId, syncRegistrationQueue } from "./src/services/auth";
 import { flushProgressQueue } from "./src/utils/progressQueue";
+import { syncQueue, resetStuckItems } from "./src/utils/offlineQueue";
+import { API_BASE } from "./src/services/api";
 import "./src/i18n";
 
 import OnboardingScreen from "./src/screens/OnboardingScreen";
@@ -30,6 +32,7 @@ import FAQScreen from "./src/screens/FAQScreen";
 import AboutScreen from "./src/screens/AboutScreen";
 import ReportDetailScreen from "./src/screens/ReportDetailScreen";
 import QueuedReportDetailScreen from "./src/screens/QueuedReportDetailScreen";
+import ErrorBoundary from "./src/components/ErrorBoundary";
 
 // Show notifications even when the app is foregrounded.
 Notifications.setNotificationHandler({
@@ -62,6 +65,8 @@ function Navigation() {
 
   useEffect(() => {
     initDeviceId();
+    // Reset any items that were mid-sync when the app was last killed.
+    resetStuckItems();
     // Register the background fetch task so offline reports sync even when
     // the app is fully killed (minimum 15-minute OS interval).
     registerBackgroundSync().catch(() => { /* non-critical */ });
@@ -77,16 +82,38 @@ function Navigation() {
   }, []);
 
   useEffect(() => {
-    // Attempt to flush queued progress once on mount, then again whenever
-    // the device reports a network reconnection.
+    // Attempt to flush queued progress once on mount.
     flushProgressQueue();
-    const unsubscribe = NetInfo.addEventListener((state) => {
+
+    // Sync queued reports whenever connectivity is restored while the app
+    // is in the foreground.
+    const unsubscribeNet = NetInfo.addEventListener((state) => {
       if (state.isConnected === true && state.isInternetReachable !== false) {
         syncRegistrationQueue();
         flushProgressQueue();
+        syncQueue(API_BASE).catch(() => {});
       }
     });
-    return () => unsubscribe();
+
+    // Also sync when the app returns to the foreground — covers the gap
+    // between background-fetch intervals when the user reopens the app.
+    const appStateSub = AppState.addEventListener(
+      "change",
+      (nextState: AppStateStatus) => {
+        if (nextState === "active") {
+          NetInfo.fetch().then((state) => {
+            if (state.isConnected && state.isInternetReachable !== false) {
+              syncQueue(API_BASE).catch(() => {});
+            }
+          });
+        }
+      }
+    );
+
+    return () => {
+      unsubscribeNet();
+      appStateSub.remove();
+    };
   }, []);
 
   return (

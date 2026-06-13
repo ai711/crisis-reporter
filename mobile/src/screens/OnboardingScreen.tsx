@@ -201,6 +201,14 @@ export default function OnboardingScreen() {
       // Load the downloaded package into i18n immediately so T&C renders in the selected language
       const { loadDynamicLanguagePackage } = await import("../i18n");
       await loadDynamicLanguagePackage(selectedLang);
+    } else {
+      // UN language — load cached package or fetch from backend so T&C and the rest
+      // of the app render with full pipeline translations, not just the sparse bundled file.
+      const { loadDynamicLanguagePackage, fetchLanguagePackageFromBackend } = await import("../i18n");
+      const loaded = await loadDynamicLanguagePackage(selectedLang);
+      if (!loaded) {
+        await fetchLanguagePackageFromBackend(selectedLang);
+      }
     }
 
     i18n.changeLanguage(selectedLang);

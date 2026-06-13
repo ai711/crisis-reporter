@@ -123,10 +123,19 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
       }
       const { loadDynamicLanguagePackage } = await import("../i18n");
       await loadDynamicLanguagePackage(langCode);
+    } else {
+      // UN language: load cached backend package (full pipeline strings) before switching.
+      // Fall back silently — bundled static file is used if no cache exists yet.
+      const { loadDynamicLanguagePackage, fetchLanguagePackageFromBackend } = await import("../i18n");
+      const loaded = await loadDynamicLanguagePackage(langCode);
+      if (!loaded) {
+        // No cache yet — fetch now so the user immediately gets full translations.
+        await fetchLanguagePackageFromBackend(langCode);
+      }
     }
 
     setLanguage(langCode);
-    i18n.changeLanguage(langCode);
+    await i18n.changeLanguage(langCode);
     await AsyncStorage.setItem("cr_language", langCode);
 
     // RTL direction changes (switching to/from Arabic) require a full JS reload.
