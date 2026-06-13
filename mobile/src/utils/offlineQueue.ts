@@ -2,8 +2,10 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as FileSystem from "expo-file-system";
 import { documentDirectory } from "expo-file-system/legacy";
 import * as Notifications from "expo-notifications";
+import * as SecureStore from "expo-secure-store";
 import type { QueuedReport, QueuedPhoto, ReportSubmitRequest } from "../types";
 import { tokenStorage } from "../services/api";
+import { syncRegistrationQueue } from "../services/auth";
 
 // Persistent photo storage — survives Android low-storage cache clears.
 // documentDirectory is from the legacy path because expo-file-system v19 moved

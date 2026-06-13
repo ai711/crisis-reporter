@@ -124,8 +124,29 @@ function CountryModal({
   onClose: () => void;
 }) {
   const { t } = useTranslation();
+  const [keyboardOffset, setKeyboardOffset] = useState(0);
+
+  // Lift the sheet above the software keyboard using the Visual Viewport API.
+  // When the keyboard opens, window.visualViewport.height shrinks — the difference
+  // between window.innerHeight and vp.height is the keyboard height. Setting
+  // paddingBottom on the overlay pushes the bottom sheet up by exactly that amount.
+  useEffect(() => {
+    const vp = window.visualViewport;
+    if (!vp) return;
+    const update = () => {
+      setKeyboardOffset(Math.max(0, window.innerHeight - vp.height - vp.offsetTop));
+    };
+    vp.addEventListener("resize", update);
+    vp.addEventListener("scroll", update);
+    update();
+    return () => {
+      vp.removeEventListener("resize", update);
+      vp.removeEventListener("scroll", update);
+    };
+  }, []);
+
   return (
-    <div style={s.overlay} onClick={onClose}>
+    <div style={{ ...s.overlay, paddingBottom: keyboardOffset }} onClick={onClose}>
       <div style={s.bottomSheet} onClick={(e) => e.stopPropagation()}>
         <div style={s.sheetHandle} />
         <div style={s.sheetHeader}>
@@ -436,10 +457,11 @@ export default function OnboardingPage() {
   // ALL useMemo hooks must be declared before any conditional return (Rules of Hooks).
   const pillLanguages = useMemo<Language[]>(() => [
     ...UN_LANGUAGES,
-    // Only add officialLang as a 7th pill when it is NOT already one of the 6 UN languages.
-    // officialLang is now always set (even for UN-language countries) so we must deduplicate here.
-    ...(officialLang && !UN_LANGUAGE_CODES.has(officialLang.code) ? [officialLang] : []),
-  ], [officialLang]);
+    // Only add officialLang when it is not a UN language AND it is confirmed available
+    // by the /api/language-packages/available response. Without this check, countries like
+    // India would show "Hindi" even when no Hindi translation package exists.
+    ...(officialLang && !UN_LANGUAGE_CODES.has(officialLang.code) && allLanguages.some((l: any) => l.code === officialLang.code) ? [officialLang] : []),
+  ], [officialLang, allLanguages]);
 
   const sortedLanguages = useMemo(() => [...pillLanguages].sort((a, b) => {
     const officialCode = officialLang?.code || null;

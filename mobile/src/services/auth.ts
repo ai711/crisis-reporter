@@ -144,7 +144,10 @@ export async function logoutReporter(): Promise<void> {
 // ── Anonymous registration with offline queue fallback ────────────────────────
 
 export async function registerAnonymously(): Promise<string> {
-  const deviceId = await SecureStore.getItemAsync("cr_device_id");
+  // Use the shared promise so we never race against initDeviceId() writing to
+  // SecureStore for the first time. Direct getItemAsync("cr_device_id") can
+  // return null if initDeviceId() hasn't flushed the write yet.
+  const deviceId = await getOrCreateDeviceId();
   const osDeviceId = await SecureStore.getItemAsync("cr_os_device_id");
   const tAndCAcceptedAt = await AsyncStorage.getItem("cr_tandc_accepted_at");
   const countryCode = await AsyncStorage.getItem("cr_country_code");
