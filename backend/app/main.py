@@ -1073,6 +1073,12 @@ WHERE code IN (
     'PG','WS','SB','TO','TV','VU'
 )
 """,
+    # reporters.device_id_hash — partial unique index (NULL rows excluded) prevents
+    # concurrent anonymous registrations from the same device creating two profiles.
+    "CREATE UNIQUE INDEX IF NOT EXISTS uq_reporters_device_id_hash ON reporters(device_id_hash) WHERE device_id_hash IS NOT NULL",
+    # reporters.device_id_encrypted — auto-create path in reports.py now stores
+    # device_id on auto-created profiles; column already exists from initial schema.
+    # No ADD COLUMN needed — just ensuring the unique index above is in place.
 ]
 
 

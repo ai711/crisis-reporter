@@ -343,6 +343,17 @@ export async function syncQueue(apiBaseUrl: string): Promise<void> {
   isSyncing = true;
 
   try {
+    // Before syncing reports, resolve any pending anonymous registration.
+    // CR-PENDING- IDs stored in queue items are not valid reporter identifiers —
+    // the backend cannot resolve them and falls back to auto-creating a new
+    // anonymous profile for each report, producing duplicate reporter IDs.
+    const storedId = await SecureStore.getItemAsync("cr_reporter_id");
+    if (storedId?.startsWith("CR-PENDING-")) {
+      try { await syncRegistrationQueue(); } catch { /* still offline — carry on */ }
+    }
+    const resolvedReporterId = await SecureStore.getItemAsync("cr_reporter_id");
+    const hasRealId = !!resolvedReporterId && !resolvedReporterId.startsWith("CR-PENDING-");
+
     // Read inside the lock so a concurrent addToQueue can't produce a torn snapshot.
     const pending = await withQueueLock(async () => {
       const queue = await getQueue();
@@ -373,10 +384,16 @@ export async function syncQueue(apiBaseUrl: string): Promise<void> {
         if (item.existing_report_id) {
           reportId = item.existing_report_id;
         } else {
+          // Inject the current real reporter_id, overriding any stale CR-PENDING-
+          // value that was baked into the payload when the report was queued offline.
+          const reportPayload = hasRealId
+            ? { ...item.report, reporter_id: resolvedReporterId }
+            : item.report;
+
           const reportResponse = await fetch(`${apiBaseUrl}/api/reports`, {
             method: "POST",
             headers,
-            body: JSON.stringify(item.report),
+            body: JSON.stringify(reportPayload),
           });
 
           if (!reportResponse.ok) {

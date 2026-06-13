@@ -321,13 +321,25 @@ async def submit_report(
 
     # reporter_id is mandatory — every report must have an owner.
     # If no reporter could be resolved (no JWT, no valid reporter_id in body),
-    # auto-create an anonymous profile so reporter_id is never NULL.
+    # try to match by device_id first (covers offline-queued reports submitted
+    # with a CR-PENDING- id before registration completed). Only create a new
+    # profile when device_id is also absent or matches nothing.
+    if reporter_id is None and request.device_id:
+        dh = hash_field(request.device_id)
+        r2 = await db.execute(select(Reporter).where(Reporter.device_id_hash == dh))
+        matched_by_device = r2.scalar_one_or_none()
+        if matched_by_device:
+            reporter = matched_by_device
+            reporter_id = matched_by_device.id
+
     if reporter_id is None:
         from sqlalchemy import text as sa_text
         auto_reporter = Reporter(
             platform=request.platform,
             country_code=request.reporter_country,
             language_code=request.language_code,
+            device_id_encrypted=encrypt_field(request.device_id) if request.device_id else None,
+            device_id_hash=hash_field(request.device_id) if request.device_id else None,
         )
         db.add(auto_reporter)
         await db.flush()
