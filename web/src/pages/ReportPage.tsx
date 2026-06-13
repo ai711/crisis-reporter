@@ -15,6 +15,7 @@ import SubmissionStepper, { type StepperStep } from "../components/SubmissionSte
 import type { DamageLevel, QueuedPhoto } from "../types";
 import { addToQueue, isIndexedDBAvailable, requestSyncNotificationPermission } from "../utils/offlineQueue";
 import { generateUUID } from "../utils/uuid";
+import { WEB_SESSION_ID } from "../utils/sessionId";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 const MAPTILER_KEY = import.meta.env.VITE_MAPTILER_KEY || "";
@@ -1519,6 +1520,7 @@ export default function ReportPage() {
                     !reporterId.startsWith('local_'))
         ? reporterId
         : null,
+      device_id: WEB_SESSION_ID,
       language_code: languageCode,
       question_package_version: questionPackage?.version ?? null,
       question_package_content_version: questionPackage?.content_version ?? questionPackage?.version ?? null,

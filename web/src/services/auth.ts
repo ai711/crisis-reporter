@@ -18,7 +18,7 @@ export async function createAnonymousSession(
   languageCode: string
 ): Promise<AnonymousSession> {
   const response = await api.post("/api/reporter/auth/anonymous", {
-    web_session_id: WEB_SESSION_ID,
+    device_id: WEB_SESSION_ID,
     platform: detectPlatform(),
     country_code: countryCode,
     language_code: languageCode,

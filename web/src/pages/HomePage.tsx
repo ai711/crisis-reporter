@@ -112,11 +112,14 @@ export default function HomePage() {
   // Login prompt — shown 2 s after first load if no Reporter ID exists
   useEffect(() => {
     try {
-      const alreadyPrompted = localStorage.getItem("cr_login_prompted");
       const hasReporterId = localStorage.getItem("cr_reporter_id");
-      if (alreadyPrompted || hasReporterId) return;
+      if (hasReporterId) return;
+      // sessionStorage — resets each browser session so a failed registration
+      // doesn't permanently suppress the prompt across visits.
+      const alreadyPrompted = sessionStorage.getItem("cr_login_prompted");
+      if (alreadyPrompted) return;
       const timer = setTimeout(() => {
-        localStorage.setItem("cr_login_prompted", "true");
+        sessionStorage.setItem("cr_login_prompted", "true");
         setLoginPromptOpen(true);
       }, 2000);
       return () => clearTimeout(timer);
@@ -165,8 +168,11 @@ export default function HomePage() {
     // cascading 404s on every subsequent session until the user clears storage.
     if (assignedId && !assignedId.startsWith("local_")) {
       try { localStorage.setItem("cr_reporter_id", assignedId); } catch { /* ignore */ }
+      // Only store real IDs in Zustand. local_ IDs are session-only fallbacks —
+      // persisting them to Zustand (which writes localStorage["cr_auth"]) would
+      // make the app think the reporter is registered across sessions.
+      setReporter(assignedId, false);
     }
-    setReporter(assignedId, false);
     setLoginPromptBusy(false);
 
     try {
