@@ -705,9 +705,12 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
         return;
       }
 
-      const tokenData = await Notifications.getExpoPushTokenAsync({
-        projectId: Constants.expoConfig?.extra?.eas?.projectId as string,
-      });
+      const projectId = Constants.expoConfig?.extra?.eas?.projectId;
+      if (!projectId) {
+        console.warn("EAS projectId not found — push token registration skipped");
+        return;
+      }
+      const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
       const pushToken = tokenData.data;
 
       const reporterId = await SecureStore.getItemAsync("cr_reporter_id");

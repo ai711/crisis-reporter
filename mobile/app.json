@@ -52,6 +52,7 @@
           "backgroundColor": "#1A2B4A"
         }
       ],
+      "expo-system-ui",
       "expo-secure-store",
       "@maplibre/maplibre-react-native",
       [
