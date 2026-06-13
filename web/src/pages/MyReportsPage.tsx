@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "../stores/authStore";
@@ -186,7 +186,13 @@ function absolutePhotoUrl(url: string): string {
 
 export default function MyReportsPage() {
   const { t } = useTranslation();
+  const tRef = useRef(t);
+  useEffect(() => { tRef.current = t; }, [t]);
+
   const { reporterId } = useAuthStore();
+  // Falls back to localStorage so reports still load even if Zustand hydrated
+  // without a reporterId (e.g. user was assigned an ID before today's Bug 3 fix).
+  const effectiveReporterId = reporterId || tokenStorage.getReporterId();
   const navigate = useNavigate();
 
   // Translation-aware label helpers
@@ -249,7 +255,7 @@ export default function MyReportsPage() {
     if (!cursor) { setLoading(true); setError(null); }
     else          { setLoadingMore(true); }
 
-    if (!reporterId || !tokenStorage.getAccessToken()) {
+    if (!effectiveReporterId || !tokenStorage.getAccessToken()) {
       try {
         const raw = localStorage.getItem("cr_local_reports");
         if (raw) {
@@ -300,13 +306,13 @@ export default function MyReportsPage() {
           }
         } catch { /* ignore */ }
       } else {
-        setError(t("my_reports.load_error"));
+        setError(tRef.current("my_reports.load_error"));
       }
     } finally {
       setLoading(false);
       setLoadingMore(false);
     }
-  }, [reporterId, t]);
+  }, [effectiveReporterId]);
 
   useEffect(() => { fetchReports(); }, [fetchReports]);
 
@@ -767,7 +773,7 @@ export default function MyReportsPage() {
       <div style={styles.content}>
 
         {/* Login prompt for anonymous reporters */}
-        {!reporterId && (
+        {!effectiveReporterId && (
           <div style={styles.loginPrompt}>
             <p style={styles.loginPromptText}>{t("my_reports.login_prompt")}</p>
             <div style={styles.loginPromptBtns}>
@@ -793,7 +799,7 @@ export default function MyReportsPage() {
           <div style={styles.centred}>
             <span style={styles.emptyIcon}>📋</span>
             <p style={styles.emptyText}>
-              {!reporterId ? t("my_reports.empty_anonymous") : t("my_reports.empty_title")}
+              {!effectiveReporterId ? t("my_reports.empty_anonymous") : t("my_reports.empty_title")}
             </p>
           </div>
         ) : (
