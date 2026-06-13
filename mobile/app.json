@@ -20,12 +20,6 @@
       "bundleIdentifier": "org.undp.crisisreporter"
     },
     "android": {
-      "newArchEnabled": true,
-      "splash": {
-        "image": "./assets/splash-icon.png",
-        "resizeMode": "contain",
-        "backgroundColor": "#1A2B4A"
-      },
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#1A2B4A"
@@ -50,6 +44,14 @@
     "plugins": [
       "./plugins/withFixHermesc",
       "./plugins/withFixMainApplication",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#1A2B4A"
+        }
+      ],
       "expo-secure-store",
       "@maplibre/maplibre-react-native",
       [
