@@ -13,4 +13,5 @@ COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./package.json
 
-CMD node_modules/.bin/serve dist --single --listen $PORT
+ENV PORT=3000
+CMD node_modules/.bin/serve dist --single -l tcp://0.0.0.0:$PORT
