@@ -31,6 +31,7 @@ import * as Device from 'expo-device';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as FileSystem from 'expo-file-system';
 import { addToQueue, syncQueue, getQueue, removeFromQueue, queuePhotosForReport, saveDirectSubmittedRecord } from "../utils/offlineQueue";
+import { haversineKm, milesToKm, saveCrisisMeta, loadCrisisMeta } from "../utils/geo";
 import NetInfo from "@react-native-community/netinfo";
 import StepIndicator from "../components/StepIndicator";
 import type { DamageLevel, QueuedPhoto, ProcessedPhoto } from "../types";
@@ -391,6 +392,10 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
   const [submittedReportId, setSubmittedReportId] = useState<string | null>(null);
   const [showDupeWarning, setShowDupeWarning] = useState(false);
   const [crisisId, setCrisisId] = useState<string | null>(null);
+  const [crisisCenterLat, setCrisisCenterLat] = useState<number | null>(null);
+  const [crisisCenterLng, setCrisisCenterLng] = useState<number | null>(null);
+  const [crisisRadiusMiles, setCrisisRadiusMiles] = useState<number>(50);
+  const [showOutsideAreaWarning, setShowOutsideAreaWarning] = useState(false);
   const [crisisLoading, setCrisisLoading] = useState(true);
   const [crisisError, setCrisisError] = useState(false);
   const [questionPackage, setQuestionPackage] = useState<ActivePackage | null>(null);
@@ -416,11 +421,31 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
 
   useEffect(() => {
     const init = async () => {
+      const cached = await loadCrisisMeta();
+      if (cached) {
+        setCrisisCenterLat(cached.map_center_lat);
+        setCrisisCenterLng(cached.map_center_lng);
+        setCrisisRadiusMiles(cached.map_default_radius_miles);
+      }
       try {
         const crisisRes = await api.get("/api/crises/active");
         const list = Array.isArray(crisisRes.data) ? crisisRes.data : (crisisRes.data?.items ?? []);
-        if (list.length > 0) setCrisisId(list[0].id);
-        else setCrisisError(true);
+        if (list.length > 0) {
+          const first = list[0];
+          setCrisisId(first.id);
+          setCrisisCenterLat(first.map_center_lat ?? null);
+          setCrisisCenterLng(first.map_center_lng ?? null);
+          setCrisisRadiusMiles(first.map_default_radius_miles ?? 50);
+          await saveCrisisMeta({
+            id: first.id,
+            map_center_lat: first.map_center_lat ?? null,
+            map_center_lng: first.map_center_lng ?? null,
+            map_default_radius_miles: first.map_default_radius_miles ?? 50,
+            cached_at: new Date().toISOString(),
+          });
+        } else {
+          setCrisisError(true);
+        }
       } catch {
         setCrisisError(true);
       }
@@ -432,6 +457,19 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
     };
     init();
   }, []);
+
+  // Geo-fence: warn reporter if selected location is outside the crisis radius
+  useEffect(() => {
+    const lat = selectedBuilding ? selectedBuilding.centroid[1] : gpsCoords?.lat ?? null;
+    const lng = selectedBuilding ? selectedBuilding.centroid[0] : gpsCoords?.lng ?? null;
+    if (!lat || !lng || !crisisCenterLat || !crisisCenterLng) {
+      setShowOutsideAreaWarning(false);
+      return;
+    }
+    setShowOutsideAreaWarning(
+      haversineKm(lat, lng, crisisCenterLat, crisisCenterLng) > milesToKm(crisisRadiusMiles)
+    );
+  }, [selectedBuilding, gpsCoords, crisisCenterLat, crisisCenterLng, crisisRadiusMiles]);
 
   // Version-gated question package sync — loads cache immediately, only re-downloads if version changed
   useEffect(() => {
@@ -2186,6 +2224,19 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                         {gpsCoords.lat.toFixed(5)}° N, {gpsCoords.lng.toFixed(5)}° E
                       </Text>
                     </View>
+                  </View>
+                )}
+
+                {/* Outside crisis area warning (non-blocking, dismissible) */}
+                {showOutsideAreaWarning && (
+                  <View style={styles.outsideAreaWarning}>
+                    <MaterialIcons name="warning" size={scale(14)} color="#E07B00" />
+                    <Text style={styles.outsideAreaWarningText}>
+                      {t('report.location_outside_crisis_area')}
+                    </Text>
+                    <TouchableOpacity onPress={() => setShowOutsideAreaWarning(false)}>
+                      <MaterialIcons name="close" size={scale(14)} color="#E07B00" />
+                    </TouchableOpacity>
                   </View>
                 )}
 
@@ -4055,6 +4106,23 @@ const styles = StyleSheet.create({
   selectionCardMeta: { fontSize: scale(12), color: '#717782' },
   selectionCardCoordsRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
   selectionCardCoords: { fontSize: scale(11), color: '#717782', flex: 1 },
+  outsideAreaWarning: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: scale(8),
+    backgroundColor: '#FFF8E1',
+    borderWidth: 1,
+    borderColor: '#FFD54F',
+    borderRadius: scale(8),
+    padding: scale(10),
+    marginTop: scale(4),
+  },
+  outsideAreaWarningText: {
+    flex: 1,
+    fontSize: scale(12),
+    color: '#795548',
+    lineHeight: scale(17),
+  },
   manualToggle: { fontSize: scale(13), color: '#0468B1', textDecorationLine: 'underline' },
 
   // GPS button

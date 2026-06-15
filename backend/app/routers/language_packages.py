@@ -2850,6 +2850,7 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
     ("report.photo_action_remove",      "ui_report", "Remove"),
     ("report.preparing_photos",         "ui_report", "Preparing photos…"),
     ("report.duplicate_inline_warning", "ui_report", "A report for this location may already exist from this device. You can still submit if this is a different incident."),
+    ("report.location_outside_crisis_area", "ui_report", "Your selected location appears to be outside the primary crisis area. You can still submit if this is correct."),
     ("report.validation_incomplete",    "ui_report", "Please complete all required fields"),
     ("report.error_no_connection",      "ui_report", "No Connection"),
     ("report.error_no_internet",        "ui_report", "No internet connection. Please check your connection and try again."),

@@ -35,7 +35,8 @@
     "submitting": "Submitting...",
     "error": "Failed to submit report. Please try again.",
     "question_number": "Question {{number}} of {{total}}",
-    "complete": "Completely Damaged"
+    "complete": "Completely Damaged",
+    "location_outside_crisis_area": "Your selected location appears to be outside the primary crisis area. You can still submit if this is correct."
   },
   "map": {
     "loading": "Loading map...",

@@ -26,6 +26,7 @@ import NetInfo from '@react-native-community/netinfo';
 import * as Location from 'expo-location';
 import { MaterialIcons } from '@expo/vector-icons';
 import api from '../services/api';
+import { radiusBBox, saveCrisisMeta, loadCrisisMeta } from '../utils/geo';
 
 const { width: _screenWidthRaw } = Dimensions.get('window');
 const screenWidth = _screenWidthRaw || 375;
@@ -98,6 +99,8 @@ export default function MapScreen() {
   const [isOnline, setIsOnline] = useState(true);
   const [selectedReport, setSelectedReport] = useState<ReportPin | null>(null);
   const [crisisRadius, setCrisisRadius] = useState<string>('50 mi');
+  const [crisisCenterLat, setCrisisCenterLat] = useState<number | null>(null);
+  const [crisisCenterLng, setCrisisCenterLng] = useState<number | null>(null);
   const [buildingsFC, setBuildingsFC] = useState<GeoJSON.FeatureCollection>(EMPTY_FC);
   const [showZoomHint, setShowZoomHint] = useState(false);
   const cameraRef = useRef<CameraRef | null>(null);
@@ -158,8 +161,33 @@ export default function MapScreen() {
       if (crisesRes.status === 'fulfilled') {
         const crises: any[] = crisesRes.value.data ?? [];
         const first = crises[0];
-        if (first?.map_default_radius_miles) {
-          setCrisisRadius(`${first.map_default_radius_miles} mi`);
+        if (first) {
+          const radiusMiles: number = first.map_default_radius_miles ?? 50;
+          const centerLat: number | null = first.map_center_lat ?? null;
+          const centerLng: number | null = first.map_center_lng ?? null;
+          setCrisisRadius(`${radiusMiles} mi`);
+          setCrisisCenterLat(centerLat);
+          setCrisisCenterLng(centerLng);
+          void saveCrisisMeta({
+            id: first.id,
+            map_center_lat: centerLat,
+            map_center_lng: centerLng,
+            map_default_radius_miles: radiusMiles,
+            cached_at: new Date().toISOString(),
+          });
+          if (centerLat && centerLng && cameraRef.current) {
+            const [w, s, e, n] = radiusBBox(centerLat, centerLng, radiusMiles);
+            cameraRef.current.fitBounds([w, s, e, n], { duration: 800 });
+          }
+        }
+      } else {
+        const cached = await loadCrisisMeta();
+        if (cached?.map_center_lat && cached?.map_center_lng && cameraRef.current) {
+          setCrisisRadius(`${cached.map_default_radius_miles} mi`);
+          setCrisisCenterLat(cached.map_center_lat);
+          setCrisisCenterLng(cached.map_center_lng);
+          const [w, s, e, n] = radiusBBox(cached.map_center_lat, cached.map_center_lng, cached.map_default_radius_miles);
+          cameraRef.current.fitBounds([w, s, e, n], { duration: 800 });
         }
       }
     } catch {

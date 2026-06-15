@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "../stores/authStore";
 import api from "../services/api";
+import { radiusBBox, saveCrisisMeta, loadCrisisMeta } from "../utils/geo";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -296,7 +297,13 @@ export default function MapPage() {
     mapInstance.addControl(new maplibregl.NavigationControl(), "top-right");
 
     mapInstance.on("load", async () => {
-      centerOnGPS(mapInstance, countryCodeAtMount.current);
+      const initialMeta = loadCrisisMeta();
+      if (initialMeta?.map_center_lat && initialMeta?.map_center_lng) {
+        const [w, s, e, n] = radiusBBox(initialMeta.map_center_lat, initialMeta.map_center_lng, initialMeta.map_default_radius_miles);
+        mapInstance.fitBounds([[w, s], [e, n]], { padding: 40, maxZoom: 14, animate: false });
+      } else {
+        centerOnGPS(mapInstance, countryCodeAtMount.current);
+      }
 
       mapInstance.addSource("buildings", {
         type: "geojson",
@@ -384,12 +391,28 @@ export default function MapPage() {
           ? crisisRes.data
           : (crisisRes.data?.items ?? []);
         if (list.length > 0) {
-          const crisisId: string = (list[0] as { id: string }).id;
+          const first = list[0] as { id: string; map_center_lat?: number | null; map_center_lng?: number | null; map_default_radius_miles?: number };
+          saveCrisisMeta({
+            id: first.id,
+            map_center_lat: first.map_center_lat ?? null,
+            map_center_lng: first.map_center_lng ?? null,
+            map_default_radius_miles: first.map_default_radius_miles ?? 50,
+            cached_at: new Date().toISOString(),
+          });
+          if (first.map_center_lat && first.map_center_lng) {
+            const [w, s, e, n] = radiusBBox(first.map_center_lat, first.map_center_lng, first.map_default_radius_miles ?? 50);
+            mapInstance.fitBounds([[w, s], [e, n]], { padding: 40, maxZoom: 14 });
+          } else if (!initialMeta?.map_center_lat) {
+            centerOnGPS(mapInstance, countryCodeAtMount.current);
+          }
+          const crisisId: string = first.id;
           const reportsRes = await api.get<ReportsListResponse>("/api/reports/map", {
             params: { crisis_id: crisisId, limit: 200 },
           });
           const source = mapInstance.getSource("reports") as maplibregl.GeoJSONSource | undefined;
           source?.setData(reportsGeoJSON(reportsRes.data.reports));
+        } else if (!initialMeta?.map_center_lat) {
+          centerOnGPS(mapInstance, countryCodeAtMount.current);
         }
       } catch { /* reports non-critical */ } finally {
         setReportsLoading(false);

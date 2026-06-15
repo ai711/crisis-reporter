@@ -76,6 +76,7 @@
     "pin_dropped": "Pin Dropped",
     "gps_captured": "GPS Location Captured",
     "duplicate_inline_warning": "A report for this location may already exist from this device. You can still submit if this is a different incident.",
+    "location_outside_crisis_area": "Your selected location appears to be outside the primary crisis area. You can still submit if this is correct.",
     "building_name_label": "BUILDING NAME",
     "location_note_label": "ADD A LOCATION NOTE (OPTIONAL)",
     "location_note_placeholder": "e.g. Blue gate on the left, next to the pharmacy",
