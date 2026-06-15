@@ -2964,6 +2964,17 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
     ("my_reports.failed_attempts",       "ui_report", "Failed after {{count}} attempt(s). Check connection."),
     ("my_reports.retry_partial_title",   "ui_report", "Report uploaded"),
     ("my_reports.retry_partial_body",    "ui_report", "Your report reached our servers. Photos are still uploading — you can see the report in My Reports now."),
+    # Location step — geo-fence and offline country picker (Logic 1 + 2)
+    ("locationScreen.tooFarFromGps", "ui_location", "This location is more than 50 miles from your current position. Please select a location closer to where you are."),
+    ("locationScreen.countryLabel",  "ui_location", "Country (where is the damage?)"),
+    ("locationScreen.countryHint",   "ui_location", "Pre-filled from your profile. Change if the damage is in a different country."),
+    ("locationScreen.countrySearch", "ui_location", "Search countries…"),
+    ("locationScreen.selectCountry", "ui_location", "Select country"),
+    ("location.too_far_from_gps",    "ui_location", "This location is more than 50 miles from your current position. Please select a location closer to where you are."),
+    ("location.country_label",       "ui_location", "Country (where is the damage?)"),
+    ("location.country_hint",        "ui_location", "Pre-filled from your settings. Change if the damage is in a different country."),
+    ("location.country_search",      "ui_location", "Search countries…"),
+    ("location.select_country",      "ui_location", "Select country"),
 
     # ── Photo screen (mobile) ──
     ("photoScreen.guidelines.title",     "ui_report", "Photo guidelines"),

@@ -17,6 +17,7 @@ import { addToQueue, isIndexedDBAvailable, requestSyncNotificationPermission } f
 import { generateUUID } from "../utils/uuid";
 import { haversineKm, milesToKm, saveCrisisMeta, loadCrisisMeta } from "../utils/geo";
 import { WEB_SESSION_ID } from "../utils/sessionId";
+import { fetchAndCacheCountries, type CachedCountry } from "../utils/countryListCache";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 const MAPTILER_KEY = import.meta.env.VITE_MAPTILER_KEY || "";
@@ -349,6 +350,15 @@ export default function ReportPage() {
   const [crisisCenterLng, setCrisisCenterLng] = useState<number | null>(null);
   const [crisisRadiusMiles, setCrisisRadiusMiles] = useState<number>(50);
   const [showOutsideAreaWarning, setShowOutsideAreaWarning] = useState(false);
+  // Logic 1 — country derived from selected location coordinates
+  const [reportLocationCountry, setReportLocationCountry] = useState<string | null>(null);
+  // GPS geo-fence — hard block when selection > 50 mi from reporter GPS
+  const [gpsGeofenceBlocked, setGpsGeofenceBlocked] = useState(false);
+  // Logic 2 — country picker for offline + no GPS
+  const [offlineReportCountry, setOfflineReportCountry] = useState<string | null>(null);
+  const [offlineCountries, setOfflineCountries] = useState<CachedCountry[]>([]);
+  const [showCountryModal, setShowCountryModal] = useState(false);
+  const [countrySearch, setCountrySearch] = useState("");
 
   // Location state — metadata flags (G7/G9/G11)
   const [locationEntryMethod, setLocationEntryMethod] = useState<
@@ -493,7 +503,7 @@ export default function ReportPage() {
     init();
   }, []);
 
-  // Geo-fence: warn reporter if selected location is outside the crisis radius
+  // Geo-fence: warn reporter if selected location is outside the crisis radius (soft warning)
   useEffect(() => {
     const lat = buildingCentroidLat ?? pinDropCoords?.lat ?? gpsLatitude;
     const lng = buildingCentroidLng ?? pinDropCoords?.lng ?? gpsLongitude;
@@ -505,6 +515,62 @@ export default function ReportPage() {
       haversineKm(lat, lng, crisisCenterLat, crisisCenterLng) > milesToKm(crisisRadiusMiles)
     );
   }, [buildingCentroidLat, buildingCentroidLng, pinDropCoords, gpsLatitude, gpsLongitude, crisisCenterLat, crisisCenterLng, crisisRadiusMiles]);
+
+  // GPS geo-fence: hard block when selected location > 50 mi from reporter's current GPS
+  useEffect(() => {
+    if (gpsLatitude === null || gpsLongitude === null) { setGpsGeofenceBlocked(false); return; }
+    const selLat = buildingCentroidLat ?? pinDropCoords?.lat ?? null;
+    const selLng = buildingCentroidLng ?? pinDropCoords?.lng ?? null;
+    if (selLat === null || selLng === null) { setGpsGeofenceBlocked(false); return; }
+    setGpsGeofenceBlocked(haversineKm(selLat, selLng, gpsLatitude, gpsLongitude) > milesToKm(50));
+  }, [buildingCentroidLat, buildingCentroidLng, pinDropCoords, gpsLatitude, gpsLongitude]);
+
+  // Logic 1: silent reverse geocode when building, pin, or GPS coords are confirmed
+  const reverseGeocodeCountry = async (lat: number, lng: number): Promise<void> => {
+    if (!MAPTILER_KEY) return;
+    try {
+      const ctrl = new AbortController();
+      const tid = window.setTimeout(() => ctrl.abort(), 5000);
+      const r = await fetch(
+        `https://api.maptiler.com/geocoding/${lng.toFixed(6)},${lat.toFixed(6)}.json?key=${MAPTILER_KEY}&types=country`,
+        { signal: ctrl.signal }
+      );
+      window.clearTimeout(tid);
+      if (!r.ok) return;
+      const data = await r.json() as { features?: Array<{ id?: string; properties?: { short_code?: string } }> };
+      const feature = data?.features?.[0];
+      const fromId = feature?.id?.split?.('.')?.[1]?.toUpperCase();
+      const fromShort = feature?.properties?.short_code?.toUpperCase();
+      const code = fromId || fromShort;
+      if (code && /^[A-Z]{2}$/.test(code)) setReportLocationCountry(code);
+    } catch { /* silent — onboarding country is the fallback */ }
+  };
+
+  useEffect(() => {
+    if (buildingCentroidLat !== null && buildingCentroidLng !== null) {
+      void reverseGeocodeCountry(buildingCentroidLat, buildingCentroidLng);
+    }
+  }, [buildingCentroidLat, buildingCentroidLng]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (pinDropCoords) void reverseGeocodeCountry(pinDropCoords.lat, pinDropCoords.lng);
+  }, [pinDropCoords]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // GPS-only: geocode when GPS acquired but no building/pin yet
+  useEffect(() => {
+    if (gpsLatitude !== null && gpsLongitude !== null && buildingCentroidLat === null && !pinDropCoords) {
+      void reverseGeocodeCountry(gpsLatitude, gpsLongitude);
+    }
+  }, [gpsLatitude, gpsLongitude]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Logic 2: load country list and pre-fill when offline + no GPS
+  useEffect(() => {
+    if (!locationOffline || gpsLatitude !== null) return;
+    fetchAndCacheCountries().then(({ data }) => {
+      if (data) setOfflineCountries(data.filter(c => c.is_active !== false));
+    });
+    setOfflineReportCountry(countryCode || localStorage.getItem("cr_country") || null);
+  }, [locationOffline, gpsLatitude]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load question package from localStorage first; fall back to network on first visit
   useEffect(() => {
@@ -1373,6 +1439,7 @@ export default function ReportPage() {
   // G5 — Valid if any usable coordinate or text field is filled.
   // When offline without GPS, address is specifically required (asterisk is enforced).
   const isLocationValid = (): boolean => {
+    if (gpsGeofenceBlocked) return false;
     if ((gpsLatitude !== null && gpsLongitude !== null) || buildingCentroidLat !== null || pinDropCoords !== null) return true;
     if (locationOffline && gpsLatitude === null) return locationAddress.trim().length > 0;
     return locationAddress.trim().length > 0 || locationLandmark.trim().length > 0 || locationBuildingName.trim().length > 0;
@@ -1561,7 +1628,7 @@ export default function ReportPage() {
         : null,
       device_id: WEB_SESSION_ID,
       language_code: languageCode,
-      reporter_country: countryCode || localStorage.getItem("cr_country") || null,
+      reporter_country: reportLocationCountry || offlineReportCountry || countryCode || localStorage.getItem("cr_country") || null,
       question_package_version: questionPackage?.version ?? null,
       question_package_content_version: questionPackage?.content_version ?? questionPackage?.version ?? null,
       question_package_translation_version: questionPackage?.translation_version ?? null,
@@ -2377,6 +2444,57 @@ export default function ReportPage() {
                 </p>
               )}
 
+              {/* Logic 2: Country picker — only when offline + no GPS (no coords to reverse-geocode from) */}
+              {locationOffline && gpsLatitude === null && (
+                <div style={{ marginBottom: 12 }}>
+                  <label style={{ ...styles.fieldLabel, display: "block", marginBottom: 4 }}>
+                    {t("location.country_label")}
+                  </label>
+                  <div style={{ position: "relative" }}>
+                    <button
+                      style={{ width: "100%", textAlign: "left", padding: "10px 36px 10px 12px", border: "1px solid #D1D5DB", borderRadius: 8, background: "#FAFAFA", fontSize: 14, color: offlineReportCountry ? "#1B1C1C" : "#9CA3AF", cursor: "pointer", fontFamily: "inherit" }}
+                      onClick={() => setShowCountryModal(true)}
+                    >
+                      {offlineCountries.find(c => c.code === offlineReportCountry)?.name || offlineReportCountry || t("location.select_country")}
+                    </button>
+                    <span className="material-symbols-outlined" style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", fontSize: 20, color: "#717782", pointerEvents: "none" }}>expand_more</span>
+                  </div>
+                  <p style={{ fontSize: 11, color: "#9CA3AF", margin: "4px 0 0" }}>{t("location.country_hint")}</p>
+
+                  {/* Country search modal */}
+                  {showCountryModal && (
+                    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 9000, display: "flex", alignItems: "flex-end" }} onClick={() => { setShowCountryModal(false); setCountrySearch(""); }}>
+                      <div style={{ background: "#fff", borderRadius: "20px 20px 0 0", width: "100%", maxHeight: "75vh", display: "flex", flexDirection: "column", padding: "20px 0 0" }} onClick={e => e.stopPropagation()}>
+                        <div style={{ padding: "0 16px 12px", borderBottom: "1px solid #EBEBEB" }}>
+                          <input
+                            autoFocus
+                            style={{ width: "100%", padding: "10px 14px", border: "1px solid #D1D5DB", borderRadius: 8, fontSize: 14, boxSizing: "border-box" }}
+                            placeholder={t("location.country_search")}
+                            value={countrySearch}
+                            onChange={e => setCountrySearch(e.target.value)}
+                          />
+                        </div>
+                        <div style={{ overflowY: "auto", flex: 1 }}>
+                          {offlineCountries
+                            .filter(c => c.name.toLowerCase().includes(countrySearch.toLowerCase()) || c.code.toLowerCase().includes(countrySearch.toLowerCase()))
+                            .map(c => (
+                              <button
+                                key={c.code}
+                                style={{ width: "100%", textAlign: "left", padding: "14px 20px", border: "none", borderBottom: "1px solid #F3F4F6", background: offlineReportCountry === c.code ? "#EBF4FF" : "transparent", fontSize: 15, color: "#1B1C1C", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", fontFamily: "inherit" }}
+                                onClick={() => { setOfflineReportCountry(c.code); setShowCountryModal(false); setCountrySearch(""); }}
+                              >
+                                {c.name}
+                                {offlineReportCountry === c.code && <span className="material-symbols-outlined" style={{ fontSize: 18, color: "#0468B1" }}>check</span>}
+                              </button>
+                            ))
+                          }
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Selection state card */}
               {selectedBuildingId && (
                 <div style={styles.selectionCard}>
@@ -2432,7 +2550,15 @@ export default function ReportPage() {
               )}
 
               {/* Outside crisis area warning (non-blocking, dismissible) */}
-              {showOutsideAreaWarning && (
+              {/* GPS geo-fence: hard error — not dismissible */}
+              {gpsGeofenceBlocked && (
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 8, background: "#FFF5F5", border: "1px solid #FC8181", borderRadius: 8, padding: "10px 14px", marginBottom: 8 }}>
+                  <span className="material-symbols-outlined" style={{ fontSize: 18, color: "#C53030", flexShrink: 0 }}>location_off</span>
+                  <span style={{ fontSize: 13, color: "#C53030", lineHeight: "1.5" }}>{t('location.too_far_from_gps')}</span>
+                </div>
+              )}
+
+              {showOutsideAreaWarning && !gpsGeofenceBlocked && (
                 <div style={styles.inlineDupeWarning}>
                   <span>{t('report.location_outside_crisis_area')}</span>
                   <button
