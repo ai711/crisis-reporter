@@ -53,3 +53,34 @@ export function loadCrisisMeta(): CrisisMeta | null {
     return null;
   }
 }
+
+const FENCE_RADIUS_KEY = "cr_fence_radius";
+
+export interface FenceRadiusMeta {
+  radius_miles: number;
+  country_overrides: Record<string, number>;
+  cached_at: string;
+}
+
+export function saveFenceRadiusMeta(meta: FenceRadiusMeta): void {
+  try {
+    localStorage.setItem(FENCE_RADIUS_KEY, JSON.stringify(meta));
+  } catch { /* quota exceeded — skip */ }
+}
+
+export function loadFenceRadiusMeta(): FenceRadiusMeta | null {
+  try {
+    const raw = localStorage.getItem(FENCE_RADIUS_KEY);
+    return raw ? (JSON.parse(raw) as FenceRadiusMeta) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function getGpsFenceRadius(countryCode: string | null, meta: FenceRadiusMeta | null): number {
+  if (!meta) return 50;
+  if (countryCode != null && meta.country_overrides[countryCode] != null) {
+    return meta.country_overrides[countryCode];
+  }
+  return meta.radius_miles;
+}

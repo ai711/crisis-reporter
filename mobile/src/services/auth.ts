@@ -2,9 +2,20 @@ import api, { tokenStorage } from "./api";
 import type { AnonymousSession, AuthTokens } from "../types";
 import * as SecureStore from "expo-secure-store";
 import * as Application from "expo-application";
+import * as Cellular from "expo-cellular";
 import { Platform } from "react-native";
 import { useAuthStore } from "../stores/authStore";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+
+// ── MCC ───────────────────────────────────────────────────────────────────────
+
+export async function readMCC(): Promise<string | null> {
+  try {
+    return await Cellular.getMobileCountryCodeAsync();
+  } catch {
+    return null;
+  }
+}
 
 // ── Device ID ─────────────────────────────────────────────────────────────────
 
@@ -153,6 +164,8 @@ export async function registerAnonymously(): Promise<string> {
   const countryCode = await AsyncStorage.getItem("cr_country_code");
   const languageCode = await AsyncStorage.getItem("cr_language");
 
+  const mcc = await readMCC();
+
   const payload = {
     device_id: deviceId,
     os_device_id: osDeviceId,
@@ -160,6 +173,7 @@ export async function registerAnonymously(): Promise<string> {
     country_code: countryCode,
     language_code: languageCode,
     t_and_c_accepted_at: tAndCAcceptedAt,
+    mcc,
   };
 
   try {

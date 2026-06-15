@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { X, Eye, EyeOff, Users } from "lucide-react";
 import { useAuthStore } from "../stores/authStore";
 import Header from "../components/Header";
+import { usePageTitle } from "../hooks/usePageTitle";
 import PageSpinner from "../components/PageSpinner";
 import EmptyState from "../components/EmptyState";
 import { Toast } from "../components/Toast";
@@ -326,6 +327,7 @@ function MField({
 type StatusFilter = "all" | "active" | "inactive";
 
 export default function UserManagementPage() {
+  usePageTitle("Manage Users");
   const { user: currentUser } = useAuthStore();
   const navigate = useNavigate();
   const queryClient = useQueryClient();

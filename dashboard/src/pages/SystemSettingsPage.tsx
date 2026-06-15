@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "../stores/authStore";
 import api from "../services/api";
 import Header from "../components/Header";
+import { usePageTitle } from "../hooks/usePageTitle";
 import { Toast } from "../components/Toast";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
@@ -3551,6 +3552,7 @@ function MapSettingsTab() {
 // ── Main Page ──────────────────────────────────────────────────────────────────
 
 export default function SystemSettingsPage() {
+  usePageTitle("System Settings");
   const { user } = useAuthStore();
   const [activeTab, setActiveTab] = useState<Tab>("countries");
   const isAdmin = user?.role === "admin" || user?.role === "superadmin";

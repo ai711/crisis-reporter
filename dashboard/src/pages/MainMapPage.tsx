@@ -5,6 +5,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import Header from "../components/Header";
 import PropertySummaryPanel from "../components/PropertySummaryPanel";
 import { useSSE } from "../hooks/useSSE";
+import { usePageTitle } from "../hooks/usePageTitle";
 import api from "../services/api";
 import type { MapPin, DashboardStats, SSEEvent } from "../types";
 
@@ -46,6 +47,7 @@ function TargetIcon({ size = 20 }: { size?: number }) {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function MainMapPage() {
+  usePageTitle("Map View");
   // ── Refs ──────────────────────────────────────────────────────────────────
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
@@ -416,7 +418,7 @@ export default function MainMapPage() {
           </div>
           <div style={{ ...styles.statItem, borderLeft: "3px solid #f2994a" }}>
             <span style={{ ...styles.statNumber, color: "#f2994a" }}>{stats.orange_count}</span>
-            <span style={styles.statLabel}>Needs Attention</span>
+            <span style={styles.statLabel}>Approved</span>
           </div>
           <div style={{ ...styles.statItem, borderLeft: "3px solid #e53e3e" }}>
             <span style={{ ...styles.statNumber, color: "#e53e3e" }}>{stats.red_count}</span>

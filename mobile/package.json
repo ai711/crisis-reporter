@@ -22,6 +22,7 @@
     "expo-application": "~56.0.3",
     "expo-background-fetch": "~56.0.18",
     "expo-camera": "~56.0.8",
+    "expo-cellular": "~56.0.5",
     "expo-constants": "~56.0.18",
     "expo-device": "~56.0.4",
     "expo-file-system": "~56.0.8",

@@ -14,6 +14,7 @@ import * as Location from "expo-location";
 import * as Notifications from "expo-notifications";
 import * as SecureStore from "expo-secure-store";
 import Constants from "expo-constants";
+import { readMCC } from "../services/auth";
 import {
   Map as MLMap,
   Camera,
@@ -28,11 +29,10 @@ import {
 import { useAuthStore } from "../stores/authStore";
 import api, { API_BASE } from "../services/api";
 import * as Device from 'expo-device';
-import * as Cellular from 'expo-cellular';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as FileSystem from 'expo-file-system';
 import { addToQueue, syncQueue, getQueue, removeFromQueue, queuePhotosForReport, saveDirectSubmittedRecord } from "../utils/offlineQueue";
-import { haversineKm, milesToKm, saveCrisisMeta, loadCrisisMeta } from "../utils/geo";
+import { haversineKm, milesToKm, saveCrisisMeta, loadCrisisMeta, saveFenceRadiusMeta, loadFenceRadiusMeta, getGpsFenceRadius, type FenceRadiusMeta } from "../utils/geo";
 import NetInfo from "@react-native-community/netinfo";
 import StepIndicator from "../components/StepIndicator";
 import type { DamageLevel, QueuedPhoto, ProcessedPhoto } from "../types";
@@ -414,9 +414,11 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
   const [showOutsideAreaWarning, setShowOutsideAreaWarning] = useState(false);
   // Logic 1 — country derived from selected location coordinates
   const [reportLocationCountry, setReportLocationCountry] = useState<string | null>(null);
-  // GPS geo-fence — hard block when selection is > 50 mi from reporter's GPS
+  // GPS geo-fence — hard block when selection is > dashboard-configured radius from reporter's GPS
   const [gpsGeofenceBlocked, setGpsGeofenceBlocked] = useState(false);
-  // Logic 2 — country picker for offline_no_gps scenario
+  const [fenceRadiusMeta, setFenceRadiusMeta] = useState<FenceRadiusMeta | null>(null);
+  const [reporterCountryCode, setReporterCountryCode] = useState<string | null>(null);
+  // Logic 2 — country picker for offline scenarios
   const [offlineReportCountry, setOfflineReportCountry] = useState<string | null>(null);
   const [offlineCountries, setOfflineCountries] = useState<Array<{code:string;name:string}>>([]);
   const [showCountryModal, setShowCountryModal] = useState(false);
@@ -478,6 +480,16 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
         const settingsRes = await api.get("/api/settings/public");
         setFootprintSource(settingsRes.data?.building_footprint_source ?? "osm");
       } catch { /* silent — OSM fallback remains active */ }
+      const cachedFence = await loadFenceRadiusMeta();
+      if (cachedFence) setFenceRadiusMeta(cachedFence);
+      try {
+        const fenceRes = await api.get("/api/settings/fence-radius");
+        const meta: FenceRadiusMeta = { ...fenceRes.data, cached_at: new Date().toISOString() };
+        await saveFenceRadiusMeta(meta);
+        setFenceRadiusMeta(meta);
+      } catch { /* silent — cached value or 50 mi fallback remains active */ }
+      const storedCountry = await AsyncStorage.getItem('cr_country_code');
+      if (storedCountry) setReporterCountryCode(storedCountry);
       setCrisisLoading(false);
     };
     init();
@@ -496,16 +508,17 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
     );
   }, [selectedBuilding, gpsCoords, crisisCenterLat, crisisCenterLng, crisisRadiusMiles]);
 
-  // GPS geo-fence: hard block when selected location is > 50 mi from reporter's current GPS
+  // GPS geo-fence: hard block when selected location is > dashboard-configured radius from reporter's GPS
   useEffect(() => {
     if (!locationGpsCoords) { setGpsGeofenceBlocked(false); return; }
     const selLat = selectedBuilding ? selectedBuilding.centroid[1] : pinCoords?.lat ?? null;
     const selLng = selectedBuilding ? selectedBuilding.centroid[0] : pinCoords?.lng ?? null;
     if (selLat === null || selLng === null) { setGpsGeofenceBlocked(false); return; }
+    const radius = getGpsFenceRadius(reporterCountryCode, fenceRadiusMeta);
     setGpsGeofenceBlocked(
-      haversineKm(selLat, selLng, locationGpsCoords.lat, locationGpsCoords.lng) > milesToKm(50)
+      haversineKm(selLat, selLng, locationGpsCoords.lat, locationGpsCoords.lng) > milesToKm(radius)
     );
-  }, [selectedBuilding, pinCoords, locationGpsCoords]);
+  }, [selectedBuilding, pinCoords, locationGpsCoords, fenceRadiusMeta, reporterCountryCode]);
 
   // Logic 1: reverse geocode country from selected building, pin drop, or GPS position
   const reverseGeocodeCountry = useCallback(async (lat: number, lng: number) => {
@@ -544,9 +557,9 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
     void reverseGeocodeCountry(locationGpsCoords.lat, locationGpsCoords.lng);
   }, [locationGpsCoords, reverseGeocodeCountry]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Logic 2: load country list and pre-fill when offline_no_gps is detected
+  // Logic 2: load country list and pre-fill when offline (with or without GPS)
   useEffect(() => {
-    if (locationScenario !== 'offline_no_gps') return;
+    if (locationScenario !== 'offline_no_gps' && locationScenario !== 'offline_gps') return;
     AsyncStorage.getItem('cr_countries_cache').then((raw) => {
       try {
         const list = raw ? (JSON.parse(raw) as Array<{code:string;name:string;is_active?:boolean}>)
@@ -1553,8 +1566,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
     const osDeviceId = await SecureStore.getItemAsync("cr_os_device_id");
     const netState = await NetInfo.fetch();
     const networkType = netState.type || 'unknown';
-    let mcc: string | null = null;
-    try { mcc = await Cellular.getMobileCountryCodeAsync(); } catch { /* WiFi-only or no SIM */ }
+    const mcc = await readMCC();
     const appVersion = Constants.expoConfig?.version || (Constants as any).manifest?.version || '1.0.0';
     const reporterCountry = await AsyncStorage.getItem('cr_country_code');
     const deviceModel = Device.modelName || 'Unknown';
@@ -2421,8 +2433,8 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                 </View>
               )}
 
-              {/* Logic 2: Country picker — only for offline_no_gps (no coords to reverse-geocode from) */}
-              {locationScenario === 'offline_no_gps' && (
+              {/* Logic 2: Country picker — shown for all offline scenarios */}
+              {(locationScenario === 'offline_no_gps' || locationScenario === 'offline_gps') && (
                 <>
                   <Text style={styles.manualFieldLabel}>{t('locationScreen.countryLabel')}</Text>
                   <TouchableOpacity style={styles.countryPickerBtn} onPress={() => setShowCountryModal(true)}>

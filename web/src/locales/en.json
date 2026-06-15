@@ -222,7 +222,7 @@
     "gps_unavailable_inline": "Your location could not be detected. You can still select a building on the map or use the search bar to find your location.",
     "offline_gps_background": "Your GPS coordinates are still being recorded in the background",
     "permission_note": "Crisis Reporter needs your location to help identify the building you are reporting.",
-    "too_far_from_gps": "This location is more than 50 miles from your current position. Please select a location closer to where you are.",
+    "too_far_from_gps": "This location is too far from your current position. Please select a location closer to where you are.",
     "country_label": "Country (where is the damage?)",
     "country_hint": "Pre-filled from your settings. Change if the damage is in a different country.",
     "country_search": "Search countries…",

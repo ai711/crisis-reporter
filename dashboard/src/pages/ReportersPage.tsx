@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Users, X, Filter } from "lucide-react";
 import Header from "../components/Header";
+import { usePageTitle } from "../hooks/usePageTitle";
 import PageSpinner from "../components/PageSpinner";
 import EmptyState from "../components/EmptyState";
 import { getReporters } from "../services/api";
@@ -302,6 +303,7 @@ function StatusPill({ status }: { status: string }) {
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function ReportersPage() {
+  usePageTitle("Reporters");
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounced(search, 400);
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);

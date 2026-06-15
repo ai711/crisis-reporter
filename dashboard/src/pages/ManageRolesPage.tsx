@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { ShieldOff } from "lucide-react";
 import { useAuthStore } from "../stores/authStore";
 import Header from "../components/Header";
+import { usePageTitle } from "../hooks/usePageTitle";
 import api from "../services/api";
 import type { Role } from "../types";
 
@@ -226,6 +227,7 @@ function ReadOnlyPermissions({ permissions }: { permissions: Permissions }) {
 // ── Main Page ──────────────────────────────────────────────────────────────────
 
 export default function ManageRolesPage() {
+  usePageTitle("Manage Roles");
   const { user: currentUser } = useAuthStore();
   const queryClient = useQueryClient();
   const navigate = useNavigate();

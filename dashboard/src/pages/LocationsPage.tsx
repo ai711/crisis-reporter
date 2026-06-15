@@ -7,6 +7,7 @@ import EmptyState from "../components/EmptyState";
 import ErrorState from "../components/ErrorState";
 import { getProperties, getDashboardProjects } from "../services/api";
 import { formatDamageLevel, formatDateTime } from "../utils/formatters";
+import { usePageTitle } from "../hooks/usePageTitle";
 import type { Property, PropertiesListResponse, ProjectListRow, ProjectsListResponse } from "../types";
 
 // ── Damage colours ────────────────────────────────────────────────────────────
@@ -103,6 +104,7 @@ function SearchIcon() {
 }
 
 export default function LocationsPage() {
+  usePageTitle("Locations");
   const [search, setSearch] = useState("");
   const [showUnreviewed, setShowUnreviewed] = useState(false);
   const [hoveredRow, setHoveredRow] = useState<string | null>(null);

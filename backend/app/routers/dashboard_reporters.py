@@ -230,6 +230,28 @@ async def get_reporter_detail(
         except Exception:
             pass
 
+    # Decrypt device_id if available
+    device_id = None
+    if reporter.device_id_encrypted:
+        try:
+            from app.services.encryption import decrypt_field
+            device_id = decrypt_field(reporter.device_id_encrypted)
+        except Exception:
+            pass
+
+    # Pull device info from the reporter's most recent report — these fields live
+    # on the Report model (sent at submission time, not registration time)
+    device_info_result = await db.execute(
+        select(Report.device_model, Report.device_brand, Report.network_type)
+        .where(Report.reporter_id == reporter.id)
+        .order_by(Report.created_at.desc())
+        .limit(1)
+    )
+    device_info_row = device_info_result.first()
+    device_model = device_info_row.device_model if device_info_row else None
+    device_brand = device_info_row.device_brand if device_info_row else None
+    network_type = device_info_row.network_type if device_info_row else None
+
     # Report statistics
     stats_result = await db.execute(
         select(Report.flag_status, func.count(Report.id))
@@ -280,10 +302,14 @@ async def get_reporter_detail(
         "platform_label": _platform_label(reporter.platform),
         "country": reporter.country_code,
         "language_code": reporter.language_code,
+        "device_id": device_id,
         "ip_address": reporter.ip_address,
         "app_version": reporter.app_version,
         "browser_version": reporter.browser_version,
         "mcc": reporter.mcc,
+        "device_model": device_model,
+        "device_brand": device_brand,
+        "network_type": network_type,
         "is_verified": reporter.is_verified,
         "is_blocked": reporter.is_blocked,
         "is_paused": reporter.is_paused,

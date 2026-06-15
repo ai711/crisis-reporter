@@ -100,3 +100,8 @@ export const isEndDatePassed = (endDate: string): boolean => {
   end.setHours(23, 59, 59, 999);
   return new Date() > end;
 };
+
+export const toTitleCase = (s: string | null | undefined): string => {
+  if (!s) return "—";
+  return s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+};

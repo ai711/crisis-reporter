@@ -4,7 +4,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, text
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from app.database import get_db
 from app.models.reporter import Reporter
@@ -29,6 +29,16 @@ class AnonymousSessionRequest(BaseModel):
     language_code: str = "en"
     os_device_id: Optional[str] = None
     t_and_c_accepted_at: Optional[datetime] = None
+    mcc: Optional[str] = None
+
+    @field_validator("mcc")
+    @classmethod
+    def validate_mcc(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        if not v.isdigit() or len(v) != 3:
+            return None  # silently discard malformed values rather than reject the registration
+        return v
 
 
 class AnonymousSessionResponse(BaseModel):
@@ -92,6 +102,8 @@ async def create_anonymous_session(
             reporter.os_device_id = request.os_device_id
         if request.t_and_c_accepted_at is not None:
             reporter.t_and_c_accepted_at = request.t_and_c_accepted_at
+        if request.mcc is not None:
+            reporter.mcc = request.mcc
         await db.commit()
         return AnonymousSessionResponse(
             reporter_id=reporter.display_id,
@@ -109,6 +121,7 @@ async def create_anonymous_session(
         last_active_at=datetime.now(timezone.utc),
         os_device_id=request.os_device_id,
         t_and_c_accepted_at=request.t_and_c_accepted_at,
+        mcc=request.mcc,
     )
     db.add(reporter)
     await db.flush()

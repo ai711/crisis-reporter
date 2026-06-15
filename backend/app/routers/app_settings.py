@@ -28,6 +28,16 @@ async def get_public_settings(db: AsyncSession = Depends(get_db)):
         "building_footprint_source": building_footprint_source,
     }
 
+
+@router.get("/fence-radius")
+async def get_fence_radius(db: AsyncSession = Depends(get_db)):
+    """GPS fence radius config for reporter apps. No auth required."""
+    map_settings = await get_map_settings_dict(db)
+    return {
+        "radius_miles": map_settings.get("reporting_radius_miles", app_config.REPORTING_RADIUS_DEFAULT_MILES),
+        "country_overrides": map_settings.get("country_overrides", {}),
+    }
+
 # ── Default values ────────────────────────────────────────────────────────────
 
 DEFAULTS: dict[str, Any] = {

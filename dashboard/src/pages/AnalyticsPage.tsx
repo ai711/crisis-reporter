@@ -16,6 +16,7 @@ import {
 } from "recharts";
 import { CheckCircle, AlertTriangle } from "lucide-react";
 import Header from "../components/Header";
+import { usePageTitle } from "../hooks/usePageTitle";
 import api, { getReviewQueueCounts } from "../services/api";
 import type { ReviewQueueCounts } from "../types";
 
@@ -309,6 +310,7 @@ const renderPieLabel = ({ value, percent }: { value: number; percent?: number })
 // ── Main component ─────────────────────────────────────────────────────────────
 
 export default function AnalyticsPage() {
+  usePageTitle("Analytics");
   const navigate = useNavigate();
   const [granularity, setGranularity] = useState<"daily" | "weekly">("daily");
   const [pending, setPending] = useState<Filters>(DEFAULT_FILTERS);

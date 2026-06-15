@@ -24,7 +24,9 @@ import {
   formatDamageLevel,
   formatTimeInQueue,
   formatCountdown,
+  toTitleCase,
 } from "../utils/formatters";
+import { usePageTitle } from "../hooks/usePageTitle";
 import type {
   ReviewQueueCounts,
   Tab1Row,
@@ -182,7 +184,7 @@ function ConfirmActionModal({
   const [comment, setComment] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const canSubmit = comment.trim().length >= 10 && !loading;
+  const canSubmit = comment.trim().length >= 3 && !loading;
 
   async function handleConfirm() {
     if (!canSubmit) return;
@@ -248,7 +250,7 @@ function ConfirmActionModal({
           <label style={ms.label}>
             Review Comment{" "}
             <span style={{ color: "var(--c-text-muted)", fontWeight: 400 }}>
-              (required, min 10 chars)
+              (required, min 3 chars)
             </span>
           </label>
           <textarea
@@ -259,7 +261,7 @@ function ConfirmActionModal({
             placeholder="Enter reason or notes…"
             autoFocus
           />
-          <span style={ms.charCount}>{comment.trim().length} / 10 min</span>
+          <span style={ms.charCount}>{comment.trim().length} / 3 min</span>
         </div>
 
         {error && <div style={ms.error}>{error}</div>}
@@ -303,7 +305,7 @@ function ForceResolutionModal({
   const [reason, setReason] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const canSubmit = reason.trim().length >= 10 && !loading;
+  const canSubmit = reason.trim().length >= 3 && !loading;
 
   async function handleConfirm() {
     if (!canSubmit) return;
@@ -416,7 +418,7 @@ function ForceResolutionModal({
           <label style={ms.label}>
             Reason{" "}
             <span style={{ color: "var(--c-text-muted)", fontWeight: 400 }}>
-              (required, min 10 chars)
+              (required, min 3 chars)
             </span>
           </label>
           <textarea
@@ -427,7 +429,7 @@ function ForceResolutionModal({
             placeholder="Enter reason for force resolution…"
             autoFocus
           />
-          <span style={ms.charCount}>{reason.trim().length} / 10 min</span>
+          <span style={ms.charCount}>{reason.trim().length} / 3 min</span>
         </div>
 
         {error && <div style={ms.error}>{error}</div>}
@@ -471,7 +473,7 @@ function Tab1ReviewModal({ row, onClose, onSuccess }: Tab1ReviewModalProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const canSubmit = comment.trim().length >= 10 && !loading;
+  const canSubmit = comment.trim().length >= 3 && !loading;
 
   async function handleDecision(decision: "approve" | "discard") {
     if (!canSubmit) return;
@@ -518,7 +520,12 @@ function Tab1ReviewModal({ row, onClose, onSuccess }: Tab1ReviewModalProps) {
             <div>
               <h3 style={rms.headerTitle}>Review Report</h3>
               <p style={rms.headerSub}>
-                {reportLabel}
+                <button
+                  style={{ ...s.linkBtn, fontSize: 13 }}
+                  onClick={() => window.open("/reports/" + row.report_id, "_blank")}
+                >
+                  {reportLabel}
+                </button>
                 {row.country ? ` · ${row.country}` : ""}
               </p>
             </div>
@@ -559,7 +566,7 @@ function Tab1ReviewModal({ row, onClose, onSuccess }: Tab1ReviewModalProps) {
                 <span style={rms.summaryLabel}>Infrastructure</span>
                 <span style={rms.summaryValue}>
                   {row.infrastructure_types.length > 0
-                    ? row.infrastructure_types.join(", ")
+                    ? row.infrastructure_types.map(toTitleCase).join(", ")
                     : "—"}
                 </span>
               </div>
@@ -577,9 +584,12 @@ function Tab1ReviewModal({ row, onClose, onSuccess }: Tab1ReviewModalProps) {
               </div>
               <div style={rms.summaryItem}>
                 <span style={rms.summaryLabel}>Reporter</span>
-                <span style={{ ...rms.summaryValue, fontFamily: "monospace" }}>
-                  {row.reporter_display_id}
-                </span>
+                <button
+                  style={s.linkBtn}
+                  onClick={() => window.open("/reporters/" + row.reporter_id, "_blank")}
+                >
+                  #{row.reporter_display_id}
+                </button>
               </div>
             </div>
           </div>
@@ -642,7 +652,7 @@ function Tab1ReviewModal({ row, onClose, onSuccess }: Tab1ReviewModalProps) {
               <span style={rms.sectionTitle}>
                 Review Comment{" "}
                 <span style={{ color: "var(--c-text-muted)", fontWeight: 400 }}>
-                  (required — min 10, max 500 characters)
+                  (required — min 3, max 500 characters)
                 </span>
               </span>
             </div>
@@ -662,7 +672,7 @@ function Tab1ReviewModal({ row, onClose, onSuccess }: Tab1ReviewModalProps) {
                 style={{
                   fontSize: 11,
                   color:
-                    comment.trim().length < 10
+                    comment.trim().length < 3
                       ? "var(--c-flag-red)"
                       : "var(--c-text-subtle)",
                   fontWeight: comment.trim().length < 10 ? 600 : 400,
@@ -950,9 +960,9 @@ function Tab1({ currentUserName }: { currentUserName: string }) {
                         <DamageDot level={row.damage_level} />
                       </td>
                       <td style={{ fontSize: 12 }}>
-                        {row.infrastructure_types.join(", ") || "—"}
+                        {row.infrastructure_types.length > 0 ? row.infrastructure_types.map(toTitleCase).join(", ") : "—"}
                       </td>
-                      <td style={{ fontSize: 12 }}>{row.crisis_type ?? "—"}</td>
+                      <td style={{ fontSize: 12 }}>{row.crisis_type ? toTitleCase(row.crisis_type) : "—"}</td>
                       <td style={{ maxWidth: 260, overflow: "hidden" }}>
                         <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
                           {row.flag_reasons.map((r) => (
@@ -1877,6 +1887,7 @@ function Tab4({ currentUserName: _currentUserName }: { currentUserName: string }
 // ── Page ───────────────────────────────────────────────────────────────────────
 
 export default function ReviewQueuePage() {
+  usePageTitle("Review Queue");
   const { user } = useAuthStore();
   const currentUserName = user?.full_name ?? "";
   const [activeTab, setActiveTab] = useState(1);

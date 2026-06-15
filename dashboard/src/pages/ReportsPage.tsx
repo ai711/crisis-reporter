@@ -3,12 +3,13 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { Search, ChevronDown, X, ChevronLeft, ChevronRight, Eye, Download, FileText } from "lucide-react";
 import Header from "../components/Header";
+import { usePageTitle } from "../hooks/usePageTitle";
 import PageSpinner from "../components/PageSpinner";
 import EmptyState from "../components/EmptyState";
 import ErrorState from "../components/ErrorState";
 import api from "../services/api";
 import type { ReportListItem, FlagStatus, ReportListResponse } from "../types";
-import { formatDamageLevel, formatDateTime } from "../utils/formatters";
+import { formatDamageLevel, formatDateTime, toTitleCase } from "../utils/formatters";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -137,6 +138,7 @@ function buildPageRange(current: number, total: number): (number | "...")[] {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function ReportsPage() {
+  usePageTitle("Reports");
   const navigate = useNavigate();
 
   // Filters
@@ -719,7 +721,7 @@ export default function ReportsPage() {
                           style={{ ...styles.td, fontSize: 12, color: "var(--c-text-secondary)", maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
                           title={report.infrastructure_type ?? ""}
                         >
-                          {report.infrastructure_type ?? "—"}
+                          {report.infrastructure_type ? toTitleCase(report.infrastructure_type) : "—"}
                         </td>
 
                         {/* Crisis Type */}
@@ -727,7 +729,7 @@ export default function ReportsPage() {
                           style={{ ...styles.td, fontSize: 12, color: "var(--c-text-secondary)", maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
                           title={report.disaster_type ?? ""}
                         >
-                          {report.disaster_type ?? "—"}
+                          {report.disaster_type ? toTitleCase(report.disaster_type) : "—"}
                         </td>
 
                         {/* Status icon */}

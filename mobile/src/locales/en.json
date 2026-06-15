@@ -246,7 +246,7 @@
     "pinDropInstruction": "Tap anywhere on the map to place a pin, or drag the pin to the exact location.",
     "searchResultsEmpty": "No results found. Try a different search term.",
     "hideManualEntry": "Hide manual entry",
-    "tooFarFromGps": "This location is more than 50 miles from your current position. Please select a location closer to where you are.",
+    "tooFarFromGps": "This location is too far from your current position. Please select a location closer to where you are.",
     "countryLabel": "Country (where is the damage?)",
     "countryHint": "Pre-filled from your profile. Change if the damage is in a different country.",
     "countrySearch": "Search countries…",

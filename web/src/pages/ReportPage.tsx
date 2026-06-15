@@ -12,10 +12,10 @@ import { validatePhoto } from "../utils/photoValidation";
 import { compressPhoto } from "../utils/photoCompression";
 import { extractExif } from "../utils/exifExtraction";
 import SubmissionStepper, { type StepperStep } from "../components/SubmissionStepper";
-import type { DamageLevel, QueuedPhoto } from "../types";
+import type { DamageLevel, QueuedPhoto, ReportSubmitRequest } from "../types";
 import { addToQueue, isIndexedDBAvailable, requestSyncNotificationPermission } from "../utils/offlineQueue";
 import { generateUUID } from "../utils/uuid";
-import { haversineKm, milesToKm, saveCrisisMeta, loadCrisisMeta } from "../utils/geo";
+import { haversineKm, milesToKm, saveCrisisMeta, loadCrisisMeta, saveFenceRadiusMeta, loadFenceRadiusMeta, getGpsFenceRadius, type FenceRadiusMeta } from "../utils/geo";
 import { WEB_SESSION_ID } from "../utils/sessionId";
 import { fetchAndCacheCountries, type CachedCountry } from "../utils/countryListCache";
 
@@ -352,8 +352,9 @@ export default function ReportPage() {
   const [showOutsideAreaWarning, setShowOutsideAreaWarning] = useState(false);
   // Logic 1 — country derived from selected location coordinates
   const [reportLocationCountry, setReportLocationCountry] = useState<string | null>(null);
-  // GPS geo-fence — hard block when selection > 50 mi from reporter GPS
+  // GPS geo-fence — hard block when selection > configured radius from reporter GPS
   const [gpsGeofenceBlocked, setGpsGeofenceBlocked] = useState(false);
+  const [fenceRadiusMeta, setFenceRadiusMeta] = useState<FenceRadiusMeta | null>(() => loadFenceRadiusMeta());
   // Logic 2 — country picker for offline + no GPS
   const [offlineReportCountry, setOfflineReportCountry] = useState<string | null>(null);
   const [offlineCountries, setOfflineCountries] = useState<CachedCountry[]>([]);
@@ -388,12 +389,12 @@ export default function ReportPage() {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [wasQueued, setWasQueued] = useState(false);
-  const [_submittedReportId, setSubmittedReportId] = useState<string | null>(null);
+  const [, setSubmittedReportId] = useState<string | null>(null);
   const [showDupeWarning, setShowDupeWarning] = useState(false);
   const [error, setError] = useState("");
   const [crisisId, setCrisisId] = useState<string | null>(null);
   const [crisisLoading, setCrisisLoading] = useState(true);
-  const [_crisisError, setCrisisError] = useState(false);
+  const [, setCrisisError] = useState(false);
   const [questionPackage, setQuestionPackage] = useState<ActivePackage | null>(null);
   const [showAnswerPrompt, setShowAnswerPrompt] = useState(false);
   const [editingFromReview, setEditingFromReview] = useState(false);
@@ -498,6 +499,12 @@ export default function ReportPage() {
         const settingsRes = await api.get("/api/settings/public");
         setFootprintSource(settingsRes.data?.building_footprint_source ?? "osm");
       } catch { /* silent — OSM fallback remains active */ }
+      try {
+        const fenceRes = await api.get("/api/settings/fence-radius");
+        const meta: FenceRadiusMeta = { ...fenceRes.data, cached_at: new Date().toISOString() };
+        saveFenceRadiusMeta(meta);
+        setFenceRadiusMeta(meta);
+      } catch { /* silent — cached value or 50 mi fallback remains active */ }
       setCrisisLoading(false);
     };
     init();
@@ -516,14 +523,15 @@ export default function ReportPage() {
     );
   }, [buildingCentroidLat, buildingCentroidLng, pinDropCoords, gpsLatitude, gpsLongitude, crisisCenterLat, crisisCenterLng, crisisRadiusMiles]);
 
-  // GPS geo-fence: hard block when selected location > 50 mi from reporter's current GPS
+  // GPS geo-fence: hard block when selected location > dashboard-configured radius from reporter's GPS
   useEffect(() => {
     if (gpsLatitude === null || gpsLongitude === null) { setGpsGeofenceBlocked(false); return; }
     const selLat = buildingCentroidLat ?? pinDropCoords?.lat ?? null;
     const selLng = buildingCentroidLng ?? pinDropCoords?.lng ?? null;
     if (selLat === null || selLng === null) { setGpsGeofenceBlocked(false); return; }
-    setGpsGeofenceBlocked(haversineKm(selLat, selLng, gpsLatitude, gpsLongitude) > milesToKm(50));
-  }, [buildingCentroidLat, buildingCentroidLng, pinDropCoords, gpsLatitude, gpsLongitude]);
+    const radius = getGpsFenceRadius(countryCode || localStorage.getItem("cr_country"), fenceRadiusMeta);
+    setGpsGeofenceBlocked(haversineKm(selLat, selLng, gpsLatitude, gpsLongitude) > milesToKm(radius));
+  }, [buildingCentroidLat, buildingCentroidLng, pinDropCoords, gpsLatitude, gpsLongitude, fenceRadiusMeta, countryCode]);
 
   // Logic 1: silent reverse geocode when building, pin, or GPS coords are confirmed
   const reverseGeocodeCountry = async (lat: number, lng: number): Promise<void> => {
@@ -550,11 +558,11 @@ export default function ReportPage() {
     if (buildingCentroidLat !== null && buildingCentroidLng !== null) {
       void reverseGeocodeCountry(buildingCentroidLat, buildingCentroidLng);
     }
-  }, [buildingCentroidLat, buildingCentroidLng]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [buildingCentroidLat, buildingCentroidLng]);
 
   useEffect(() => {
     if (pinDropCoords) void reverseGeocodeCountry(pinDropCoords.lat, pinDropCoords.lng);
-  }, [pinDropCoords]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [pinDropCoords]);
 
   // GPS-only: geocode when GPS acquired but no building/pin yet
   useEffect(() => {
@@ -595,7 +603,7 @@ export default function ReportPage() {
       }
     };
     loadPackage();
-  }, [step]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [step]);
 
   // Pre-fill Q3 infrastructure name with OSM building name captured at location step
   useEffect(() => {
@@ -1085,7 +1093,7 @@ export default function ReportPage() {
     } catch {
       try { localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ }
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   // Save immediately whenever the user advances a step or damage sub-question.
   useEffect(() => {
@@ -1683,7 +1691,7 @@ export default function ReportPage() {
           content_type: file.type || "image/jpeg",
           display_order: i,
         }));
-        await addToQueue({ ...reportPayload, was_queued: true } as any, queuedPhotos);
+        await addToQueue({ ...reportPayload, was_queued: true } as unknown as ReportSubmitRequest, queuedPhotos);
         try { localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ }
         // Request notification permission so we can alert when this report uploads later
         void requestSyncNotificationPermission();

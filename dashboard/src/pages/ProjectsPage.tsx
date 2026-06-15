@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Pencil, Lock, X, ChevronLeft, ChevronRight, Filter, FolderOpen } from "lucide-react";
 import Header from "../components/Header";
+import { usePageTitle } from "../hooks/usePageTitle";
 import PageSpinner from "../components/PageSpinner";
 import EmptyState from "../components/EmptyState";
 import ErrorState from "../components/ErrorState";
@@ -580,6 +581,7 @@ function FilterPanel({ filters, onChange, onClose, countries }: FilterPanelProps
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function ProjectsPage() {
+  usePageTitle("Projects");
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const canEdit =

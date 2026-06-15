@@ -3,6 +3,7 @@ import { useParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { User } from "lucide-react";
 import Header from "../components/Header";
+import { usePageTitle } from "../hooks/usePageTitle";
 import PageSpinner from "../components/PageSpinner";
 import ErrorState from "../components/ErrorState";
 import {
@@ -733,6 +734,8 @@ export default function ReporterDetailPage() {
     },
     enabled: !!reporterId,
   });
+
+  usePageTitle(reporter?.reporter_id != null ? `Reporter #${reporter.reporter_id}` : "Reporter Detail");
 
   function invalidate() {
     queryClient.invalidateQueries({ queryKey: ["reporter-detail", reporterId] });

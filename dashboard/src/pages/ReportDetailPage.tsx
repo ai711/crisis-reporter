@@ -20,7 +20,8 @@ import api from "../services/api";
 import { useAuthStore } from "../stores/authStore";
 import { useHasAccess } from "../hooks/useHasAccess";
 import type { ReportDetail, FlagStatus, FlagEvent, VersionHistoryItem, QuestionAnswer, ReportProjectRef } from "../types";
-import { formatDamageLevel, formatDateTime } from "../utils/formatters";
+import { formatDamageLevel, formatDateTime, toTitleCase } from "../utils/formatters";
+import { usePageTitle } from "../hooks/usePageTitle";
 
 const MAPTILER_KEY = import.meta.env.VITE_MAPTILER_KEY || "";
 
@@ -215,7 +216,7 @@ function VersionRow({ item }: { item: VersionHistoryItem }) {
       {expanded && (
         <div style={styles.versionExpanded}>
           <span style={styles.detailLabel}>Infrastructure:</span>
-          <span style={styles.detailValue}>{item.infrastructure_type}</span>
+          <span style={styles.detailValue}>{toTitleCase(item.infrastructure_type)}</span>
         </div>
       )}
     </div>
@@ -421,6 +422,8 @@ export default function ReportDetailPage() {
     },
     enabled: !!reportId,
   });
+
+  usePageTitle(report?.serial_number != null ? `Report #${report.serial_number}` : "Report Detail");
 
   useEffect(() => {
     if (report?.id) {
@@ -790,11 +793,11 @@ export default function ReportDetailPage() {
                       value={formatDamageLevel(report.damage_level)}
                       accentColor={damageLevelColor}
                     />
-                    <DamageField label="Infrastructure Type" value={report.infrastructure_type} />
+                    <DamageField label="Infrastructure Type" value={report.infrastructure_type ? toTitleCase(report.infrastructure_type) : undefined} />
                     {(report.infrastructure_name || infrastructureNameFromQA) && (
                       <DamageField label="Entity Name" value={report.infrastructure_name ?? infrastructureNameFromQA} />
                     )}
-                    <DamageField label="Disaster Category" value={report.disaster_type} />
+                    <DamageField label="Disaster Category" value={report.disaster_type ? toTitleCase(report.disaster_type) : undefined} />
                     {(report.debris_blocking || debrisBlockingFromQA) && (
                       <DamageField
                         label="Debris Presence"

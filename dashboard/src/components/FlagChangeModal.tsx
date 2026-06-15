@@ -38,7 +38,7 @@ export default function FlagChangeModal({
   if (!isOpen) return null;
 
   const trimmedLen = comment.trim().length;
-  const isValid = trimmedLen >= 10;
+  const isValid = trimmedLen >= 3;
 
   const displayTo = isEmergencyOverride
     ? overrideTarget === "green" ? "Force to Green" : "Force to Red"
@@ -99,7 +99,7 @@ export default function FlagChangeModal({
                 color: isValid ? "#4caf50" : "#999",
               }}
             >
-              {trimmedLen} / 10 minimum
+              {trimmedLen} / 3 minimum
             </div>
           </div>
 

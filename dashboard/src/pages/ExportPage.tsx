@@ -3,6 +3,7 @@ import { useLocation } from "react-router-dom";
 import Header from "../components/Header";
 import api from "../services/api";
 import { useHasAccess } from "../hooks/useHasAccess";
+import { usePageTitle } from "../hooks/usePageTitle";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -342,6 +343,7 @@ function CountryMultiSelect({
 // ── Component ──────────────────────────────────────────────────────────────────
 
 export default function ExportPage() {
+  usePageTitle("Export");
   const location = useLocation();
   const today = new Date().toISOString().split("T")[0];
 

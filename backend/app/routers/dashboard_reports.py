@@ -153,8 +153,8 @@ class FlagUpdateRequest(BaseModel):
 
     @validator("reason")
     def reason_min_length(cls, v):
-        if len(v.strip()) < 10:
-            raise ValueError("Comment must be at least 10 characters.")
+        if len(v.strip()) < 3:
+            raise ValueError("Comment must be at least 3 characters.")
         return v.strip()
 
 
@@ -170,8 +170,8 @@ class EmergencyOverrideRequest(BaseModel):
 
     @validator("reason")
     def reason_min_length(cls, v):
-        if len(v.strip()) < 10:
-            raise ValueError("Comment must be at least 10 characters.")
+        if len(v.strip()) < 3:
+            raise ValueError("Comment must be at least 3 characters.")
         return v.strip()
 
 

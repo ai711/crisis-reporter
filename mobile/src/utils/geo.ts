@@ -55,3 +55,34 @@ export async function loadCrisisMeta(): Promise<CrisisMeta | null> {
     return null;
   }
 }
+
+const FENCE_RADIUS_KEY = "cr_fence_radius";
+
+export interface FenceRadiusMeta {
+  radius_miles: number;
+  country_overrides: Record<string, number>;
+  cached_at: string;
+}
+
+export async function saveFenceRadiusMeta(meta: FenceRadiusMeta): Promise<void> {
+  try {
+    await AsyncStorage.setItem(FENCE_RADIUS_KEY, JSON.stringify(meta));
+  } catch { /* storage error — skip */ }
+}
+
+export async function loadFenceRadiusMeta(): Promise<FenceRadiusMeta | null> {
+  try {
+    const raw = await AsyncStorage.getItem(FENCE_RADIUS_KEY);
+    return raw ? (JSON.parse(raw) as FenceRadiusMeta) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function getGpsFenceRadius(countryCode: string | null, meta: FenceRadiusMeta | null): number {
+  if (!meta) return 50;
+  if (countryCode != null && meta.country_overrides[countryCode] != null) {
+    return meta.country_overrides[countryCode];
+  }
+  return meta.radius_miles;
+}
