@@ -4,8 +4,9 @@ Called by auto_flagging after a report is assigned Green or Orange status.
 """
 
 import logging
+from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, func
 
 from app.models.property import Property, generate_property_id
 from app.models.report import Report
@@ -107,8 +108,8 @@ async def update_conflict_warning(db: AsyncSession, property_id: str) -> Propert
         log.warning("update_conflict_warning: property %s not found", property_id)
         return prop  # type: ignore[return-value]
 
-    # Confirmed status overrides conflict warning
-    if prop.confirmed_status is not None:
+    # Manual confirmation resolves conflict — auto-confirmation does not
+    if prop.confirmed_status is not None and prop.manual_confirmed_lock:
         prop.has_conflict_warning = False
         await db.flush()
         return prop
@@ -138,3 +139,62 @@ async def update_conflict_warning(db: AsyncSession, property_id: str) -> Propert
 
     await db.flush()
     return prop
+
+
+async def auto_confirm_property(db: AsyncSession, property_id: str) -> None:
+    """Set confirmed_status to the majority damage level across all qualifying reports.
+
+    Rules:
+    - Skips if manual_confirmed_lock is True (human override in place).
+    - Minimum 1 qualifying report required.
+    - Tie-break: the damage level from the most recent qualifying report wins.
+    - Does NOT suppress conflict warning — that stays live so reviewers can spot disagreement
+      even when a majority status has been auto-confirmed.
+    """
+    result = await db.execute(select(Property).where(Property.id == property_id))
+    prop = result.scalar_one_or_none()
+    if not prop or prop.manual_confirmed_lock:
+        return
+
+    # Aggregate: count + most-recent submission timestamp per damage level
+    agg_result = await db.execute(
+        select(
+            Report.damage_level,
+            func.count(Report.id).label("cnt"),
+            func.max(Report.submitted_at).label("latest"),
+        )
+        .where(
+            and_(
+                Report.property_id == property_id,
+                Report.flag_status.in_(["green", "orange"]),
+                Report.damage_level.isnot(None),
+            )
+        )
+        .group_by(Report.damage_level)
+    )
+    rows = agg_result.all()
+    if not rows:
+        return
+
+    max_count = max(r.cnt for r in rows)
+    tied = [r for r in rows if r.cnt == max_count]
+
+    if len(tied) == 1:
+        majority_level = tied[0].damage_level
+    else:
+        # Tie-break: latest submission timestamp
+        majority_level = max(tied, key=lambda r: r.latest).damage_level
+
+    if prop.confirmed_status == majority_level and prop.auto_confirmed:
+        return  # Already up to date
+
+    prop.confirmed_status = majority_level
+    prop.confirmed_by = None
+    prop.confirmed_at = datetime.now(timezone.utc)
+    prop.auto_confirmed = True
+
+    await db.flush()
+    log.info(
+        "auto_confirm_property: %s confirmed_status=%s (majority of qualifying reports)",
+        property_id, majority_level,
+    )

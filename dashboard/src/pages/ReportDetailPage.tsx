@@ -148,7 +148,7 @@ function SectionTitle({ children, aside }: { children: React.ReactNode; aside?: 
   );
 }
 
-function DamageField({ label, value, accentColor = "#e6e8eb" }: { label: string; value: React.ReactNode; accentColor?: string }) {
+function DamageField({ label, value, accentColor = "#e6e8eb" }: { label: React.ReactNode; value: React.ReactNode; accentColor?: string }) {
   const isColored = accentColor !== "#e6e8eb";
   return (
     <div style={{ borderLeft: `2px solid ${accentColor}`, paddingLeft: 14 }}>
@@ -194,6 +194,23 @@ function DetailRow({ label, value }: { label: string; value: React.ReactNode }) 
       <span style={styles.detailLabel}>{label}</span>
       <span style={styles.detailValue}>{value ?? <em style={{ color: "#9ca3af" }}>Not recorded</em>}</span>
     </div>
+  );
+}
+
+function InfoTip({ tip }: { tip: string }) {
+  return (
+    <span
+      title={tip}
+      style={{
+        display: "inline-flex", alignItems: "center", justifyContent: "center",
+        width: 14, height: 14, borderRadius: "50%",
+        background: "#f0f3f7", border: "1px solid #d1d5db",
+        fontSize: 9, fontWeight: 700, color: "#6b7280",
+        cursor: "help", flexShrink: 0, marginLeft: 4, lineHeight: 1, verticalAlign: "middle",
+      }}
+    >
+      i
+    </span>
   );
 }
 
@@ -782,6 +799,52 @@ export default function ReportDetailPage() {
                   {report.location_landmark && (
                     <p style={{ fontSize: 12, color: "#717782", marginTop: 6 }}>Landmark: {report.location_landmark}</p>
                   )}
+                  {/* Extended location metadata */}
+                  {(report.gps_accuracy_meters != null || report.gps_denied || report.location_entry_method ||
+                    report.location_building_name || report.location_note ||
+                    report.building_name_osm || report.building_name_reporter) && (
+                    <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 24px" }}>
+                      {report.gps_accuracy_meters != null && (
+                        <div style={{ fontSize: 11, color: "#717782" }}>
+                          <span style={{ fontWeight: 600, color: "#374151" }}>GPS Accuracy </span>
+                          <span style={{ fontFamily: "monospace" }}>±{report.gps_accuracy_meters.toFixed(1)} m</span>
+                        </div>
+                      )}
+                      {report.location_entry_method && (
+                        <div style={{ fontSize: 11, color: "#717782" }}>
+                          <span style={{ fontWeight: 600, color: "#374151" }}>Entry Method </span>
+                          {toTitleCase(report.location_entry_method)}
+                        </div>
+                      )}
+                      {report.gps_denied && (
+                        <div style={{ fontSize: 11, color: "#dc2626", fontWeight: 600 }}>GPS permission denied</div>
+                      )}
+                      {report.location_building_name && (
+                        <div style={{ fontSize: 11, color: "#717782", gridColumn: "span 2" }}>
+                          <span style={{ fontWeight: 600, color: "#374151" }}>Building Name (Form) </span>
+                          {report.location_building_name}
+                        </div>
+                      )}
+                      {report.location_note && (
+                        <div style={{ fontSize: 11, color: "#717782", gridColumn: "span 2" }}>
+                          <span style={{ fontWeight: 600, color: "#374151" }}>Location Note </span>
+                          {report.location_note}
+                        </div>
+                      )}
+                      {report.building_name_osm && (
+                        <div style={{ fontSize: 11, color: "#717782" }}>
+                          <span style={{ fontWeight: 600, color: "#374151" }}>OSM Name </span>
+                          {report.building_name_osm}
+                        </div>
+                      )}
+                      {report.building_name_reporter && (
+                        <div style={{ fontSize: 11, color: "#717782" }}>
+                          <span style={{ fontWeight: 600, color: "#374151" }}>Reporter Name </span>
+                          {report.building_name_reporter}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </section>
 
                 {/* Damage Assessment Matrix */}
@@ -793,14 +856,25 @@ export default function ReportDetailPage() {
                       value={formatDamageLevel(report.damage_level)}
                       accentColor={damageLevelColor}
                     />
-                    <DamageField label="Infrastructure Type" value={report.infrastructure_type ? toTitleCase(report.infrastructure_type) : undefined} />
+                    {/* Infrastructure types — show array if available, else fall back to scalar */}
+                    {(() => {
+                      const types = report.infrastructure_types && report.infrastructure_types.length > 0
+                        ? report.infrastructure_types
+                        : report.infrastructure_type ? [report.infrastructure_type] : [];
+                      if (types.length === 0) return <DamageField label="Infrastructure Type" value={undefined} />;
+                      const typeLabels = types.map(toTitleCase).join(", ");
+                      const allTypes = report.infrastructure_other
+                        ? `${typeLabels}, ${report.infrastructure_other}`
+                        : typeLabels;
+                      return <DamageField label={`Infrastructure Type${types.length > 1 ? "s" : ""}`} value={allTypes} />;
+                    })()}
                     {(report.infrastructure_name || infrastructureNameFromQA) && (
                       <DamageField label="Entity Name" value={report.infrastructure_name ?? infrastructureNameFromQA} />
                     )}
                     <DamageField label="Disaster Category" value={report.disaster_type ? toTitleCase(report.disaster_type) : undefined} />
                     {(report.debris_blocking || debrisBlockingFromQA) && (
                       <DamageField
-                        label="Debris Presence"
+                        label={<>Debris Presence <InfoTip tip="Derived from Q5 in the question_answers JSON — reporter's assessment of debris blocking access." /></>}
                         value={
                           (report.debris_blocking === "yes" || debrisBlockingFromQA === "Yes")
                             ? "Yes (Hazardous)"
@@ -816,7 +890,7 @@ export default function ReportDetailPage() {
 
                 {/* Community Impact Brief */}
                 <section style={{ ...styles.primarySection, marginBottom: 0, paddingBottom: 0, borderBottom: "none" }}>
-                  <SectionTitle>Community Impact Brief</SectionTitle>
+                  <SectionTitle aside={<InfoTip tip="Electricity, Health Services, and Priority Needs are derived from Q6–Q8 in the question_answers JSON array — they are not stored as separate database columns." />}>Community Impact Brief</SectionTitle>
                   <div style={styles.impactCard}>
                     <ImpactRow icon="bolt" title="Electricity" value={electricityValue} />
                     <ImpactRow icon="local_hospital" title="Health Services" value={healthValue} />
@@ -880,6 +954,12 @@ export default function ReportDetailPage() {
                 {report.flow_started_at && (
                   <DetailRow label="Flow started" value={new Date(report.flow_started_at).toLocaleString()} />
                 )}
+                {report.queued_at && (
+                  <DetailRow label="Queued offline at" value={formatDateTime(report.queued_at)} />
+                )}
+                {report.synced_at && (
+                  <DetailRow label="Synced to server" value={formatDateTime(report.synced_at)} />
+                )}
                 {report.photos.length > 0 && (
                   <DetailRow label="Photo first uploaded" value={formatDateTime(report.photos[0].created_at)} />
                 )}
@@ -922,7 +1002,38 @@ export default function ReportDetailPage() {
                 <MetaRow label="Offline Queue" value="Yes — synced from device" />
               )}
               {report.question_package_version && (
-                <MetaRow label="Q Package" value={report.question_package_version} mono noBorder />
+                <MetaRow label="Q Package" value={report.question_package_version} mono />
+              )}
+              {/* Device & Network sub-section */}
+              {(report.device_model || report.device_brand || report.device_os_version || report.network_type || report.mnc) && (
+                <>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: "#9ca3af", letterSpacing: "0.08em", textTransform: "uppercase", margin: "14px 0 8px" }}>Device &amp; Network</div>
+                  {report.device_brand && report.device_model && (
+                    <MetaRow label="Device" value={`${report.device_brand} ${report.device_model}`} mono />
+                  )}
+                  {report.device_brand && !report.device_model && (
+                    <MetaRow label="Brand" value={report.device_brand} mono />
+                  )}
+                  {!report.device_brand && report.device_model && (
+                    <MetaRow label="Model" value={report.device_model} mono />
+                  )}
+                  {report.device_os_version && (
+                    <MetaRow label="OS Version" value={report.device_os_version} mono />
+                  )}
+                  {report.network_type && (
+                    <MetaRow label="Network" value={report.network_type.toUpperCase()} />
+                  )}
+                  {report.mnc && (
+                    <MetaRow label="MNC" value={report.mnc} mono />
+                  )}
+                </>
+              )}
+              {/* Carrier */}
+              {(report.carrier_name || report.mcc) && (
+                <>
+                  {report.carrier_name && <MetaRow label="Carrier" value={report.carrier_name} />}
+                  {report.mcc && <MetaRow label="MCC" value={report.mcc} mono noBorder />}
+                </>
               )}
             </div>
 

@@ -445,6 +445,7 @@ async def auto_flag_report(report_id: str, delay: int = 10) -> None:
                 try:
                     from app.services.property_service import (
                         get_or_create_property,
+                        auto_confirm_property,
                         update_conflict_warning,
                     )
                     async with AsyncSessionLocal() as prop_db:
@@ -453,6 +454,7 @@ async def auto_flag_report(report_id: str, delay: int = 10) -> None:
                             prop = await get_or_create_property(prop_db, prop_report)
                             prop_report.property_id = prop.id
                             await prop_db.flush()
+                            await auto_confirm_property(prop_db, prop.id)
                             await update_conflict_warning(prop_db, prop.id)
                             await _link_report_to_projects(prop_db, prop_report)
                             await prop_db.commit()

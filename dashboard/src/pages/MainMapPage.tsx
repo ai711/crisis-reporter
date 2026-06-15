@@ -418,7 +418,7 @@ export default function MainMapPage() {
           </div>
           <div style={{ ...styles.statItem, borderLeft: "3px solid #f2994a" }}>
             <span style={{ ...styles.statNumber, color: "#f2994a" }}>{stats.orange_count}</span>
-            <span style={styles.statLabel}>Approved</span>
+            <span style={styles.statLabel}>Manually Approved</span>
           </div>
           <div style={{ ...styles.statItem, borderLeft: "3px solid #e53e3e" }}>
             <span style={{ ...styles.statNumber, color: "#e53e3e" }}>{stats.red_count}</span>

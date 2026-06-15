@@ -5,10 +5,10 @@ import Header from "../components/Header";
 import PageSpinner from "../components/PageSpinner";
 import EmptyState from "../components/EmptyState";
 import ErrorState from "../components/ErrorState";
-import { getProperties, getDashboardProjects } from "../services/api";
+import { getProperties, getDashboardProjects, getPropertyStats } from "../services/api";
 import { formatDamageLevel, formatDateTime } from "../utils/formatters";
 import { usePageTitle } from "../hooks/usePageTitle";
-import type { Property, PropertiesListResponse, ProjectListRow, ProjectsListResponse } from "../types";
+import type { Property, PropertiesListResponse, PropertyStats, ProjectListRow, ProjectsListResponse } from "../types";
 
 // ── Damage colours ────────────────────────────────────────────────────────────
 
@@ -47,6 +47,16 @@ function FilterIcon() {
     <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor"
       strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+    </svg>
+  );
+}
+
+function ColumnsIcon() {
+  return (
+    <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="3" y="3" width="7" height="18" rx="1" />
+      <rect x="14" y="3" width="7" height="18" rx="1" />
     </svg>
   );
 }
@@ -91,6 +101,35 @@ const DAMAGE_LEVEL_OPTIONS: { value: string; label: string }[] = [
 
 const PAGE_SIZES = [100, 200, 300, 400, 500];
 
+// ── Column definitions ────────────────────────────────────────────────────────
+
+interface ColDef {
+  id: string;
+  label: string;
+  sortField?: SortField;
+  alwaysVisible?: boolean;
+  defaultHidden?: boolean;
+  tooltip?: string;
+}
+
+const COLUMN_DEFS: ColDef[] = [
+  { id: "property_id",           label: "Property ID",         sortField: "property_id",          alwaysVisible: true },
+  { id: "display_name",          label: "Property Name",       sortField: "display_name",   tooltip: "Override name → building name from reporter/OSM → GPS coords fallback when no name is available" },
+  { id: "address",               label: "Address / GPS",       sortField: "address",        tooltip: "Free-text address from the most recent report, or GPS coordinates if no address was provided" },
+  { id: "country",               label: "Country",             sortField: "country" },
+  { id: "current_damage_level",  label: "Current Damage",      sortField: "current_damage_level" },
+  { id: "confirmed_status",      label: "Confirmed Status",    sortField: "confirmed_status" },
+  { id: "has_conflict_warning",  label: "Conflict",            sortField: "has_conflict_warning" },
+  { id: "total_reports",         label: "Reports",             sortField: "total_reports" },
+  { id: "total_reporters",       label: "Reporters",           sortField: "total_reporters",       defaultHidden: true },
+  { id: "most_recent_report_at", label: "Most Recent Report",  sortField: "most_recent_report_at" },
+  { id: "property_status",       label: "Status",              sortField: "property_status" },
+];
+
+const DEFAULT_VISIBLE = new Set(
+  COLUMN_DEFS.filter((c) => !c.defaultHidden).map((c) => c.id)
+);
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 function SearchIcon() {
@@ -119,6 +158,9 @@ export default function LocationsPage() {
   const [pendingFilters, setPendingFilters] = useState<Filters>({ ...DEFAULT_FILTERS });
   const [fetchProjects, setFetchProjects] = useState(false);
   const filterRef = useRef<HTMLDivElement>(null);
+  const [visibleCols, setVisibleCols] = useState<Set<string>>(DEFAULT_VISIBLE);
+  const [colsOpen, setColsOpen] = useState(false);
+  const colsRef = useRef<HTMLDivElement>(null);
 
   // Fetch projects when filter panel is first opened
   const { data: projectsData } = useQuery<ProjectsListResponse>({
@@ -132,6 +174,16 @@ export default function LocationsPage() {
   });
   const projectOptions: ProjectListRow[] = projectsData?.items ?? [];
 
+  // Summary stats (global, unfiltered)
+  const { data: statsData } = useQuery<PropertyStats>({
+    queryKey: ["property-stats"],
+    queryFn: async () => {
+      const res = await getPropertyStats();
+      return res.data as PropertyStats;
+    },
+    staleTime: 1000 * 60 * 2,
+  });
+
   // Close filter panel on outside click
   useEffect(() => {
     if (!filterOpen) return;
@@ -143,6 +195,18 @@ export default function LocationsPage() {
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, [filterOpen]);
+
+  // Close columns panel on outside click
+  useEffect(() => {
+    if (!colsOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (colsRef.current && !colsRef.current.contains(e.target as Node)) {
+        setColsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [colsOpen]);
 
   // Build query params
   const buildParams = (): Record<string, string | number | boolean> => {
@@ -250,6 +314,23 @@ export default function LocationsPage() {
       <Header title="Location Page" subtitle="Building and area-level damage data" />
 
       <div style={styles.body}>
+        {/* ── Summary stat blocks ── */}
+        {statsData && (
+          <div style={styles.statRow}>
+            {[
+              { label: "Total Properties", value: statsData.total, color: "var(--c-primary-container)", bg: "rgba(4,104,177,0.07)" },
+              { label: "Confirmed",         value: statsData.confirmed,    color: "var(--c-flag-green)",  bg: "rgba(34,197,94,0.08)" },
+              { label: "With Conflict",     value: statsData.with_conflict, color: "var(--c-flag-orange)", bg: "rgba(245,166,35,0.08)" },
+              { label: "Recovered",         value: statsData.recovered,    color: "var(--c-text-muted)",  bg: "var(--c-surface-low)" },
+            ].map(({ label, value, color, bg }) => (
+              <div key={label} style={{ ...styles.statCard, background: bg }}>
+                <span style={{ fontSize: 22, fontWeight: 800, color, lineHeight: 1 }}>{value.toLocaleString()}</span>
+                <span style={{ fontSize: 11, fontWeight: 600, color: "var(--c-text-muted)", marginTop: 4, textTransform: "uppercase" as const, letterSpacing: "0.06em" }}>{label}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* ── Page context strip ── */}
         <div style={styles.contextStrip}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -302,7 +383,7 @@ export default function LocationsPage() {
             </button>
 
             {filterOpen && (
-              <div style={styles.filterPanel}>
+              <div style={styles.filterPanel} onClick={(e) => e.stopPropagation()}>
                 <div style={styles.filterTitle}>Filter Properties</div>
 
                 {/* Conflict warning — highlighted as primary QA filter */}
@@ -489,6 +570,57 @@ export default function LocationsPage() {
               </div>
             )}
           </div>
+
+          {/* ── Columns visibility toggle ── */}
+          <div style={{ position: "relative" }} ref={colsRef}>
+            <button
+              style={{
+                ...styles.filterBtn,
+                background: visibleCols.size < COLUMN_DEFS.length ? "rgba(4,104,177,0.08)" : "var(--c-surface-low)",
+                border: visibleCols.size < COLUMN_DEFS.length ? "1.5px solid var(--c-primary-container)" : "1.5px solid var(--c-border)",
+                color: visibleCols.size < COLUMN_DEFS.length ? "var(--c-primary-container)" : "var(--c-text-secondary)",
+              }}
+              onClick={() => setColsOpen((o) => !o)}
+            >
+              <ColumnsIcon />
+              <span style={{ marginLeft: 6 }}>Columns</span>
+              {visibleCols.size < COLUMN_DEFS.length && (
+                <span style={styles.filterBadge}>{COLUMN_DEFS.length - visibleCols.size} hidden</span>
+              )}
+            </button>
+            {colsOpen && (
+              <div style={{ ...styles.filterPanel, width: 220, padding: "16px" }} onClick={(e) => e.stopPropagation()}>
+                <div style={styles.filterTitle}>Visible Columns</div>
+                {COLUMN_DEFS.map((col) => (
+                  <label key={col.id} style={{ ...styles.filterCheckLabel, opacity: col.alwaysVisible ? 0.5 : 1 }}>
+                    <input
+                      type="checkbox"
+                      checked={visibleCols.has(col.id)}
+                      disabled={!!col.alwaysVisible}
+                      onChange={(e) => {
+                        setVisibleCols((prev) => {
+                          const next = new Set(prev);
+                          if (e.target.checked) next.add(col.id);
+                          else next.delete(col.id);
+                          return next;
+                        });
+                      }}
+                      style={{ marginRight: 8 }}
+                    />
+                    {col.label}
+                  </label>
+                ))}
+                <div style={{ ...styles.filterActions, marginTop: 12 }}>
+                  <button style={styles.filterClearBtn} onClick={() => setVisibleCols(DEFAULT_VISIBLE)}>
+                    Reset
+                  </button>
+                  <button style={styles.filterApplyBtn} onClick={() => setColsOpen(false)}>
+                    Done
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* ── Show unreviewed toggle ── */}
@@ -554,27 +686,14 @@ export default function LocationsPage() {
             <table style={styles.table}>
               <thead>
                 <tr style={styles.thead}>
-                  {(
-                    [
-                      ["property_id", "Property ID"],
-                      ["display_name", "Property Name"],
-                      ["address", "Address / GPS"],
-                      ["country", "Country"],
-                      ["current_damage_level", "Current Damage"],
-                      ["confirmed_status", "Confirmed Status"],
-                      ["has_conflict_warning", "Conflict"],
-                      ["total_reports", "Reports"],
-                      ["total_reporters", "Reporters"],
-                      ["most_recent_report_at", "Most Recent Report"],
-                      ["property_status", "Status"],
-                    ] as [SortField, string][]
-                  ).map(([field, label]) => (
+                  {COLUMN_DEFS.filter((c) => visibleCols.has(c.id)).map((col) => (
                     <th
-                      key={field}
+                      key={col.id}
                       style={styles.th}
-                      onClick={() => handleSort(field)}
+                      onClick={() => col.sortField && handleSort(col.sortField)}
+                      title={col.tooltip}
                     >
-                      {label} {sortIndicator(field)}
+                      {col.label} {col.sortField && sortIndicator(col.sortField)}
                     </th>
                   ))}
                 </tr>
@@ -590,6 +709,104 @@ export default function LocationsPage() {
                     ? DAMAGE_COLORS[prop.confirmed_status] ?? "var(--c-text-muted)"
                     : null;
 
+                  const renderCell = (colId: string) => {
+                    switch (colId) {
+                      case "property_id":
+                        return (
+                          <td key={colId} style={styles.td}>
+                            <span
+                              style={styles.idLink}
+                              onClick={(e) => { e.stopPropagation(); window.open("/locations/" + prop.property_id, "_blank"); }}
+                              role="link"
+                              tabIndex={0}
+                              title={prop.property_id ?? ""}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") window.open("/locations/" + prop.property_id, "_blank");
+                              }}
+                            >
+                              {(prop.property_id ?? "").slice(0, 8)}…
+                            </span>
+                          </td>
+                        );
+                      case "display_name":
+                        return <td key={colId} style={styles.td}>{prop.display_name}</td>;
+                      case "address":
+                        return (
+                          <td key={colId} style={styles.td}>
+                            {prop.address
+                              ? prop.address
+                              : prop.latitude != null && prop.longitude != null
+                                ? `${prop.latitude.toFixed(5)}, ${prop.longitude.toFixed(5)}`
+                                : <span style={styles.muted}>No coordinates</span>}
+                          </td>
+                        );
+                      case "country":
+                        return <td key={colId} style={styles.td}>{prop.country ?? "—"}</td>;
+                      case "current_damage_level":
+                        return (
+                          <td key={colId} style={styles.td}>
+                            {prop.current_damage_level && dmgColor ? (
+                              <span style={{ ...styles.pill, background: dmgColor }}>
+                                {formatDamageLevel(prop.current_damage_level)}
+                              </span>
+                            ) : <span style={styles.muted}>—</span>}
+                          </td>
+                        );
+                      case "confirmed_status":
+                        return (
+                          <td key={colId} style={styles.td}>
+                            {prop.confirmed_status && confirmedColor ? (
+                              <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+                                <span style={{ ...styles.pill, background: confirmedColor }}>
+                                  {!prop.auto_confirmed && <LockIcon />}
+                                  {formatDamageLevel(prop.confirmed_status)}
+                                </span>
+                                {prop.auto_confirmed && (
+                                  <span style={styles.autoBadge} title="Set automatically based on majority of reports">Auto</span>
+                                )}
+                              </span>
+                            ) : null}
+                          </td>
+                        );
+                      case "has_conflict_warning":
+                        return (
+                          <td key={colId} style={styles.td}>
+                            {prop.has_conflict_warning && (
+                              <span style={styles.conflictIcon} title="Conflicting assessments from reporters">
+                                <AlertTriangleIcon size={18} />
+                              </span>
+                            )}
+                          </td>
+                        );
+                      case "total_reports":
+                        return <td key={colId} style={{ ...styles.td, textAlign: "center" }}>{prop.total_reports}</td>;
+                      case "total_reporters":
+                        return <td key={colId} style={{ ...styles.td, textAlign: "center" }}>{prop.total_reporters}</td>;
+                      case "most_recent_report_at":
+                        return (
+                          <td key={colId} style={styles.td}>
+                            {prop.most_recent_report_at
+                              ? formatDateTime(prop.most_recent_report_at)
+                              : <span style={styles.muted}>—</span>}
+                          </td>
+                        );
+                      case "property_status":
+                        return (
+                          <td key={colId} style={styles.td}>
+                            <span style={{
+                              fontWeight: 600,
+                              fontSize: "var(--text-sm)",
+                              color: prop.property_status === "Active" ? "var(--c-flag-green)" : "var(--c-text-muted)",
+                            }}>
+                              {prop.property_status}
+                            </span>
+                          </td>
+                        );
+                      default:
+                        return <td key={colId} style={styles.td}>—</td>;
+                    }
+                  };
+
                   return (
                     <tr
                       key={prop.property_id}
@@ -604,95 +821,7 @@ export default function LocationsPage() {
                       onMouseLeave={() => setHoveredRow(null)}
                       onClick={() => window.open("/locations/" + prop.property_id, "_blank")}
                     >
-                      {/* Property ID */}
-                      <td style={styles.td}>
-                        <span
-                          style={styles.idLink}
-                          onClick={(e) => { e.stopPropagation(); window.open("/locations/" + prop.property_id, "_blank"); }}
-                          role="link"
-                          tabIndex={0}
-                          title={prop.property_id ?? ""}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") window.open("/locations/" + prop.property_id, "_blank");
-                          }}
-                        >
-                          {(prop.property_id ?? "").slice(0, 8)}…
-                        </span>
-                      </td>
-
-                      {/* Property Name */}
-                      <td style={styles.td}>{prop.display_name}</td>
-
-                      {/* Address / GPS */}
-                      <td style={styles.td}>
-                        {prop.address
-                          ? prop.address
-                          : prop.latitude != null && prop.longitude != null
-                            ? `${prop.latitude.toFixed(5)}, ${prop.longitude.toFixed(5)}`
-                            : <span style={styles.muted}>No coordinates</span>}
-                      </td>
-
-                      {/* Country */}
-                      <td style={styles.td}>{prop.country ?? "—"}</td>
-
-                      {/* Current Damage Level */}
-                      <td style={styles.td}>
-                        {prop.current_damage_level && dmgColor ? (
-                          <span style={{ ...styles.pill, background: dmgColor }}>
-                            {formatDamageLevel(prop.current_damage_level)}
-                          </span>
-                        ) : (
-                          <span style={styles.muted}>—</span>
-                        )}
-                      </td>
-
-                      {/* Confirmed Status */}
-                      <td style={styles.td}>
-                        {prop.confirmed_status && confirmedColor ? (
-                          <span style={{ ...styles.pill, background: confirmedColor }}>
-                            <LockIcon />
-                            {formatDamageLevel(prop.confirmed_status)}
-                          </span>
-                        ) : null}
-                      </td>
-
-                      {/* Conflict Warning */}
-                      <td style={styles.td}>
-                        {prop.has_conflict_warning && (
-                          <span
-                            style={styles.conflictIcon}
-                            title="Conflicting assessments from reporters"
-                          >
-                            <AlertTriangleIcon size={18} />
-                          </span>
-                        )}
-                      </td>
-
-                      {/* Total Reports */}
-                      <td style={{ ...styles.td, textAlign: "center" }}>{prop.total_reports}</td>
-
-                      {/* Total Reporters */}
-                      <td style={{ ...styles.td, textAlign: "center" }}>{prop.total_reporters}</td>
-
-                      {/* Most Recent Report */}
-                      <td style={styles.td}>
-                        {prop.most_recent_report_at
-                          ? formatDateTime(prop.most_recent_report_at)
-                          : <span style={styles.muted}>—</span>}
-                      </td>
-
-                      {/* Property Status */}
-                      <td style={styles.td}>
-                        <span
-                          style={{
-                            fontWeight: 600,
-                            fontSize: "var(--text-sm)",
-                            color: prop.property_status === "Active" ? "var(--c-flag-green)" : "var(--c-text-muted)",
-                          }}
-                        >
-                          {prop.property_status}
-                        </span>
-                      </td>
+                      {COLUMN_DEFS.filter((c) => visibleCols.has(c.id)).map((col) => renderCell(col.id))}
                     </tr>
                   );
                 })}
@@ -754,6 +883,20 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     flexDirection: "column",
     gap: 0,
+  },
+  statRow: {
+    display: "grid",
+    gridTemplateColumns: "repeat(4, 1fr)",
+    gap: 12,
+    marginBottom: 16,
+  },
+  statCard: {
+    display: "flex",
+    flexDirection: "column" as const,
+    alignItems: "flex-start",
+    padding: "14px 18px",
+    borderRadius: "var(--radius-lg)",
+    border: "1px solid var(--c-border-ghost)",
   },
   contextStrip: {
     display: "flex",
@@ -1037,6 +1180,18 @@ const styles: Record<string, React.CSSProperties> = {
     color: "var(--c-flag-orange)",
     display: "inline-flex",
     alignItems: "center",
+  },
+  autoBadge: {
+    fontSize: 9,
+    fontWeight: 700,
+    color: "var(--c-text-muted)",
+    background: "var(--c-surface-low)",
+    border: "1px solid var(--c-border)",
+    borderRadius: 4,
+    padding: "2px 5px",
+    letterSpacing: "0.04em",
+    textTransform: "uppercase" as const,
+    flexShrink: 0,
   },
   sortNeutral: {
     color: "var(--c-text-subtle)",

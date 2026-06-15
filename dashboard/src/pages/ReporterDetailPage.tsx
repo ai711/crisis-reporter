@@ -94,6 +94,23 @@ function Toast({ message, onDone }: { message: string; onDone: () => void }) {
 
 // ── Card ───────────────────────────────────────────────────────────────────────
 
+function InfoTip({ tip }: { tip: string }) {
+  return (
+    <span
+      title={tip}
+      style={{
+        display: "inline-flex", alignItems: "center", justifyContent: "center",
+        width: 14, height: 14, borderRadius: "50%",
+        background: "var(--c-surface-low)", border: "1px solid var(--c-border)",
+        fontSize: 9, fontWeight: 700, color: "var(--c-text-muted)",
+        cursor: "help", flexShrink: 0, lineHeight: 1,
+      }}
+    >
+      i
+    </span>
+  );
+}
+
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="card card-padded">
@@ -380,6 +397,75 @@ function PauseSection({
         />
       )}
     </Card>
+  );
+}
+
+// ── Account Restrictions & Auto-block History ────────────────────────────────
+
+function AccountRestrictionsSection({ reporter }: { reporter: ReporterDetail }) {
+  const hasBlockData = !!(reporter.block_reason || reporter.blocked_at || reporter.auto_blocked_at || reporter.pending_auto_block_confirmation);
+  const [open, setOpen] = useState(hasBlockData);
+
+  const row = (label: string, value: React.ReactNode) => (
+    <div style={{ display: "flex", gap: 8, fontSize: 13, padding: "5px 0", borderBottom: "1px solid var(--c-border-ghost)" }}>
+      <span style={{ minWidth: 220, color: "var(--c-text-muted)", flexShrink: 0 }}>{label}</span>
+      <span style={{ color: "var(--c-text-primary)", fontFamily: typeof value === "string" && value.length > 20 ? "monospace" : undefined }}>{value || <em style={{ color: "var(--c-text-subtle)" }}>—</em>}</span>
+    </div>
+  );
+
+  return (
+    <div className="card card-padded">
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{ display: "flex", alignItems: "center", gap: 8, background: "none", border: "none", cursor: "pointer", width: "100%", padding: 0 }}
+      >
+        <h2 className="section-label" style={{ margin: 0, flex: 1, textAlign: "left" }}>
+          RESTRICTIONS & AUTO-BLOCK LOG
+        </h2>
+        {hasBlockData && (
+          <span style={{ fontSize: 11, background: "#FEF2F2", color: "#C62828", borderRadius: 4, padding: "2px 8px", fontWeight: 600 }}>
+            Data present
+          </span>
+        )}
+        <span style={{ fontSize: 18, color: "var(--c-text-muted)", lineHeight: 1 }}>{open ? "▲" : "▼"}</span>
+      </button>
+
+      {!open && !hasBlockData && (
+        <p style={{ fontSize: 13, color: "var(--c-text-subtle)", marginTop: 8 }}>No block or auto-block events recorded.</p>
+      )}
+
+      {open && (
+        <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 0 }}>
+          {/* Manual block */}
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", color: "var(--c-text-muted)", marginBottom: 6, textTransform: "uppercase" }}>Manual Block</div>
+            {row("Block Reason", reporter.block_reason)}
+            {row("Blocked At", reporter.blocked_at ? formatDateTime(reporter.blocked_at) : null)}
+          </div>
+
+          {/* Pause */}
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", color: "var(--c-text-muted)", marginBottom: 6, textTransform: "uppercase" }}>Submission Pause</div>
+            {row("Pause Reason", reporter.pause_reason)}
+            {row("Pause Expires At", reporter.pause_expires_at ? formatDateTime(reporter.pause_expires_at) : null)}
+          </div>
+
+          {/* Auto-block */}
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", color: "var(--c-text-muted)", marginBottom: 6, textTransform: "uppercase" }}>Auto-block (Rule 1)</div>
+            {row("Auto-blocked At", reporter.auto_blocked_at ? formatDateTime(reporter.auto_blocked_at) : null)}
+            {row("Auto-block Expires At", reporter.auto_block_expires_at ? formatDateTime(reporter.auto_block_expires_at) : null)}
+            {row("Pending Confirmation", reporter.pending_auto_block_confirmation ? "Yes — awaiting staff review" : reporter.pending_auto_block_confirmation === false ? "No" : null)}
+            {row("Confirmed", reporter.auto_block_confirmed === true ? "Yes" : reporter.auto_block_confirmed === false ? "No" : null)}
+            {row("Confirmed By", reporter.auto_block_confirmed_by)}
+            {row("Confirmed At", reporter.auto_block_confirmed_at ? formatDateTime(reporter.auto_block_confirmed_at) : null)}
+            {row("Matched Blocked Reporter ID", reporter.matched_blocked_reporter_id
+              ? <button style={{ fontFamily: "monospace", fontSize: 12, background: "none", border: "none", cursor: "pointer", color: "var(--c-primary-container)", textDecoration: "underline", padding: 0 }} onClick={() => window.open("/reporters/" + reporter.matched_blocked_reporter_id, "_blank")}>{reporter.matched_blocked_reporter_id}</button>
+              : null)}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -839,9 +925,18 @@ export default function ReporterDetailPage() {
               <DetailRow label="IP Address" value={reporter.ip_address ? <span style={{ fontFamily: "monospace" }}>{reporter.ip_address}</span> : "—"} />
               <DetailRow label="Country" value={reporter.country || "—"} />
               <DetailRow label="MCC (cell tower)" value={reporter.mcc || "—"} />
-              <DetailRow label="Device Model" value={reporter.device_model || "—"} />
-              <DetailRow label="Device Brand" value={reporter.device_brand || "—"} />
-              <DetailRow label="Network Type" value={reporter.network_type || "—"} />
+              <DetailRow
+                label={<span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>Device Model <InfoTip tip="From the reporter's most recent report — reflects their latest device, not registration." /></span> as unknown as string}
+                value={reporter.device_model || "—"}
+              />
+              <DetailRow
+                label={<span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>Device Brand <InfoTip tip="From the reporter's most recent report — reflects their latest device, not registration." /></span> as unknown as string}
+                value={reporter.device_brand || "—"}
+              />
+              <DetailRow
+                label={<span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>Network Type <InfoTip tip="From the reporter's most recent report — reflects their latest known network." /></span> as unknown as string}
+                value={reporter.network_type || "—"}
+              />
             </div>
             <div>
               <DetailRow label="Platform" value={platformDisplay(reporter)} />
@@ -953,13 +1048,16 @@ export default function ReporterDetailPage() {
           }}
         />
 
-        {/* Section 6: Reports */}
+        {/* Section 6: Restrictions & Auto-block History */}
+        <AccountRestrictionsSection reporter={reporter} />
+
+        {/* Section 7: Reports */}
         <ReportsSection reporterId={reporter.reporter_id} />
 
-        {/* Section 7: Badges */}
+        {/* Section 8: Badges */}
         <BadgesSection reporterId={reporter.reporter_id} />
 
-        {/* Section 8: Activity Log */}
+        {/* Section 9: Activity Log */}
         <ActivityLogSection reporterId={reporter.reporter_id} />
       </div>
     </div>

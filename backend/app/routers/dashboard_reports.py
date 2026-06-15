@@ -76,21 +76,42 @@ class ReportDetail(BaseModel):
     building_name: Optional[str]
     damage_level: str
     infrastructure_type: str
+    infrastructure_types: Optional[list] = None
+    infrastructure_other: Optional[str] = None
     disaster_type: Optional[str]
     description: Optional[str]
     description_translated: Optional[str]
     flag_status: str
     platform: str
     language_code: str
+    reporter_country: Optional[str] = None
     gps_latitude: Optional[float]
     gps_longitude: Optional[float]
+    gps_accuracy_meters: Optional[float] = None
     gps_available: bool
+    gps_denied: Optional[bool] = None
     location_address: Optional[str]
     location_landmark: Optional[str]
+    location_building_name: Optional[str] = None
+    location_note: Optional[str] = None
+    location_entry_method: Optional[str] = None
+    building_name_osm: Optional[str] = None
+    building_name_reporter: Optional[str] = None
+    building_centroid_lat: Optional[float] = None
+    building_centroid_lng: Optional[float] = None
     was_queued: bool
+    queued_at: Optional[datetime] = None
+    synced_at: Optional[datetime] = None
     mcc: Optional[str]
+    mnc: Optional[str] = None
     carrier_name: Optional[str]
+    device_model: Optional[str] = None
+    device_brand: Optional[str] = None
+    device_os_version: Optional[str] = None
+    network_type: Optional[str] = None
+    app_version: Optional[str] = None
     submitted_at: datetime
+    flow_started_at: Optional[datetime] = None
     submission_started_at: Optional[datetime]
     submission_submitted_at: Optional[datetime]
     created_at: datetime
@@ -98,7 +119,6 @@ class ReportDetail(BaseModel):
     photos: list[PhotoSummary]
     flag_events: list[FlagEventSummary]
     versions: list[VersionHistoryItem]
-    # New fields
     property_id: Optional[str] = None
     projects: list[ProjectRef] = []
     submission_ip: Optional[str] = None
@@ -449,21 +469,42 @@ async def get_report_detail(
         building_name=report.building_name,
         damage_level=report.damage_level,
         infrastructure_type=report.infrastructure_type,
+        infrastructure_types=report.infrastructure_types,
+        infrastructure_other=report.infrastructure_other,
         disaster_type=report.disaster_type,
         description=report.description,
         description_translated=report.description_translated,
         flag_status=report.flag_status,
         platform=report.platform,
         language_code=report.language_code,
+        reporter_country=report.reporter_country,
         gps_latitude=report.gps_latitude,
         gps_longitude=report.gps_longitude,
+        gps_accuracy_meters=report.gps_accuracy_meters,
         gps_available=report.gps_available,
+        gps_denied=report.gps_denied,
         location_address=report.location_address,
         location_landmark=report.location_landmark,
+        location_building_name=report.location_building_name,
+        location_note=report.location_note,
+        location_entry_method=report.location_entry_method,
+        building_name_osm=report.building_name_osm,
+        building_name_reporter=report.building_name_reporter,
+        building_centroid_lat=report.building_centroid_lat,
+        building_centroid_lng=report.building_centroid_lng,
         was_queued=report.was_queued,
+        queued_at=report.queued_at,
+        synced_at=report.synced_at,
         mcc=report.mcc,
+        mnc=report.mnc,
         carrier_name=report.carrier_name,
+        device_model=report.device_model,
+        device_brand=report.device_brand,
+        device_os_version=report.device_os_version,
+        network_type=report.network_type,
+        app_version=report.app_version,
         submitted_at=report.submitted_at,
+        flow_started_at=report.flow_started_at,
         submission_started_at=report.submission_started_at,
         submission_submitted_at=report.submission_submitted_at,
         created_at=report.created_at,

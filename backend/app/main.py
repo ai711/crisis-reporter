@@ -1079,6 +1079,12 @@ WHERE code IN (
     # reporters.device_id_encrypted — auto-create path in reports.py now stores
     # device_id on auto-created profiles; column already exists from initial schema.
     # No ADD COLUMN needed — just ensuring the unique index above is in place.
+
+    # Property.auto_confirmed — True when confirmed_status was set by the auto-confirm majority loop
+    "ALTER TABLE properties ADD COLUMN IF NOT EXISTS auto_confirmed BOOLEAN NOT NULL DEFAULT FALSE",
+    # Property.manual_confirmed_lock — True when a dashboard user has manually touched confirmed_status;
+    # while True, the auto-confirm loop skips this property entirely
+    "ALTER TABLE properties ADD COLUMN IF NOT EXISTS manual_confirmed_lock BOOLEAN NOT NULL DEFAULT FALSE",
 ]
 
 

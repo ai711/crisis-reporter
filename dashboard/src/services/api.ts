@@ -120,6 +120,9 @@ api.interceptors.response.use(
 export const getProperties = (params: Record<string, string | number | boolean>) =>
   api.get('/api/properties', { params });
 
+export const getPropertyStats = () =>
+  api.get('/api/properties/stats');
+
 export const getPropertyDetail = (propertyId: string, projectId?: string) =>
   api.get(`/api/properties/${propertyId}`, {
     params: projectId ? { project_id: projectId } : {}

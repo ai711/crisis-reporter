@@ -29,12 +29,17 @@ class Property(Base):
     override_lat: Mapped[float | None] = mapped_column(Float, nullable=True)
     override_lng: Mapped[float | None] = mapped_column(Float, nullable=True)
 
-    # Confirmed status — set manually by dashboard users
+    # Confirmed status — auto-set by majority logic, or manually overridden by dashboard users
     confirmed_status: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)
     confirmed_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("dashboard_users.id"), nullable=True
     )
     confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # True when confirmed_status was set by the auto-confirm loop (majority vote)
+    auto_confirmed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, server_default="false")
+    # True when a dashboard user has manually set/changed/cleared confirmed_status;
+    # while True, the auto-confirm loop skips this property
+    manual_confirmed_lock: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, server_default="false")
 
     # Recovery status
     is_recovered: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)

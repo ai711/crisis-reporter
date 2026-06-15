@@ -56,6 +56,8 @@ class PropertyListItem(BaseModel):
     country: Optional[str]
     current_damage_level: Optional[str]
     confirmed_status: Optional[str]
+    auto_confirmed: bool
+    manual_confirmed_lock: bool
     has_conflict_warning: bool
     total_reports: int
     total_reporters: int
@@ -69,6 +71,13 @@ class PropertyListResponse(BaseModel):
     total: int
     cursor: Optional[str]
     has_more: bool
+
+
+class PropertyStats(BaseModel):
+    total: int
+    confirmed: int
+    with_conflict: int
+    recovered: int
 
 
 class ReporterRow(BaseModel):
@@ -99,6 +108,8 @@ class PropertyDetail(BaseModel):
     country: Optional[str]
     crisis_id: Optional[str]
     confirmed_status: Optional[str]
+    auto_confirmed: bool
+    manual_confirmed_lock: bool
     has_conflict_warning: bool
     conflict_warning_details: Optional[ConflictWarningDetail]
     total_reports: int
@@ -246,11 +257,10 @@ async def _build_property_list_item(
     address = recent_row[1] if recent_row else None
     report_name = recent_row[2] if recent_row else None
 
-    # Country from most recent report
+    # Country from the most recent report's reporter_country field
     country_row = await db.execute(
-        select(Reporter.country_code)
-        .join(Report, Report.reporter_id == Reporter.id)
-        .where(and_(*filters, Report.reporter_id.isnot(None)))
+        select(Report.reporter_country)
+        .where(and_(*filters, Report.reporter_country.isnot(None)))
         .order_by(Report.submitted_at.desc())
         .limit(1)
     )
@@ -264,6 +274,8 @@ async def _build_property_list_item(
         country=country,
         current_damage_level=DAMAGE_LABELS.get(current_damage) if current_damage else None,
         confirmed_status=DAMAGE_LABELS.get(prop.confirmed_status) if prop.confirmed_status else None,
+        auto_confirmed=prop.auto_confirmed,
+        manual_confirmed_lock=prop.manual_confirmed_lock,
         has_conflict_warning=prop.has_conflict_warning,
         total_reports=total_reports or 0,
         total_reporters=total_reporters or 0,
@@ -274,6 +286,40 @@ async def _build_property_list_item(
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
+
+@router.get("/stats", response_model=PropertyStats)
+async def get_property_stats(
+    db: AsyncSession = Depends(get_db),
+    _: DashboardUser = Depends(get_current_dashboard_user),
+):
+    qualifying_sq = (
+        select(Report.property_id)
+        .where(
+            and_(
+                Report.property_id.isnot(None),
+                Report.flag_status.in_(["green", "orange"]),
+            )
+        )
+        .distinct()
+        .scalar_subquery()
+    )
+
+    result = await db.execute(
+        select(
+            func.count(Property.id),
+            func.count(Property.id).filter(Property.confirmed_status.isnot(None)),
+            func.count(Property.id).filter(Property.has_conflict_warning == True),
+            func.count(Property.id).filter(Property.is_recovered == True),
+        ).where(Property.id.in_(qualifying_sq))
+    )
+    row = result.one()
+    return PropertyStats(
+        total=row[0] or 0,
+        confirmed=row[1] or 0,
+        with_conflict=row[2] or 0,
+        recovered=row[3] or 0,
+    )
+
 
 @router.get("", response_model=PropertyListResponse)
 async def list_properties(
@@ -492,11 +538,10 @@ async def get_property_detail(
     address = recent_row[1] if recent_row else None
     report_name = recent_row[2] if recent_row else None
 
-    # Country
+    # Country from the most recent report's reporter_country field
     country_row = await db.execute(
-        select(Reporter.country_code)
-        .join(Report, Report.reporter_id == Reporter.id)
-        .where(and_(*report_filters, Report.reporter_id.isnot(None)))
+        select(Report.reporter_country)
+        .where(and_(*report_filters, Report.reporter_country.isnot(None)))
         .order_by(Report.submitted_at.desc())
         .limit(1)
     )
@@ -576,6 +621,8 @@ async def get_property_detail(
         country=country,
         crisis_id=crisis_id_str,
         confirmed_status=DAMAGE_LABELS.get(prop.confirmed_status) if prop.confirmed_status else None,
+        auto_confirmed=prop.auto_confirmed,
+        manual_confirmed_lock=prop.manual_confirmed_lock,
         has_conflict_warning=prop.has_conflict_warning,
         conflict_warning_details=conflict_details,
         total_reports=total_reports or 0,
@@ -628,12 +675,17 @@ async def set_confirmed_status(
         )
 
     prop.confirmed_status = new_status
-    prop.confirmed_by = current_user.id
-    prop.confirmed_at = datetime.now(timezone.utc)
+    prop.confirmed_by = current_user.id if new_status is not None else None
+    prop.confirmed_at = datetime.now(timezone.utc) if new_status is not None else None
+    prop.auto_confirmed = False
 
-    # Setting confirmed status suppresses conflict warning
     if new_status is not None:
+        # Manual set → lock out auto-confirm permanently until user clears it
+        prop.manual_confirmed_lock = True
         prop.has_conflict_warning = False
+    else:
+        # Clearing confirmed status → unlock so auto-confirm can resume
+        prop.manual_confirmed_lock = False
 
     db.add(PropertyComment(
         property_id=prop.id,

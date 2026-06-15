@@ -165,33 +165,47 @@ export interface ReportDetail extends ReportListItem {
   description: string | null;
   description_translated: string | null;
   language_code: string;
+  reporter_country: string | null;
   gps_available: boolean;
+  gps_accuracy_meters?: number | null;
+  gps_denied?: boolean | null;
   location_address: string | null;
   location_landmark: string | null;
-  was_queued: boolean;
-  mcc: string | null;
-  carrier_name: string | null;
-  submission_started_at: string | null;
-  submission_submitted_at: string | null;
-  question_answers: QuestionAnswer[] | null;
-  photos: PhotoSummary[];
-  flag_events: FlagEvent[];
-  versions: VersionHistoryItem[];
-  network_type?: string | null;
-  device_model?: string | null;
-  app_version?: string | null;
-  flow_started_at?: string | null;
+  location_building_name?: string | null;
+  location_note?: string | null;
+  location_entry_method?: string | null;
+  building_name_osm?: string | null;
+  building_name_reporter?: string | null;
   building_centroid_lat?: number | null;
   building_centroid_lng?: number | null;
-  question_package_version?: string | null;
+  infrastructure_types?: string[] | null;
+  infrastructure_other?: string | null;
+  infrastructure_name?: string | null;
+  debris_blocking?: string | null;
   electricity_condition?: string | null;
   health_services_condition?: string | null;
   pressing_needs?: string[] | string | null;
   pressing_needs_other?: string | null;
+  was_queued: boolean;
+  queued_at?: string | null;
+  synced_at?: string | null;
+  mcc: string | null;
+  mnc?: string | null;
+  carrier_name: string | null;
+  device_model?: string | null;
+  device_brand?: string | null;
+  device_os_version?: string | null;
+  network_type?: string | null;
+  app_version?: string | null;
+  flow_started_at?: string | null;
+  submission_started_at: string | null;
+  submission_submitted_at: string | null;
+  question_answers: QuestionAnswer[] | null;
+  question_package_version?: string | null;
   photo_metadata?: string | null;
-  infrastructure_name?: string | null;
-  debris_blocking?: string | null;
-  // New fields from audit
+  photos: PhotoSummary[];
+  flag_events: FlagEvent[];
+  versions: VersionHistoryItem[];
   property_id?: string | null;
   projects?: ReportProjectRef[];
   submission_ip?: string | null;
@@ -229,8 +243,12 @@ export interface ReporterDetail extends ReporterListRow {
   device_id: string | null;
   mcc: string | null;
   language_code: string | null;
-  name: string | null;             // decrypted from name_encrypted; null if anonymous
-  email: string | null;            // decrypted from email_encrypted; null if anonymous
+  name: string | null;
+  email: string | null;
+  is_verified: boolean | null;
+  is_blocked: boolean | null;
+  block_reason: string | null;
+  blocked_at: string | null;
   green_orange_reports: number;
   red_reports: number;
   discarded_reports: number;
@@ -244,6 +262,14 @@ export interface ReporterDetail extends ReporterListRow {
   device_brand?: string | null;
   os_device_id?: string | null;
   network_type?: string | null;
+  // Auto-block machinery
+  auto_blocked_at?: string | null;
+  auto_block_expires_at?: string | null;
+  auto_block_confirmed?: boolean | null;
+  auto_block_confirmed_at?: string | null;
+  auto_block_confirmed_by?: string | null;
+  matched_blocked_reporter_id?: string | null;
+  pending_auto_block_confirmation?: boolean | null;
 }
 
 export interface ReporterActivityEntry {
@@ -329,6 +355,8 @@ export interface Property {
   crisis_id?: string | null;
   current_damage_level: string | null;
   confirmed_status: string | null;
+  auto_confirmed: boolean;
+  manual_confirmed_lock: boolean;
   confirmed_by: string | null;
   confirmed_at: string | null;
   has_conflict_warning: boolean;
@@ -391,6 +419,13 @@ export interface PropertiesListResponse {
   total: number;
   cursor: string | null;
   has_more: boolean;
+}
+
+export interface PropertyStats {
+  total: number;
+  confirmed: number;
+  with_conflict: number;
+  recovered: number;
 }
 
 // ── Review Queue ──────────────────────────────────────────────────────────────
