@@ -96,6 +96,7 @@ class Settings(BaseSettings):
         "http://192.168.1.69:5174",
         "https://crisis-reporter-production.up.railway.app",
         "https://crisis-reporter-git-production.up.railway.app",
+        "https://crisis-reporter-production-8139.up.railway.app",
     ]
 
     class Config:
