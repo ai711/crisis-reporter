@@ -15,6 +15,7 @@ import SubmissionStepper, { type StepperStep } from "../components/SubmissionSte
 import type { DamageLevel, QueuedPhoto } from "../types";
 import { addToQueue, isIndexedDBAvailable, requestSyncNotificationPermission } from "../utils/offlineQueue";
 import { generateUUID } from "../utils/uuid";
+import { haversineKm, milesToKm, saveCrisisMeta, loadCrisisMeta } from "../utils/geo";
 import { WEB_SESSION_ID } from "../utils/sessionId";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
@@ -343,6 +344,11 @@ export default function ReportPage() {
 
   // Location state — inline duplicate warning (B10)
   const [showDuplicateInlineWarning, setShowDuplicateInlineWarning] = useState(false);
+  // Location state — geo-fence warning
+  const [crisisCenterLat, setCrisisCenterLat] = useState<number | null>(null);
+  const [crisisCenterLng, setCrisisCenterLng] = useState<number | null>(null);
+  const [crisisRadiusMiles, setCrisisRadiusMiles] = useState<number>(50);
+  const [showOutsideAreaWarning, setShowOutsideAreaWarning] = useState(false);
 
   // Location state — metadata flags (G7/G9/G11)
   const [locationEntryMethod, setLocationEntryMethod] = useState<
@@ -450,11 +456,31 @@ export default function ReportPage() {
 
   useEffect(() => {
     const init = async () => {
+      const cached = loadCrisisMeta();
+      if (cached) {
+        setCrisisCenterLat(cached.map_center_lat);
+        setCrisisCenterLng(cached.map_center_lng);
+        setCrisisRadiusMiles(cached.map_default_radius_miles);
+      }
       try {
         const crisisRes = await api.get("/api/crises/active");
         const list = Array.isArray(crisisRes.data) ? crisisRes.data : (crisisRes.data?.items ?? []);
-        if (list.length > 0) setCrisisId(list[0].id);
-        else setCrisisError(true);
+        if (list.length > 0) {
+          const first = list[0];
+          setCrisisId(first.id);
+          setCrisisCenterLat(first.map_center_lat ?? null);
+          setCrisisCenterLng(first.map_center_lng ?? null);
+          setCrisisRadiusMiles(first.map_default_radius_miles ?? 50);
+          saveCrisisMeta({
+            id: first.id,
+            map_center_lat: first.map_center_lat ?? null,
+            map_center_lng: first.map_center_lng ?? null,
+            map_default_radius_miles: first.map_default_radius_miles ?? 50,
+            cached_at: new Date().toISOString(),
+          });
+        } else {
+          setCrisisError(true);
+        }
       } catch {
         setCrisisError(true);
       }
@@ -466,6 +492,19 @@ export default function ReportPage() {
     };
     init();
   }, []);
+
+  // Geo-fence: warn reporter if selected location is outside the crisis radius
+  useEffect(() => {
+    const lat = buildingCentroidLat ?? pinDropCoords?.lat ?? gpsLatitude;
+    const lng = buildingCentroidLng ?? pinDropCoords?.lng ?? gpsLongitude;
+    if (!lat || !lng || !crisisCenterLat || !crisisCenterLng) {
+      setShowOutsideAreaWarning(false);
+      return;
+    }
+    setShowOutsideAreaWarning(
+      haversineKm(lat, lng, crisisCenterLat, crisisCenterLng) > milesToKm(crisisRadiusMiles)
+    );
+  }, [buildingCentroidLat, buildingCentroidLng, pinDropCoords, gpsLatitude, gpsLongitude, crisisCenterLat, crisisCenterLng, crisisRadiusMiles]);
 
   // Load question package from localStorage first; fall back to network on first visit
   useEffect(() => {
@@ -1522,6 +1561,7 @@ export default function ReportPage() {
         : null,
       device_id: WEB_SESSION_ID,
       language_code: languageCode,
+      reporter_country: countryCode || localStorage.getItem("cr_country") || null,
       question_package_version: questionPackage?.version ?? null,
       question_package_content_version: questionPackage?.content_version ?? questionPackage?.version ?? null,
       question_package_translation_version: questionPackage?.translation_version ?? null,
@@ -2385,6 +2425,19 @@ export default function ReportPage() {
                   <button
                     style={styles.inlineDupeDismiss}
                     onClick={() => setShowDuplicateInlineWarning(false)}
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+
+              {/* Outside crisis area warning (non-blocking, dismissible) */}
+              {showOutsideAreaWarning && (
+                <div style={styles.inlineDupeWarning}>
+                  <span>{t('report.location_outside_crisis_area')}</span>
+                  <button
+                    style={styles.inlineDupeDismiss}
+                    onClick={() => setShowOutsideAreaWarning(false)}
                   >
                     ✕
                   </button>
