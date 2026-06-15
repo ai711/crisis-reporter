@@ -14,7 +14,7 @@ void WEB_SESSION_ID;
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import i18n, { loadLanguagePackage, loadLanguagePackageFromCache } from "./i18n";
+import { loadLanguagePackage, loadLanguagePackageFromCache } from "./i18n";
 import App from "./App.tsx";
 import "./index.css";
 import { registerSyncTriggers, resetStuckItems, registerBackgroundSync } from "./utils/offlineQueue";
@@ -125,6 +125,3 @@ const queryClient = new QueryClient({
 (window as Window & { __crWebSessionId?: string }).__crWebSessionId =
   (window as Window & { __crWebSessionId?: string }).__crWebSessionId || WEB_SESSION_ID;
 
-// Re-export so other modules can import directly from main if needed.
-export { WEB_SESSION_ID };
-export { i18n };

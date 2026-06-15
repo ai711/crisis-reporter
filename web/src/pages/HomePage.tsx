@@ -137,7 +137,7 @@ export default function HomePage() {
     setLoginPromptBusy(true);
     setLoginPromptOpen(false);
 
-    let assignedId: string | null = null;
+    let assignedId: string | null;
 
     try {
       const res = await api.post<{ reporter_id: string; access_token?: string; refresh_token?: string }>(
@@ -184,12 +184,13 @@ export default function HomePage() {
     } catch { /* ignore */ }
   };
 
-  const { data: reportsData, isLoading: reportsLoading, isError: reportsError } = useQuery({
+  type HomeReport = { id?: string; flag_status?: string; building_name?: string; infrastructure_name?: string; damage_level?: string; submitted_at?: string };
+  const { data: reportsData, isLoading: reportsLoading, isError: reportsError } = useQuery<{ reports: HomeReport[]; total: number }>({
     queryKey: ['my-reports-home'],
     queryFn: async () => {
       const res = await api.get('/api/reports/my', { params: { limit: 3 } });
       if (!res.data) return { reports: [], total: 0 };
-      return { reports: res.data.reports || res.data.items || res.data || [], total: 0 };
+      return { reports: (res.data.reports || res.data.items || res.data || []) as HomeReport[], total: 0 };
     },
     enabled: !!tokenStorage.getAccessToken(),
     staleTime: 60000,
@@ -277,7 +278,7 @@ export default function HomePage() {
           ) : (reportsData?.reports?.length ?? 0) > 0 ? (
             <div>
               <div style={s.sectionLabel}>{t('home.recentReports', 'Recent Reports')}</div>
-              {(reportsData?.reports as any[])?.slice(0, 3).map((report: any) => (
+              {reportsData?.reports?.slice(0, 3).map((report) => (
                 <div key={report.id} style={s.reportRow}>
                   <div style={{
                     width: 8, height: 8, borderRadius: 4, flexShrink: 0,
@@ -291,7 +292,7 @@ export default function HomePage() {
                       {report.building_name || report.infrastructure_name || t('home.unnamedLocation', 'Unnamed location')}
                     </div>
                     <div style={s.reportRowMeta}>
-                      {report.damage_level} · {new Date(report.submitted_at).toLocaleDateString()}
+                      {report.damage_level} · {report.submitted_at ? new Date(report.submitted_at).toLocaleDateString() : "—"}
                     </div>
                   </div>
                 </div>

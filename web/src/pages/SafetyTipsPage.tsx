@@ -251,7 +251,7 @@ async function fetchAndCacheSlides<T>(url: string, cacheKey: string): Promise<T[
     const data = await res.json();
     const slides: T[] = data.slides ?? [];
     if (slides.length > 0) {
-      try { localStorage.setItem(cacheKey, JSON.stringify(slides)); } catch {}
+      try { localStorage.setItem(cacheKey, JSON.stringify(slides)); } catch { /* quota exceeded — ignore */ }
     }
     return slides.length > 0 ? slides : null;
   } catch {
@@ -266,7 +266,7 @@ function getSlidesFromCache<T>(cacheKey: string): T[] | null {
       const slides: T[] = JSON.parse(raw);
       if (Array.isArray(slides) && slides.length > 0) return slides;
     }
-  } catch {}
+  } catch { /* corrupted cache — ignore */ }
   return null;
 }
 

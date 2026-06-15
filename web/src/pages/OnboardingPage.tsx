@@ -13,6 +13,7 @@ interface Language {
   code: string;
   name: string;
   native_name?: string;
+  is_active?: boolean;
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -325,7 +326,7 @@ export default function OnboardingPage() {
   const [langPackageError, setLangPackageError] = useState(false);
   const [langFromCache, setLangFromCache] = useState(false);
   const [moreLangsModalOpen, setMoreLangsModalOpen] = useState(false);
-  const [allLanguages, setAllLanguages] = useState<any[]>([]);
+  const [allLanguages, setAllLanguages] = useState<Language[]>([]);
   const [showAllLanguages, setShowAllLanguages] = useState(false);
 
   // Terms
@@ -394,7 +395,7 @@ export default function OnboardingPage() {
   // Auto-fetch all available languages on mount so the full list is always shown
   useEffect(() => {
     fetchMoreLanguages();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleCountrySelect = (country: CachedCountry) => {
     setSelectedCountry(country);
@@ -460,7 +461,7 @@ export default function OnboardingPage() {
     // Only add officialLang when it is not a UN language AND it is confirmed available
     // by the /api/language-packages/available response. Without this check, countries like
     // India would show "Hindi" even when no Hindi translation package exists.
-    ...(officialLang && !UN_LANGUAGE_CODES.has(officialLang.code) && allLanguages.some((l: any) => l.code === officialLang.code) ? [officialLang] : []),
+    ...(officialLang && !UN_LANGUAGE_CODES.has(officialLang.code) && allLanguages.some((l) => l.code === officialLang.code) ? [officialLang] : []),
   ], [officialLang, allLanguages]);
 
   const sortedLanguages = useMemo(() => [...pillLanguages].sort((a, b) => {
