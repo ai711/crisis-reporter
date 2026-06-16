@@ -32,6 +32,7 @@ import FAQScreen from "./src/screens/FAQScreen";
 import AboutScreen from "./src/screens/AboutScreen";
 import ReportDetailScreen from "./src/screens/ReportDetailScreen";
 import QueuedReportDetailScreen from "./src/screens/QueuedReportDetailScreen";
+import RegisterScreen from "./src/screens/RegisterScreen";
 import ErrorBoundary from "./src/components/ErrorBoundary";
 
 // Show notifications even when the app is foregrounded.
@@ -129,6 +130,7 @@ function Navigation() {
             <Stack.Screen name="SettingsScreen" component={SettingsScreen} options={{ headerShown: false }} />
             <Stack.Screen name="MyReports" component={MyReportsScreen} />
             <Stack.Screen name="LoginScreen" component={LoginScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="RegisterScreen" component={RegisterScreen} options={{ headerShown: false }} />
             <Stack.Screen name="ReporterProfileScreen" component={ReporterProfileScreen} options={{ headerShown: false }} />
             <Stack.Screen name="SafetyTipsScreen" component={SafetyTipsScreen} options={{ headerShown: false }} />
             <Stack.Screen name="BadgesScreen" component={BadgesScreen} options={{ headerShown: false }} />

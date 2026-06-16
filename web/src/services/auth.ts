@@ -37,7 +37,7 @@ export async function registerReporter(
   const response = await api.post("/api/reporter/auth/register", {
     email,
     password,
-    web_session_id: WEB_SESSION_ID,
+    device_id: WEB_SESSION_ID,
     platform: detectPlatform(),
     country_code: countryCode,
     language_code: languageCode,
@@ -55,7 +55,7 @@ export async function loginReporter(
   const response = await api.post("/api/reporter/auth/login", {
     email,
     password,
-    web_session_id: WEB_SESSION_ID,
+    device_id: WEB_SESSION_ID,
     platform: detectPlatform(),
   });
 

@@ -6,6 +6,7 @@ import {
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
+import { useTranslation } from "react-i18next";
 import * as SecureStore from "expo-secure-store";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as ImagePicker from "expo-image-picker";
@@ -33,8 +34,10 @@ function parsePhoneNumber(stored: string): { code: string; number: string } {
 export default function ReporterProfileScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
+  const { t } = useTranslation();
 
   const [reporterId, setReporterId] = useState<string | null>(null);
+  const [isVerified, setIsVerified] = useState(false);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
@@ -60,6 +63,8 @@ export default function ReporterProfileScreen() {
     const init = async () => {
       const id = await SecureStore.getItemAsync("cr_reporter_id");
       setReporterId(id ?? null);
+      const accessToken = await SecureStore.getItemAsync("cr_access_token");
+      setIsVerified(!!accessToken && !!id && !id.startsWith("CR-PENDING-"));
       if (!id || id.startsWith("CR-PENDING-")) return;
 
       // Try local cache first (works offline)
@@ -243,6 +248,34 @@ export default function ReporterProfileScreen() {
 
   // ── Render ───────────────────────────────────────────────────────────────────
 
+  // Anonymous gate — show login/register prompt if not logged in
+  if (!isVerified && !loading) {
+    return (
+      <View style={styles.container}>
+        <View style={[styles.header, { paddingTop: insets.top, height: 56 + insets.top }]}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <MaterialIcons name="arrow-back" size={scale(24)} color="#0468B1" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>{t("profile.title") || "Profile"}</Text>
+          <View style={styles.headerBtn} />
+        </View>
+        <View style={styles.anonGate}>
+          <View style={styles.anonIcon}>
+            <MaterialIcons name="person" size={scale(48)} color="#0468B1" />
+          </View>
+          <Text style={styles.anonHeading}>{t("profile.anon_gate_heading") || "Create a free account to save your profile and earn badges."}</Text>
+          <Text style={styles.anonSubtext}>{t("profile.anon_gate_subtext") || "You can still submit reports anonymously without an account."}</Text>
+          <TouchableOpacity style={styles.loginBtn} onPress={() => (navigation as any).navigate("LoginScreen")}>
+            <Text style={styles.loginBtnText}>{t("login.loginButton") || "Log In"}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.registerBtn} onPress={() => (navigation as any).navigate("RegisterScreen")}>
+            <Text style={styles.registerBtnText}>{t("register.title") || "Create Account"}</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       {/* Header */}
@@ -254,7 +287,7 @@ export default function ReporterProfileScreen() {
         >
           <MaterialIcons name="arrow-back" size={scale(24)} color="#0468B1" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Profile</Text>
+        <Text style={styles.headerTitle}>{t("profile.title") || "My Profile"}</Text>
         <View style={styles.headerBtn} />
       </View>
 
@@ -640,4 +673,56 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     letterSpacing: 0.2,
   },
+
+  // Anonymous gate
+  anonGate: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 32,
+  },
+  anonIcon: {
+    width: scale(80),
+    height: scale(80),
+    borderRadius: scale(40),
+    backgroundColor: "rgba(4,104,177,0.08)",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 20,
+  },
+  anonHeading: {
+    fontSize: scale(20),
+    fontWeight: "700",
+    color: "#1B1C1C",
+    marginBottom: 8,
+    textAlign: "center",
+  },
+  anonSubtext: {
+    fontSize: scale(14),
+    color: "#717782",
+    textAlign: "center",
+    lineHeight: scale(20),
+    marginBottom: 32,
+    maxWidth: 280,
+  },
+  loginBtn: {
+    width: "100%",
+    height: 52,
+    borderRadius: 14,
+    backgroundColor: "#0468B1",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  loginBtnText: { color: "#fff", fontSize: scale(15), fontWeight: "700" },
+  registerBtn: {
+    width: "100%",
+    height: 52,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: "#0468B1",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  registerBtnText: { color: "#0468B1", fontSize: scale(15), fontWeight: "600" },
 });

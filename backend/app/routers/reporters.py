@@ -12,7 +12,7 @@ from app.models.reporter_activity_log import ReporterActivityLog
 from app.models.report import Report
 from app.models.safety_progress import SafetyProgress
 from app.services.auth import verify_password, create_token_pair
-from app.services.encryption import encrypt_field, hash_field
+from app.services.encryption import encrypt_field, decrypt_field, hash_field
 from app.services.dependencies import get_current_reporter
 from app.services.storage import storage_service
 
@@ -49,6 +49,23 @@ class LoginResponse(BaseModel):
     expires_in: int
     reporter_id: int
     is_verified: bool
+
+
+class ProfileResponse(BaseModel):
+    reporter_id: int | None
+    first_name: str | None
+    last_name: str | None
+    email: str | None
+    phone_number: str | None
+    profile_photo_url: str | None
+    is_verified: bool
+
+
+class ProfileUpdateRequest(BaseModel):
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    email: Optional[str] = None
+    phone_number: Optional[str] = None
 
 
 class MergeAnonymousRequest(BaseModel):
@@ -248,6 +265,94 @@ async def merge_anonymous(
     return {"merged": True, "reports_transferred": reports_transferred}
 
 
+# ── Reporter profile GET / PATCH ──────────────────────────────────────────────
+
+@router.get("/{reporter_id}", response_model=ProfileResponse)
+async def get_reporter_profile(
+    reporter_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_reporter: Reporter = Depends(get_current_reporter),
+):
+    """Return the reporter's public profile. Only the reporter themselves can access it."""
+    reporter = await _get_reporter_by_id(reporter_id, db)
+    if not reporter or reporter.id != current_reporter.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+
+    email: str | None = None
+    if reporter.email_encrypted:
+        try:
+            email = decrypt_field(reporter.email_encrypted)
+        except Exception:
+            email = None
+
+    return ProfileResponse(
+        reporter_id=reporter.display_id,
+        first_name=reporter.first_name,
+        last_name=reporter.last_name,
+        email=email,
+        phone_number=reporter.phone_number,
+        profile_photo_url=reporter.photo_url,
+        is_verified=reporter.is_verified,
+    )
+
+
+@router.patch("/{reporter_id}")
+async def update_reporter_profile(
+    reporter_id: str,
+    body: ProfileUpdateRequest,
+    db: AsyncSession = Depends(get_db),
+    current_reporter: Reporter = Depends(get_current_reporter),
+):
+    """Update the reporter's optional profile fields (name, phone)."""
+    reporter = await _get_reporter_by_id(reporter_id, db)
+    if not reporter or reporter.id != current_reporter.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+
+    if body.first_name is not None:
+        reporter.first_name = body.first_name.strip() or None
+    if body.last_name is not None:
+        reporter.last_name = body.last_name.strip() or None
+    if body.phone_number is not None:
+        reporter.phone_number = body.phone_number.strip() or None
+
+    # Email update — re-encrypt and re-hash; skip if already the same
+    if body.email is not None:
+        new_email = body.email.strip() or None
+        if new_email:
+            new_hash = hash_field(new_email)
+            if reporter.email_hash != new_hash:
+                # Ensure no other reporter already owns this email
+                conflict = await db.execute(
+                    select(Reporter).where(
+                        Reporter.email_hash == new_hash,
+                        Reporter.id != reporter.id,
+                    )
+                )
+                if conflict.scalar_one_or_none():
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Email already registered to another account",
+                    )
+                reporter.email_encrypted = encrypt_field(new_email)
+                reporter.email_hash = new_hash
+        else:
+            reporter.email_encrypted = None
+            reporter.email_hash = None
+
+    # Keep name_encrypted in sync (used by dashboard profile_type detection)
+    fn = reporter.first_name or ""
+    ln = reporter.last_name or ""
+    combined = f"{fn} {ln}".strip()
+    if combined:
+        reporter.name_encrypted = encrypt_field(combined)
+    elif reporter.first_name is None and reporter.last_name is None:
+        reporter.name_encrypted = None
+
+    reporter.last_active_at = datetime.now(timezone.utc)
+    await db.commit()
+    return {"success": True}
+
+
 # ── Safety progress ───────────────────────────────────────────────────────────
 
 @router.post("/{reporter_id}/safety-progress")
@@ -349,4 +454,4 @@ async def upload_reporter_photo(
     reporter.photo_url = photo_url
     await db.commit()
 
-    return {"photo_url": photo_url}
+    return {"profile_photo_url": photo_url}

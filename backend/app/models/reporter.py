@@ -40,6 +40,11 @@ class Reporter(Base):
         LargeBinary, nullable=True
     )
     password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    # Profile fields — first/last name and phone stored plaintext (displayed, not searchable by hash)
+    first_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    last_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    phone_number: Mapped[str | None] = mapped_column(String(30), nullable=True)
     is_verified: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False
     )

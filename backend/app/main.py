@@ -1085,6 +1085,11 @@ WHERE code IN (
     # Property.manual_confirmed_lock — True when a dashboard user has manually touched confirmed_status;
     # while True, the auto-confirm loop skips this property entirely
     "ALTER TABLE properties ADD COLUMN IF NOT EXISTS manual_confirmed_lock BOOLEAN NOT NULL DEFAULT FALSE",
+
+    # Reporter profile fields — first_name, last_name, phone_number added for reporter profile page
+    "ALTER TABLE reporters ADD COLUMN IF NOT EXISTS first_name VARCHAR(100)",
+    "ALTER TABLE reporters ADD COLUMN IF NOT EXISTS last_name VARCHAR(100)",
+    "ALTER TABLE reporters ADD COLUMN IF NOT EXISTS phone_number VARCHAR(30)",
 ]
 
 

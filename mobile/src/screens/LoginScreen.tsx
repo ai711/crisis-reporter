@@ -97,6 +97,15 @@ export default function LoginScreen() {
         <TouchableOpacity onPress={handleForgotPassword} style={styles.forgotBtn}>
           <Text style={styles.forgotText}>{t("login.forgotPassword")}</Text>
         </TouchableOpacity>
+
+        <View style={styles.registerRow}>
+          <Text style={styles.registerRowText}>
+            {t("login.no_account") || "Don't have an account?"}
+          </Text>
+          <TouchableOpacity onPress={() => (navigation as any).navigate("RegisterScreen")}>
+            <Text style={styles.registerLink}>{t("register.title") || "Create Account"}</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     </View>
   );
@@ -139,4 +148,7 @@ const styles = StyleSheet.create({
   loginBtnText: { color: "#FFFFFF", fontSize: 16, fontWeight: "600" },
   forgotBtn: { alignItems: "center", marginTop: 8 },
   forgotText: { color: "#0468B1", fontSize: 14 },
+  registerRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", marginTop: 20, gap: 4, flexWrap: "wrap" },
+  registerRowText: { fontSize: 14, color: "#718096" },
+  registerLink: { fontSize: 14, color: "#0468B1", fontWeight: "600" },
 });

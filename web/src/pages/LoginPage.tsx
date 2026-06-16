@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useAuthStore } from "../stores/authStore";
 import api from "../services/api";
 import { tokenStorage } from "../services/api";
+import { registerReporter } from "../services/auth";
 
 interface LoginResponse {
   access_token: string;
@@ -47,16 +48,22 @@ function IconEye({ open }: { open: boolean }) {
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { t } = useTranslation();
   const { setReporter } = useAuthStore();
 
+  const isRegisterMode = new URLSearchParams(location.search).get("mode") === "register";
+  const [mode, setMode] = useState<"login" | "register">(isRegisterMode ? "register" : "login");
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.trim() || !password) {
       setError(t('login.validation'));
@@ -83,22 +90,79 @@ export default function LoginPage() {
     }
   };
 
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email.trim() || !password) {
+      setError(t('login.validation'));
+      return;
+    }
+    if (password !== confirmPassword) {
+      setError(t('register.password_mismatch') || "Passwords do not match");
+      return;
+    }
+    if (password.length < 8) {
+      setError(t('register.password_too_short') || "Password must be at least 8 characters");
+      return;
+    }
+    setLoading(true);
+    setError("");
+    try {
+      const countryCode = localStorage.getItem("cr_country") ?? "US";
+      const languageCode = localStorage.getItem("cr_language") ?? "en";
+      const tokens = await registerReporter(email.trim(), password, countryCode, languageCode);
+      setReporter(String(tokens.reporter_id), tokens.is_verified);
+      navigate("/");
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { detail?: string } } })?.response?.data
+          ?.detail ?? (t('register.error') || "Registration failed. Please try again.");
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const switchMode = (next: "login" | "register") => {
+    setMode(next);
+    setError("");
+    setPassword("");
+    setConfirmPassword("");
+  };
+
+  const isLogin = mode === "login";
+
   return (
     <div style={s.page}>
       <header style={s.header}>
         <button style={s.backBtn} onClick={() => navigate("/")} aria-label="Back">
           <IconBack />
         </button>
-        <span style={s.headerTitle}>{t('login.title')}</span>
+        <span style={s.headerTitle}>{isLogin ? t('login.title') : (t('register.title') || "Create Account")}</span>
         <div style={{ minWidth: 44, flexShrink: 0 }} />
       </header>
 
+      {/* Mode switcher */}
+      <div style={s.modeSwitcher}>
+        <button
+          style={{ ...s.modeBtn, ...(isLogin ? s.modeBtnActive : {}) }}
+          onClick={() => switchMode("login")}
+        >
+          {t('login.title')}
+        </button>
+        <button
+          style={{ ...s.modeBtn, ...(!isLogin ? s.modeBtnActive : {}) }}
+          onClick={() => switchMode("register")}
+        >
+          {t('register.title') || "Create Account"}
+        </button>
+      </div>
+
       <main style={s.main}>
-        <form style={s.form} onSubmit={handleSubmit} noValidate>
+        <form style={s.form} onSubmit={isLogin ? handleLogin : handleRegister} noValidate>
           <div style={s.fieldGroup}>
-            <label style={s.label} htmlFor="login-email">{t('login.email_label')}</label>
+            <label style={s.label} htmlFor="auth-email">{t('login.email_label')}</label>
             <input
-              id="login-email"
+              id="auth-email"
               style={s.input}
               type="email"
               autoComplete="email"
@@ -110,13 +174,13 @@ export default function LoginPage() {
           </div>
 
           <div style={s.fieldGroup}>
-            <label style={s.label} htmlFor="login-password">{t('login.password_label')}</label>
+            <label style={s.label} htmlFor="auth-password">{t('login.password_label')}</label>
             <div style={s.passwordWrap}>
               <input
-                id="login-password"
+                id="auth-password"
                 style={{ ...s.input, paddingRight: 48 }}
                 type={showPassword ? "text" : "password"}
-                autoComplete="current-password"
+                autoComplete={isLogin ? "current-password" : "new-password"}
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -133,6 +197,38 @@ export default function LoginPage() {
             </div>
           </div>
 
+          {!isLogin && (
+            <div style={s.fieldGroup}>
+              <label style={s.label} htmlFor="auth-confirm">{t('register.confirm_password') || "Confirm Password"}</label>
+              <div style={s.passwordWrap}>
+                <input
+                  id="auth-confirm"
+                  style={{ ...s.input, paddingRight: 48 }}
+                  type={showConfirm ? "text" : "password"}
+                  autoComplete="new-password"
+                  placeholder="••••••••"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  disabled={loading}
+                />
+                <button
+                  type="button"
+                  style={s.eyeBtn}
+                  onClick={() => setShowConfirm((v) => !v)}
+                  aria-label={showConfirm ? "Hide password" : "Show password"}
+                >
+                  <IconEye open={showConfirm} />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {!isLogin && (
+            <p style={s.hint}>
+              {t('register.hint') || "No email verification required. You can log in immediately after creating your account."}
+            </p>
+          )}
+
           {error && <p style={s.errorMsg}>{error}</p>}
 
           <button
@@ -140,16 +236,29 @@ export default function LoginPage() {
             style={{ ...s.submitBtn, opacity: loading ? 0.7 : 1 }}
             disabled={loading}
           >
-            {loading ? t('login.signing_in') : t('login.submit_btn')}
+            {loading
+              ? (isLogin ? t('login.signing_in') : (t('register.creating') || "Creating account…"))
+              : (isLogin ? t('login.submit_btn') : (t('register.submit_btn') || "Create Account"))}
           </button>
         </form>
 
-        <p style={s.signupPrompt}>
-          {t('login.no_account')}{" "}
-          <button style={s.signupLink} onClick={() => navigate("/profile")}>
-            {t('login.setup_profile')}
-          </button>
-        </p>
+        {isLogin && (
+          <p style={s.signupPrompt}>
+            {t('login.no_account')}{" "}
+            <button style={s.signupLink} onClick={() => switchMode("register")}>
+              {t('register.title') || "Create Account"}
+            </button>
+          </p>
+        )}
+
+        {!isLogin && (
+          <p style={s.signupPrompt}>
+            {t('register.already_have_account') || "Already have an account?"}{" "}
+            <button style={s.signupLink} onClick={() => switchMode("login")}>
+              {t('login.title')}
+            </button>
+          </p>
+        )}
       </main>
     </div>
   );
@@ -198,9 +307,36 @@ const s: Record<string, React.CSSProperties> = {
     transform: "translateX(-50%)",
     whiteSpace: "nowrap" as const,
   },
+  modeSwitcher: {
+    display: "flex",
+    margin: "16px 24px 0",
+    background: "#E4E2E1",
+    borderRadius: 10,
+    padding: 4,
+    gap: 4,
+    flexShrink: 0,
+  },
+  modeBtn: {
+    flex: 1,
+    padding: "10px 12px",
+    border: "none",
+    borderRadius: 8,
+    fontSize: 14,
+    fontWeight: 600,
+    cursor: "pointer",
+    background: "transparent",
+    color: "#717782",
+    transition: "all 0.15s",
+    fontFamily: "inherit",
+  },
+  modeBtnActive: {
+    background: "#fff",
+    color: "#0468B1",
+    boxShadow: "0 1px 4px rgba(0,0,0,0.12)",
+  },
   main: {
     flex: 1,
-    padding: "32px 24px 40px",
+    padding: "24px 24px 40px",
     display: "flex",
     flexDirection: "column",
     gap: 0,
@@ -231,6 +367,7 @@ const s: Record<string, React.CSSProperties> = {
     background: "#fff",
     boxSizing: "border-box" as const,
     color: "#1A2B4A",
+    fontFamily: "inherit",
   },
   passwordWrap: {
     position: "relative",
@@ -246,6 +383,12 @@ const s: Record<string, React.CSSProperties> = {
     padding: 4,
     display: "flex",
     alignItems: "center",
+  },
+  hint: {
+    fontSize: 13,
+    color: "#718096",
+    margin: 0,
+    lineHeight: 1.5,
   },
   errorMsg: {
     fontSize: 14,
@@ -267,6 +410,7 @@ const s: Record<string, React.CSSProperties> = {
     fontWeight: 700,
     cursor: "pointer",
     marginTop: 4,
+    fontFamily: "inherit",
   },
   signupPrompt: {
     fontSize: 14,
@@ -282,5 +426,6 @@ const s: Record<string, React.CSSProperties> = {
     fontWeight: 600,
     cursor: "pointer",
     padding: 0,
+    fontFamily: "inherit",
   },
 };

@@ -273,7 +273,21 @@
     "saving": "Saving…",
     "go_back": "Go Back",
     "go_home": "Go to Home",
-    "got_it": "Got it"
+    "got_it": "Got it",
+    "show": "Show",
+    "hide": "Hide"
+  },
+  "register": {
+    "title": "Create Account",
+    "hint": "No email verification required. You can log in on any platform immediately after creating your account.",
+    "confirm_password": "Confirm Password",
+    "password_mismatch": "Passwords do not match",
+    "password_too_short": "Password must be at least 8 characters",
+    "error": "Registration failed. Please try again.",
+    "email_taken": "Email already registered",
+    "submit_btn": "Create Account",
+    "already_have_account": "Already have an account?",
+    "creating": "Creating account…"
   },
   "profile": {
     "title": "My Profile",

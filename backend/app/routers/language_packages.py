@@ -3134,6 +3134,31 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
     ("locationScreen.hideManualEntry", "ui_location", "Hide manual entry"),
     ("locationScreen.expandManualEntry", "ui_location", "Enter location manually instead"),
 
+    # register — account creation flow (web + mobile)
+    ("register.title",              "ui_register", "Create Account"),
+    ("register.hint",               "ui_register", "No email verification required. You can log in on any platform immediately after creating your account."),
+    ("register.confirm_password",   "ui_register", "Confirm Password"),
+    ("register.password_mismatch",  "ui_register", "Passwords do not match"),
+    ("register.password_too_short", "ui_register", "Password must be at least 8 characters"),
+    ("register.error",              "ui_register", "Registration failed. Please try again."),
+    ("register.email_taken",        "ui_register", "Email already registered"),
+    ("register.submit_btn",         "ui_register", "Create Account"),
+    ("register.already_have_account","ui_register","Already have an account?"),
+    ("register.creating",           "ui_register", "Creating account…"),
+
+    # login — mobile-specific keys (different naming convention from web login.*)
+    ("login.emailPlaceholder",      "ui_login", "Email address"),
+    ("login.passwordPlaceholder",   "ui_login", "Password"),
+    ("login.loginButton",           "ui_login", "Log In"),
+    ("login.forgotPassword",        "ui_login", "Forgot password?"),
+    ("login.forgotPasswordMessage", "ui_login", "Please contact your UNDP coordinator to reset your password."),
+    ("login.errorInvalid",          "ui_login", "Invalid email or password. Please try again."),
+    ("login.errorGeneric",          "ui_login", "Something went wrong. Please try again."),
+
+    # common — show/hide toggles used in password fields
+    ("common.show", "ui_common", "Show"),
+    ("common.hide", "ui_common", "Hide"),
+
 ]
 
 
