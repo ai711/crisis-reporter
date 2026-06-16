@@ -143,8 +143,8 @@ class ConfirmedStatusRequest(BaseModel):
     @field_validator("comment")
     @classmethod
     def comment_min_length(cls, v: str) -> str:
-        if len(v.strip()) < 10:
-            raise ValueError("comment must be at least 10 characters")
+        if len(v.strip()) < 3:
+            raise ValueError("comment must be at least 3 characters")
         return v
 
     @field_validator("confirmed_status")
@@ -179,8 +179,8 @@ class RecoveryRequest(BaseModel):
     @field_validator("comment")
     @classmethod
     def comment_min_length(cls, v: str) -> str:
-        if len(v.strip()) < 10:
-            raise ValueError("comment must be at least 10 characters")
+        if len(v.strip()) < 3:
+            raise ValueError("comment must be at least 3 characters")
         return v
 
 

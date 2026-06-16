@@ -151,7 +151,7 @@ interface StatusChangeModalProps {
 function StatusChangeModal({ newStatus, onConfirm, onCancel, isSubmitting, error }: StatusChangeModalProps) {
   const [comment, setComment] = useState("");
   const trimmedLen = comment.trim().length;
-  const isValid = trimmedLen >= 10;
+  const isValid = trimmedLen >= 3;
 
   return (
     <>
@@ -190,7 +190,7 @@ function StatusChangeModal({ newStatus, onConfirm, onCancel, isSubmitting, error
               disabled={isSubmitting}
             />
             <div style={{ ...s.charCounter, color: isValid ? "var(--c-flag-green)" : "var(--c-text-subtle)" }}>
-              {trimmedLen} / 10 minimum
+              {trimmedLen} / 3 minimum
             </div>
           </div>
           {error && <div style={s.errorBox}>{error}</div>}
@@ -229,7 +229,7 @@ function PauseRemovalModal({
 }) {
   const [comment, setComment] = useState("");
   const trimmedLen = comment.trim().length;
-  const isValid = trimmedLen >= 10;
+  const isValid = trimmedLen >= 3;
 
   return (
     <>
@@ -251,7 +251,7 @@ function PauseRemovalModal({
               disabled={isSubmitting}
             />
             <div style={{ ...s.charCounter, color: isValid ? "var(--c-flag-green)" : "var(--c-text-subtle)" }}>
-              {trimmedLen} / 10 minimum
+              {trimmedLen} / 3 minimum
             </div>
           </div>
           {error && <div style={s.errorBox}>{error}</div>}

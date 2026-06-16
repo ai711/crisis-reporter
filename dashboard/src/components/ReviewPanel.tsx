@@ -154,7 +154,7 @@ export default function ReviewPanel({
     });
   }
 
-  const commentValid = comment.trim().length >= 10;
+  const commentValid = comment.trim().length >= 3;
 
   async function handleSubmitWithDecision(d: "approve" | "discard") {
     if (!commentValid || isSubmitting) return;
@@ -330,7 +330,7 @@ export default function ReviewPanel({
             <div style={styles.sectionLabel}>
               Review Comment{" "}
               <span style={{ fontWeight: 400, color: "#718096" }}>
-                (required, min 10 chars)
+                (required, min 3 chars)
               </span>
             </div>
             <textarea
@@ -340,7 +340,7 @@ export default function ReviewPanel({
               value={comment}
               onChange={(e) => setComment(e.target.value)}
             />
-            <div style={styles.charCount}>{comment.trim().length} / 10 min</div>
+            <div style={styles.charCount}>{comment.trim().length} / 3 min</div>
           </div>
 
           {/* Submit error */}

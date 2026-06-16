@@ -1433,7 +1433,7 @@ function LanguagesTab() {
   }
 
   async function handleDeprecate() {
-    if (!deprecateModal || deprecateComment.trim().length < 10) return;
+    if (!deprecateModal || deprecateComment.trim().length < 3) return;
     try {
       await api.patch(`/api/languages/${deprecateModal.code}/status`, { status: "deprecated" });
       queryClient.invalidateQueries({ queryKey: ["languages"] });
@@ -2342,7 +2342,7 @@ function LanguagesTab() {
                   <div style={{ fontSize: 13, color: "#92400e", lineHeight: 1.5 }}>You are about to deactivate {deprecateModal.name}. Reporters currently using this language will be notified to switch on their next app open. Translation updates will be paused for this language.</div>
                 </div>
               </div>
-              <Field label="Comment (required, min 10 characters)" required error={deprecateComment.trim().length > 0 && deprecateComment.trim().length < 10 ? "Minimum 10 characters" : undefined}>
+              <Field label="Comment (required, min 3 characters)" required error={deprecateComment.trim().length > 0 && deprecateComment.trim().length < 3 ? "Minimum 3 characters" : undefined}>
                 <textarea
                   value={deprecateComment}
                   onChange={(e) => setDeprecateComment(e.target.value)}
@@ -2355,8 +2355,8 @@ function LanguagesTab() {
             <div style={{ ...s.modalFooter, padding: "0 24px 20px" }}>
               <button style={s.cancelBtn} onClick={() => setDeprecateModal(null)}>Cancel</button>
               <button
-                style={{ ...s.submitBtn, background: "#c53030", opacity: deprecateComment.trim().length < 10 ? 0.6 : 1 }}
-                disabled={deprecateComment.trim().length < 10}
+                style={{ ...s.submitBtn, background: "#c53030", opacity: deprecateComment.trim().length < 3 ? 0.6 : 1 }}
+                disabled={deprecateComment.trim().length < 3}
                 onClick={handleDeprecate}
               >
                 Deactivate Language

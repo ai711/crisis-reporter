@@ -56,8 +56,8 @@ class ForceResolutionRequest(BaseModel):
     @field_validator("reason")
     @classmethod
     def reason_min_length(cls, v: str) -> str:
-        if len(v.strip()) < 10:
-            raise ValueError("reason must be at least 10 characters")
+        if len(v.strip()) < 3:
+            raise ValueError("reason must be at least 3 characters")
         return v.strip()
 
 
@@ -67,8 +67,8 @@ class DismissRequest(BaseModel):
     @field_validator("comment")
     @classmethod
     def comment_min_length(cls, v: str) -> str:
-        if len(v.strip()) < 10:
-            raise ValueError("comment must be at least 10 characters")
+        if len(v.strip()) < 3:
+            raise ValueError("comment must be at least 3 characters")
         return v.strip()
 
 
@@ -78,8 +78,8 @@ class ConfirmBlockRequest(BaseModel):
     @field_validator("comment")
     @classmethod
     def comment_min_length(cls, v: str) -> str:
-        if len(v.strip()) < 10:
-            raise ValueError("comment must be at least 10 characters")
+        if len(v.strip()) < 3:
+            raise ValueError("comment must be at least 3 characters")
         return v.strip()
 
 
@@ -103,8 +103,8 @@ class ReviewDecisionRequest(BaseModel):
     @field_validator("comment")
     @classmethod
     def comment_min_length(cls, v: str) -> str:
-        if len(v.strip()) < 10:
-            raise ValueError("comment must be at least 10 characters")
+        if len(v.strip()) < 3:
+            raise ValueError("comment must be at least 3 characters")
         return v.strip()
 
 

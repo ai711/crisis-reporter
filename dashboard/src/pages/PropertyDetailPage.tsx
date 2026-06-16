@@ -128,7 +128,7 @@ function ConfirmedStatusModal({
   if (!isOpen) return null;
 
   const trimmedLen = comment.trim().length;
-  const isValid = trimmedLen >= 10;
+  const isValid = trimmedLen >= 3;
   const label = targetStatus ? formatDamageLevel(targetStatus) : "Clear Confirmed Status";
 
   return (
@@ -152,7 +152,7 @@ function ConfirmedStatusModal({
               disabled={isSubmitting}
             />
             <div style={{ ...mStyles.charCounter, color: isValid ? "var(--c-flag-green)" : "var(--c-text-subtle)" }}>
-              {trimmedLen} / 10 minimum
+              {trimmedLen} / 3 minimum
             </div>
           </div>
           {error && <div style={mStyles.errorBox}>{error}</div>}
@@ -199,7 +199,7 @@ function RecoveryModal({ isOpen, onClose, action, onConfirm, isSubmitting, error
   if (!isOpen) return null;
 
   const trimmedLen = comment.trim().length;
-  const isValid = trimmedLen >= 10;
+  const isValid = trimmedLen >= 3;
   const label = action === "recover" ? "Mark as Recovered" : "Reinstate";
 
   return (
@@ -224,7 +224,7 @@ function RecoveryModal({ isOpen, onClose, action, onConfirm, isSubmitting, error
               disabled={isSubmitting}
             />
             <div style={{ ...mStyles.charCounter, color: isValid ? "var(--c-flag-green)" : "var(--c-text-subtle)" }}>
-              {trimmedLen} / 10 minimum
+              {trimmedLen} / 3 minimum
             </div>
           </div>
           {error && <div style={mStyles.errorBox}>{error}</div>}

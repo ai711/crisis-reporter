@@ -54,8 +54,8 @@ class StatusChangeRequest(BaseModel):
     @field_validator("comment")
     @classmethod
     def comment_min_length(cls, v: str) -> str:
-        if len(v.strip()) < 10:
-            raise ValueError("Comment must be at least 10 characters")
+        if len(v.strip()) < 3:
+            raise ValueError("Comment must be at least 3 characters")
         return v.strip()
 
 
@@ -65,8 +65,8 @@ class RemovePauseRequest(BaseModel):
     @field_validator("comment")
     @classmethod
     def comment_min_length(cls, v: str) -> str:
-        if len(v.strip()) < 10:
-            raise ValueError("Comment must be at least 10 characters")
+        if len(v.strip()) < 3:
+            raise ValueError("Comment must be at least 3 characters")
         return v.strip()
 
 
