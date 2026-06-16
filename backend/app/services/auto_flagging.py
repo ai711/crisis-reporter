@@ -317,6 +317,21 @@ async def auto_flag_report(report_id: str, delay: int = 10) -> None:
                                     f"Expires {pause_expires.isoformat()}"
                                 ),
                             )
+                            try:
+                                from app.services.notification_service import fire_notification
+                                reporter_label = (
+                                    f"Reporter #{pause_reporter.display_id}"
+                                    if pause_reporter.display_id
+                                    else "A reporter"
+                                )
+                                await fire_notification(
+                                    "reporter_auto_paused",
+                                    f"{reporter_label} was automatically paused after submitting "
+                                    f"more than {int(_thresholds['rapid_submission_count'])} reports "
+                                    f"in {int(_thresholds['rapid_submission_window_hours'])} hour(s).",
+                                )
+                            except Exception:
+                                log.exception("auto_flag_report: reporter_auto_paused notification failed")
                     except Exception:
                         log.exception("auto_flag_report: pause apply failed for reporter %s", report.reporter_id)
 
@@ -442,6 +457,19 @@ async def auto_flag_report(report_id: str, delay: int = 10) -> None:
                 except Exception:
                     log.exception("auto_flag_report: SSE publish failed for %s", report_id)
 
+                if new_flag == "red":
+                    try:
+                        from app.services.notification_service import fire_notification
+                        sn = report.serial_number
+                        label = f"#{sn}" if sn else report_id[:8]
+                        await fire_notification(
+                            "new_red_flagged_report",
+                            f"Report {label} was automatically flagged Red and requires review.",
+                            label=label,
+                        )
+                    except Exception:
+                        log.exception("auto_flag_report: notification fire failed for %s", report_id)
+
             # ── Property creation — Green and Orange flags only ────────────────
             if new_flag in ("green", "orange"):
                 try:
@@ -511,6 +539,17 @@ async def monitor_stuck_grey_reports() -> None:
 
             if not stuck:
                 return
+
+            # Fire grey_flag_processing_delay notification (cooldown prevents spam)
+            try:
+                from app.services.notification_service import fire_notification
+                await fire_notification(
+                    "grey_flag_processing_delay",
+                    f"{len(stuck)} report(s) have been stuck in Grey flag status for "
+                    f"more than {threshold_minutes} minute(s). Auto-flagging is being retried.",
+                )
+            except Exception:
+                log.exception("monitor_stuck_grey_reports: notification fire failed")
 
             for report in stuck:
                 minutes_stuck = int(

@@ -51,13 +51,9 @@ from app.routers.countries import seed_countries
 
 
 async def _seed_notification_types() -> None:
-    """Ensure the notifications AppSetting has the 4 correct Chapter 13 types.
-    Replaces any old notification types from previous chapters."""
+    """Ensure the notifications AppSetting has all 8 canonical notification types.
+    Adds missing types and preserves user-configured fields for existing ones."""
     from app.models.app_setting import AppSetting
-    correct_keys = {
-        "review_queue_threshold", "new_red_flagged_report",
-        "reporter_auto_paused", "high_volume_processing_delay",
-    }
     correct_types = [
         {
             "key": "review_queue_threshold",
@@ -84,6 +80,34 @@ async def _seed_notification_types() -> None:
             "key": "high_volume_processing_delay",
             "label": "High volume processing delay",
             "description": "Triggers when the system is processing a high volume of reports and map updates may be delayed.",
+            "active": True, "subscribers": [], "threshold": None,
+            "delivery_mode": "immediate", "summary_interval_minutes": None,
+        },
+        {
+            "key": "grey_flag_processing_delay",
+            "label": "Grey flag processing delay",
+            "description": "Triggers when the background monitoring job identifies reports stuck in Grey flag status beyond the configured threshold.",
+            "active": True, "subscribers": [], "threshold": None,
+            "delivery_mode": "immediate", "summary_interval_minutes": None,
+        },
+        {
+            "key": "translation_auto_translation_complete",
+            "label": "Auto-translation complete",
+            "description": "Triggers when a background auto-translation job completes following an English content change.",
+            "active": True, "subscribers": [], "threshold": None,
+            "delivery_mode": "immediate", "summary_interval_minutes": None,
+        },
+        {
+            "key": "auto_block_confirmation_expiring",
+            "label": "Auto-block confirmation window expiring",
+            "description": "Triggers when a reporter profile in the Review Queue has less than 24 hours remaining in its confirmation window.",
+            "active": True, "subscribers": [], "threshold": None,
+            "delivery_mode": "immediate", "summary_interval_minutes": None,
+        },
+        {
+            "key": "language_deprecation_expiring",
+            "label": "Language deprecation window expiring",
+            "description": "Triggers when a deprecated language has less than 7 days remaining before its hard-removal window expires.",
             "active": True, "subscribers": [], "threshold": None,
             "delivery_mode": "immediate", "summary_interval_minutes": None,
         },
@@ -716,12 +740,40 @@ async def _auto_block_confirmation_loop() -> None:
                         reporter.id, confirmation_hours,
                     )
                 await db.commit()
+
+                # Fire notification for blocks expiring within the next 24 hours
+                try:
+                    from app.services.notification_service import fire_notification
+                    warning_window = now + timedelta(hours=24)
+                    expiring_soon = await db.execute(
+                        select(Reporter).where(
+                            Reporter.pending_auto_block_confirmation == True,
+                            Reporter.auto_block_confirmed == False,
+                            Reporter.auto_block_expires_at > now,
+                            Reporter.auto_block_expires_at <= warning_window,
+                        )
+                    )
+                    expiring_reporters = expiring_soon.scalars().all()
+                    if expiring_reporters:
+                        ids = ", ".join(
+                            f"#{r.display_id}" if r.display_id else str(r.id)[:8]
+                            for r in expiring_reporters
+                        )
+                        await fire_notification(
+                            "auto_block_confirmation_expiring",
+                            f"{len(expiring_reporters)} auto-blocked reporter(s) have less than 24 hours "
+                            f"remaining in their review window: {ids}. Review in Reporter Profiles.",
+                        )
+                except Exception as e:
+                    logger.error("auto_block_confirmation_expiring notification error: %s", e)
+
         except Exception as e:
             logger.error("Auto-block confirmation loop error: %s", e)
 
 
 async def _remove_expired_deprecated_languages_loop() -> None:
-    """Daily: hard-remove languages past their removal_scheduled_at date."""
+    """Daily: hard-remove languages past their removal_scheduled_at date.
+    Also fires language_deprecation_expiring notification for any language within 7 days of removal."""
     from app.tasks import remove_expired_deprecated_languages
     while True:
         await asyncio.sleep(24 * 60 * 60)
@@ -729,6 +781,78 @@ async def _remove_expired_deprecated_languages_loop() -> None:
             await remove_expired_deprecated_languages()
         except Exception as e:
             logger.error("remove_expired_deprecated_languages loop error: %s", e)
+
+        # Check for languages expiring within the next 7 days
+        try:
+            from app.models.language_package import Language
+            from app.services.notification_service import fire_notification
+            warning_cutoff = datetime.now(timezone.utc) + timedelta(days=7)
+            async with AsyncSessionLocal() as db:
+                result = await db.execute(
+                    select(Language).where(
+                        Language.status == "deprecated",
+                        Language.removal_scheduled_at.isnot(None),
+                        Language.removal_scheduled_at > datetime.now(timezone.utc),
+                        Language.removal_scheduled_at <= warning_cutoff,
+                    )
+                )
+                expiring = result.scalars().all()
+            if expiring:
+                names = ", ".join(f"{l.name} ({l.code})" for l in expiring)
+                await fire_notification(
+                    "language_deprecation_expiring",
+                    f"{len(expiring)} deprecated language(s) will be permanently removed within "
+                    f"7 days: {names}. Review in Content Management.",
+                )
+        except Exception as e:
+            logger.error("language_deprecation_expiring notification error: %s", e)
+
+
+async def _review_queue_threshold_loop() -> None:
+    """Every 30 minutes: check if red-flagged-report count exceeds the configured threshold."""
+    while True:
+        await asyncio.sleep(30 * 60)
+        try:
+            from app.models.report import Report
+            from app.models.app_setting import AppSetting
+            from app.services.notification_service import fire_notification
+            from sqlalchemy import func
+
+            async with AsyncSessionLocal() as db:
+                # Read the threshold from notification settings
+                threshold = 50  # default
+                row = await db.execute(select(AppSetting).where(AppSetting.key == "notifications"))
+                rec = row.scalar_one_or_none()
+                if rec and isinstance(rec.value, dict):
+                    for t in rec.value.get("types", []):
+                        if t.get("key") == "review_queue_threshold":
+                            threshold = int(t.get("threshold") or 50)
+                            break
+
+                count_result = await db.execute(
+                    select(func.count(Report.id)).where(Report.flag_status == "red")
+                )
+                red_count = count_result.scalar() or 0
+
+            if red_count >= threshold:
+                await fire_notification(
+                    "review_queue_threshold",
+                    f"Review Queue alert: {red_count} Red-flagged report(s) are awaiting review, "
+                    f"exceeding the threshold of {threshold}.",
+                )
+        except Exception as e:
+            logger.error("review_queue_threshold_loop error: %s", e)
+
+
+async def _notification_batch_flush_loop() -> None:
+    """Every 60 seconds: flush summary-mode notification batches from Redis."""
+    while True:
+        await asyncio.sleep(60)
+        try:
+            from app.services.notification_service import flush_pending_batches
+            await flush_pending_batches(app.state.redis)
+        except Exception as e:
+            logger.error("notification_batch_flush_loop error: %s", e)
 
 
 async def _pause_expiry_loop() -> None:
@@ -991,6 +1115,9 @@ ON CONFLICT DO NOTHING""",
     )""",
     "CREATE INDEX IF NOT EXISTS idx_notifications_triggered_at ON notifications(triggered_at DESC)",
     "CREATE INDEX IF NOT EXISTS idx_notification_reads_user ON notification_reads(dashboard_user_id)",
+    # Subscriber-specific notifications — target_user_id NULL means global (is_global=TRUE)
+    "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS target_user_id UUID REFERENCES dashboard_users(id) ON DELETE CASCADE",
+    "CREATE INDEX IF NOT EXISTS idx_notifications_target_user ON notifications(target_user_id) WHERE target_user_id IS NOT NULL",
     # Chapter 18 — Password expiry enforcement
     "ALTER TABLE dashboard_users ADD COLUMN IF NOT EXISTS password_changed_at TIMESTAMPTZ",
     "UPDATE dashboard_users SET password_changed_at = created_at WHERE password_changed_at IS NULL",
@@ -1210,11 +1337,15 @@ async def lifespan(app: FastAPI):
     task_autoblock = asyncio.create_task(_auto_block_confirmation_loop())
     task_pause_expiry = asyncio.create_task(_pause_expiry_loop())
     task_lang_cleanup = asyncio.create_task(_remove_expired_deprecated_languages_loop())
+    task_rq_threshold = asyncio.create_task(_review_queue_threshold_loop())
+    task_notif_flush = asyncio.create_task(_notification_batch_flush_loop())
     yield
     task_stuck.cancel()
     task_autoblock.cancel()
     task_pause_expiry.cancel()
     task_lang_cleanup.cancel()
+    task_rq_threshold.cancel()
+    task_notif_flush.cancel()
     await app.state.redis.aclose()
     await engine.dispose()
 

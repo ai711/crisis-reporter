@@ -343,7 +343,8 @@ async def patch_notification_settings(
 
     for update in payload.types:
         if update.key not in existing_types:
-            raise HTTPException(status_code=404, detail=f"Notification type '{update.key}' not found")
+            # Unknown key — not yet seeded. Skip gracefully rather than aborting.
+            continue
         entry = existing_types[update.key]
         if update.active is not None:
             entry["active"] = update.active

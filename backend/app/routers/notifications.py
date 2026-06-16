@@ -26,7 +26,7 @@ async def get_notifications(
         text("""
             SELECT n.id, n.notification_type_key, n.message, n.triggered_at
             FROM notifications n
-            WHERE n.is_global = TRUE
+            WHERE (n.is_global = TRUE OR n.target_user_id = :user_id::uuid)
               AND NOT EXISTS (
                 SELECT 1 FROM notification_reads nr
                 WHERE nr.notification_id = n.id

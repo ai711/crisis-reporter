@@ -116,6 +116,16 @@ async def auto_translate_question_package(package_version: str) -> None:
         "auto_translate_question_package: done for version %s — %d strings translated",
         package_version, translated_total,
     )
+    if translated_total > 0:
+        try:
+            from app.services.notification_service import fire_notification
+            await fire_notification(
+                "translation_auto_translation_complete",
+                f"Auto-translation complete for question package '{package_version}' — "
+                f"{translated_total} string(s) translated into {len(_TARGET_LANGUAGES)} languages.",
+            )
+        except Exception:
+            log.warning("auto_translate_question_package: notification fire failed")
 
 
 async def auto_translate_content(content_type: str) -> None:
@@ -215,6 +225,16 @@ async def auto_translate_content(content_type: str) -> None:
         "auto_translate_content: done for content_type=%s — %d strings translated",
         content_type, translated_total,
     )
+    if translated_total > 0:
+        try:
+            from app.services.notification_service import fire_notification
+            await fire_notification(
+                "translation_auto_translation_complete",
+                f"Auto-translation complete for '{content_type}' — "
+                f"{translated_total} string(s) translated into {len(_TARGET_LANGUAGES)} languages.",
+            )
+        except Exception:
+            log.warning("auto_translate_content: notification fire failed")
 
 
 async def remove_expired_deprecated_languages() -> None:

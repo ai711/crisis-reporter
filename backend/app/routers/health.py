@@ -61,16 +61,10 @@ async def _check_file_storage() -> dict:
 
 
 async def _check_arq_worker() -> dict:
-    try:
-        import redis.asyncio as aioredis
-        client = aioredis.from_url(settings.REDIS_URL, socket_connect_timeout=3)
-        keys = await client.keys("arq:worker:*")
-        await client.aclose()
-        if keys:
-            return {"status": "operational", "message": None}
-        return {"status": "degraded", "message": "No active workers detected"}
-    except Exception as e:
-        return {"status": "outage", "message": str(e)[:120]}
+    # All background jobs (auto-flagging, stuck-report loop, etc.) run as asyncio
+    # tasks inside the FastAPI process — no separate ARQ worker is deployed.
+    # Report as operational whenever the API server itself is up.
+    return {"status": "operational", "message": None}
 
 
 @router.api_route("", methods=["GET", "HEAD"])
