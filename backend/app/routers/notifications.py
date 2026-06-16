@@ -88,7 +88,7 @@ async def mark_all_read(
             INSERT INTO notification_reads (notification_id, dashboard_user_id, read_at)
             SELECT n.id, :uid, NOW()
             FROM notifications n
-            WHERE n.is_global = TRUE
+            WHERE (n.is_global = TRUE OR n.target_user_id = :uid::uuid)
               AND NOT EXISTS (
                 SELECT 1 FROM notification_reads nr
                 WHERE nr.notification_id = n.id

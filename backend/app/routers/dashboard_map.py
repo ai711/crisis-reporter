@@ -106,11 +106,14 @@ async def get_map_pins(
         Report.gps_latitude.isnot(None),
         Report.gps_longitude.isnot(None),
     ]
-    # Scope to a specific project when provided; otherwise show all crises.
-    if crisis_id:
-        base_conditions.append(Report.crisis_id == crisis_id)
+    # Scope by project junction table when project_serial_id is provided — this is
+    # the authoritative scope for the project detail map, covering all reports linked
+    # via report_projects regardless of which crisis_id the report was submitted to.
+    # Only fall back to Report.crisis_id when no project scope is active.
     if project_report_ids is not None:
         base_conditions.append(Report.id.in_(project_report_ids))
+    elif crisis_id:
+        base_conditions.append(Report.crisis_id == crisis_id)
 
     # Optional filters ─────────────────────────────────────────────────────────
 

@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "../stores/authStore";
+import { useSettingsStore } from "../stores/settingsStore";
 import api from "../services/api";
 import ProfilePanel from "./ProfilePanel";
 
@@ -239,6 +240,7 @@ function NotificationDropdown({
 
 export default function Header({ title, subtitle }: HeaderProps) {
   const { user } = useAuthStore();
+  const { logoUrl } = useSettingsStore();
   const navigate = useNavigate();
 
   const [profileOpen, setProfileOpen] = useState(false);
@@ -275,10 +277,19 @@ export default function Header({ title, subtitle }: HeaderProps) {
   return (
     <>
       <div style={styles.header}>
-        {/* Left: page title */}
-        <div style={styles.left}>
-          <h1 style={styles.title}>{title}</h1>
-          {subtitle && <p style={styles.subtitle}>{subtitle}</p>}
+        {/* Left: logo (if set) + page title */}
+        <div style={{ ...styles.left, display: "flex", alignItems: "center", gap: 12 }}>
+          {logoUrl && (
+            <img
+              src={logoUrl}
+              alt="Organisation logo"
+              style={{ height: 28, maxWidth: 100, objectFit: "contain", flexShrink: 0 }}
+            />
+          )}
+          <div style={{ minWidth: 0 }}>
+            <h1 style={styles.title}>{title}</h1>
+            {subtitle && <p style={styles.subtitle}>{subtitle}</p>}
+          </div>
         </div>
 
         {/* Right: bell + full name + avatar */}

@@ -68,19 +68,13 @@ async def _link_report_to_projects(db, report) -> None:
     """Link a newly approved report to all matching active/closed projects."""
     from app.models.crisis import Crisis
     from app.models.report_project import ReportProject
-    from app.models.reporter import Reporter
 
-    # Resolve reporter country
-    reporter_country: str | None = None
-    if report.reporter_id:
-        rep_r = await db.execute(
-            select(Reporter).where(Reporter.id == report.reporter_id)
-        )
-        rep = rep_r.scalar_one_or_none()
-        if rep:
-            reporter_country = rep.country_code
+    # Use the country captured at submission time (reverse-geocoded from GPS on
+    # web/Android). This reflects where the damage is, not the reporter's profile
+    # country. Falls back to the reporter's onboarding country when GPS is absent.
+    report_country: str | None = getattr(report, "reporter_country", None)
 
-    if not reporter_country or not report.created_at:
+    if not report_country or not report.created_at:
         return
 
     report_date = report.created_at.date()
@@ -90,7 +84,7 @@ async def _link_report_to_projects(db, report) -> None:
             Crisis.status.in_(["active", "closed"]),
             Crisis.start_date <= report_date,
             Crisis.end_date >= report_date,
-            Crisis.countries.contains([reporter_country]),
+            Crisis.countries.contains([report_country]),
         )
     )
 

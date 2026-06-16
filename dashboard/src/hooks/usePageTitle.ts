@@ -1,12 +1,13 @@
 import { useEffect } from "react";
-
-const APP_SUFFIX = "Crisis Reporter";
+import { useSettingsStore } from "../stores/settingsStore";
 
 export function usePageTitle(title: string) {
+  const dashboardTitle = useSettingsStore((s) => s.dashboardTitle);
+
   useEffect(() => {
-    document.title = `${title} | ${APP_SUFFIX}`;
+    document.title = `${title} | ${dashboardTitle}`;
     return () => {
-      document.title = APP_SUFFIX;
+      document.title = dashboardTitle;
     };
-  }, [title]);
+  }, [title, dashboardTitle]);
 }

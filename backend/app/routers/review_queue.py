@@ -835,10 +835,15 @@ async def force_resolution(
     db.add(flag_event)
     await db.commit()
 
-    # Property creation for Green target
-    if body.target_status == "green":
+    # Property creation + project linking for Green/Orange targets
+    if body.target_status in ("green", "orange"):
         try:
-            from app.services.property_service import get_or_create_property, update_conflict_warning
+            from app.services.property_service import (
+                get_or_create_property,
+                auto_confirm_property,
+                update_conflict_warning,
+            )
+            from app.services.auto_flagging import _link_report_to_projects
             from app.database import AsyncSessionLocal
             async with AsyncSessionLocal() as prop_db:
                 prop_report = await prop_db.get(Report, report.id)
@@ -846,10 +851,12 @@ async def force_resolution(
                     prop = await get_or_create_property(prop_db, prop_report)
                     prop_report.property_id = prop.id
                     await prop_db.flush()
+                    await auto_confirm_property(prop_db, prop.id)
                     await update_conflict_warning(prop_db, prop.id)
+                    await _link_report_to_projects(prop_db, prop_report)
                     await prop_db.commit()
         except Exception:
-            log.exception("force_resolution: property creation failed for report %s", report_id)
+            log.exception("force_resolution: property/project linking failed for report %s", report_id)
 
     # Release lock
     try:
@@ -1145,6 +1152,29 @@ async def submit_review_decision(
         await release_soft_lock(redis, "report", report_id, str(current_user.id))
     except Exception:
         pass
+
+    # Property creation + project linking for approved (Orange) reports
+    if target_status == "orange":
+        try:
+            from app.services.property_service import (
+                get_or_create_property,
+                auto_confirm_property,
+                update_conflict_warning,
+            )
+            from app.services.auto_flagging import _link_report_to_projects
+            from app.database import AsyncSessionLocal
+            async with AsyncSessionLocal() as prop_db:
+                prop_report = await prop_db.get(Report, report.id)
+                if prop_report:
+                    prop = await get_or_create_property(prop_db, prop_report)
+                    prop_report.property_id = prop.id
+                    await prop_db.flush()
+                    await auto_confirm_property(prop_db, prop.id)
+                    await update_conflict_warning(prop_db, prop.id)
+                    await _link_report_to_projects(prop_db, prop_report)
+                    await prop_db.commit()
+        except Exception:
+            log.exception("submit_review_decision: property/project linking failed for %s", report_id)
 
     # Publish SSE events
     try:

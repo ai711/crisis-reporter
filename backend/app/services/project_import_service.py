@@ -10,7 +10,6 @@ import uuid
 from datetime import datetime, date, time, timezone
 
 from sqlalchemy import select, func
-from sqlalchemy.orm import joinedload
 
 from app.database import AsyncSessionLocal
 
@@ -27,7 +26,6 @@ async def import_reports_for_project(
     """Find all qualifying reports and link them to the project via report_projects."""
     from app.models.crisis import Crisis
     from app.models.report import Report
-    from app.models.reporter import Reporter
     from app.models.report_project import ReportProject
 
     start_dt = datetime.combine(start_date, time.min).replace(tzinfo=timezone.utc)
@@ -43,13 +41,14 @@ async def import_reports_for_project(
             crisis.import_status = "running"
             await db.commit()
 
-            # Count qualifying reports (joined with reporter for country)
+            # Filter by Report.reporter_country — the country captured at submission
+            # time via GPS reverse-geocode. This reflects where the damage is located,
+            # not the reporter's profile country. No Reporter join required.
             count_q = (
                 select(func.count(Report.id))
-                .join(Reporter, Report.reporter_id == Reporter.id)
                 .where(
                     Report.flag_status.in_(["green", "orange"]),
-                    Reporter.country_code.in_(countries),
+                    Report.reporter_country.in_(countries),
                     Report.created_at >= start_dt,
                     Report.created_at <= end_dt,
                 )
@@ -73,10 +72,9 @@ async def import_reports_for_project(
             while True:
                 batch_q = (
                     select(Report.id)
-                    .join(Reporter, Report.reporter_id == Reporter.id)
                     .where(
                         Report.flag_status.in_(["green", "orange"]),
-                        Reporter.country_code.in_(countries),
+                        Report.reporter_country.in_(countries),
                         Report.created_at >= start_dt,
                         Report.created_at <= end_dt,
                     )

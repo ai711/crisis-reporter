@@ -197,6 +197,22 @@ async def get_map_settings_dict(db: AsyncSession) -> dict:
 _ALLOWED_LOGO_TYPES = {"image/jpeg", "image/png", "image/svg+xml"}
 
 
+@router.get("/display")
+async def get_display_settings(
+    db: AsyncSession = Depends(get_db),
+    current_user: DashboardUser = Depends(get_current_dashboard_user),
+):
+    """Lightweight endpoint — returns only dashboard_title and logo_url.
+    Accessible to all authenticated dashboard users (not superadmin-only)."""
+    setting = await _get_setting(db, "general")
+    if not isinstance(setting, dict):
+        setting = dict(DEFAULTS["general"])
+    return {
+        "dashboard_title": setting.get("dashboard_title", "Crisis Reporter"),
+        "logo_url": setting.get("logo_url"),
+    }
+
+
 @router.get("/general")
 async def get_general_settings(
     db: AsyncSession = Depends(get_db),

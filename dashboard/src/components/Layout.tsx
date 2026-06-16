@@ -1,5 +1,7 @@
+import { useEffect } from "react";
 import Sidebar from "./Sidebar";
 import { useAuthStore } from "../stores/authStore";
+import { useSettingsStore } from "../stores/settingsStore";
 import { useIdleTimer } from "../hooks/useIdleTimer";
 
 interface LayoutProps {
@@ -8,6 +10,11 @@ interface LayoutProps {
 
 export default function Layout({ children }: LayoutProps) {
   const { user } = useAuthStore();
+  const { loadSettings, loaded } = useSettingsStore();
+
+  useEffect(() => {
+    if (user && !loaded) loadSettings();
+  }, [user?.id]);
 
   // Start the inactivity timer for every authenticated page.
   // The timeout value comes from the user object (set on login from the backend).

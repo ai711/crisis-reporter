@@ -834,11 +834,26 @@ async def _review_queue_threshold_loop() -> None:
                 )
                 red_count = count_result.scalar() or 0
 
+                grey_result = await db.execute(
+                    select(func.count(Report.id)).where(Report.flag_status == "grey")
+                )
+                grey_count = grey_result.scalar() or 0
+
             if red_count >= threshold:
                 await fire_notification(
                     "review_queue_threshold",
                     f"Review Queue alert: {red_count} Red-flagged report(s) are awaiting review, "
                     f"exceeding the threshold of {threshold}.",
+                )
+
+            # Fire high_volume_processing_delay when the grey-flag processing queue
+            # is significantly backed up (≥20 reports queued for auto-flagging).
+            _HIGH_VOLUME_GREY_THRESHOLD = 20
+            if grey_count >= _HIGH_VOLUME_GREY_THRESHOLD:
+                await fire_notification(
+                    "high_volume_processing_delay",
+                    f"Processing delay: {grey_count} report(s) are queued for auto-flagging. "
+                    f"Map updates may be delayed until processing completes.",
                 )
         except Exception as e:
             logger.error("review_queue_threshold_loop error: %s", e)

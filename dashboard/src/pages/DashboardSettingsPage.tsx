@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Info, Lock } from "lucide-react";
 import { useAuthStore } from "../stores/authStore";
+import { useSettingsStore } from "../stores/settingsStore";
 import Header from "../components/Header";
 import { usePageTitle } from "../hooks/usePageTitle";
 import api from "../services/api";
@@ -392,6 +393,7 @@ function ComingSoonRow({ label, description }: { label: string; description: str
 
 function GeneralSettingsTab() {
   const queryClient = useQueryClient();
+  const { setSettings } = useSettingsStore();
   const [form, setForm] = useState<GeneralSettings | null>(null);
   const [saved, setSaved] = useState(false);
   const [logoFile, setLogoFile] = useState<File | null>(null);
@@ -421,8 +423,9 @@ function GeneralSettingsTab() {
       if (logoFile) fd.append("logo", logoFile);
       return api.patch("/api/settings/general", fd, { headers: { "Content-Type": "multipart/form-data" } });
     },
-    onSuccess: () => {
+    onSuccess: (_, payload) => {
       queryClient.invalidateQueries({ queryKey: ["settings", "general"] });
+      setSettings({ dashboard_title: payload.dashboard_title, logo_url: payload.logo_url ?? null });
       setLogoFile(null);
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
@@ -501,13 +504,13 @@ function GeneralSettingsTab() {
           </div>
         </div>
         <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/svg+xml" style={{ display: "none" }} onChange={handleLogoChange} />
-
-        <SaveBar
-          onSave={() => mutation.mutate(form)}
-          saving={mutation.isPending}
-          saved={saved}
-        />
       </SettingsCard>
+
+      <SaveBar
+        onSave={() => mutation.mutate(form)}
+        saving={mutation.isPending}
+        saved={saved}
+      />
     </div>
   );
 }
@@ -817,8 +820,10 @@ function NotificationSettingsTab() {
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 14, fontWeight: 600, color: "var(--c-navy)" }}>{t.label}</div>
                 <div style={{ fontSize: 12, color: "var(--c-text-subtle)", marginTop: 2 }}>{t.description}</div>
-                <div style={{ fontSize: 11, color: "var(--c-surface-high)", marginTop: 6 }}>
-                  {t.subscribers.length} subscriber{t.subscribers.length !== 1 ? "s" : ""}
+                <div style={{ fontSize: 11, color: "var(--c-text-subtle)", marginTop: 6 }}>
+                  {t.subscribers.length === 0
+                    ? "Sent to all staff"
+                    : `${t.subscribers.length} subscriber${t.subscribers.length !== 1 ? "s" : ""}`}
                 </div>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 20, flexShrink: 0 }}>
@@ -858,7 +863,7 @@ function NotificationSettingsTab() {
                     <input
                       type="radio"
                       name={`delivery_${t.key}`}
-                      checked={t.delivery_mode === "summary"}
+                      checked={(t.delivery_mode ?? "summary") === "summary"}
                       onChange={() => updateField(t.key, "delivery_mode", "summary")}
                     />
                     Send summary alert every N minutes
@@ -951,6 +956,58 @@ function SystemThresholdsCard() {
   );
 }
 
+// ── Retry Stuck Reports button ─────────────────────────────────────────────────
+
+function RetryStuckReportsButton() {
+  const queryClient = useQueryClient();
+  const [result, setResult] = useState<{ retried: number; errors: number } | null>(null);
+
+  const mutation = useMutation({
+    mutationFn: () => api.post("/api/settings/retry-stuck-reports"),
+    onSuccess: (res) => {
+      const reports: { status: string }[] = res.data?.reports ?? [];
+      const retried = reports.length;
+      const errors = reports.filter((r) => r.status === "error").length;
+      setResult({ retried, errors });
+      queryClient.invalidateQueries({ queryKey: ["health-grey-count"] });
+      setTimeout(() => setResult(null), 6000);
+    },
+  });
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6, flexShrink: 0 }}>
+      <button
+        onClick={() => mutation.mutate()}
+        disabled={mutation.isPending}
+        style={{
+          padding: "8px 16px",
+          background: mutation.isPending ? "var(--c-surface-high)" : BLUE,
+          color: mutation.isPending ? "var(--c-text-subtle)" : "var(--c-surface-lowest)",
+          border: "none",
+          borderRadius: 8,
+          fontSize: 13,
+          fontWeight: 600,
+          cursor: mutation.isPending ? "not-allowed" : "pointer",
+          fontFamily: "inherit",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {mutation.isPending ? "Retrying…" : "Retry Stuck Reports"}
+      </button>
+      {result && (
+        <span style={{ fontSize: 11, color: result.errors > 0 ? RED : GREEN }}>
+          {result.retried === 0
+            ? "No stuck reports found"
+            : result.errors > 0
+            ? `${result.retried} retried · ${result.errors} error${result.errors !== 1 ? "s" : ""}`
+            : `${result.retried} report${result.retried !== 1 ? "s" : ""} retried`}
+        </span>
+      )}
+    </div>
+  );
+}
+
+
 // ── Tab 4 — System Status ──────────────────────────────────────────────────────
 
 function SystemStatusTab() {
@@ -1032,7 +1089,7 @@ function SystemStatusTab() {
         </div>
       </div>
 
-      {/* Grey flag queue count */}
+      {/* Grey flag queue count + retry action */}
       <div style={{
         display: "flex", alignItems: "center", gap: 16,
         padding: "16px 20px",
@@ -1043,7 +1100,7 @@ function SystemStatusTab() {
         <span style={{ fontSize: 32, fontWeight: 800, color: greyNumColor, lineHeight: 1, minWidth: 40 }}>
           {greyCount}
         </span>
-        <div>
+        <div style={{ flex: 1 }}>
           <div style={{ fontSize: 14, fontWeight: 700, color: "var(--c-navy)" }}>Reports in Grey Flag Status</div>
           <div style={{ fontSize: 12, color: "var(--c-text-subtle)", marginTop: 2 }}>
             {greyCount === 0
@@ -1051,6 +1108,7 @@ function SystemStatusTab() {
               : `${greyCount} report${greyCount !== 1 ? "s" : ""} awaiting auto-flagging. Non-zero counts persisting beyond the threshold trigger a processing alert.`}
           </div>
         </div>
+        <RetryStuckReportsButton />
       </div>
 
       {/* Component grid */}

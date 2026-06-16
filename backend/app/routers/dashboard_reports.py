@@ -1,5 +1,6 @@
 import uuid
 import os
+import logging
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, status, Query
@@ -20,6 +21,7 @@ from app.services.dependencies import get_current_dashboard_user, require_supera
 from app.services.storage import storage_service, LocalFileSystemStorage
 from app.config import settings
 
+log = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/dashboard/reports", tags=["Dashboard Reports"])
 
 
@@ -631,6 +633,29 @@ async def update_report_flag(
     db.add(flag_event)
     await db.commit()
 
+    # Property creation + project linking when transitioning to Green or Orange
+    if requested_status in ("green", "orange"):
+        try:
+            from app.services.property_service import (
+                get_or_create_property,
+                auto_confirm_property,
+                update_conflict_warning,
+            )
+            from app.services.auto_flagging import _link_report_to_projects
+            from app.database import AsyncSessionLocal
+            async with AsyncSessionLocal() as prop_db:
+                prop_report = await prop_db.get(Report, report.id)
+                if prop_report:
+                    prop = await get_or_create_property(prop_db, prop_report)
+                    prop_report.property_id = prop.id
+                    await prop_db.flush()
+                    await auto_confirm_property(prop_db, prop.id)
+                    await update_conflict_warning(prop_db, prop.id)
+                    await _link_report_to_projects(prop_db, prop_report)
+                    await prop_db.commit()
+        except Exception:
+            log.exception("update_report_flag: property/project linking failed for %s", report_id)
+
     from app.routers.dashboard_sse import publish_event
     await publish_event(
         crisis_id=str(report.crisis_id),
@@ -681,6 +706,29 @@ async def emergency_override_flag(
     )
     db.add(flag_event)
     await db.commit()
+
+    # Property creation + project linking when overriding to Green
+    if request.target_status == "green":
+        try:
+            from app.services.property_service import (
+                get_or_create_property,
+                auto_confirm_property,
+                update_conflict_warning,
+            )
+            from app.services.auto_flagging import _link_report_to_projects
+            from app.database import AsyncSessionLocal
+            async with AsyncSessionLocal() as prop_db:
+                prop_report = await prop_db.get(Report, report.id)
+                if prop_report:
+                    prop = await get_or_create_property(prop_db, prop_report)
+                    prop_report.property_id = prop.id
+                    await prop_db.flush()
+                    await auto_confirm_property(prop_db, prop.id)
+                    await update_conflict_warning(prop_db, prop.id)
+                    await _link_report_to_projects(prop_db, prop_report)
+                    await prop_db.commit()
+        except Exception:
+            log.exception("emergency_override_flag: property/project linking failed for %s", report_id)
 
     from app.routers.dashboard_sse import publish_event
     await publish_event(
