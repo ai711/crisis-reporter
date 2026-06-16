@@ -258,10 +258,6 @@ function FlagReasonDetail({ flagEvents, flagColor }: { flagEvents: FlagEvent[]; 
         <div style={styles.flagContextCard}>
           <p style={styles.flagContextHeader}>IP country mismatch detected</p>
           <div style={styles.flagContextRow}>
-            <span style={styles.flagContextLabel}>Submission IP</span>
-            <span style={styles.flagContextValue}>{String(meta?.submission_ip ?? "—")}</span>
-          </div>
-          <div style={styles.flagContextRow}>
             <span style={styles.flagContextLabel}>IP-geolocated country</span>
             <span style={styles.flagContextValue}>{String(meta?.geolocated_country ?? "—")}</span>
           </div>
@@ -269,7 +265,7 @@ function FlagReasonDetail({ flagEvents, flagColor }: { flagEvents: FlagEvent[]; 
             <span style={styles.flagContextLabel}>Reporter-selected country</span>
             <span style={styles.flagContextValue}>{String(meta?.reporter_selected_country ?? "—")}</span>
           </div>
-          <p style={styles.flagContextNote}>VPN usage may cause false positives for this check.</p>
+          <p style={styles.flagContextNote}>VPN usage may cause false positives. The submission IP is shown in the report details below.</p>
         </div>
       );
     }

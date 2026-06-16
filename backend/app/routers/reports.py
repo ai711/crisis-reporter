@@ -469,9 +469,9 @@ async def submit_report(
     if reporter:
         reporter.report_count = (reporter.report_count or 0) + 1
         reporter.last_active_at = datetime.now(timezone.utc)
-        # Capture identity fields on first submission (never overwrite)
-        if not reporter.ip_address and client_ip:
-            reporter.ip_address = client_ip
+        # Capture first-seen IP as Fernet-encrypted (never overwrite, never store plaintext)
+        if not reporter.ip_address_encrypted and ip_encrypted:
+            reporter.ip_address_encrypted = ip_encrypted
         # Update ip_address_hash on every submission — used by Rule 2 auto-flagging
         # to match the report's submission IP against blocked reporters' last-seen IPs.
         if ip_hash:
@@ -520,7 +520,11 @@ async def list_reports(
     db: AsyncSession = Depends(get_db),
 ):
     """List recent geo-located reports for the mobile map screen."""
-    query = select(Report).where(Report.gps_latitude.isnot(None), Report.gps_longitude.isnot(None))
+    query = select(Report).where(
+        Report.gps_latitude.isnot(None),
+        Report.gps_longitude.isnot(None),
+        Report.flag_status.in_(["green", "orange"]),
+    )
     if cursor:
         query = query.where(Report.id < cursor)
     query = query.order_by(Report.created_at.desc()).limit(limit)

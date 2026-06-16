@@ -37,7 +37,7 @@ function getContextDetail(
 ): string | null {
   if (!meta) return null;
   if (reason === "ip_country_mismatch") {
-    return `IP: ${meta.submission_ip ?? "—"} → geolocated: ${meta.geolocated_country ?? "?"}, reporter selected: ${meta.reporter_selected_country ?? "?"}`;
+    return `IP geolocated: ${meta.geolocated_country ?? "?"}, reporter selected: ${meta.reporter_selected_country ?? "?"}`;
   }
   if (reason === "same_ip_multiple_devices") {
     const count = Array.isArray(meta.matching_reporters)

@@ -81,9 +81,10 @@ class Settings(BaseSettings):
     STUCK_REPORT_THRESHOLD_MINUTES: int = 10
 
     # Export signed URLs
-    # IMPORTANT: Set EXPORT_URL_SIGN_SECRET to a long random string in production
+    # IMPORTANT: Set EXPORT_URL_SIGN_SECRET to a long random string in production.
     # Generate with: python -c "import secrets; print(secrets.token_hex(32))"
-    EXPORT_URL_SIGN_SECRET: str = "dev-secret-change-in-production"
+    # If blank, a random per-startup secret is generated (export URLs expire on restart).
+    EXPORT_URL_SIGN_SECRET: str = ""
     EXPORT_DOWNLOAD_EXPIRY_MINUTES: int = 15
 
     # CORS — origins allowed to call the API

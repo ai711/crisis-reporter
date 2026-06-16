@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import secrets
 from datetime import datetime, timezone
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -1090,11 +1091,23 @@ WHERE code IN (
     "ALTER TABLE reporters ADD COLUMN IF NOT EXISTS first_name VARCHAR(100)",
     "ALTER TABLE reporters ADD COLUMN IF NOT EXISTS last_name VARCHAR(100)",
     "ALTER TABLE reporters ADD COLUMN IF NOT EXISTS phone_number VARCHAR(30)",
+    # reporters.ip_address_encrypted — Fernet-encrypted first-seen IP (mirrors Report.ip_address_encrypted).
+    # Replaces the legacy plaintext reporters.ip_address column for new submissions.
+    "ALTER TABLE reporters ADD COLUMN IF NOT EXISTS ip_address_encrypted VARCHAR(500)",
 ]
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Vuln fix: EXPORT_URL_SIGN_SECRET must not be the known public default.
+    # If unset, generate a random per-startup secret so dev works but the
+    # known plaintext string is never the active signing key.
+    if not settings.EXPORT_URL_SIGN_SECRET:
+        settings.EXPORT_URL_SIGN_SECRET = secrets.token_hex(32)
+        logger.warning(
+            "EXPORT_URL_SIGN_SECRET is not set — using a random per-startup value. "
+            "Export download URLs will expire on restart. Set this env var in production."
+        )
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         for stmt in _MIGRATIONS:

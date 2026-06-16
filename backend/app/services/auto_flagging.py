@@ -347,7 +347,9 @@ async def auto_flag_report(report_id: str, delay: int = 10) -> None:
                         new_flag = "red"
                         flag_reason = "ip_country_mismatch"
                         flag_metadata = {
-                            "submission_ip": raw_ip,
+                            # submission_ip intentionally omitted — raw IP must not be
+                            # stored in plaintext in flag_events. The decrypted IP is
+                            # available on-demand via ReportDetail.submission_ip.
                             "geolocated_country": geo_country,
                             "reporter_selected_country": reporter_country,
                         }

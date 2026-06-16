@@ -14,11 +14,23 @@ from app.models.dashboard_user import DashboardUser
 from app.models.safety_progress import SafetyProgress
 from app.services.dependencies import get_current_dashboard_user
 from app.services.reporter_activity_service import write_activity_log
+from app.services.encryption import decrypt_field, hash_field
 
 router = APIRouter(prefix="/api/dashboard/reporters", tags=["Dashboard Reporters"])
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _decrypt_reporter_ip(r: Reporter) -> str | None:
+    """Decrypt the reporter's first-seen IP. Falls back to legacy plaintext for pre-migration rows."""
+    if r.ip_address_encrypted:
+        try:
+            import base64
+            return decrypt_field(base64.b64decode(r.ip_address_encrypted))
+        except Exception:
+            pass
+    return r.ip_address  # legacy plaintext fallback
+
 
 def _compute_profile_type(reporter: Reporter) -> str:
     if reporter.is_verified or reporter.name_encrypted or reporter.email_encrypted:
@@ -135,10 +147,12 @@ async def list_reporters(
 
     if search:
         term = f"%{search}%"
+        # IP search uses exact hash match (plaintext IP is no longer stored)
+        ip_hash_match = Reporter.ip_address_hash == hash_field(search.strip())
         conditions.append(
             or_(
                 cast(Reporter.display_id, SAString).ilike(term),
-                Reporter.ip_address.ilike(term),
+                ip_hash_match,
                 Reporter.platform.ilike(term),
             )
         )
@@ -186,7 +200,7 @@ async def list_reporters(
             "profile_type": _compute_profile_type(r),
             "created_at": r.created_at.isoformat(),
             "country": r.country_code,
-            "ip_address": r.ip_address,
+            "ip_address": _decrypt_reporter_ip(r),
             "platform": r.platform,
             "platform_label": _platform_label(r.platform),
             "app_version": r.app_version,
@@ -303,7 +317,7 @@ async def get_reporter_detail(
         "country": reporter.country_code,
         "language_code": reporter.language_code,
         "device_id": device_id,
-        "ip_address": reporter.ip_address,
+        "ip_address": _decrypt_reporter_ip(reporter),
         "app_version": reporter.app_version,
         "browser_version": reporter.browser_version,
         "mcc": reporter.mcc,

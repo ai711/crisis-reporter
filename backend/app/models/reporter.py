@@ -77,7 +77,10 @@ class Reporter(Base):
     )  # "anonymous_no_reports" | "anonymous_with_reports" | "named_profile"
 
     # Identity / device detail fields
+    # ip_address is the legacy plaintext column — kept for backward compat, no longer written.
+    # New submissions write to ip_address_encrypted (Fernet) instead.
     ip_address: Mapped[str | None] = mapped_column(String(45), nullable=True)
+    ip_address_encrypted: Mapped[str | None] = mapped_column(String(500), nullable=True)
     app_version: Mapped[str | None] = mapped_column(String(50), nullable=True)
     browser_version: Mapped[str | None] = mapped_column(String(100), nullable=True)
     mcc: Mapped[str | None] = mapped_column(String(10), nullable=True)
