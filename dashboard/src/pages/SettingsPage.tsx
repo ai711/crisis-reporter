@@ -1,8 +1,10 @@
 import Header from "../components/Header";
 import { useAuthStore } from "../stores/authStore";
+import { usePageTitle } from "../hooks/usePageTitle";
 
 export default function SettingsPage() {
   const { user } = useAuthStore();
+  usePageTitle("Settings");
 
   return (
     <div style={styles.container}>

@@ -23,6 +23,7 @@ import PageSpinner from "../components/PageSpinner";
 import ErrorState from "../components/ErrorState";
 import PropertySummaryPanel from "../components/PropertySummaryPanel";
 import { useAuthStore } from "../stores/authStore";
+import { usePageTitle } from "../hooks/usePageTitle";
 import {
   getProjectDetail,
   getProjectImportStatus,
@@ -664,6 +665,8 @@ export default function ProjectDetailPage() {
       setToast({ message: "Failed to update access level. Please try again.", type: "error" });
     }
   };
+
+  usePageTitle(project ? project.serial_id : "Project");
 
   // ── Render guards ──────────────────────────────────────────────────────
   if (projectLoading) {

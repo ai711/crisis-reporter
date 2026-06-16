@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Lock } from "lucide-react";
 import { useAuthStore } from "../stores/authStore";
+import { usePageTitle } from "../hooks/usePageTitle";
 import Header from "../components/Header";
 import api from "../services/api";
 import type { Role } from "../types";
@@ -220,6 +221,7 @@ function EditPermissionsTable({
 // ── Main Component ─────────────────────────────────────────────────────────────
 
 export default function RoleDetailPage() {
+  usePageTitle("Manage Roles");
   const { roleId } = useParams<{ roleId: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();

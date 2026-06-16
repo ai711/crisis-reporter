@@ -1,7 +1,9 @@
 import { useNavigate } from "react-router-dom";
+import { usePageTitle } from "../hooks/usePageTitle";
 
 export default function AccessDeniedPage() {
   const navigate = useNavigate();
+  usePageTitle("Access Denied");
 
   return (
     <div style={styles.container}>

@@ -402,7 +402,7 @@ export default function MainMapPage() {
       <style>{`.map-pill-toolbar::-webkit-scrollbar { display: none; }`}</style>
       <Header
         title="Map View"
-        subtitle={`${pinsData?.total ?? 0} location${(pinsData?.total ?? 0) !== 1 ? "s" : ""} reported`}
+        subtitle={stats ? `${stats.total_reports} report${stats.total_reports !== 1 ? "s" : ""} submitted` : "Loading…"}
       />
 
       {/* ── Stats bar ── */}

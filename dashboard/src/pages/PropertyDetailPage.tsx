@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useSearchParams, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Header from "../components/Header";
+import { usePageTitle } from "../hooks/usePageTitle";
 import PageSpinner from "../components/PageSpinner";
 import ErrorState from "../components/ErrorState";
 import {
@@ -751,6 +752,7 @@ export default function PropertyDetailPage() {
     : "Property Detail";
 
   const pageTitle = isLoading ? "Loading…" : isError ? "Error" : displayName;
+  usePageTitle(pageTitle);
 
   if (isLoading) {
     return (

@@ -3,6 +3,7 @@ import { CheckCircle } from "lucide-react";
 import Header from "../components/Header";
 import PageSpinner from "../components/PageSpinner";
 import EmptyState from "../components/EmptyState";
+import { usePageTitle } from "../hooks/usePageTitle";
 import { useSSE } from "../hooks/useSSE";
 import api from "../services/api";
 import type { SSEEvent } from "../types";
@@ -63,6 +64,7 @@ function locationLabel(r: QueueReport): string {
 // ── Component ──────────────────────────────────────────────────────────────────
 
 export default function ReportQueuePage() {
+  usePageTitle("Report Queue");
   const [items, setItems] = useState<QueueReport[]>([]);
   const [total, setTotal] = useState(0);
   const [cursor, setCursor] = useState<string | null>(null);

@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "../services/api";
 import Header from "../components/Header";
 import { useAuthStore } from "../stores/authStore";
+import { usePageTitle } from "../hooks/usePageTitle";
 
 // ── Edit-permission context ────────────────────────────────────────────────────
 // Provides canEdit=true to all sub-editors by default; set to false for
@@ -721,6 +722,7 @@ const GROUP_TABS: { key: SectionGroup; label: string; subtitle: string }[] = [
 ];
 
 export default function ContentManagementPage() {
+  usePageTitle("Content Management");
   const { user } = useAuthStore();
   const canEdit = user?.role === "admin" || user?.role === "superadmin";
   const [activeGroup, setActiveGroup] = useState<SectionGroup>("reporter-safety");

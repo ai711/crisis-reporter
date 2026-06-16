@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Info, Lock } from "lucide-react";
 import { useAuthStore } from "../stores/authStore";
 import Header from "../components/Header";
+import { usePageTitle } from "../hooks/usePageTitle";
 import api from "../services/api";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
@@ -1208,6 +1209,7 @@ type TabKey = (typeof TABS)[number]["key"];
 // ── Main Page ──────────────────────────────────────────────────────────────────
 
 export default function DashboardSettingsPage() {
+  usePageTitle("Dashboard Settings");
   const { user } = useAuthStore();
   const [activeTab, setActiveTab] = useState<TabKey>("general");
 

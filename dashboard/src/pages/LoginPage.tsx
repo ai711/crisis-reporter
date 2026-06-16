@@ -4,6 +4,7 @@ import { login } from "../services/auth";
 import { useAuthStore } from "../stores/authStore";
 import axios from "axios";
 import api, { tokenStorage, resetExpiredPassword } from "../services/api";
+import { usePageTitle } from "../hooks/usePageTitle";
 
 // ── UNDP logo SVG ─────────────────────────────────────────────────────────────
 
@@ -129,6 +130,7 @@ function passwordStrength(pwd: string): { level: number; label: string; color: s
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function LoginPage() {
+  usePageTitle("Sign In");
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { setUser } = useAuthStore();

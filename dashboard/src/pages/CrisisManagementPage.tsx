@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "../services/api";
 import Header from "../components/Header";
+import { usePageTitle } from "../hooks/usePageTitle";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -338,6 +339,7 @@ function CrisisCard({ crisis, onSetActive, onArchive, mutating }: CrisisCardProp
 // ── Main Page ──────────────────────────────────────────────────────────────────
 
 export default function CrisisManagementPage() {
+  usePageTitle("Crisis Management");
   const queryClient = useQueryClient();
   const [showModal, setShowModal] = useState(false);
   const [successBanner, setSuccessBanner] = useState("");

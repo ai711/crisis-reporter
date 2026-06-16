@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Eye, EyeOff } from "lucide-react";
 import { useAuthStore } from "../stores/authStore";
+import { usePageTitle } from "../hooks/usePageTitle";
 import Header from "../components/Header";
 import {
   getDashboardUserDetail,
@@ -317,6 +318,7 @@ function EField({
 // ── User Detail Page ───────────────────────────────────────────────────────────
 
 export default function UserDetailPage() {
+  usePageTitle("User Management");
   const { userId } = useParams<{ userId: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
