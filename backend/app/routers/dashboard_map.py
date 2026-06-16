@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, cast, String, or_, and_, exists
 from pydantic import BaseModel
 from typing import Optional
+from datetime import datetime, timezone
 
 from app.database import get_db
 from app.models.report import Report
@@ -122,9 +123,21 @@ async def get_map_pins(
         base_conditions.append(Report.disaster_type.in_(types))
 
     if date_from:
-        base_conditions.append(Report.created_at >= date_from)
+        try:
+            dt_from = datetime.fromisoformat(date_from)
+            if dt_from.tzinfo is None:
+                dt_from = dt_from.replace(tzinfo=timezone.utc)
+            base_conditions.append(Report.created_at >= dt_from)
+        except ValueError:
+            pass
     if date_to:
-        base_conditions.append(Report.created_at <= date_to)
+        try:
+            dt_to = datetime.fromisoformat(date_to)
+            if dt_to.tzinfo is None:
+                dt_to = dt_to.replace(tzinfo=timezone.utc)
+            base_conditions.append(Report.created_at <= dt_to)
+        except ValueError:
+            pass
 
     if country:
         countries_list = [c.strip() for c in country.split(",")]
