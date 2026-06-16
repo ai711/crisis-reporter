@@ -3,6 +3,8 @@ import {
   View, Text, TextInput, TouchableOpacity,
   StyleSheet, ActivityIndicator, Alert,
 } from "react-native";
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { useTranslation } from "react-i18next";
@@ -21,13 +23,17 @@ export default function LoginScreen() {
 
   const handleLogin = async () => {
     if (!email || !password) return;
+    if (!EMAIL_RE.test(email.trim())) {
+      setError(t("login.invalid_email") || "Please enter a valid email address");
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
       // loginReporter calls the correct endpoint, stores access + refresh tokens
       // via tokenStorage.setTokens(), and returns the full AuthTokens payload.
       const tokens = await loginReporter(email, password);
-      setReporter(tokens.reporter_id, tokens.is_verified);
+      setReporter(String(tokens.reporter_id), tokens.is_verified);
       navigation.goBack();
     } catch (err: any) {
       const status = err?.response?.status;

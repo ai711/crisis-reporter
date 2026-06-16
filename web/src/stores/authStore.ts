@@ -12,6 +12,7 @@ interface AuthState {
   setCountry: (countryCode: string) => void;
   setLanguage: (languageCode: string) => void;
   setOnboarded: () => void;
+  logout: () => void;
   reset: () => void;
 }
 
@@ -32,6 +33,13 @@ export const useAuthStore = create<AuthState>()(
       setLanguage: (languageCode) => set({ languageCode }),
 
       setOnboarded: () => set({ isOnboarded: true }),
+
+      logout: () => {
+        localStorage.removeItem("cr_access_token");
+        localStorage.removeItem("cr_refresh_token");
+        localStorage.removeItem("cr_reporter_id");
+        set({ reporterId: null, isVerified: false });
+      },
 
       reset: () => {
         localStorage.removeItem("cr_country");

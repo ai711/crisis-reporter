@@ -66,7 +66,6 @@ export interface ReportSubmitRequest {
 
 export interface ReportSubmitResponse {
   report_id: string;
-  flag_status: FlagStatus;
   message: string;
 }
 

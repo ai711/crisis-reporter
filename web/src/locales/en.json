@@ -302,6 +302,7 @@
     "completion_heading": "Profile Completion",
     "completion_hint": "Adding your email or phone number links all your reports to your profile",
     "email_invalid": "Please enter a valid email address",
+    "email_change_confirm": "You are changing your login email. You will need to use the new address to sign in next time. Continue?",
     "anon_gate_heading": "Create a free account to save your profile and earn badges.",
     "anon_gate_subtext": "You can still submit reports anonymously without an account.",
     "anon_note": "All profile fields are optional. You can submit reports anonymously.",
@@ -324,6 +325,7 @@
     "signing_in": "Signing in…",
     "validation": "Please enter your email and password.",
     "invalid_credentials": "Invalid email or password.",
+    "invalid_email": "Please enter a valid email address.",
     "no_account": "Don't have an account?",
     "setup_profile": "Set up your profile →"
   },
@@ -455,7 +457,9 @@
   "sidemenu": {
     "install_app": "Install App",
     "add_to_home_screen": "Add to home screen",
-    "version": "Crisis Reporter v1.0"
+    "version": "Crisis Reporter v1.0",
+    "verified_reporter": "Verified Reporter",
+    "anonymous_reporter": "Anonymous Reporter"
   },
   "ios_install": {
     "title": "Install Crisis Reporter",

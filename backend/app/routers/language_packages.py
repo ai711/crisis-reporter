@@ -2207,6 +2207,7 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
     ("login.signing_in",          "ui_login", "Signing in…"),
     ("login.validation",          "ui_login", "Please enter your email and password."),
     ("login.invalid_credentials", "ui_login", "Invalid email or password."),
+    ("login.invalid_email",       "ui_login", "Please enter a valid email address."),
     ("login.no_account",          "ui_login", "Don't have an account?"),
     ("login.setup_profile",       "ui_login", "Set up your profile →"),
 
@@ -2418,9 +2419,11 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
     ("profile.footer_hint",           "ui_profile", "Your profile is saved locally and synced when online"),
 
     # Side menu / PWA install prompt (web)
-    ("sidemenu.install_app",        "ui_menu", "Install App"),
-    ("sidemenu.add_to_home_screen", "ui_menu", "Add to home screen"),
-    ("sidemenu.version",            "ui_menu", "Crisis Reporter v1.0"),
+    ("sidemenu.install_app",         "ui_menu", "Install App"),
+    ("sidemenu.add_to_home_screen",  "ui_menu", "Add to home screen"),
+    ("sidemenu.version",             "ui_menu", "Crisis Reporter v1.0"),
+    ("sidemenu.verified_reporter",   "ui_menu", "Verified Reporter"),
+    ("sidemenu.anonymous_reporter",  "ui_menu", "Anonymous Reporter"),
 
     # ── Mobile-only keys ──────────────────────────────────────────────────────────
 
@@ -3055,6 +3058,7 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
     ("loginPopup.createButton",      "ui_auth", "Create Account"),
     ("loginPopup.skipButton",        "ui_auth", "Skip for now"),
     ("profile.email_invalid",        "ui_auth", "Please enter a valid email address"),
+    ("profile.email_change_confirm", "ui_auth", "You are changing your login email. You will need to use the new address to sign in next time. Continue?"),
 
     # ── Terms & Conditions (mobile — T&C screen) ──
     ("tandc.title",              "ui_onboarding", "Terms & Conditions"),

@@ -3,6 +3,8 @@ import {
   View, Text, TextInput, TouchableOpacity,
   StyleSheet, ActivityIndicator, ScrollView,
 } from "react-native";
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { useTranslation } from "react-i18next";
@@ -29,6 +31,10 @@ export default function RegisterScreen() {
       setError(t("login.validation") || "Please fill in all required fields");
       return;
     }
+    if (!EMAIL_RE.test(email.trim())) {
+      setError(t("login.invalid_email") || "Please enter a valid email address");
+      return;
+    }
     if (password !== confirmPassword) {
       setError(t("register.password_mismatch") || "Passwords do not match");
       return;
@@ -44,8 +50,7 @@ export default function RegisterScreen() {
       const languageCode = (await AsyncStorage.getItem("cr_language")) ?? "en";
       const tokens = await registerReporter(email.trim(), password, countryCode, languageCode);
       setReporter(String(tokens.reporter_id), tokens.is_verified);
-      navigation.goBack();
-      navigation.goBack();
+      navigation.navigate("Home");
     } catch (err: any) {
       const status = err?.response?.status;
       if (status === 400) {

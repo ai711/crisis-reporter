@@ -43,7 +43,7 @@ export async function registerReporter(
     language_code: languageCode,
   });
 
-  const tokens = response.data as AuthTokens;
+  const tokens: AuthTokens = { ...response.data, reporter_id: String(response.data.reporter_id) };
   tokenStorage.setTokens(tokens.access_token, tokens.refresh_token, tokens.reporter_id);
   return tokens;
 }
@@ -59,8 +59,18 @@ export async function loginReporter(
     platform: detectPlatform(),
   });
 
-  const tokens = response.data as AuthTokens;
+  const tokens: AuthTokens = { ...response.data, reporter_id: String(response.data.reporter_id) };
   tokenStorage.setTokens(tokens.access_token, tokens.refresh_token, tokens.reporter_id);
+
+  // Merge any anonymous session reports to the verified account (best-effort).
+  try {
+    await api.post("/api/reporters/merge-anonymous", {
+      anonymous_device_id: WEB_SESSION_ID,
+    });
+  } catch {
+    // Silent fail — merge is best-effort; login must not fail if merge fails.
+  }
+
   return tokens;
 }
 

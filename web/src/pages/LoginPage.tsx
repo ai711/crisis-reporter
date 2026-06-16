@@ -2,18 +2,9 @@ import { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useAuthStore } from "../stores/authStore";
-import api from "../services/api";
-import { tokenStorage } from "../services/api";
-import { registerReporter } from "../services/auth";
+import { registerReporter, loginReporter } from "../services/auth";
 
-interface LoginResponse {
-  access_token: string;
-  refresh_token: string;
-  token_type: string;
-  expires_in: number;
-  reporter_id: string;
-  is_verified: boolean;
-}
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function IconBack() {
   return (
@@ -52,7 +43,9 @@ export default function LoginPage() {
   const { t } = useTranslation();
   const { setReporter } = useAuthStore();
 
-  const isRegisterMode = new URLSearchParams(location.search).get("mode") === "register";
+  const params = new URLSearchParams(location.search);
+  const isRegisterMode = params.get("mode") === "register";
+  const nextPath = params.get("next") ?? "/";
   const [mode, setMode] = useState<"login" | "register">(isRegisterMode ? "register" : "login");
 
   const [email, setEmail] = useState("");
@@ -69,17 +62,16 @@ export default function LoginPage() {
       setError(t('login.validation'));
       return;
     }
+    if (!EMAIL_RE.test(email.trim())) {
+      setError(t('login.invalid_email') || "Please enter a valid email address");
+      return;
+    }
     setLoading(true);
     setError("");
     try {
-      const res = await api.post<LoginResponse>("/api/reporters/login", {
-        email: email.trim(),
-        password,
-      });
-      const { access_token, refresh_token, reporter_id, is_verified } = res.data;
-      tokenStorage.setTokens(access_token, refresh_token, reporter_id);
-      setReporter(reporter_id, is_verified);
-      navigate("/");
+      const tokens = await loginReporter(email.trim(), password);
+      setReporter(String(tokens.reporter_id), tokens.is_verified);
+      navigate(nextPath);
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { detail?: string } } })?.response?.data
@@ -94,6 +86,10 @@ export default function LoginPage() {
     e.preventDefault();
     if (!email.trim() || !password) {
       setError(t('login.validation'));
+      return;
+    }
+    if (!EMAIL_RE.test(email.trim())) {
+      setError(t('login.invalid_email') || "Please enter a valid email address");
       return;
     }
     if (password !== confirmPassword) {
@@ -111,7 +107,7 @@ export default function LoginPage() {
       const languageCode = localStorage.getItem("cr_language") ?? "en";
       const tokens = await registerReporter(email.trim(), password, countryCode, languageCode);
       setReporter(String(tokens.reporter_id), tokens.is_verified);
-      navigate("/");
+      navigate(nextPath);
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { detail?: string } } })?.response?.data

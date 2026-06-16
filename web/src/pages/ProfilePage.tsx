@@ -93,6 +93,7 @@ export default function ProfilePage() {
   const [isDirty, setIsDirty] = useState(false);
 
   const successTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const originalEmailRef = useRef<string>("");
 
   // ── Load profile ────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -104,7 +105,9 @@ export default function ProfilePage() {
         const p = res.data;
         setFirstName(p.first_name ?? "");
         setLastName(p.last_name ?? "");
-        setEmail(p.email ?? "");
+        const loadedEmail = p.email ?? "";
+        setEmail(loadedEmail);
+        originalEmailRef.current = loadedEmail;
         const parsed = parsePhoneNumber(p.phone_number ?? "");
         setPhoneCountryCode(parsed.code);
         setPhone(parsed.number);
@@ -160,6 +163,18 @@ export default function ProfilePage() {
     setEmailError("");
     if (!reporterId) return;
 
+    // If the reporter had a login email and is changing it, confirm — this
+    // changes the credential used to sign in on all devices.
+    const newEmail = email.trim();
+    const oldEmail = originalEmailRef.current;
+    if (oldEmail && newEmail && newEmail !== oldEmail) {
+      const ok = window.confirm(
+        t("profile.email_change_confirm") ||
+        `You are changing your login email from "${oldEmail}" to "${newEmail}". You will need to use the new address to sign in next time. Continue?`
+      );
+      if (!ok) return;
+    }
+
     setSaving(true);
     setSaveStatus("idle");
 
@@ -187,6 +202,7 @@ export default function ProfilePage() {
         phone_number: phone.trim() ? `${phoneCountryCode}${phone.trim()}` : null,
       });
 
+      originalEmailRef.current = email.trim();
       setSaveStatus("success");
       setIsDirty(false);
       if (successTimer.current) clearTimeout(successTimer.current);
@@ -222,8 +238,8 @@ export default function ProfilePage() {
           <p style={s.anonGateHeading}>{t("profile.anon_gate_heading")}</p>
           <p style={s.anonGateSubtext}>{t("profile.anon_gate_subtext")}</p>
           <div style={s.anonGateBtns}>
-            <button onClick={() => navigate("/login")} style={s.loginBtn}>{t("settings.login")}</button>
-            <button onClick={() => navigate("/login?mode=register")} style={s.registerBtn}>{t("settings.register")}</button>
+            <button onClick={() => navigate("/login?next=%2Fprofile")} style={s.loginBtn}>{t("settings.login")}</button>
+            <button onClick={() => navigate("/login?mode=register&next=%2Fprofile")} style={s.registerBtn}>{t("settings.register")}</button>
           </div>
         </div>
       </div>

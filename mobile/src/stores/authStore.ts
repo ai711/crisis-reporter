@@ -22,6 +22,7 @@ interface AuthState {
   setDeviceId: (id: string) => void;
   setOsDeviceId: (id: string | null) => void;
   setTAndCAcceptedAt: (ts: string) => void;
+  logout: () => void;
   reset: () => void;
 }
 
@@ -48,6 +49,7 @@ export const useAuthStore = create<AuthState>()(
       setDeviceId: (deviceId: string) => set({ deviceId }),
       setOsDeviceId: (osDeviceId: string | null) => set({ osDeviceId }),
       setTAndCAcceptedAt: (tAndCAcceptedAt: string) => set({ tAndCAcceptedAt }),
+      logout: () => set({ reporterId: null, isVerified: false }),
       reset: () =>
         set({
           reporterId: null,

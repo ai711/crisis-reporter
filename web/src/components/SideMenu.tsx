@@ -48,8 +48,9 @@ export default function SideMenu({ open, onClose }: SideMenuProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const { t } = useTranslation();
-  const { reporterId } = useAuthStore();
+  const { reporterId, isVerified } = useAuthStore();
   const [profile, setProfile] = useState<ReporterProfile | null>(null);
+  const prevReporterIdRef = useRef<string | null>(null);
   const [canInstall, setCanInstall] = useState(false);
   const installPromptRef = useRef<BeforeInstallPromptEvent | null>(null);
   const [canInstallIOS, setCanInstallIOS] = useState(false);
@@ -117,11 +118,19 @@ export default function SideMenu({ open, onClose }: SideMenuProps) {
   }
 
   const fetchProfile = useCallback(() => {
-    if (!reporterId || profile) return;
+    if (!reporterId) return;
     api.get<ReporterProfile>(`/api/reporters/${reporterId}`)
       .then((res) => setProfile(res.data))
       .catch(() => {});
-  }, [reporterId, profile]);
+  }, [reporterId]);
+
+  // Clear cached profile whenever the logged-in user changes (login / logout).
+  useEffect(() => {
+    if (reporterId !== prevReporterIdRef.current) {
+      prevReporterIdRef.current = reporterId;
+      setProfile(null);
+    }
+  }, [reporterId]);
 
   useEffect(() => {
     if (open) fetchProfile();
@@ -137,7 +146,27 @@ export default function SideMenu({ open, onClose }: SideMenuProps) {
     navigate(route);
   }
 
-  // profile available for future display (name, avatar initials)
+  const initials = reporterId
+    ? profile?.first_name && profile?.last_name
+      ? (profile.first_name[0] + profile.last_name[0]).toUpperCase()
+      : profile?.first_name
+        ? profile.first_name[0].toUpperCase()
+        : profile?.email
+          ? profile.email[0].toUpperCase()
+          : "?"
+    : "?";
+
+  const displayName = reporterId
+    ? profile?.first_name && profile?.last_name
+      ? `${profile.first_name} ${profile.last_name}`
+      : profile?.first_name
+        ? profile.first_name
+        : profile?.email
+          ? profile.email
+          : isVerified
+            ? t("sidemenu.verified_reporter")
+            : t("sidemenu.anonymous_reporter")
+    : "";
 
   const content = (
     <>
@@ -228,7 +257,72 @@ export default function SideMenu({ open, onClose }: SideMenuProps) {
         </div>
 
         {/* Subtle divider */}
-        <div style={{ height: 1, background: "rgba(193,199,210,0.5)", flexShrink: 0, marginBottom: 8 }} />
+        <div style={{ height: 1, background: "rgba(193,199,210,0.5)", flexShrink: 0 }} />
+
+        {/* ── User identity strip ── */}
+        {reporterId && (
+          <div style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            padding: "12px 20px 8px",
+            flexShrink: 0,
+          }}>
+            <div style={{
+              width: 40,
+              height: 40,
+              borderRadius: "50%",
+              background: isVerified ? BLUE : "#9CA3AF",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+              overflow: "hidden",
+            }}>
+              {profile?.profile_photo_url ? (
+                <img
+                  src={profile.profile_photo_url}
+                  alt=""
+                  style={{ width: 40, height: 40, objectFit: "cover" }}
+                />
+              ) : (
+                <span style={{ color: "#fff", fontSize: 15, fontWeight: 700, lineHeight: 1 }}>
+                  {initials}
+                </span>
+              )}
+            </div>
+            <div style={{ minWidth: 0 }}>
+              <p style={{
+                fontSize: 14,
+                fontWeight: 600,
+                color: "#1B1C1C",
+                margin: 0,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}>
+                {displayName}
+              </p>
+              {isVerified ? (
+                <div style={{ display: "flex", alignItems: "center", gap: 3, marginTop: 2 }}>
+                  <span
+                    className="material-symbols-outlined"
+                    style={{ color: "#16A34A", fontSize: 13, fontVariationSettings: "'FILL' 1" }}
+                  >
+                    verified
+                  </span>
+                  <span style={{ fontSize: 12, color: "#16A34A", fontWeight: 500 }}>
+                    {t("sidemenu.verified_reporter")}
+                  </span>
+                </div>
+              ) : (
+                <span style={{ fontSize: 12, color: "#9CA3AF" }}>
+                  {t("sidemenu.anonymous_reporter")}
+                </span>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* ── Menu items ── */}
         <nav style={{ flex: 1, padding: "0 16px", display: "flex", flexDirection: "column", gap: 4 }}>

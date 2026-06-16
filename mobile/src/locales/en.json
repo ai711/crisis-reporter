@@ -142,7 +142,8 @@
     "forgotPassword": "Forgot password?",
     "forgotPasswordMessage": "Please contact your UNDP coordinator to reset your password.",
     "errorInvalid": "Invalid email or password. Please try again.",
-    "errorGeneric": "Something went wrong. Please try again."
+    "errorGeneric": "Something went wrong. Please try again.",
+    "invalid_email": "Please enter a valid email address."
   },
   "profile": {
     "title": "Create Account",

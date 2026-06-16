@@ -106,9 +106,9 @@ export async function registerReporter(
   await tokenStorage.setTokens(
     tokens.access_token,
     tokens.refresh_token,
-    tokens.reporter_id
+    String(tokens.reporter_id)
   );
-  return tokens;
+  return { ...tokens, reporter_id: String(tokens.reporter_id) };
 }
 
 export async function loginReporter(
@@ -124,7 +124,7 @@ export async function loginReporter(
     platform: Platform.OS,
   });
 
-  const tokens: AuthTokens = response.data;
+  const tokens: AuthTokens = { ...response.data, reporter_id: String(response.data.reporter_id) };
   await tokenStorage.setTokens(
     tokens.access_token,
     tokens.refresh_token,

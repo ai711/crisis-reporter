@@ -27,7 +27,7 @@ interface SettingsScreenProps {
 
 export default function SettingsScreen({ navigation }: SettingsScreenProps) {
   const { t, i18n } = useTranslation();
-  const { languageCode, isVerified, setLanguage, setCountry, reset } = useAuthStore();
+  const { languageCode, isVerified, setLanguage, setCountry, logout } = useAuthStore();
   const insets = useSafeAreaInsets();
 
   const [showCountryPicker, setShowCountryPicker] = useState(false);
@@ -152,7 +152,8 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
 
   const handleLogout = async () => {
     await logoutReporter();
-    reset();
+    logout();
+    navigation.navigate("Home");
   };
 
   return (

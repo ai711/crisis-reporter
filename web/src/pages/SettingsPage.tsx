@@ -89,7 +89,7 @@ function IconClose() {
 export default function SettingsPage() {
   const navigate = useNavigate();
   const { t } = useTranslation(); // keeps i18next react context active for language switching
-  const { setCountry, setLanguage, reset } = useAuthStore();
+  const { setCountry, setLanguage, logout } = useAuthStore();
 
   const [modal, setModal] = useState<"country" | "language" | null>(null);
 
@@ -218,8 +218,8 @@ export default function SettingsPage() {
 
   const handleSignOut = () => {
     logoutReporter();
-    reset();
-    navigate("/onboarding");
+    logout();
+    navigate("/");
   };
 
   const closeModal = () => {
