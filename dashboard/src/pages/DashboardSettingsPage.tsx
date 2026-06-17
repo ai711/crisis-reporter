@@ -423,9 +423,11 @@ function GeneralSettingsTab() {
       if (logoFile) fd.append("logo", logoFile);
       return api.patch("/api/settings/general", fd, { headers: { "Content-Type": "multipart/form-data" } });
     },
-    onSuccess: (_, payload) => {
+    onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ["settings", "general"] });
-      setSettings({ dashboard_title: payload.dashboard_title, logo_url: payload.logo_url ?? null });
+      // Use response data — logo_url in res.data is the server-assigned URL
+      // after any new upload, not the stale form-state value.
+      setSettings({ dashboard_title: res.data.dashboard_title, logo_url: res.data.logo_url ?? null });
       setLogoFile(null);
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);

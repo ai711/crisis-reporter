@@ -14,6 +14,7 @@ export default function Layout({ children }: LayoutProps) {
 
   useEffect(() => {
     if (user && !loaded) loadSettings();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
   // Start the inactivity timer for every authenticated page.
