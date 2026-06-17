@@ -45,7 +45,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 # Exclude them from the "dead seed key" warning.
 DYNAMIC_PREFIXES = [
     "SAFETY_DISASTER_",   # t(`SAFETY_DISASTER_${id}_LABEL`)
-    "SAFETY_TIP_",        # t(`SAFETY_TIP_${part}${disaster}_SLIDE_${n}_${field}`)
+    "SAFETY_TIP_",        # server-side translation lookup via content endpoints (?lang=) — no t() calls
     "disaster_types.",    # t(`disaster_types.${v}`)
     "crisis_types.",      # t(`crisis_types.${ct.key}`) in CrisisTypeModal.tsx
     "faq.q",              # t(`${baseKey}_answer`) etc.

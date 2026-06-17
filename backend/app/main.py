@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 from pathlib import Path
-from sqlalchemy import select, text
+from sqlalchemy import select, text, update as sql_update
 from app.config import settings
 from app.database import engine, Base, AsyncSessionLocal
 
@@ -1277,6 +1277,44 @@ async def lifespan(app: FastAPI):
     await _seed_default_crisis()
     await _seed_notification_types()
     await _seed_safety_tips_content()
+    # Promote all auto-translated draft/approved translations to published so the
+    # language package endpoint serves them without requiring manual admin approval.
+    # Runs on every startup — idempotent. Also kicks off a background auto-translate
+    # pass for any keys that have never been translated (status="missing").
+    try:
+        from app.models.language_package import Translation, LanguagePackage, Language
+        async with AsyncSessionLocal() as db:
+            promoted = await db.execute(
+                sql_update(Translation)
+                .where(
+                    Translation.translated_by == "auto",
+                    Translation.status.in_(["draft", "approved"]),
+                    Translation.translated_text != "",
+                )
+                .values(status="published")
+                .execution_options(synchronize_session=False)
+            )
+            promoted_count = promoted.rowcount
+            if promoted_count:
+                await db.commit()
+                logger.info("Promoted %d auto-translated drafts to published", promoted_count)
+                # Bump every published language package version so clients re-download
+                bump_result = await db.execute(
+                    select(LanguagePackage).where(LanguagePackage.status == "published")
+                )
+                for pkg in bump_result.scalars().all():
+                    try:
+                        parts = pkg.version.split(".")
+                        patch = int(parts[-1]) + 1 if parts[-1].isdigit() else 1
+                        pkg.version = ".".join(parts[:-1] + [str(patch)])
+                    except Exception:
+                        pkg.version = pkg.version + ".1"
+                await db.commit()
+        # Background pass to translate any keys still marked "missing"
+        from app.tasks import auto_translate_content as _atc
+        asyncio.create_task(_atc("all"))
+    except Exception as _promo_err:
+        logger.warning("Auto-draft promotion skipped: %s", _promo_err)
     # Remove the ZZ placeholder country if it exists
     try:
         async with AsyncSessionLocal() as db:

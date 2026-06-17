@@ -1,13 +1,14 @@
 import asyncio
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, update as sql_update
 from pydantic import BaseModel
 from typing import Any
 
 from app.database import get_db, AsyncSessionLocal
 from app.models.app_setting import AppSetting
+from app.models.language_package import StringKey, Translation
 from app.services.dependencies import require_admin
 from app.models.dashboard_user import DashboardUser
 
@@ -92,6 +93,55 @@ DEFAULTS: dict[str, Any] = {
 }
 
 
+async def _translate_slides_bc(db: AsyncSession, slides: list, part: str, lang: str) -> list:
+    """Fetch published translations for Part B/C slides and return translated slide list."""
+    prefix_pattern = f"SAFETY_TIP_{part}_SLIDE_%"
+    rows = await db.execute(
+        select(StringKey.key, Translation.translated_text)
+        .join(Translation, Translation.string_key_id == StringKey.id)
+        .where(
+            StringKey.key.like(prefix_pattern),
+            Translation.language_code == lang,
+            Translation.status == "published",
+        )
+    )
+    tr = {row.key: row.translated_text for row in rows.all()}
+    result = []
+    for idx, slide in enumerate(slides, start=1):
+        sp = f"SAFETY_TIP_{part}_SLIDE_{idx}"
+        title = tr.get(f"{sp}_TITLE") or slide.get("title", "")
+        bullets = [
+            tr.get(f"{sp}_BULLET_{bidx}") or b
+            for bidx, b in enumerate(slide.get("bullets", []), start=1)
+        ]
+        result.append({"title": title, "bullets": bullets})
+    return result
+
+
+async def _translate_slides_a(db: AsyncSession, slides: list, disaster_type: str, lang: str) -> list:
+    """Fetch published translations for Part A disaster slides and return translated slide list."""
+    disaster_upper = disaster_type.upper().replace("-", "_")
+    prefix_pattern = f"SAFETY_TIP_A_{disaster_upper}_SLIDE_%"
+    rows = await db.execute(
+        select(StringKey.key, Translation.translated_text)
+        .join(Translation, Translation.string_key_id == StringKey.id)
+        .where(
+            StringKey.key.like(prefix_pattern),
+            Translation.language_code == lang,
+            Translation.status == "published",
+        )
+    )
+    tr = {row.key: row.translated_text for row in rows.all()}
+    result = []
+    for idx, slide in enumerate(slides, start=1):
+        sp = f"SAFETY_TIP_A_{disaster_upper}_SLIDE_{idx}"
+        title = tr.get(f"{sp}_TITLE") or slide.get("title", "")
+        dos = [tr.get(f"{sp}_DO_{i}") or d for i, d in enumerate(slide.get("dos", []), start=1)]
+        donts = [tr.get(f"{sp}_DONT_{i}") or d for i, d in enumerate(slide.get("donts", []), start=1)]
+        result.append({"title": title, "dos": dos, "donts": donts})
+    return result
+
+
 def _safety_tips_default(disaster_type: str) -> dict:
     return {
         "slides": [
@@ -148,13 +198,19 @@ class SafetyTipsPatch(BaseModel):
 @router.get("/safety-tips/{disaster_type}")
 async def get_safety_tips(
     disaster_type: str,
+    lang: str = Query("en"),
     db: AsyncSession = Depends(get_db),
 ):
-    """Public — no auth required. Reporter app fetches this to show in-app safety tips."""
+    """Public — no auth required. Reporter app fetches this to show in-app safety tips.
+    Pass ?lang=zh (or ar/fr/ru/es) to receive pre-translated slide content."""
     if disaster_type not in DISASTER_TYPES:
         raise HTTPException(status_code=404, detail=f"Unknown disaster type: {disaster_type}")
     key = f"content_safety-tips_{disaster_type}"
-    return await _get(db, key, _safety_tips_default(disaster_type))
+    data = await _get(db, key, _safety_tips_default(disaster_type))
+    if lang != "en" and data.get("slides"):
+        data = dict(data)
+        data["slides"] = await _translate_slides_a(db, data["slides"], disaster_type, lang)
+    return data
 
 
 async def _sync_safety_tips_to_translation(
@@ -214,6 +270,17 @@ async def _sync_safety_tips_to_translation(
                     ))
                 elif existing.english_text != english_text:
                     existing.english_text = english_text
+                    # Reset non-published translations so auto-translate re-queues them.
+                    # Published rows stay intact for in-flight language packages.
+                    await db.execute(
+                        sql_update(Translation)
+                        .where(
+                            Translation.string_key_id == existing.id,
+                            Translation.status != "published",
+                        )
+                        .values(status="missing", translated_text="")
+                        .execution_options(synchronize_session=False)
+                    )
 
             await db.commit()
             await ensure_string_keys_synced(db)
@@ -300,6 +367,17 @@ async def _sync_slideshow_to_translation(
                     ))
                 elif existing.english_text != english_text:
                     existing.english_text = english_text
+                    # Reset non-published translations so auto-translate re-queues them.
+                    # Published rows stay intact for in-flight language packages.
+                    await db.execute(
+                        sql_update(Translation)
+                        .where(
+                            Translation.string_key_id == existing.id,
+                            Translation.status != "published",
+                        )
+                        .values(status="missing", translated_text="")
+                        .execution_options(synchronize_session=False)
+                    )
 
             await db.commit()
             await ensure_string_keys_synced(db)
@@ -317,13 +395,21 @@ async def _sync_slideshow_to_translation(
 @router.get("/{content_type}")
 async def get_content(
     content_type: str,
+    lang: str = Query("en"),
     db: AsyncSession = Depends(get_db),
 ):
-    """Public — no auth required. Returns current content for the given type."""
+    """Public — no auth required. Returns current content for the given type.
+    Pass ?lang=zh (or ar/fr/ru/es) to receive pre-translated slide content for
+    reporting-guidelines (Part B) and first-aid (Part C)."""
     if content_type not in SIMPLE_TYPES:
         raise HTTPException(status_code=404, detail=f"Unknown content type: {content_type}")
     key = f"content_{content_type}"
-    return await _get(db, key, DEFAULTS.get(content_type, {}))
+    data = await _get(db, key, DEFAULTS.get(content_type, {}))
+    if lang != "en" and data.get("slides") and content_type in ("reporting-guidelines", "first-aid"):
+        part = "B" if content_type == "reporting-guidelines" else "C"
+        data = dict(data)
+        data["slides"] = await _translate_slides_bc(db, data["slides"], part, lang)
+    return data
 
 
 @router.patch("/{content_type}")

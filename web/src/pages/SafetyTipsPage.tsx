@@ -84,30 +84,7 @@ function MatIcon({
   );
 }
 
-// ── Translation key helper ────────────────────────────────────────────────────
-// Returns a factory bound to the i18next `t` function from the calling component.
-// Keys follow the backend pipeline pattern:
-//   SAFETY_TIP_A_{DISASTER}_SLIDE_{N}_TITLE
-//   SAFETY_TIP_A_{DISASTER}_SLIDE_{N}_DO_{M}
-//   SAFETY_TIP_A_{DISASTER}_SLIDE_{N}_DONT_{M}
-//   SAFETY_TIP_B_SLIDE_{N}_TITLE / BULLET_{M}
-//   SAFETY_TIP_C_SLIDE_{N}_TITLE / BULLET_{M}
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function makeTip(t: (key: string, opts?: any) => string) {
-  return function tip(
-    part: Part,
-    disaster: string,
-    slideIdx: number,       // 1-based
-    field: "TITLE" | "DO" | "DONT" | "BULLET",
-    bulletIdx: number,      // 1-based; 0 = no suffix (for TITLE)
-    fallback: string,
-  ): string {
-    const d = disaster ? `_${disaster.toUpperCase().replace(/-/g, "_")}` : "";
-    const b = bulletIdx > 0 ? `_${bulletIdx}` : "";
-    return t(`SAFETY_TIP_${part}${d}_SLIDE_${slideIdx}_${field}${b}`, { defaultValue: fallback });
-  };
-}
 
 // ── Fallback content (used when API is unavailable and cache is empty) ─────────
 
@@ -291,14 +268,18 @@ function markComplete(part: Part, id?: string) {
   getStorage().setItem(lsKey(part, id), "1");
 }
 
-function slideContentKey(part: Part, disasterId?: string): string {
-  return part === "A" ? `cr_content_safetyA_${disasterId}` : `cr_content_safety${part}`;
+function slideContentKey(part: Part, disasterId?: string, lang = "en"): string {
+  const langSuffix = lang !== "en" ? `_${lang}` : "";
+  return part === "A"
+    ? `cr_content_safetyA_${disasterId}${langSuffix}`
+    : `cr_content_safety${part}${langSuffix}`;
 }
 
-function slideFetchURL(part: Part, disasterId?: string): string {
-  if (part === "A") return `${BASE_URL}/api/content/safety-tips/${disasterId}`;
-  if (part === "B") return `${BASE_URL}/api/content/reporting-guidelines`;
-  return `${BASE_URL}/api/content/first-aid`;
+function slideFetchURL(part: Part, disasterId?: string, lang = "en"): string {
+  const langParam = lang !== "en" ? `?lang=${encodeURIComponent(lang)}` : "";
+  if (part === "A") return `${BASE_URL}/api/content/safety-tips/${disasterId}${langParam}`;
+  if (part === "B") return `${BASE_URL}/api/content/reporting-guidelines${langParam}`;
+  return `${BASE_URL}/api/content/first-aid${langParam}`;
 }
 
 // ── Nav footer ─────────────────────────────────────────────────────────────────
@@ -374,7 +355,7 @@ function SlideNavFooter({
 
 function SlideViewerA({
   slides,
-  disasterId,
+  disasterId: _disasterId,
   completionKey,
   onComplete,
 }: {
@@ -384,7 +365,6 @@ function SlideViewerA({
   onComplete: () => void;
 }) {
   const { t } = useTranslation();
-  const tip = makeTip(t);
   const [current, setCurrent] = useState(0);
   const [done, setDone] = useState(() => isComplete(completionKey.part, completionKey.id));
   const [isPending, setIsPending] = useState(false);
@@ -410,8 +390,6 @@ function SlideViewerA({
     return <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "#C1C7D2", fontSize: 14 }}>Loading…</div>;
   }
 
-  const slideTitle = tip("A", disasterId, current + 1, "TITLE", 0, slide.title);
-
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden" }}>
       {/* Counter + dots */}
@@ -426,10 +404,10 @@ function SlideViewerA({
         </div>
       </div>
 
-      {/* Slide content */}
+      {/* Slide content — title and bullet text come pre-translated from the backend */}
       <div style={{ flex: 1, overflowY: "auto", padding: "24px" }}>
         <h3 style={{ margin: "0 0 16px", fontSize: 17, fontWeight: 700, color: "#1B1C1C", lineHeight: 1.4 }}>
-          {slideTitle}
+          {slide.title}
         </h3>
 
         {hasDos && (
@@ -440,7 +418,7 @@ function SlideViewerA({
             <ul style={{ margin: 0, paddingLeft: 20 }}>
               {slide.dos.map((d, i) => (
                 <li key={i} style={{ color: "#414751", fontSize: 14, lineHeight: 1.7, marginBottom: i < slide.dos.length - 1 ? 6 : 0 }}>
-                  {tip("A", disasterId, current + 1, "DO", i + 1, d)}
+                  {d}
                 </li>
               ))}
             </ul>
@@ -455,7 +433,7 @@ function SlideViewerA({
             <ul style={{ margin: 0, paddingLeft: 20 }}>
               {slide.donts.map((d, i) => (
                 <li key={i} style={{ color: "#414751", fontSize: 14, lineHeight: 1.7, marginBottom: i < slide.donts.length - 1 ? 6 : 0 }}>
-                  {tip("A", disasterId, current + 1, "DONT", i + 1, d)}
+                  {d}
                 </li>
               ))}
             </ul>
@@ -485,7 +463,7 @@ function SlideViewerA({
 
 function SlideViewerBC({
   slides,
-  part,
+  part: _part,
   completionKey,
   onComplete,
 }: {
@@ -495,7 +473,6 @@ function SlideViewerBC({
   onComplete: () => void;
 }) {
   const { t } = useTranslation();
-  const tip = makeTip(t);
   const [current, setCurrent] = useState(0);
   const [done, setDone] = useState(() => isComplete(completionKey.part, completionKey.id));
   const [isPending, setIsPending] = useState(false);
@@ -536,12 +513,12 @@ function SlideViewerBC({
       <div style={{ flex: 1, overflowY: "auto", padding: "24px" }}>
         <div style={{ background: "#F6F3F2", border: "1.5px solid #E4E2E1", borderRadius: 16, padding: "20px" }}>
           <h3 style={{ margin: "0 0 14px", fontSize: 17, fontWeight: 700, color: "#1B1C1C", lineHeight: 1.4 }}>
-            {tip(part, "", current + 1, "TITLE", 0, slide.title)}
+            {slide.title}
           </h3>
           <ul style={{ margin: 0, paddingLeft: 20 }}>
             {slide.bullets.map((b, i) => (
               <li key={i} style={{ color: "#414751", fontSize: 14, lineHeight: 1.7, marginBottom: i < slide.bullets.length - 1 ? 8 : 0 }}>
-                {tip(part, "", current + 1, "BULLET", i + 1, b)}
+                {b}
               </li>
             ))}
           </ul>
@@ -569,7 +546,8 @@ function SlideViewerBC({
 
 export default function SafetyTipsPage() {
   const navigate = useNavigate();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const lang = i18n.language || "en";
   const [view, setView] = useState<View>({ type: "home" });
   const [rev, setRev] = useState(0);
   // Slides fetched from API — keyed by slideContentKey()
@@ -587,12 +565,12 @@ export default function SafetyTipsPage() {
     }
   }, []);
 
-  // Background-fetch slides when entering a slide view
+  // Background-fetch slides when entering a slide view (lang-aware — each language caches separately)
   useEffect(() => {
     if (view.type !== "slide") return;
     const { part, disasterId } = view;
-    const cacheKey = slideContentKey(part, disasterId);
-    const url = slideFetchURL(part, disasterId);
+    const cacheKey = slideContentKey(part, disasterId, lang);
+    const url = slideFetchURL(part, disasterId, lang);
 
     if (part === "A") {
       fetchAndCacheSlides<SlideA>(url, cacheKey).then((slides) => {
@@ -603,7 +581,7 @@ export default function SafetyTipsPage() {
         if (slides) setSlidesCache((prev) => new Map(prev).set(cacheKey, slides));
       });
     }
-  }, [view]);
+  }, [view, lang]);
 
   const refresh = useCallback(() => setRev((n) => n + 1), []);
   void rev;
@@ -611,20 +589,22 @@ export default function SafetyTipsPage() {
   // ── Helpers to resolve slides for slide view ─────────────────────────────────
 
   function resolvePartASlides(disasterId: string): SlideA[] {
-    const key = slideContentKey("A", disasterId);
+    const key = slideContentKey("A", disasterId, lang);
     const fromCache = slidesCache.get(key) as SlideA[] | undefined;
     if (fromCache?.length) return fromCache;
     const fromLS = getSlidesFromCache<SlideA>(key);
     if (fromLS?.length) return fromLS;
+    // English fallback only — non-English will show briefly until fetch completes
     return DISASTERS_FALLBACK.find((d) => d.id === disasterId)?.slides ?? [];
   }
 
   function resolveSlidesBC(part: "B" | "C"): SlideBC[] {
-    const key = slideContentKey(part);
+    const key = slideContentKey(part, undefined, lang);
     const fromCache = slidesCache.get(key) as SlideBC[] | undefined;
     if (fromCache?.length) return fromCache;
     const fromLS = getSlidesFromCache<SlideBC>(key);
     if (fromLS?.length) return fromLS;
+    // English fallback only — non-English will show briefly until fetch completes
     return part === "B" ? PART_B_FALLBACK : PART_C_FALLBACK;
   }
 

@@ -70,17 +70,34 @@ async def auto_translate_question_package(package_version: str) -> None:
 
         async with httpx.AsyncClient(timeout=30.0) as client:
             for lang_code in _TARGET_LANGUAGES:
-                # Find keys that already have any translation for this language
+                # Skip keys that already have a usable (non-missing) translation.
+                # status='missing' means the English source changed — must re-translate.
                 existing_result = await db.execute(
                     select(Translation.string_key_id).where(
-                        Translation.language_code == lang_code
+                        Translation.language_code == lang_code,
+                        Translation.status != "missing",
                     )
                 )
                 already_translated = {row[0] for row in existing_result.all()}
 
-                for sk in keys:
-                    if sk.id in already_translated:
-                        continue
+                keys_to_translate = [sk for sk in keys if sk.id not in already_translated]
+                if not keys_to_translate:
+                    continue
+
+                # Preload existing 'missing' rows so we UPDATE rather than INSERT.
+                missing_rows_result = await db.execute(
+                    select(Translation).where(
+                        Translation.string_key_id.in_([sk.id for sk in keys_to_translate]),
+                        Translation.language_code == lang_code,
+                        Translation.status == "missing",
+                    )
+                )
+                missing_by_key = {
+                    r.string_key_id: r
+                    for r in missing_rows_result.scalars().all()
+                }
+
+                for sk in keys_to_translate:
                     try:
                         resp = await client.post(
                             translate_url,
@@ -95,13 +112,19 @@ async def auto_translate_question_package(package_version: str) -> None:
                         translated_text = resp.json().get("translatedText", "")
                         if not translated_text:
                             continue
-                        db.add(Translation(
-                            string_key_id=sk.id,
-                            language_code=lang_code,
-                            translated_text=translated_text,
-                            status="draft",
-                            translated_by="auto",
-                        ))
+                        existing_row = missing_by_key.get(sk.id)
+                        if existing_row is not None:
+                            existing_row.translated_text = translated_text
+                            existing_row.status = "draft"
+                            existing_row.translated_by = "auto"
+                        else:
+                            db.add(Translation(
+                                string_key_id=sk.id,
+                                language_code=lang_code,
+                                translated_text=translated_text,
+                                status="draft",
+                                translated_by="auto",
+                            ))
                         translated_total += 1
                     except Exception as exc:
                         log.warning(
@@ -180,16 +203,34 @@ async def auto_translate_content(content_type: str) -> None:
 
         async with httpx.AsyncClient(timeout=30.0) as client:
             for lang_code in _TARGET_LANGUAGES:
+                # Skip keys that already have a usable (non-missing) translation.
+                # status='missing' means the English source changed — must re-translate.
                 existing_result = await db.execute(
                     select(Translation.string_key_id).where(
-                        Translation.language_code == lang_code
+                        Translation.language_code == lang_code,
+                        Translation.status != "missing",
                     )
                 )
                 already_translated = {row[0] for row in existing_result.all()}
 
-                for sk in keys:
-                    if sk.id in already_translated:
-                        continue
+                keys_to_translate = [sk for sk in keys if sk.id not in already_translated]
+                if not keys_to_translate:
+                    continue
+
+                # Preload existing 'missing' rows so we UPDATE rather than INSERT.
+                missing_rows_result = await db.execute(
+                    select(Translation).where(
+                        Translation.string_key_id.in_([sk.id for sk in keys_to_translate]),
+                        Translation.language_code == lang_code,
+                        Translation.status == "missing",
+                    )
+                )
+                missing_by_key = {
+                    r.string_key_id: r
+                    for r in missing_rows_result.scalars().all()
+                }
+
+                for sk in keys_to_translate:
                     try:
                         resp = await client.post(
                             translate_url,
@@ -204,13 +245,19 @@ async def auto_translate_content(content_type: str) -> None:
                         translated_text = resp.json().get("translatedText", "")
                         if not translated_text:
                             continue
-                        db.add(Translation(
-                            string_key_id=sk.id,
-                            language_code=lang_code,
-                            translated_text=translated_text,
-                            status="draft",
-                            translated_by="auto",
-                        ))
+                        existing_row = missing_by_key.get(sk.id)
+                        if existing_row is not None:
+                            existing_row.translated_text = translated_text
+                            existing_row.status = "published"
+                            existing_row.translated_by = "auto"
+                        else:
+                            db.add(Translation(
+                                string_key_id=sk.id,
+                                language_code=lang_code,
+                                translated_text=translated_text,
+                                status="published",
+                                translated_by="auto",
+                            ))
                         translated_total += 1
                     except Exception as exc:
                         log.warning(
