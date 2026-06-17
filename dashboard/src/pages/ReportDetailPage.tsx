@@ -776,7 +776,7 @@ export default function ReportDetailPage() {
                   {report.gps_latitude && report.gps_longitude ? (
                     <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 16 }}>
                       <a
-                        href={`https://www.google.com/maps?q=${report.gps_latitude},${report.gps_longitude}`}
+                        href={`https://www.google.com/maps?q=${report.building_centroid_lat ?? report.gps_latitude},${report.building_centroid_lng ?? report.gps_longitude}`}
                         target="_blank" rel="noopener noreferrer"
                         style={styles.mapsLink}
                       >

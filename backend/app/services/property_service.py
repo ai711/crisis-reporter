@@ -35,12 +35,13 @@ async def get_or_create_property(db: AsyncSession, report: Report) -> Property:
         if prop:
             return prop
 
-        # No existing property for this building_id — create one
+        # No existing property for this building_id — create one.
+        # Prefer building centroid over raw device GPS for the canonical property location.
         prop = Property(
             id=generate_property_id(),
             building_id=report.building_id,
-            latitude=report.gps_latitude or 0.0,
-            longitude=report.gps_longitude or 0.0,
+            latitude=report.building_centroid_lat or report.gps_latitude or 0.0,
+            longitude=report.building_centroid_lng or report.gps_longitude or 0.0,
             confirmed_status=None,
             is_recovered=False,
             has_conflict_warning=False,
@@ -51,22 +52,20 @@ async def get_or_create_property(db: AsyncSession, report: Report) -> Property:
         return prop
 
     # ── Path 2: no building_id — GPS proximity match ──────────────────────────
-    if report.gps_latitude is not None and report.gps_longitude is not None:
+    # Use building centroid when available (more accurate), fall back to device GPS.
+    ref_lat = report.building_centroid_lat or report.gps_latitude
+    ref_lng = report.building_centroid_lng or report.gps_longitude
+    if ref_lat is not None and ref_lng is not None:
         result = await db.execute(
             select(Property).where(
                 and_(
                     Property.building_id.is_(None),
-                    Property.latitude.between(
-                        report.gps_latitude - radius, report.gps_latitude + radius
-                    ),
-                    Property.longitude.between(
-                        report.gps_longitude - radius, report.gps_longitude + radius
-                    ),
+                    Property.latitude.between(ref_lat - radius, ref_lat + radius),
+                    Property.longitude.between(ref_lng - radius, ref_lng + radius),
                 )
             ).order_by(
-                # Pick nearest centroid
-                (Property.latitude - report.gps_latitude) * (Property.latitude - report.gps_latitude)
-                + (Property.longitude - report.gps_longitude) * (Property.longitude - report.gps_longitude)
+                (Property.latitude - ref_lat) * (Property.latitude - ref_lat)
+                + (Property.longitude - ref_lng) * (Property.longitude - ref_lng)
             ).limit(1)
         )
         prop = result.scalar_one_or_none()
@@ -74,8 +73,9 @@ async def get_or_create_property(db: AsyncSession, report: Report) -> Property:
             return prop
 
     # ── Path 3: create new property ───────────────────────────────────────────
-    lat = report.gps_latitude or 0.0
-    lng = report.gps_longitude or 0.0
+    # Prefer building centroid (more accurate) over raw device GPS.
+    lat = report.building_centroid_lat or report.gps_latitude or 0.0
+    lng = report.building_centroid_lng or report.gps_longitude or 0.0
     prop = Property(
         id=generate_property_id(),
         building_id=None,
