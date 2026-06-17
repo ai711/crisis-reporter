@@ -1236,6 +1236,9 @@ WHERE code IN (
     # reporters.ip_address_encrypted — Fernet-encrypted first-seen IP (mirrors Report.ip_address_encrypted).
     # Replaces the legacy plaintext reporters.ip_address column for new submissions.
     "ALTER TABLE reporters ADD COLUMN IF NOT EXISTS ip_address_encrypted VARCHAR(500)",
+    # reporters.email_hash — DB-level unique constraint prevents duplicate emails under concurrent
+    # registrations. Partial (WHERE NOT NULL) so anonymous reporters (no email) remain unaffected.
+    "CREATE UNIQUE INDEX IF NOT EXISTS uq_reporters_email_hash ON reporters(email_hash) WHERE email_hash IS NOT NULL",
 ]
 
 

@@ -171,6 +171,12 @@ export default function SettingsPage() {
     setInactiveCountry(null);
     setModal(null);
 
+    // Persist to reporter profile (best-effort — silent on failure)
+    const reporterId = localStorage.getItem("cr_reporter_id");
+    if (reporterId) {
+      api.patch(`/api/reporters/${reporterId}`, { country_code: country.code }).catch(() => {});
+    }
+
     // F3: Silent question package version check for the newly selected country.
     try {
       const cachedPkg = localStorage.getItem("cr_question_package");
@@ -211,6 +217,12 @@ export default function SettingsPage() {
     setLanguage(code);
     setCurrentLangCode(code);
     if (result.fromCache) setLangCacheNote(true);
+
+    // Persist to reporter profile (best-effort — silent on failure)
+    const reporterId = localStorage.getItem("cr_reporter_id");
+    if (reporterId) {
+      api.patch(`/api/reporters/${reporterId}`, { language_code: code }).catch(() => {});
+    }
 
     // i18n.changeLanguage is called inside loadLanguagePackage — no direct call needed.
     setModal(null);

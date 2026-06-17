@@ -650,8 +650,12 @@ async def update_report_flag(
             )
             from app.services.auto_flagging import _link_report_to_projects
             from app.database import AsyncSessionLocal
+            _prop_report_id = report.id  # capture UUID before outer session expires
             async with AsyncSessionLocal() as prop_db:
-                prop_report = await prop_db.get(Report, report.id)
+                _pr2 = await prop_db.execute(
+                    select(Report).where(Report.id == _prop_report_id)
+                )
+                prop_report = _pr2.scalar_one_or_none()
                 if prop_report:
                     prop = await get_or_create_property(prop_db, prop_report)
                     prop_report.property_id = prop.id
@@ -724,8 +728,12 @@ async def emergency_override_flag(
             )
             from app.services.auto_flagging import _link_report_to_projects
             from app.database import AsyncSessionLocal
+            _prop_report_id2 = report.id  # capture UUID before outer session expires
             async with AsyncSessionLocal() as prop_db:
-                prop_report = await prop_db.get(Report, report.id)
+                _pr3 = await prop_db.execute(
+                    select(Report).where(Report.id == _prop_report_id2)
+                )
+                prop_report = _pr3.scalar_one_or_none()
                 if prop_report:
                     prop = await get_or_create_property(prop_db, prop_report)
                     prop_report.property_id = prop.id

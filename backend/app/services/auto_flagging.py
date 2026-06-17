@@ -473,7 +473,12 @@ async def auto_flag_report(report_id: str, delay: int = 10) -> None:
                         update_conflict_warning,
                     )
                     async with AsyncSessionLocal() as prop_db:
-                        prop_report = await prop_db.get(Report, report.id)
+                        # Use explicit SELECT (not .get) to avoid identity-map issues on the
+                        # expired outer-session object after db.commit().
+                        _pr = await prop_db.execute(
+                            select(Report).where(Report.id == report.id)
+                        )
+                        prop_report = _pr.scalar_one_or_none()
                         if prop_report:
                             prop = await get_or_create_property(prop_db, prop_report)
                             prop_report.property_id = prop.id

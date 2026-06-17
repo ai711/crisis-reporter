@@ -316,6 +316,7 @@ export default function MainMapPage() {
           damage_level: props.damage_level,
           report_count: Number(props.report_count),
           flag_status: props.flag_status,
+          property_id: props.property_id ?? null,
         };
         setSelectedPinRef.current?.(pin);
       });
@@ -360,6 +361,7 @@ export default function MainMapPage() {
         damage_level: pin.damage_level,
         report_count: pin.report_count,
         flag_status: pin.flag_status,
+        property_id: pin.property_id ?? null,
       },
     }));
     source.setData({ type: "FeatureCollection", features });

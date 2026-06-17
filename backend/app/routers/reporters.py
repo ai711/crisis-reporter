@@ -66,6 +66,8 @@ class ProfileUpdateRequest(BaseModel):
     last_name: Optional[str] = None
     email: Optional[str] = None
     phone_number: Optional[str] = None
+    country_code: Optional[str] = None
+    language_code: Optional[str] = None
 
 
 class MergeAnonymousRequest(BaseModel):
@@ -338,6 +340,11 @@ async def update_reporter_profile(
         else:
             reporter.email_encrypted = None
             reporter.email_hash = None
+
+    if body.country_code is not None:
+        reporter.country_code = body.country_code.strip() or None
+    if body.language_code is not None:
+        reporter.language_code = body.language_code.strip() or "en"
 
     # Keep name_encrypted in sync (used by dashboard profile_type detection)
     fn = reporter.first_name or ""
