@@ -30,7 +30,7 @@ async def get_notifications(
               AND NOT EXISTS (
                 SELECT 1 FROM notification_reads nr
                 WHERE nr.notification_id = n.id
-                  AND nr.dashboard_user_id = :user_id
+                  AND nr.dashboard_user_id = :user_id::uuid
               )
             ORDER BY n.triggered_at DESC
             LIMIT 10
@@ -68,7 +68,7 @@ async def mark_notification_read(
     await db.execute(
         text("""
             INSERT INTO notification_reads (notification_id, dashboard_user_id, read_at)
-            VALUES (:nid, :uid, NOW())
+            VALUES (:nid, :uid::uuid, NOW())
             ON CONFLICT DO NOTHING
         """),
         {"nid": notification_id, "uid": str(current_user.id)},
@@ -86,13 +86,13 @@ async def mark_all_read(
     await db.execute(
         text("""
             INSERT INTO notification_reads (notification_id, dashboard_user_id, read_at)
-            SELECT n.id, :uid, NOW()
+            SELECT n.id, :uid::uuid, NOW()
             FROM notifications n
             WHERE (n.is_global = TRUE OR n.target_user_id = :uid::uuid)
               AND NOT EXISTS (
                 SELECT 1 FROM notification_reads nr
                 WHERE nr.notification_id = n.id
-                  AND nr.dashboard_user_id = :uid
+                  AND nr.dashboard_user_id = :uid::uuid
               )
             ON CONFLICT DO NOTHING
         """),
