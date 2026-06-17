@@ -22,20 +22,21 @@ async def get_notifications(
     current_user: DashboardUser = Depends(get_current_dashboard_user),
 ):
     """Return up to 10 unread notifications for the current user."""
+    uid = current_user.id  # uuid.UUID object — asyncpg binds natively without cast
     result = await db.execute(
         text("""
             SELECT n.id, n.notification_type_key, n.message, n.triggered_at
             FROM notifications n
-            WHERE (n.is_global = TRUE OR n.target_user_id = :user_id::uuid)
+            WHERE (n.is_global = TRUE OR n.target_user_id = :uid)
               AND NOT EXISTS (
                 SELECT 1 FROM notification_reads nr
                 WHERE nr.notification_id = n.id
-                  AND nr.dashboard_user_id = :user_id::uuid
+                  AND nr.dashboard_user_id = :uid
               )
             ORDER BY n.triggered_at DESC
             LIMIT 10
         """),
-        {"user_id": str(current_user.id)},
+        {"uid": uid},
     )
     rows = result.mappings().all()
     return {
@@ -68,10 +69,10 @@ async def mark_notification_read(
     await db.execute(
         text("""
             INSERT INTO notification_reads (notification_id, dashboard_user_id, read_at)
-            VALUES (:nid, :uid::uuid, NOW())
+            VALUES (:nid, :uid, NOW())
             ON CONFLICT DO NOTHING
         """),
-        {"nid": notification_id, "uid": str(current_user.id)},
+        {"nid": notification_id, "uid": current_user.id},
     )
     await db.commit()
     return {"success": True}
@@ -86,17 +87,17 @@ async def mark_all_read(
     await db.execute(
         text("""
             INSERT INTO notification_reads (notification_id, dashboard_user_id, read_at)
-            SELECT n.id, :uid::uuid, NOW()
+            SELECT n.id, :uid, NOW()
             FROM notifications n
-            WHERE (n.is_global = TRUE OR n.target_user_id = :uid::uuid)
+            WHERE (n.is_global = TRUE OR n.target_user_id = :uid)
               AND NOT EXISTS (
                 SELECT 1 FROM notification_reads nr
                 WHERE nr.notification_id = n.id
-                  AND nr.dashboard_user_id = :uid::uuid
+                  AND nr.dashboard_user_id = :uid
               )
             ON CONFLICT DO NOTHING
         """),
-        {"uid": str(current_user.id)},
+        {"uid": current_user.id},
     )
     await db.commit()
     return {"success": True}
