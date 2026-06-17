@@ -18,5 +18,17 @@ export default defineConfig([
     languageOptions: {
       globals: globals.browser,
     },
+    rules: {
+      // TanStack Query form-init pattern: useEffect(() => { if (data) setForm(data); }, [data])
+      // This is intentional and safe — demote from error to warn.
+      'react-hooks/set-state-in-effect': 'warn',
+      // Allow the _underscore prefix convention for intentionally unused variables/params.
+      '@typescript-eslint/no-unused-vars': ['error', {
+        varsIgnorePattern: '^_',
+        argsIgnorePattern: '^_',
+        caughtErrorsIgnorePattern: '^_',
+        destructuredArrayIgnorePattern: '^_',
+      }],
+    },
   },
 ])

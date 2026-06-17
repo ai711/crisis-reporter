@@ -263,6 +263,32 @@ export default function ManageRolesPage() {
     return () => clearTimeout(t);
   }, [successMsg]);
 
+  // ── Data — hooks must be declared before any early return ─────────────────
+  const { data: allRoles = [], isLoading } = useQuery<Role[]>({
+    queryKey: ["roles"],
+    queryFn: async () => {
+      const res = await api.get<Role[]>("/api/roles");
+      return res.data;
+    },
+  });
+
+  const createMutation = useMutation({
+    mutationFn: async (payload: { name: string; permissions: Permissions }) => {
+      const res = await api.post<Role>("/api/roles", payload);
+      return res.data;
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: async (payload: { id: string; name: string; permissions: Permissions }) => {
+      const res = await api.patch<Role>(`/api/roles/${payload.id}`, {
+        name: payload.name,
+        permissions: payload.permissions,
+      });
+      return res.data;
+    },
+  });
+
   // ── Access guard ───────────────────────────────────────────────────────────
   if (!canView) {
     return (
@@ -281,37 +307,11 @@ export default function ManageRolesPage() {
     );
   }
 
-  // ── Data ───────────────────────────────────────────────────────────────────
-  const { data: allRoles = [], isLoading } = useQuery<Role[]>({
-    queryKey: ["roles"],
-    queryFn: async () => {
-      const res = await api.get<Role[]>("/api/roles");
-      return res.data;
-    },
-  });
-
   const defaultRoles = allRoles.filter((r) => r.is_default);
   const customRoles = allRoles.filter((r) => !r.is_default);
   const filteredCustomRoles = searchTerm
     ? customRoles.filter((r) => r.name.toLowerCase().includes(searchTerm))
     : customRoles;
-
-  const createMutation = useMutation({
-    mutationFn: async (payload: { name: string; permissions: Permissions }) => {
-      const res = await api.post<Role>("/api/roles", payload);
-      return res.data;
-    },
-  });
-
-  const updateMutation = useMutation({
-    mutationFn: async (payload: { id: string; name: string; permissions: Permissions }) => {
-      const res = await api.patch<Role>(`/api/roles/${payload.id}`, {
-        name: payload.name,
-        permissions: payload.permissions,
-      });
-      return res.data;
-    },
-  });
 
   // ── Panel actions ──────────────────────────────────────────────────────────
 

@@ -1001,9 +1001,11 @@ export default function ReporterDetailPage() {
         {/* Safety Tips Progress */}
         <div className="card card-padded">
           <h2 className="section-label" style={{ marginBottom: 12, paddingBottom: 10, borderBottom: "1px solid var(--c-border-ghost)", display: "block" }}>SAFETY TIPS PROGRESS</h2>
-          {(reporter as any).safety_progress ? (
+          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+          {((reporter as any).safety_progress) ? (
             <div style={{display: 'flex', gap: 12}}>
               {['A', 'B', 'C'].map(part => {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const done = (reporter as any).safety_progress?.[`part_${part.toLowerCase()}_complete`];
                 return (
                   <div key={part} style={{flex: 1, textAlign: 'center', padding: '10px 0',

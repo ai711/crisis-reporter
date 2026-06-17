@@ -1015,7 +1015,7 @@ function LanguagesTab() {
     return () => {
       releaseLock(selectedLang);
     };
-  }, [selectedLang]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selectedLang]);
 
   // Release lock on browser unload
   useEffect(() => {
@@ -2760,10 +2760,10 @@ function QuestionsTab({ isAdmin, onSwitchToLanguages: _onSwitchToLanguages }: { 
   });
 
   // Active crisis check — for mid-crisis publish warning
-  const { data: activeCrises = [] } = useQuery<any[]>({
+  const { data: activeCrises = [] } = useQuery<{ id: string }[]>({
     queryKey: ["active-crises-q"],
     queryFn: async () => {
-      const res = await api.get<any[]>("/api/crises/active");
+      const res = await api.get<{ id: string }[]>("/api/crises/active");
       return res.data;
     },
     enabled: isAdmin,
@@ -2804,11 +2804,12 @@ function QuestionsTab({ isAdmin, onSwitchToLanguages: _onSwitchToLanguages }: { 
         setPublishBanner("Question package published. Reporters will sync on their next app open.");
       }
       setTimeout(() => setPublishBanner(""), 7000);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       const errData = err?.response?.data;
       if (err?.response?.status === 422 && errData?.detail?.error === "translation_incomplete") {
-        const bk: any[] = errData.detail.blocking ?? [];
-        const langs = bk.map((b: any) => b.language_name).join(", ");
+        const bk: { language_name: string }[] = errData.detail.blocking ?? [];
+        const langs = bk.map((b) => b.language_name).join(", ");
         setPublishError(`Cannot publish — translations are missing in ${bk.length} language${bk.length !== 1 ? "s" : ""}: ${langs}`);
         queryClient.invalidateQueries({ queryKey: ["question-publish-readiness"] });
         // Keep modal open so admin sees the error and can navigate to Languages tab
@@ -2831,6 +2832,7 @@ function QuestionsTab({ isAdmin, onSwitchToLanguages: _onSwitchToLanguages }: { 
       setShowDeactivateModal(false);
       setDeactivatingQuestion(null);
       refetchReadiness();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       if (err?.response?.status === 403) {
         setDeactivateError("Core questions cannot be deactivated.");

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import maplibregl, { GeoJSONSource } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
@@ -81,7 +81,7 @@ export default function MainMapPage() {
   const [country, setCountry] = useState("");
   const [showRecovered, setShowRecovered] = useState(false);
 
-  setSelectedPinRef.current = setSelectedPin;
+  useLayoutEffect(() => { setSelectedPinRef.current = setSelectedPin; });
 
   // ── Seconds ticker ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -147,7 +147,7 @@ export default function MainMapPage() {
 
   // Stable ref so SSE handler always sees the current selectedPin.
   const selectedPinRef = useRef<MapPin | null>(null);
-  selectedPinRef.current = selectedPin;
+  useLayoutEffect(() => { selectedPinRef.current = selectedPin; });
 
   // ── SSE — not active (no per-crisis channel without a crisis_id). ──────────
   // Map data refreshes on a 20-second polling interval instead.
@@ -366,6 +366,7 @@ export default function MainMapPage() {
   }, [pinsData, mapReady]);
 
   // ── Computed display values ───────────────────────────────────────────────
+  // eslint-disable-next-line react-hooks/purity
   const secondsSince = Math.floor((Date.now() - lastUpdated.getTime()) / 1000);
 
   // Active-filter booleans for chip highlight state.

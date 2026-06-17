@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useLayoutEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { Search, ChevronDown, X, ChevronLeft, ChevronRight, Eye, Download, FileText } from "lucide-react";
@@ -148,7 +148,7 @@ export default function ReportsPage() {
   const filterBarRef = useRef<HTMLDivElement>(null);
   // ref to avoid stale closures in the outside-click effect
   const filtersRef = useRef(filters);
-  filtersRef.current = filters;
+  useLayoutEffect(() => { filtersRef.current = filters; });
 
   // Pagination
   const [pageSize, setPageSize] = useState(100);
@@ -185,7 +185,6 @@ export default function ReportsPage() {
       });
     }, 400);
     return () => clearTimeout(t);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingFilters.search]);
 
   // Build query params from current applied filters + pagination state

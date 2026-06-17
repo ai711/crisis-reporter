@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useLayoutEffect, useRef, useCallback } from "react";
 import { tokenStorage, API_BASE } from "../services/api";
 import type { SSEEvent } from "../types";
 
@@ -12,7 +12,7 @@ export function useSSE({ crisisId, onEvent, enabled = true }: UseSSEOptions) {
   const eventSourceRef = useRef<EventSource | null>(null);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const onEventRef = useRef(onEvent);
-  onEventRef.current = onEvent;
+  useLayoutEffect(() => { onEventRef.current = onEvent; });
 
   const connect = useCallback(() => {
     if (!crisisId || !enabled) return;
@@ -41,8 +41,9 @@ export function useSSE({ crisisId, onEvent, enabled = true }: UseSSEOptions) {
       es.close();
       eventSourceRef.current = null;
 
-      // Reconnect after 5 seconds
+      // Reconnect after 5 seconds — self-reference is intentional (reconnect loop)
       reconnectTimeoutRef.current = setTimeout(() => {
+        // eslint-disable-next-line react-hooks/immutability
         connect();
       }, 5000);
     };

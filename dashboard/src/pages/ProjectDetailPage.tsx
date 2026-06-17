@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, useCallback } from "react";
 import { Toast } from "../components/Toast";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -295,7 +295,7 @@ export default function ProjectDetailPage() {
   const [lastUpdated, setLastUpdated] = useState(new Date());
   const [, setTick] = useState(0);
 
-  setSelectedPinRef.current = setSelectedPin;
+  useLayoutEffect(() => { setSelectedPinRef.current = setSelectedPin; });
 
   useEffect(() => {
     const id = setInterval(() => setTick((t) => t + 1), 1000);
@@ -692,6 +692,7 @@ export default function ProjectDetailPage() {
   const truncatedName = project.name.length > 40 ? project.name.slice(0, 40) + "…" : project.name;
   const headerTitle = `${project.serial_id} — ${truncatedName}`;
   const statusColors = PROJECT_STATUS_COLOURS[project.status] ?? { bg: "#f5f5f5", text: "#666" };
+  // eslint-disable-next-line react-hooks/purity
   const secondsSince = Math.floor((Date.now() - lastUpdated.getTime()) / 1000);
 
   const pieData = statsData

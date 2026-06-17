@@ -52,6 +52,16 @@ const DAMAGE_LEVEL_COLORS: Record<string, string> = {
   minimal: "#005a2c",
 };
 
+// ── Local types ───────────────────────────────────────────────────────────────
+
+interface ReportEdit {
+  id: string;
+  version_number: number;
+  edited_at: string;
+  edit_reason?: string;
+  fields_changed: Record<string, { from: string; to: string }>;
+}
+
 // ── Modal state ───────────────────────────────────────────────────────────────
 
 interface ModalState {
@@ -92,7 +102,6 @@ function useAuthPhoto(reportId: string, photoId: string) {
         setBlobUrl("error");
       });
     return () => { if (objectUrl) URL.revokeObjectURL(objectUrl); };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reportId, photoId]);
 
   return blobUrl;
@@ -418,10 +427,10 @@ export default function ReportDetailPage() {
   const [modalError, setModalError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
-  const [editForm, setEditForm] = useState<any>({});
+  const [editForm, setEditForm] = useState<Record<string, string>>({});
   const [editReason, setEditReason] = useState('');
   const [editSaving, setEditSaving] = useState(false);
-  const [reportEdits, setReportEdits] = useState<any[]>([]);
+  const [reportEdits, setReportEdits] = useState<ReportEdit[]>([]);
   const [showMergeModal, setShowMergeModal] = useState(false);
   const [mergeReason, setMergeReason] = useState('');
   const [mergeSaving, setMergeSaving] = useState(false);
@@ -1200,7 +1209,7 @@ export default function ReportDetailPage() {
                             <span style={{ fontSize: 11, color: "#9ca3af" }}>{new Date(edit.edited_at).toLocaleString()}</span>
                           </div>
                           {edit.edit_reason && <p style={{ fontSize: 11, color: "#717782", fontStyle: "italic", margin: "4px 0" }}>"{edit.edit_reason}"</p>}
-                          {Object.entries(edit.fields_changed).map(([field, change]: any) => (
+                          {Object.entries(edit.fields_changed).map(([field, change]) => (
                             <p key={field} style={{ fontSize: 11, color: "#717782", margin: "2px 0" }}>
                               {field}: <span style={{ textDecoration: "line-through" }}>{change.from}</span> → <span style={{ color: "#191c1e", fontWeight: 600 }}>{change.to}</span>
                             </p>
@@ -1333,7 +1342,7 @@ export default function ReportDetailPage() {
                     await api.post(`/api/reports/${report.id}/merge`, { target_report_id: matchedReportId, merge_reason: mergeReason });
                     setShowMergeModal(false);
                     window.location.reload();
-                  } catch (err: any) { alert(err?.response?.data?.detail || "Merge failed"); }
+                  } catch (err) { alert((err as { response?: { data?: { detail?: string } } })?.response?.data?.detail || "Merge failed"); }
                   finally { setMergeSaving(false); }
                 }}>
                 {mergeSaving ? "Merging…" : "Confirm Merge"}
@@ -1405,7 +1414,7 @@ export default function ReportDetailPage() {
                     await api.patch(`/api/reports/${report.id}`, { ...editForm, edit_reason: editReason });
                     setShowEditModal(false); setEditForm({}); setEditReason("");
                     window.location.reload();
-                  } catch (err: any) { alert(err?.response?.data?.detail || "Edit failed"); }
+                  } catch (err) { alert((err as { response?: { data?: { detail?: string } } })?.response?.data?.detail || "Edit failed"); }
                   finally { setEditSaving(false); }
                 }}>
                 {editSaving ? "Saving…" : "Save Changes"}

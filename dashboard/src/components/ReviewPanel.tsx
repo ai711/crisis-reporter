@@ -142,7 +142,6 @@ export default function ReviewPanel({
         releaseSoftLock("report", reportId).catch(() => {});
       }
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reportId, isFromQueue]);
 
   function toggleDismissed(reason: string) {
