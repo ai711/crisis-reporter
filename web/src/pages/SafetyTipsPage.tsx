@@ -326,7 +326,7 @@ function SlideNavFooter({
 }) {
   const isLast = current === total - 1;
   return (
-    <div style={{ padding: "14px 24px", background: BG, borderTop: `1px solid #E4E2E1`, display: "flex", gap: 10, flexShrink: 0 }}>
+    <div style={{ padding: "14px 24px", paddingBottom: "max(14px, calc(14px + env(safe-area-inset-bottom, 0px)))", background: BG, borderTop: `1px solid #E4E2E1`, display: "flex", gap: 10, flexShrink: 0 }}>
       <button
         onClick={onPrev}
         disabled={current === 0}

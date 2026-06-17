@@ -665,7 +665,7 @@ const s: Record<string, React.CSSProperties> = {
   // GPS unavailable chip
   gpsErrorChip: {
     position: "absolute",
-    bottom: 148,
+    bottom: "calc(148px + env(safe-area-inset-bottom, 0px))",
     right: 16,
     background: "rgba(26,43,74,0.88)",
     color: "#fff",
@@ -740,7 +740,7 @@ const s: Record<string, React.CSSProperties> = {
   // CTA: Report an Incident FAB — centre-bottom, above nav bar
   reportFab: {
     position: "absolute",
-    bottom: 96,
+    bottom: "calc(96px + env(safe-area-inset-bottom, 0px))",
     left: "50%",
     transform: "translateX(-50%)",
     background: "#0468B1",
@@ -759,7 +759,7 @@ const s: Record<string, React.CSSProperties> = {
   // D35: GPS recentre button — sits above fixed bottom nav (~80px)
   gpsBtn: {
     position: "absolute",
-    bottom: 88,
+    bottom: "calc(88px + env(safe-area-inset-bottom, 0px))",
     right: 16,
     width: 44,
     height: 44,
@@ -835,7 +835,7 @@ const s: Record<string, React.CSSProperties> = {
   panelBody: {
     flex: 1,
     overflowY: "auto",
-    padding: "16px 20px 24px",
+    padding: "16px 20px max(24px, calc(16px + env(safe-area-inset-bottom, 0px)))",
     display: "flex",
     flexDirection: "column",
     gap: 12,
