@@ -429,6 +429,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
 
   // Building footprint source — fetched once from public settings
   const [footprintSource, setFootprintSource] = useState<string>("osm");
+  const [buildingsLoading, setBuildingsLoading] = useState(false);
 
   // Map refs
   const cameraRef = useRef<CameraRef | null>(null);
@@ -903,8 +904,12 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
     const [west, south, east, north] = bounds;
     if (debounceTimer.current) clearTimeout(debounceTimer.current);
     debounceTimer.current = setTimeout(async () => {
+      if (isMountedRef.current) setBuildingsLoading(true);
       const fc = await fetchBuildingsForBounds(west, south, east, north);
-      if (fc && isMountedRef.current) setBuildingsFC(fc);
+      if (isMountedRef.current) {
+        if (fc) setBuildingsFC(fc);
+        setBuildingsLoading(false);
+      }
     }, 1000);
   };
 
@@ -2227,6 +2232,14 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                   <View style={styles.mapInstructionPill} pointerEvents="none">
                     <MaterialIcons name="info-outline" size={scale(14)} color="#0468B1" />
                     <Text style={styles.mapInstructionText}>Tap a building or drop a pin to select location</Text>
+                  </View>
+                )}
+
+                {/* Building footprints loading indicator */}
+                {buildingsLoading && (
+                  <View style={styles.buildingsLoadingPill} pointerEvents="none">
+                    <MaterialIcons name="pending" size={scale(13)} color="#fff" />
+                    <Text style={styles.buildingsLoadingText}>{t('report.loading_buildings', 'Loading footprints…')}</Text>
                   </View>
                 )}
 
@@ -4200,6 +4213,29 @@ const styles = StyleSheet.create({
     fontSize: scale(12),
     fontWeight: '500',
     color: '#1B1C1C',
+  },
+  buildingsLoadingPill: {
+    position: 'absolute',
+    top: 52,
+    alignSelf: 'center' as const,
+    zIndex: 15,
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    backgroundColor: 'rgba(4,104,177,0.88)',
+    borderRadius: 9999,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    gap: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  buildingsLoadingText: {
+    fontSize: scale(11),
+    fontWeight: '600' as const,
+    color: '#fff',
   },
 
   // Pin marker

@@ -377,6 +377,7 @@ export default function ReportPage() {
 
   // Map state
   const [locationMapZoom, setLocationMapZoom] = useState(2);
+  const [buildingsLoading, setBuildingsLoading] = useState(false);
 
   // Camera state
   const [cameraDenied, setCameraDenied] = useState(false);
@@ -443,10 +444,14 @@ export default function ReportPage() {
   const pinMarkerRef = useRef<maplibregl.Marker | null>(null); // B6
   const contentScrollRef = useRef<HTMLDivElement>(null);
 
-  // Scroll content to top whenever the review step becomes active
+  // Scroll content to top whenever the review step becomes active.
+  // requestAnimationFrame defers until after React finishes painting the new step,
+  // ensuring the scrollable div has its final content height before we reset scroll.
   useEffect(() => {
     if (step === "review") {
-      contentScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+      requestAnimationFrame(() => {
+        contentScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+      });
     }
   }, [step]);
 
@@ -783,13 +788,19 @@ export default function ReportPage() {
         setLocationMapZoom(zoom);
         if (zoom >= 14) {
           if (debounceTimer.current) clearTimeout(debounceTimer.current);
-          debounceTimer.current = setTimeout(() => fetchBuildingsForMap(mapInstance), 1000);
+          debounceTimer.current = setTimeout(() => {
+            setBuildingsLoading(true);
+            fetchBuildingsForMap(mapInstance).finally(() => setBuildingsLoading(false));
+          }, 1000);
         }
       });
 
       const initialZoom = mapInstance.getZoom();
       setLocationMapZoom(initialZoom);
-      if (initialZoom >= 14) fetchBuildingsForMap(mapInstance);
+      if (initialZoom >= 14) {
+        setBuildingsLoading(true);
+        fetchBuildingsForMap(mapInstance).finally(() => setBuildingsLoading(false));
+      }
     });
 
     return () => {
@@ -2310,6 +2321,22 @@ export default function ReportPage() {
                 </span>
               </div>
 
+              {/* Building footprints loading indicator */}
+              {buildingsLoading && (
+                <div style={{
+                  position: "absolute", top: 54, left: "50%", transform: "translateX(-50%)",
+                  zIndex: 10, background: "rgba(4,104,177,0.88)", backdropFilter: "blur(8px)",
+                  borderRadius: 9999, padding: "5px 14px",
+                  boxShadow: "0 2px 8px rgba(0,0,0,0.10)",
+                  display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap",
+                }}>
+                  <span className="material-symbols-outlined" style={{ fontSize: 13, color: "#fff" }}>pending</span>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: "#fff" }}>
+                    {t('report.loading_buildings', 'Loading footprints…')}
+                  </span>
+                </div>
+              )}
+
               {/* Floating GPS recenter button */}
               <div style={{ position: "absolute", bottom: 24, right: 16, zIndex: 10 }}>
                 <button
@@ -3606,7 +3633,7 @@ export default function ReportPage() {
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
-    minHeight: "100dvh",
+    height: "100dvh",
     background: "#F6F3F2",
     display: "flex",
     flexDirection: "column",

@@ -633,7 +633,11 @@ async def get_map_reports(
     limit: int = Query(default=200, le=500),
     db: AsyncSession = Depends(get_db),
 ):
-    """Returns geolocated, verified reports for map display. No authentication required."""
+    """Returns geolocated, verified reports for map display. No authentication required.
+
+    When crisis_id is provided and the crisis has a configured center + radius, only
+    reports whose GPS coordinates fall within that radius are returned (haversine distance).
+    """
     conditions = [
         Report.gps_latitude.isnot(None),
         Report.gps_longitude.isnot(None),
@@ -641,6 +645,36 @@ async def get_map_reports(
     ]
     if crisis_id:
         conditions.append(Report.crisis_id == crisis_id)
+
+        # Radius filter — only apply when the crisis has a configured center point.
+        try:
+            crisis_uuid = uuid.UUID(crisis_id)
+            crisis_row = await db.execute(
+                select(Crisis.map_center_lat, Crisis.map_center_lng, Crisis.map_default_radius_miles)
+                .where(Crisis.id == crisis_uuid)
+            )
+            crisis = crisis_row.one_or_none()
+        except (ValueError, AttributeError):
+            crisis = None
+
+        if crisis and crisis.map_center_lat and crisis.map_center_lng:
+            radius_km = float(crisis.map_default_radius_miles or 50) * 1.60934
+            clat = float(crisis.map_center_lat)
+            clng = float(crisis.map_center_lng)
+            # Haversine distance (km) using PostgreSQL trig functions.
+            # LEAST(1.0, …) guards against floating-point values marginally above 1
+            # that would make acos return NaN for near-identical coordinates.
+            dist_km = 6371.0 * func.acos(
+                func.least(
+                    1.0,
+                    func.cos(func.radians(clat))
+                    * func.cos(func.radians(Report.gps_latitude))
+                    * func.cos(func.radians(Report.gps_longitude) - func.radians(clng))
+                    + func.sin(func.radians(clat))
+                    * func.sin(func.radians(Report.gps_latitude)),
+                )
+            )
+            conditions.append(dist_km <= radius_km)
 
     query = (
         select(Report)

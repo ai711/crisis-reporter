@@ -108,6 +108,20 @@ export async function registerReporter(
     tokens.refresh_token,
     String(tokens.reporter_id)
   );
+
+  // Merge any anonymous session reports to the verified account (best-effort).
+  try {
+    const storedDeviceId = await SecureStore.getItemAsync("cr_device_id");
+    if (storedDeviceId) {
+      await api.post("/api/reporters/merge-anonymous", {
+        anonymous_device_id: storedDeviceId,
+      });
+    }
+  } catch (e) {
+    // Silent fail — merge is best-effort; registration must not fail if merge fails.
+    console.warn("Anonymous merge failed silently:", e);
+  }
+
   return { ...tokens, reporter_id: String(tokens.reporter_id) };
 }
 

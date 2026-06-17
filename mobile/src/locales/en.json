@@ -36,13 +36,17 @@
     "error": "Failed to submit report. Please try again.",
     "question_number": "Question {{number}} of {{total}}",
     "complete": "Completely Damaged",
-    "location_outside_crisis_area": "Your selected location appears to be outside the primary crisis area. You can still submit if this is correct."
+    "location_outside_crisis_area": "Your selected location appears to be outside the primary crisis area. You can still submit if this is correct.",
+    "loading_buildings": "Loading footprints…"
   },
   "map": {
     "loading": "Loading map...",
     "gpsUnavailable": "GPS unavailable — please select location manually",
     "searchPlaceholder": "Search for a location...",
-    "one_report_received": "1 verified report"
+    "one_report_received": "1 verified report",
+    "offline_title": "Map Unavailable",
+    "offline_gps_note": "GPS still works — your location is recorded in the background",
+    "gps_chip_unavailable": "GPS not available"
   },
   "settings": {
     "title": "Settings",

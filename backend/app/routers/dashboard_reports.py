@@ -544,9 +544,13 @@ async def serve_photo(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Photo not found")
 
     if settings.STORAGE_BACKEND == "r2":
-        # For R2, generate a presigned URL and redirect
+        # Stream the R2 object through the backend rather than redirecting.
+        # A 302 redirect to a presigned R2 URL triggers a cross-origin XHR from the
+        # dashboard, which fails because R2 doesn't add CORS headers for our origin.
         import boto3
+        import httpx
         from botocore.client import Config as BotoConfig
+        from fastapi.responses import Response as PlainResponse
         s3 = boto3.client(
             "s3",
             endpoint_url=f"https://{settings.R2_ACCOUNT_ID}.r2.cloudflarestorage.com",
@@ -558,10 +562,13 @@ async def serve_photo(
         url = s3.generate_presigned_url(
             "get_object",
             Params={"Bucket": settings.R2_BUCKET_NAME, "Key": photo.storage_path},
-            ExpiresIn=300,
+            ExpiresIn=60,
         )
-        from fastapi.responses import RedirectResponse
-        return RedirectResponse(url=url)
+        async with httpx.AsyncClient() as client:
+            r = await client.get(url)
+        r.raise_for_status()
+        content_type = r.headers.get("content-type", photo.mime_type or "image/jpeg")
+        return PlainResponse(content=r.content, media_type=content_type)
 
     # Local storage — read file and stream it.
     # Use storage_service.base_path (resolved to absolute at startup) so the

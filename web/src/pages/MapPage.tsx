@@ -170,11 +170,16 @@ function reportsGeoJSON(reports: ReportMapItem[]): Parameters<maplibregl.GeoJSON
 
 // ── Map helpers ───────────────────────────────────────────────────────────────
 
-function centerOnGPS(mapInstance: maplibregl.Map, countryCode: string | null) {
+function centerOnGPS(
+  mapInstance: maplibregl.Map,
+  countryCode: string | null,
+  onDenied?: () => void,
+) {
   const fallback = () => {
     const capital = countryCode ? COUNTRY_CAPITALS[countryCode] : null;
     if (capital) mapInstance.flyTo({ center: capital, zoom: 10 });
     else mapInstance.flyTo({ center: [0, 0], zoom: 2 });
+    onDenied?.();
   };
 
   if (!navigator.geolocation) { fallback(); return; }
@@ -182,7 +187,7 @@ function centerOnGPS(mapInstance: maplibregl.Map, countryCode: string | null) {
   navigator.geolocation.getCurrentPosition(
     (pos) => mapInstance.flyTo({ center: [pos.coords.longitude, pos.coords.latitude], zoom: 15 }),
     fallback,
-    { timeout: 8000 }
+    { timeout: 8000 },
   );
 }
 
@@ -245,6 +250,8 @@ export default function MapPage() {
   const [showZoomHint, setShowZoomHint] = useState(false);
   const [selectedPin, setSelectedPin] = useState<PinDetail | null>(null);
   const [reportsLoading, setReportsLoading] = useState(false);
+  // Brief chip shown for 3 s after a GPS recentre attempt fails
+  const [gpsUnavailable, setGpsUnavailable] = useState(false);
 
   // D30: Offline detection
   const [isOnline, setIsOnline] = useState(navigator.onLine);
@@ -427,24 +434,46 @@ export default function MapPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Map initialises once on mount
 
-  // D35: GPS recentre handler
+  // D35: GPS recentre handler — shows a brief chip if GPS is denied / unavailable
   const handleGpsRecentre = () => {
-    if (map.current) centerOnGPS(map.current, countryCode);
+    if (!map.current) return;
+    centerOnGPS(map.current, countryCode, () => {
+      setGpsUnavailable(true);
+      setTimeout(() => setGpsUnavailable(false), 3000);
+    });
   };
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
     <div style={s.page}>
-      {/* D30–31: Offline state — suppress map entirely */}
+      {/* D30–31: Offline state — suppress map entirely, show informational card */}
       {!isOnline ? (
         <div style={s.offlineContainer}>
-          <p style={s.offlineText}>
-            {t('map.offline_message')}
-          </p>
-          <button style={s.retryBtn} onClick={() => window.location.reload()}>
-            {t('common.retry')}
-          </button>
+          <div style={s.offlineCard}>
+            <div style={s.offlineIconWrap}>
+              <svg width={40} height={40} viewBox="0 0 24 24" fill="none" stroke="#717782" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+                <line x1="1" y1="1" x2="23" y2="23" />
+                <path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55" />
+                <path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39" />
+                <path d="M10.71 5.05A16 16 0 0 1 22.56 9" />
+                <path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88" />
+                <path d="M8.53 16.11a6 6 0 0 1 6.95 0" />
+                <line x1="12" y1="20" x2="12.01" y2="20" />
+              </svg>
+            </div>
+            <h2 style={s.offlineTitle}>{t('map.offline_title', 'Map Unavailable')}</h2>
+            <p style={s.offlineSubtitle}>{t('map.offline_message')}</p>
+            <div style={s.offlineGpsNote}>
+              <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#0468B1" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="3" /><path d="M12 2v3M12 19v3M2 12h3M19 12h3" />
+              </svg>
+              <span style={s.offlineGpsNoteText}>{t('map.offline_gps_note', 'GPS still works — your location is recorded in the background')}</span>
+            </div>
+            <button style={s.retryBtn} onClick={() => window.location.reload()}>
+              {t('common.retry')}
+            </button>
+          </div>
         </div>
       ) : (
         <div style={s.mapWrapper}>
@@ -461,6 +490,16 @@ export default function MapPage() {
 
           {showZoomHint && (
             <div style={s.zoomHint}>{t('map.zoom_hint')}</div>
+          )}
+
+          {/* GPS unavailable chip — auto-dismisses after 3 s */}
+          {gpsUnavailable && (
+            <div style={s.gpsErrorChip}>
+              <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+              {t('map.gps_chip_unavailable', 'GPS not available')}
+            </div>
           )}
 
           {/* D35: GPS recentre button — bottom-right, always visible when map is loaded */}
@@ -556,26 +595,90 @@ const s: Record<string, React.CSSProperties> = {
     flexDirection: "column",
     alignItems: "center",
     justifyContent: "center",
-    padding: "32px 24px",
-    gap: 20,
+    padding: "32px 20px",
+    background: "#F6F3F2",
   },
-  offlineText: {
-    fontSize: "1rem",
-    color: "#1A2B4A",
-    textAlign: "center",
-    lineHeight: 1.6,
+  offlineCard: {
+    background: "#fff",
+    borderRadius: 20,
+    padding: "36px 28px 32px",
+    maxWidth: 360,
+    width: "100%",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    gap: 16,
+    boxShadow: "0 2px 16px rgba(0,0,0,0.07)",
+  },
+  offlineIconWrap: {
+    width: 80,
+    height: 80,
+    borderRadius: "50%",
+    background: "rgba(193,199,210,0.18)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 4,
+  },
+  offlineTitle: {
+    fontSize: 22,
+    fontWeight: 700,
+    color: "#1B1C1C",
     margin: 0,
-    maxWidth: 320,
+    textAlign: "center",
+  },
+  offlineSubtitle: {
+    fontSize: 14,
+    color: "#414751",
+    textAlign: "center",
+    lineHeight: 1.55,
+    margin: 0,
+    maxWidth: 280,
+  },
+  offlineGpsNote: {
+    display: "flex",
+    alignItems: "flex-start",
+    gap: 10,
+    background: "#F6F3F2",
+    borderRadius: 12,
+    padding: "12px 16px",
+    width: "100%",
+    boxSizing: "border-box" as const,
+  },
+  offlineGpsNoteText: {
+    fontSize: 12,
+    color: "#717782",
+    lineHeight: 1.5,
+    flex: 1,
   },
   retryBtn: {
     background: "#0468B1",
     color: "#fff",
     border: "none",
-    borderRadius: 8,
-    padding: "12px 24px",
-    fontSize: 16,
-    fontWeight: 600,
+    borderRadius: 26,
+    padding: "14px 0",
+    fontSize: 15,
+    fontWeight: 700,
     cursor: "pointer",
+    width: "100%",
+  },
+  // GPS unavailable chip
+  gpsErrorChip: {
+    position: "absolute",
+    bottom: 148,
+    right: 16,
+    background: "rgba(26,43,74,0.88)",
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: 600,
+    padding: "7px 14px",
+    borderRadius: 20,
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    zIndex: 10,
+    pointerEvents: "none" as const,
+    whiteSpace: "nowrap" as const,
   },
   // Map container
   mapWrapper: {

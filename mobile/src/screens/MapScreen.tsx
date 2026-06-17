@@ -103,6 +103,7 @@ export default function MapScreen() {
   const [crisisCenterLng, setCrisisCenterLng] = useState<number | null>(null);
   const [buildingsFC, setBuildingsFC] = useState<GeoJSON.FeatureCollection>(EMPTY_FC);
   const [showZoomHint, setShowZoomHint] = useState(false);
+  const [gpsUnavailable, setGpsUnavailable] = useState(false);
   const cameraRef = useRef<CameraRef | null>(null);
   const buildingsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const initialFetchDone = useRef(false);
@@ -238,7 +239,12 @@ export default function MapScreen() {
     try {
       const { status } = await Location.getForegroundPermissionsAsync();
       if (status !== 'granted') {
-        await Location.requestForegroundPermissionsAsync();
+        const { status: newStatus } = await Location.requestForegroundPermissionsAsync();
+        if (newStatus !== 'granted') {
+          setGpsUnavailable(true);
+          setTimeout(() => setGpsUnavailable(false), 3000);
+          return;
+        }
       }
       const loc = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.Balanced,
@@ -249,7 +255,8 @@ export default function MapScreen() {
         duration: 500,
       });
     } catch {
-      // GPS unavailable
+      setGpsUnavailable(true);
+      setTimeout(() => setGpsUnavailable(false), 3000);
     }
   };
 
@@ -513,6 +520,14 @@ export default function MapScreen() {
       >
         <MaterialIcons name="gps-fixed" size={scale(24)} color="#FFFFFF" />
       </TouchableOpacity>
+
+      {/* GPS unavailable chip — auto-dismisses after 3 s */}
+      {gpsUnavailable && (
+        <View style={[styles.gpsErrorChip, { bottom: insets.bottom + 140 }]} pointerEvents="none">
+          <MaterialIcons name="location-off" size={scale(13)} color="#fff" />
+          <Text style={styles.gpsErrorChipText}>{t('map.gps_chip_unavailable', 'GPS not available')}</Text>
+        </View>
+      )}
 
       {/* Popup card — shown when a pin is tapped */}
       <Modal
@@ -815,6 +830,23 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 3 },
     zIndex: 10,
+  },
+  gpsErrorChip: {
+    position: 'absolute',
+    right: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(26,43,74,0.88)',
+    borderRadius: 20,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    zIndex: 10,
+  },
+  gpsErrorChipText: {
+    color: '#FFFFFF',
+    fontSize: scale(12),
+    fontWeight: '600',
   },
 
   // ── Popup card ───────────────────────────────────────────────────────────

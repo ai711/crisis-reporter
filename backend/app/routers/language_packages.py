@@ -2833,6 +2833,7 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
     ("report.pin_dropped",              "ui_report", "Pin Dropped"),
     ("report.gps_captured",             "ui_report", "GPS Location Captured"),
     ("report.location_zoom_hint",       "ui_report", "Zoom in to see and select buildings"),
+    ("report.loading_buildings",        "ui_report", "Loading footprints…"),
     ("report.msft_footprints_note",     "ui_report", "Microsoft Building Footprints active — building selection uses ML-detected footprints."),
     ("report.location_note_label",      "ui_report", "ADD A LOCATION NOTE (OPTIONAL)"),
     ("report.location_note_placeholder","ui_report", "e.g. Blue gate on the left, next to the pharmacy"),
@@ -3042,7 +3043,10 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
     # ── Map UI (web) ──
     ("map.pin_reported",   "ui_map", "Reported: "),
     ("map.pin_id",         "ui_map", "ID: "),
-    ("map.offline_message","ui_map", "The map requires an internet connection. Please check your connection and try again."),
+    ("map.offline_message",       "ui_map", "The map requires an internet connection. Please check your connection and try again."),
+    ("map.offline_title",         "ui_map", "Map Unavailable"),
+    ("map.offline_gps_note",      "ui_map", "GPS still works — your location is recorded in the background"),
+    ("map.gps_chip_unavailable",  "ui_map", "GPS not available"),
 
     # ── Auth / Login (mobile) ──
     ("login.emailPlaceholder",       "ui_auth", "Email address"),
