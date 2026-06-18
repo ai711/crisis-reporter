@@ -43,6 +43,13 @@ _DAMAGE_KEY_TO_CODE: dict[str, str] = {
     "minimal": "minimal",
 }
 
+# Maps backend codes → frontend snake_case keys (used in all API responses)
+_CODE_TO_SNAKE: dict[str, str] = {
+    "complete": "completely_destroyed",
+    "partial": "partially_damaged",
+    "minimal": "minimal_or_no_damage",
+}
+
 VALID_CONFIRMED = {"complete", "partial", "minimal"}
 
 
@@ -54,6 +61,8 @@ class PropertyListItem(BaseModel):
     display_name: str
     address: Optional[str]
     country: Optional[str]
+    latitude: float
+    longitude: float
     current_damage_level: Optional[str]
     confirmed_status: Optional[str]
     auto_confirmed: bool
@@ -234,18 +243,20 @@ async def _build_property_list_item(
     if project_id:
         filters.append(Report.crisis_id == project_id)
 
+    # Only count qualifying (green/orange) reports — matches what is shown in the detail view
+    qual_filters = filters + [Report.flag_status.in_(["green", "orange"])]
+
     # Aggregate stats
     agg = await db.execute(
         select(
             func.count(Report.id),
             func.count(func.distinct(Report.reporter_id)),
             func.max(Report.submitted_at),
-        ).where(and_(*filters))
+        ).where(and_(*qual_filters))
     )
     total_reports, total_reporters, most_recent_at = agg.one()
 
     # Most recent qualifying report for damage level + country + address
-    qual_filters = filters + [Report.flag_status.in_(["green", "orange"])]
     recent = await db.execute(
         select(Report.damage_level, Report.location_address, Report.building_name)
         .where(and_(*qual_filters))
@@ -272,8 +283,10 @@ async def _build_property_list_item(
         display_name=_display_name(prop, report_name),
         address=address,
         country=country,
-        current_damage_level=DAMAGE_LABELS.get(current_damage) if current_damage else None,
-        confirmed_status=DAMAGE_LABELS.get(prop.confirmed_status) if prop.confirmed_status else None,
+        latitude=prop.latitude,
+        longitude=prop.longitude,
+        current_damage_level=_CODE_TO_SNAKE.get(current_damage) if current_damage else None,
+        confirmed_status=_CODE_TO_SNAKE.get(prop.confirmed_status) if prop.confirmed_status else None,
         auto_confirmed=prop.auto_confirmed,
         manual_confirmed_lock=prop.manual_confirmed_lock,
         has_conflict_warning=prop.has_conflict_warning,
@@ -515,18 +528,20 @@ async def get_property_detail(
     if project_id:
         report_filters.append(Report.crisis_id == project_id)
 
+    # Only count qualifying (green/orange) reports — matches reporter_rows and damage distribution
+    qual_filters = report_filters + [Report.flag_status.in_(["green", "orange"])]
+
     # Aggregate stats
     agg = await db.execute(
         select(
             func.count(Report.id),
             func.count(func.distinct(Report.reporter_id)),
             func.max(Report.submitted_at),
-        ).where(and_(*report_filters))
+        ).where(and_(*qual_filters))
     )
     total_reports, total_reporters, most_recent_at = agg.one()
 
     # Most recent qualifying report
-    qual_filters = report_filters + [Report.flag_status.in_(["green", "orange"])]
     recent = await db.execute(
         select(Report.damage_level, Report.location_address, Report.building_name)
         .where(and_(*qual_filters))
@@ -555,7 +570,7 @@ async def get_property_detail(
     )
     damage_distribution: dict[str, int] = {}
     for lvl, cnt in dist_result.all():
-        damage_distribution[DAMAGE_LABELS.get(lvl, lvl)] = cnt
+        damage_distribution[_CODE_TO_SNAKE.get(lvl, lvl)] = cnt
 
     # Conflict warning details
     conflict_details = None
@@ -600,7 +615,7 @@ async def get_property_detail(
     reporter_rows = [
         ReporterRow(
             reporter_id=str(r.reporter_id),
-            most_recent_damage_level=DAMAGE_LABELS.get(r.damage_level),
+            most_recent_damage_level=_CODE_TO_SNAKE.get(r.damage_level),
             most_recent_submitted_at=r.submitted_at,
             platform=r.platform,
             flag_status=r.flag_status,
@@ -620,7 +635,7 @@ async def get_property_detail(
         address=address,
         country=country,
         crisis_id=crisis_id_str,
-        confirmed_status=DAMAGE_LABELS.get(prop.confirmed_status) if prop.confirmed_status else None,
+        confirmed_status=_CODE_TO_SNAKE.get(prop.confirmed_status) if prop.confirmed_status else None,
         auto_confirmed=prop.auto_confirmed,
         manual_confirmed_lock=prop.manual_confirmed_lock,
         has_conflict_warning=prop.has_conflict_warning,

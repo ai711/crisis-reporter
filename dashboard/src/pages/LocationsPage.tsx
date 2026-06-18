@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Home } from "lucide-react";
 import Header from "../components/Header";
@@ -212,8 +212,6 @@ export default function LocationsPage() {
   const buildParams = (): Record<string, string | number | boolean> => {
     const p: Record<string, string | number | boolean> = {
       limit: pageSize,
-      sort_by: sortBy,
-      sort_dir: sortDir,
     };
     if (cursor) p.cursor = cursor;
     if (search.trim()) p.search = search.trim();
@@ -244,7 +242,26 @@ export default function LocationsPage() {
   const hasMore: boolean = data?.has_more ?? false;
   const nextCursor: string | null = data?.cursor ?? null;
 
-  // Sort handler
+  // Client-side sort — backend ignores sort_by/sort_dir; we sort the fetched page here
+  const sortedItems = useMemo(() => {
+    if (items.length === 0) return items;
+    return [...items].sort((a, b) => {
+      const av = a[sortBy as keyof Property];
+      const bv = b[sortBy as keyof Property];
+      if (av == null && bv == null) return 0;
+      if (av == null) return 1;
+      if (bv == null) return -1;
+      let cmp = 0;
+      if (typeof av === "number" && typeof bv === "number") {
+        cmp = av - bv;
+      } else {
+        cmp = String(av).localeCompare(String(bv));
+      }
+      return sortDir === "asc" ? cmp : -cmp;
+    });
+  }, [items, sortBy, sortDir]);
+
+  // Sort handler — purely client-side, no refetch needed
   const handleSort = (field: SortField) => {
     if (field === sortBy) {
       setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -252,7 +269,6 @@ export default function LocationsPage() {
       setSortBy(field);
       setSortDir("desc");
     }
-    resetPagination();
   };
 
   const resetPagination = () => {
@@ -699,7 +715,7 @@ export default function LocationsPage() {
                 </tr>
               </thead>
               <tbody>
-                {items.map((prop) => {
+                {sortedItems.map((prop) => {
                   const isUnreviewed = showUnreviewed && !prop.confirmed_status;
                   const isHovered = hoveredRow === prop.property_id;
                   const dmgColor = prop.current_damage_level
