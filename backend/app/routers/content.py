@@ -1,4 +1,5 @@
 import asyncio
+import uuid
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -49,11 +50,11 @@ _FIRST_AID_DEFAULT = [
 
 _ERROR_MESSAGES_DEFAULT = {
     "items": [
-        {"key": "network_error", "text": "A network error occurred. Please check your connection and try again."},
-        {"key": "location_denied", "text": "Location access was denied. Please enable location services and try again."},
-        {"key": "photo_required", "text": "At least one photo is required before submitting your report."},
-        {"key": "submission_failed", "text": "Your report could not be submitted. It has been saved to your offline queue."},
-        {"key": "session_expired", "text": "Your session has expired. Please log in again."},
+        {"key": "report.error_no_internet",    "label": "Network Error",     "text": "No internet connection. Please check your connection and try again."},
+        {"key": "errors.location_denied",       "label": "Location Denied",   "text": "Location access was denied. Please enable location services and try again."},
+        {"key": "report.review_photo_required", "label": "Photo Required",    "text": "At least one photo is required. Please add a photo before submitting."},
+        {"key": "report.error_timeout",         "label": "Submission Failed", "text": "This is taking longer than expected. Please try again."},
+        {"key": "errors.session_expired",       "label": "Session Expired",   "text": "Your session has expired. Please log in again."},
     ],
     "version": 1,
     "updated_at": None,
@@ -61,11 +62,11 @@ _ERROR_MESSAGES_DEFAULT = {
 
 _SYSTEM_MESSAGES_DEFAULT = {
     "items": [
-        {"key": "sync_complete", "text": "Your offline reports have been synced successfully."},
-        {"key": "tc_update", "text": "Our Terms and Conditions have been updated. Please review and accept to continue."},
-        {"key": "report_received", "text": "Your report has been received and is being processed."},
-        {"key": "offline_queued", "text": "You are offline. Your report has been saved and will be sent when you reconnect."},
-        {"key": "update_available", "text": "A new version of the app is available. Please refresh to update."},
+        {"key": "messages.sync_complete",   "label": "Sync Complete",   "text": "Your offline reports have been synced successfully."},
+        {"key": "messages.tc_update",        "label": "T&C Updated",     "text": "Our Terms and Conditions have been updated. Please review and accept to continue."},
+        {"key": "messages.report_received",  "label": "Report Received", "text": "Your report has been received and is being processed."},
+        {"key": "offline.banner",            "label": "Offline Banner",  "text": "You are offline. Reports will be saved and sent when you reconnect."},
+        {"key": "messages.update_available", "label": "Update Available","text": "A new version of the app is available. Please refresh to update."},
     ],
     "version": 1,
     "updated_at": None,
@@ -93,9 +94,20 @@ DEFAULTS: dict[str, Any] = {
 }
 
 
+def _ensure_slide_ids(slides: list) -> list[dict]:
+    """Convert Pydantic models or dicts to dicts, assigning a stable UUID to any slide missing one."""
+    result = []
+    for s in slides:
+        d = s.model_dump() if hasattr(s, "model_dump") else dict(s)
+        if not d.get("slide_id"):
+            d["slide_id"] = uuid.uuid4().hex[:8]
+        result.append(d)
+    return result
+
+
 async def _translate_slides_bc(db: AsyncSession, slides: list, part: str, lang: str) -> list:
     """Fetch published translations for Part B/C slides and return translated slide list."""
-    prefix_pattern = f"SAFETY_TIP_{part}_SLIDE_%"
+    prefix_pattern = f"SAFETY_TIP_{part}_%"
     rows = await db.execute(
         select(StringKey.key, Translation.translated_text)
         .join(Translation, Translation.string_key_id == StringKey.id)
@@ -108,20 +120,21 @@ async def _translate_slides_bc(db: AsyncSession, slides: list, part: str, lang: 
     tr = {row.key: row.translated_text for row in rows.all()}
     result = []
     for idx, slide in enumerate(slides, start=1):
-        sp = f"SAFETY_TIP_{part}_SLIDE_{idx}"
+        slide_id = slide.get("slide_id") if isinstance(slide, dict) else None
+        sp = f"SAFETY_TIP_{part}_{slide_id}" if slide_id else f"SAFETY_TIP_{part}_SLIDE_{idx}"
         title = tr.get(f"{sp}_TITLE") or slide.get("title", "")
         bullets = [
             tr.get(f"{sp}_BULLET_{bidx}") or b
             for bidx, b in enumerate(slide.get("bullets", []), start=1)
         ]
-        result.append({"title": title, "bullets": bullets})
+        result.append({"slide_id": slide_id, "title": title, "bullets": bullets})
     return result
 
 
 async def _translate_slides_a(db: AsyncSession, slides: list, disaster_type: str, lang: str) -> list:
     """Fetch published translations for Part A disaster slides and return translated slide list."""
     disaster_upper = disaster_type.upper().replace("-", "_")
-    prefix_pattern = f"SAFETY_TIP_A_{disaster_upper}_SLIDE_%"
+    prefix_pattern = f"SAFETY_TIP_A_{disaster_upper}_%"
     rows = await db.execute(
         select(StringKey.key, Translation.translated_text)
         .join(Translation, Translation.string_key_id == StringKey.id)
@@ -134,11 +147,12 @@ async def _translate_slides_a(db: AsyncSession, slides: list, disaster_type: str
     tr = {row.key: row.translated_text for row in rows.all()}
     result = []
     for idx, slide in enumerate(slides, start=1):
-        sp = f"SAFETY_TIP_A_{disaster_upper}_SLIDE_{idx}"
+        slide_id = slide.get("slide_id") if isinstance(slide, dict) else None
+        sp = f"SAFETY_TIP_A_{disaster_upper}_{slide_id}" if slide_id else f"SAFETY_TIP_A_{disaster_upper}_SLIDE_{idx}"
         title = tr.get(f"{sp}_TITLE") or slide.get("title", "")
         dos = [tr.get(f"{sp}_DO_{i}") or d for i, d in enumerate(slide.get("dos", []), start=1)]
         donts = [tr.get(f"{sp}_DONT_{i}") or d for i, d in enumerate(slide.get("donts", []), start=1)]
-        result.append({"title": title, "dos": dos, "donts": donts})
+        result.append({"slide_id": slide_id, "title": title, "dos": dos, "donts": donts})
     return result
 
 
@@ -180,9 +194,11 @@ class ContentPatch(BaseModel):
     content: str | None = None
     slides: list[dict] | None = None
     items: list[dict] | None = None  # for error_messages / system_messages
+    tc_version_string: str | None = None  # optional semantic version bump (e.g. "1.1")
 
 
 class SafetyTipSlide(BaseModel):
+    slide_id: str | None = None
     title: str
     dos: list[str]
     donts: list[str]
@@ -239,7 +255,11 @@ async def _sync_safety_tips_to_translation(
         keys_to_ensure = []
 
         for slide_idx, slide in enumerate(slides, start=1):
-            slide_prefix = f"SAFETY_TIP_A_{disaster_upper}_SLIDE_{slide_idx}"
+            slide_id = slide.get("slide_id") if isinstance(slide, dict) else getattr(slide, "slide_id", None)
+            if slide_id:
+                slide_prefix = f"SAFETY_TIP_A_{disaster_upper}_{slide_id}"
+            else:
+                slide_prefix = f"SAFETY_TIP_A_{disaster_upper}_SLIDE_{slide_idx}"
 
             title_text = slide.title if hasattr(slide, "title") else slide.get("title", "")
             if title_text:
@@ -305,13 +325,14 @@ async def patch_safety_tips(
         raise HTTPException(status_code=404, detail=f"Unknown disaster type: {disaster_type}")
     key = f"content_safety-tips_{disaster_type}"
     current = await _get(db, key, _safety_tips_default(disaster_type))
+    slides_with_ids = _ensure_slide_ids(payload.slides)
     updated = {
-        "slides": [s.model_dump() for s in payload.slides],
+        "slides": slides_with_ids,
         "version": current.get("version", 1) + 1,
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
     await _upsert(db, key, updated)
-    asyncio.create_task(_sync_safety_tips_to_translation(disaster_type, payload.slides))
+    asyncio.create_task(_sync_safety_tips_to_translation(disaster_type, slides_with_ids))
     return updated
 
 
@@ -341,7 +362,11 @@ async def _sync_slideshow_to_translation(
         keys_to_ensure = []
 
         for slide_idx, slide in enumerate(slides, start=1):
-            slide_prefix = f"SAFETY_TIP_{part}_SLIDE_{slide_idx}"
+            slide_id = slide.get("slide_id") if isinstance(slide, dict) else getattr(slide, "slide_id", None)
+            if slide_id:
+                slide_prefix = f"SAFETY_TIP_{part}_{slide_id}"
+            else:
+                slide_prefix = f"SAFETY_TIP_{part}_SLIDE_{slide_idx}"
 
             title_text = slide.get("title", "") if isinstance(slide, dict) else getattr(slide, "title", "")
             if title_text:
@@ -388,6 +413,110 @@ async def _sync_slideshow_to_translation(
         logging.getLogger(__name__).error(
             "Slideshow translation sync failed for part=%s: %s", part, exc
         )
+
+
+async def _sync_tc_to_translation(new_text: str, new_version: int, tc_version_string: str | None) -> None:
+    """Update tc_text (and optionally tc_version) StringKey rows and trigger auto-translation."""
+    try:
+        from app.routers.language_packages import ensure_string_keys_synced
+        from app.tasks import auto_translate_content
+        from app.models.language_package import StringKey
+        from sqlalchemy import select as sa_select
+
+        async with AsyncSessionLocal() as db:
+            # Update tc_text
+            r = await db.execute(sa_select(StringKey).where(StringKey.key == "tc_text"))
+            sk = r.scalar_one_or_none()
+            if sk and sk.english_text != new_text:
+                sk.english_text = new_text
+                await db.execute(
+                    sql_update(Translation)
+                    .where(Translation.string_key_id == sk.id, Translation.status != "published")
+                    .values(status="missing", translated_text="")
+                    .execution_options(synchronize_session=False)
+                )
+            # Update tc_version (use semantic string if provided, otherwise integer counter)
+            version_str = tc_version_string if tc_version_string else str(new_version)
+            r2 = await db.execute(sa_select(StringKey).where(StringKey.key == "tc_version"))
+            sk2 = r2.scalar_one_or_none()
+            if sk2 and sk2.english_text != version_str:
+                sk2.english_text = version_str
+                await db.execute(
+                    sql_update(Translation)
+                    .where(Translation.string_key_id == sk2.id, Translation.status != "published")
+                    .values(status="missing", translated_text="")
+                    .execution_options(synchronize_session=False)
+                )
+            await db.commit()
+            await ensure_string_keys_synced(db)
+        asyncio.create_task(auto_translate_content("tc"))
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).error("TC translation sync failed: %s", exc)
+
+
+async def _sync_onboarding_to_translation(new_text: str) -> None:
+    """Update onboarding.welcome_message StringKey and trigger auto-translation."""
+    try:
+        from app.routers.language_packages import ensure_string_keys_synced
+        from app.tasks import auto_translate_content
+        from app.models.language_package import StringKey
+        from sqlalchemy import select as sa_select
+
+        async with AsyncSessionLocal() as db:
+            r = await db.execute(sa_select(StringKey).where(StringKey.key == "onboarding.welcome_message"))
+            sk = r.scalar_one_or_none()
+            if sk is None:
+                db.add(StringKey(key="onboarding.welcome_message", english_text=new_text, category="onboarding", is_active=True))
+            elif sk.english_text != new_text:
+                sk.english_text = new_text
+                await db.execute(
+                    sql_update(Translation)
+                    .where(Translation.string_key_id == sk.id, Translation.status != "published")
+                    .values(status="missing", translated_text="")
+                    .execution_options(synchronize_session=False)
+                )
+            await db.commit()
+            await ensure_string_keys_synced(db)
+        asyncio.create_task(auto_translate_content("onboarding"))
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).error("Onboarding translation sync failed: %s", exc)
+
+
+async def _sync_messages_to_translation(items: list[dict]) -> None:
+    """Update StringKey rows for error/system message items and trigger auto-translation."""
+    try:
+        from app.routers.language_packages import ensure_string_keys_synced
+        from app.tasks import auto_translate_content
+        from app.models.language_package import StringKey
+        from sqlalchemy import select as sa_select
+
+        async with AsyncSessionLocal() as db:
+            for item in items:
+                key_name = item.get("key", "")
+                text = item.get("text", "")
+                if not key_name or not text:
+                    continue
+                r = await db.execute(sa_select(StringKey).where(StringKey.key == key_name))
+                sk = r.scalar_one_or_none()
+                if sk is None:
+                    # Create the StringKey so future translations are possible
+                    db.add(StringKey(key=key_name, english_text=text, category="ui_messages", is_active=True))
+                elif sk.english_text != text:
+                    sk.english_text = text
+                    await db.execute(
+                        sql_update(Translation)
+                        .where(Translation.string_key_id == sk.id, Translation.status != "published")
+                        .values(status="missing", translated_text="")
+                        .execution_options(synchronize_session=False)
+                    )
+            await db.commit()
+            await ensure_string_keys_synced(db)
+        asyncio.create_task(auto_translate_content("messages"))
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).error("Messages translation sync failed: %s", exc)
 
 
 # ── Generic content endpoints ─────────────────────────────────────────────────
@@ -449,13 +578,18 @@ async def patch_content(
             row.value = {"version": new_version}
         await db.commit()
 
-    # Sync string keys and enqueue background auto-translation
-    from app.routers.language_packages import ensure_string_keys_synced
-    from app.tasks import auto_translate_content
-    await ensure_string_keys_synced(db)
-    asyncio.create_task(auto_translate_content(content_type=content_type))
-    if content_type in ("reporting-guidelines", "first-aid") and payload.slides is not None:
+    # Per-content-type translation sync
+    if content_type == "tc" and payload.content is not None:
+        asyncio.create_task(_sync_tc_to_translation(payload.content, new_version, payload.tc_version_string))
+    elif content_type == "onboarding" and payload.content is not None:
+        asyncio.create_task(_sync_onboarding_to_translation(payload.content))
+    elif content_type in ("error_messages", "system_messages") and payload.items is not None:
+        asyncio.create_task(_sync_messages_to_translation(payload.items))
+    elif content_type in ("reporting-guidelines", "first-aid") and payload.slides is not None:
+        slides_with_ids = _ensure_slide_ids(payload.slides)
+        updated["slides"] = slides_with_ids
+        await _upsert(db, key, updated)
         part = "B" if content_type == "reporting-guidelines" else "C"
-        asyncio.create_task(_sync_slideshow_to_translation(part, payload.slides))
+        asyncio.create_task(_sync_slideshow_to_translation(part, slides_with_ids))
 
     return updated

@@ -526,6 +526,11 @@ export default function OnboardingPage() {
       <div style={s.scrollArea}>
         <OnboardingHeader />
 
+        {/* ── Welcome message (editable via dashboard Content Management) ── */}
+        <p style={{ fontSize: 13, color: "#4B5563", lineHeight: 1.6, margin: "0 0 20px", padding: "0 4px" }}>
+          {t("onboarding.welcome_message")}
+        </p>
+
         {/* ── Country section ── */}
         <div style={s.section}>
           <p style={s.sectionLabel}>SELECT YOUR COUNTRY</p>

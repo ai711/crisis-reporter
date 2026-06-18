@@ -12,18 +12,21 @@ const ContentEditCtx = createContext(true);
 // ── Types ───────────────────────────────────────────────────────────────────
 
 interface SafetyTipSlide {
+  slide_id?: string;
   title: string;
   dos: string[];
   donts: string[];
 }
 
 interface SlideshowSlide {
+  slide_id?: string;
   title: string;
   bullets: string[];
 }
 
 interface KeyValueItem {
   key: string;
+  label?: string;
   text: string;
 }
 
@@ -287,48 +290,6 @@ function SlidePreviewModal({
           style={{ color: "#fff", background: "none", border: "1.5px solid rgba(255,255,255,0.4)", borderRadius: 8, padding: "8px 20px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
         >
           Close preview
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ── Dead-editor banner ───────────────────────────────────────────────────────
-
-function DeadEditorBanner({ contentType }: { contentType: string }) {
-  const navigate = useNavigate();
-  const labels: Record<string, string> = {
-    onboarding: "Onboarding text",
-    error_messages: "Error messages",
-    system_messages: "System messages",
-  };
-  const label = labels[contentType] || "This content";
-  return (
-    <div style={{
-      background: "#FFF5F5",
-      border: "1.5px solid #FEB2B2",
-      borderRadius: 10,
-      padding: "14px 18px",
-      marginBottom: 20,
-      display: "flex",
-      gap: 14,
-      alignItems: "flex-start",
-    }}>
-      <span style={{ fontSize: 18, flexShrink: 0 }}>⚠️</span>
-      <div>
-        <div style={{ fontWeight: 700, fontSize: 13, color: "#C53030", marginBottom: 4 }}>
-          {label} edits are not yet live
-        </div>
-        <div style={{ fontSize: 13, color: "#742A2A", lineHeight: 1.6 }}>
-          Changes saved here are stored but no frontend reads them yet. Reporters will not see
-          any updates until this section is connected to the translation pipeline.
-          Contact the development team before making changes here.
-        </div>
-        <button
-          onClick={() => navigate("/settings")}
-          style={{ marginTop: 8, background: "none", border: "none", color: "#C53030", fontSize: 12, fontWeight: 700, cursor: "pointer", padding: 0, textDecoration: "underline" }}
-        >
-          Go to App Configuration →
         </button>
       </div>
     </div>
@@ -769,12 +730,12 @@ function PlainTextEditor({
   contentType,
   label,
   placeholder,
-  showTcWarning,
+  showTcConfirm,
 }: {
   contentType: string;
   label: string;
   placeholder?: string;
-  showTcWarning?: boolean;
+  showTcConfirm?: boolean;
 }) {
   const canEdit = useContext(ContentEditCtx);
   const qc = useQueryClient();
@@ -812,35 +773,12 @@ function PlainTextEditor({
 
   return (
     <div>
-      {/* Dead-editor banner for onboarding (not wired to any frontend) */}
-      {contentType === "onboarding" && <DeadEditorBanner contentType="onboarding" />}
-
-      {showTcWarning && (
-        <div style={{
-          background: "#FFFBEA",
-          border: "1.5px solid #F6E05E",
-          borderRadius: 10,
-          padding: "12px 16px",
-          marginBottom: 20,
-          fontSize: 13,
-          color: "#744210",
-          lineHeight: 1.6,
-        }}>
-          <strong>Note:</strong> The T&amp;C body text shown to reporters comes from the language pipeline key{" "}
-          <code style={{ background: "rgba(0,0,0,0.06)", padding: "1px 5px", borderRadius: 4 }}>tc_text</code>,{" "}
-          not from this editor. Saving here bumps the version counter (which triggers reporter re-acceptance) but{" "}
-          <strong>does not update the text reporters read</strong>. To change the visible text, update the{" "}
-          <code style={{ background: "rgba(0,0,0,0.06)", padding: "1px 5px", borderRadius: 4 }}>tc_text</code>{" "}
-          string key in the Languages page.
-        </div>
-      )}
-
       <SaveBar
         version={data?.version}
         updatedAt={data?.updated_at}
         saved={saved}
         isPending={isPending}
-        onSave={() => showTcWarning ? setConfirmOpen(true) : save()}
+        onSave={() => showTcConfirm ? setConfirmOpen(true) : save()}
       />
 
       <div>
@@ -859,10 +797,8 @@ function PlainTextEditor({
         title="Save Terms & Conditions?"
         body={
           <>
-            Saving will bump the version counter. Reporters who previously accepted will be prompted to re-accept.
-            <br /><br />
-            Note: the body text they read comes from the{" "}
-            <strong>tc_text</strong> language key, not this editor.
+            Saving will update the T&amp;C text shown to reporters in all 6 UN languages (auto-translated).
+            Reporters who previously accepted will be prompted to re-accept.
           </>
         }
         onConfirm={() => save()}
@@ -909,19 +845,17 @@ function KeyValueListEditor({ contentType }: { contentType: "error_messages" | "
 
   return (
     <div>
-      <DeadEditorBanner contentType={contentType} />
-
       <SaveBar version={data?.version} updatedAt={data?.updated_at} saved={saved} isPending={isPending} onSave={() => save()} />
 
       <div style={{ fontSize: 13, color: "#717782", marginBottom: 16 }}>
-        Message keys are fixed and map to specific in-app states. Edit the text only.
+        Changes are auto-translated into all 6 UN languages. Keys map to specific in-app states — edit text only.
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         {items.map((item, idx) => (
           <div key={item.key} style={{ background: "#F6F3F2", borderRadius: 10, padding: "14px 16px", border: "1px solid #E4E2E1" }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: "#717782", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>
-              {item.key}
+              {item.label || item.key}
             </div>
             <input
               value={item.text}
@@ -1078,9 +1012,9 @@ function SystemTextSection() {
             <h3 style={{ margin: "0 0 20px", fontSize: 17, fontWeight: 700, color: "#1B1C1C" }}>Terms &amp; Conditions</h3>
             <PlainTextEditor
               contentType="tc"
-              label="T&C text (for reference — reporters see the tc_text language key, not this)"
+              label="T&C text (auto-translated to all 6 UN languages and published on save)"
               placeholder="Enter the full Terms & Conditions text…"
-              showTcWarning
+              showTcConfirm
             />
           </>
         )}
@@ -1091,7 +1025,7 @@ function SystemTextSection() {
             <h3 style={{ margin: "0 0 20px", fontSize: 17, fontWeight: 700, color: "#1B1C1C" }}>Onboarding Text</h3>
             <PlainTextEditor
               contentType="onboarding"
-              label="Welcome message (not yet live — see banner above)"
+              label="Welcome message (shown on the onboarding screen · auto-translated to all 6 UN languages)"
               placeholder="Enter the onboarding welcome text…"
             />
           </>

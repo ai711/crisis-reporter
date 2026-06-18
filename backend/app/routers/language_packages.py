@@ -2184,7 +2184,15 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
     # offline / connectivity
     ("offline.banner",  "ui_offline", "You are offline. Reports will be saved and sent when you reconnect."),
 
-    # error messages
+    # error messages (keyed to real i18n keys used in reporter app)
+    ("errors.location_denied",  "ui_errors",   "Location access was denied. Please enable location services and try again."),
+    ("errors.session_expired",  "ui_errors",   "Your session has expired. Please log in again."),
+
+    # system / status messages
+    ("messages.sync_complete",   "ui_messages", "Your offline reports have been synced successfully."),
+    ("messages.tc_update",       "ui_messages", "Our Terms and Conditions have been updated. Please review and accept to continue."),
+    ("messages.report_received", "ui_messages", "Your report has been received and is being processed."),
+    ("messages.update_available","ui_messages", "A new version of the app is available. Please refresh to update."),
 
     # profile
     ("profile.title",              "ui_profile", "My Profile"),
@@ -2400,8 +2408,9 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
     ("badges.refer_a_friend",    "ui_badges", "Refer a Friend"),
 
     # Onboarding
-    ("onboarding.subtitle",      "ui_onboarding", "Helping UNDP respond faster to crises around the world"),
-    ("onboarding.unavailable",   "ui_onboarding", "Unavailable"),
+    ("onboarding.subtitle",         "ui_onboarding", "Helping UNDP respond faster to crises around the world"),
+    ("onboarding.unavailable",      "ui_onboarding", "Unavailable"),
+    ("onboarding.welcome_message",  "ui_onboarding", "Welcome to Crisis Reporter. This app helps you document and report damage to buildings and infrastructure during and after a crisis. Your reports help UNDP and partner organisations coordinate emergency response."),
 
     # Profile form labels and placeholders
     ("profile.add_photo",             "ui_profile", "Add Profile Photo"),

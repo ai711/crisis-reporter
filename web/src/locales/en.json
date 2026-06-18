@@ -18,7 +18,8 @@
     "show_less": "Show less",
     "lang_load_error": "Could not load language. Check your connection and try again.",
     "subtitle": "Helping UNDP respond faster to crises around the world",
-    "unavailable": "Unavailable"
+    "unavailable": "Unavailable",
+    "welcome_message": "Welcome to Crisis Reporter. This app helps you document and report damage to buildings and infrastructure during and after a crisis. Your reports help UNDP and partner organisations coordinate emergency response."
   },
   "home": {
     "reportButton": "Report an Incident",
@@ -204,6 +205,16 @@
   },
   "offline": {
     "banner": "You are offline. Reports will be saved and sent when you reconnect."
+  },
+  "errors": {
+    "location_denied": "Location access was denied. Please enable location services and try again.",
+    "session_expired": "Your session has expired. Please log in again."
+  },
+  "messages": {
+    "sync_complete": "Your offline reports have been synced successfully.",
+    "tc_update": "Our Terms and Conditions have been updated. Please review and accept to continue.",
+    "report_received": "Your report has been received and is being processed.",
+    "update_available": "A new version of the app is available. Please refresh to update."
   },
   "stepper": {
     "step_photo": "Photo",
