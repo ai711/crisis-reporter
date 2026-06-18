@@ -39,7 +39,7 @@ class Crisis(Base):
         String(10), nullable=True, index=True
     )
     countries: Mapped[list[str] | None] = mapped_column(
-        ARRAY(String(100)), nullable=True
+        ARRAY(Text()), nullable=True
     )
 
     # Date range
