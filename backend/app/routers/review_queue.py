@@ -145,7 +145,8 @@ async def get_review_queue_counts(
         if notif_rec and isinstance(notif_rec.value, dict):
             for t in notif_rec.value.get("types", []):
                 if t.get("key") == "review_queue_threshold" and t.get("active", True):
-                    threshold = t.get("threshold") or 50
+                    v = t.get("threshold")
+                    threshold = v if v is not None else 50
         if tab1_count >= threshold:
             cutoff = now - timedelta(hours=1)
             recent = await db.execute(
@@ -166,7 +167,7 @@ async def get_review_queue_counts(
                 )
                 await db.commit()
     except Exception as _e:
-        log.debug("review_queue threshold notification check failed: %s", _e)
+        log.warning("review_queue threshold notification check failed: %s", _e)
 
     tab2_res = await db.execute(
         select(func.count(Property.id)).where(
