@@ -275,6 +275,8 @@ async def _sync_safety_tips_to_translation(
                 if dont_text:
                     keys_to_ensure.append((f"{slide_prefix}_DONT_{dont_idx}", dont_text, "safety"))
 
+        live_key_names = {kn for kn, _, _ in keys_to_ensure}
+
         async with AsyncSessionLocal() as db:
             for key_name, english_text, category in keys_to_ensure:
                 result = await db.execute(
@@ -288,19 +290,37 @@ async def _sync_safety_tips_to_translation(
                         category=category,
                         is_active=True,
                     ))
-                elif existing.english_text != english_text:
-                    existing.english_text = english_text
-                    # Reset non-published translations so auto-translate re-queues them.
-                    # Published rows stay intact for in-flight language packages.
-                    await db.execute(
-                        sql_update(Translation)
-                        .where(
-                            Translation.string_key_id == existing.id,
-                            Translation.status != "published",
+                else:
+                    if not existing.is_active:
+                        existing.is_active = True
+                    if existing.english_text != english_text:
+                        existing.english_text = english_text
+                        # Reset non-published translations so auto-translate re-queues them.
+                        # Published rows stay intact for in-flight language packages.
+                        await db.execute(
+                            sql_update(Translation)
+                            .where(
+                                Translation.string_key_id == existing.id,
+                                Translation.status != "published",
+                            )
+                            .values(status="missing", translated_text="")
+                            .execution_options(synchronize_session=False)
                         )
-                        .values(status="missing", translated_text="")
-                        .execution_options(synchronize_session=False)
-                    )
+
+            # Deactivate StringKeys for deleted slides / bullets so they stop
+            # bloating language packages and auto-translation runs.
+            # This also handles the positional→UUID key migration: old SLIDE_N
+            # keys become orphans the first time a save with UUIDs runs.
+            prefix_pattern = f"SAFETY_TIP_A_{disaster_upper}_%"
+            orphan_result = await db.execute(
+                sa_select(StringKey).where(
+                    StringKey.key.like(prefix_pattern),
+                    StringKey.is_active.is_(True),
+                )
+            )
+            for sk in orphan_result.scalars().all():
+                if sk.key not in live_key_names:
+                    sk.is_active = False
 
             await db.commit()
             await ensure_string_keys_synced(db)
@@ -377,6 +397,8 @@ async def _sync_slideshow_to_translation(
                 if bullet_text:
                     keys_to_ensure.append((f"{slide_prefix}_BULLET_{bullet_idx}", bullet_text, "content"))
 
+        live_key_names = {kn for kn, _, _ in keys_to_ensure}
+
         async with AsyncSessionLocal() as db:
             for key_name, english_text, category in keys_to_ensure:
                 result = await db.execute(
@@ -390,19 +412,36 @@ async def _sync_slideshow_to_translation(
                         category=category,
                         is_active=True,
                     ))
-                elif existing.english_text != english_text:
-                    existing.english_text = english_text
-                    # Reset non-published translations so auto-translate re-queues them.
-                    # Published rows stay intact for in-flight language packages.
-                    await db.execute(
-                        sql_update(Translation)
-                        .where(
-                            Translation.string_key_id == existing.id,
-                            Translation.status != "published",
+                else:
+                    if not existing.is_active:
+                        existing.is_active = True
+                    if existing.english_text != english_text:
+                        existing.english_text = english_text
+                        # Reset non-published translations so auto-translate re-queues them.
+                        # Published rows stay intact for in-flight language packages.
+                        await db.execute(
+                            sql_update(Translation)
+                            .where(
+                                Translation.string_key_id == existing.id,
+                                Translation.status != "published",
+                            )
+                            .values(status="missing", translated_text="")
+                            .execution_options(synchronize_session=False)
                         )
-                        .values(status="missing", translated_text="")
-                        .execution_options(synchronize_session=False)
-                    )
+
+            # Deactivate StringKeys for deleted slides / bullets.
+            # Also handles positional→UUID key migration: old SLIDE_N keys
+            # become orphans the first time a save with UUIDs runs.
+            prefix_pattern = f"SAFETY_TIP_{part}_%"
+            orphan_result = await db.execute(
+                sa_select(StringKey).where(
+                    StringKey.key.like(prefix_pattern),
+                    StringKey.is_active.is_(True),
+                )
+            )
+            for sk in orphan_result.scalars().all():
+                if sk.key not in live_key_names:
+                    sk.is_active = False
 
             await db.commit()
             await ensure_string_keys_synced(db)
