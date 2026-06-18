@@ -486,6 +486,56 @@ async def patch_thresholds(
     return current
 
 
+@router.post("/fix-missing-properties", dependencies=[Depends(require_superadmin)])
+async def fix_missing_properties(db: AsyncSession = Depends(get_db)):
+    """Retroactively create missing Property records for all green/orange reports
+    that have no property_id. Returns per-report results and any error tracebacks."""
+    import traceback
+    from app.models.report import Report
+    from app.database import AsyncSessionLocal
+    from sqlalchemy import and_
+
+    result = await db.execute(
+        select(Report).where(
+            and_(
+                Report.flag_status.in_(["green", "orange"]),
+                Report.property_id.is_(None),
+            )
+        )
+    )
+    reports = result.scalars().all()
+
+    results = []
+    for report in reports:
+        report_id = str(report.id)
+        try:
+            from app.services.property_service import (
+                get_or_create_property,
+                auto_confirm_property,
+                update_conflict_warning,
+            )
+            from app.services.auto_flagging import _link_report_to_projects
+            async with AsyncSessionLocal() as prop_db:
+                from sqlalchemy import select as _sel
+                _pr = await prop_db.execute(_sel(Report).where(Report.id == report.id))
+                prop_report = _pr.scalar_one_or_none()
+                if not prop_report:
+                    results.append({"report_id": report_id, "status": "not_found"})
+                    continue
+                prop = await get_or_create_property(prop_db, prop_report)
+                prop_report.property_id = prop.id
+                await prop_db.flush()
+                await auto_confirm_property(prop_db, prop.id)
+                await update_conflict_warning(prop_db, prop.id)
+                await _link_report_to_projects(prop_db, prop_report)
+                await prop_db.commit()
+            results.append({"report_id": report_id, "status": "ok", "property_id": str(prop.id)})
+        except Exception:
+            results.append({"report_id": report_id, "status": "error", "error": traceback.format_exc()})
+
+    return {"total": len(reports), "results": results}
+
+
 @router.post("/retry-stuck-reports", dependencies=[Depends(require_superadmin)])
 async def retry_stuck_reports(db: AsyncSession = Depends(get_db)):
     """Run auto-flagging synchronously for every stuck grey report and return per-report results.
