@@ -62,7 +62,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <button
               key={path}
               className={`nav-item ${isActive(path) ? "active" : "inactive"}`}
-              onClick={() => navigate(path)}
+              onClick={() => navigate(path, { replace: true })}
             >
               <span className="material-symbols-outlined">{icon}</span>
               <span className="nav-item-label">{label}</span>

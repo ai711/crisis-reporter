@@ -141,9 +141,11 @@ export default function SideMenu({ open, onClose }: SideMenuProps) {
     return () => { document.body.style.overflow = ""; };
   }, [open]);
 
+  const SIDE_MENU_TAB_ROUTES = ["/", "/map", "/my-reports"];
+
   function handleNavigate(route: string) {
     onClose();
-    navigate(route);
+    navigate(route, SIDE_MENU_TAB_ROUTES.includes(route) ? { replace: true } : undefined);
   }
 
   const initials = reporterId
