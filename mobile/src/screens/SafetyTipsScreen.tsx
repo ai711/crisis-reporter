@@ -33,6 +33,7 @@ type ViewState =
 type LoadState = 'loading' | 'loaded' | 'offline';
 
 interface Slide {
+  slide_id?: string;
   title: string;
   dos?: string[];
   donts?: string[];
@@ -190,23 +191,27 @@ async function fetchContent(
 }
 
 // ── Translation key helper ────────────────────────────────────────────────────
-// Mirrors web SafetyTipsPage.tsx — keys follow the backend pipeline pattern:
+// Key format (UUID scheme — used when slide_id is present from API response):
+//   SAFETY_TIP_A_{DISASTER}_{slide_id}_TITLE / DO_{M} / DONT_{M}
+//   SAFETY_TIP_B_{slide_id}_TITLE / BULLET_{M}
+//   SAFETY_TIP_C_{slide_id}_TITLE / BULLET_{M}
+// Positional fallback (used for hardcoded slides that have no slide_id):
 //   SAFETY_TIP_A_{DISASTER}_SLIDE_{N}_TITLE / DO_{M} / DONT_{M}
-//   SAFETY_TIP_B_SLIDE_{N}_TITLE / BULLET_{M}
-//   SAFETY_TIP_C_SLIDE_{N}_TITLE / BULLET_{M}
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function makeTip(t: (key: string, opts?: any) => string) {
   return function tip(
     part: 'A' | 'B' | 'C',
     disaster: string,
-    slideIdx: number,       // 1-based
+    slideIdx: number,          // 1-based; used only when slideId is absent
     field: 'TITLE' | 'DO' | 'DONT' | 'BULLET',
-    bulletIdx: number,      // 1-based; 0 = no suffix (for TITLE)
+    bulletIdx: number,         // 1-based; 0 = no suffix (for TITLE)
+    slideId: string | null | undefined,
     fallback: string,
   ): string {
     const d = disaster ? `_${disaster.toUpperCase().replace(/-/g, '_')}` : '';
     const b = bulletIdx > 0 ? `_${bulletIdx}` : '';
-    return t(`SAFETY_TIP_${part}${d}_SLIDE_${slideIdx}_${field}${b}`, { defaultValue: fallback });
+    const slideKey = slideId ? slideId : `SLIDE_${slideIdx}`;
+    return t(`SAFETY_TIP_${part}${d}_${slideKey}_${field}${b}`, { defaultValue: fallback });
   };
 }
 
@@ -662,7 +667,7 @@ export default function SafetyTipsScreen() {
             }}
           >
             <Text style={styles.slideTitle}>
-              {tip(tipPart, tipDisaster, currentSlide + 1, 'TITLE', 0, currentSlideData?.title ?? '')}
+              {tip(tipPart, tipDisaster, currentSlide + 1, 'TITLE', 0, currentSlideData?.slide_id, currentSlideData?.title ?? '')}
             </Text>
 
             {/* Dos */}
@@ -678,7 +683,7 @@ export default function SafetyTipsScreen() {
                       style={{ marginTop: 2 }}
                     />
                     <Text style={styles.dosDontText}>
-                      {tip(tipPart, tipDisaster, currentSlide + 1, 'DO', idx + 1, item)}
+                      {tip(tipPart, tipDisaster, currentSlide + 1, 'DO', idx + 1, currentSlideData?.slide_id, item)}
                     </Text>
                   </View>
                 ))}
@@ -704,7 +709,7 @@ export default function SafetyTipsScreen() {
                       style={{ marginTop: 2 }}
                     />
                     <Text style={styles.dosDontText}>
-                      {tip(tipPart, tipDisaster, currentSlide + 1, 'DONT', idx + 1, item)}
+                      {tip(tipPart, tipDisaster, currentSlide + 1, 'DONT', idx + 1, currentSlideData?.slide_id, item)}
                     </Text>
                   </View>
                 ))}
@@ -718,7 +723,7 @@ export default function SafetyTipsScreen() {
                   <View key={idx} style={styles.bulletRow}>
                     <View style={styles.bulletDot} />
                     <Text style={styles.bulletText}>
-                      {tip(tipPart, tipDisaster, currentSlide + 1, 'BULLET', idx + 1, item)}
+                      {tip(tipPart, tipDisaster, currentSlide + 1, 'BULLET', idx + 1, currentSlideData?.slide_id, item)}
                     </Text>
                   </View>
                 ))}
