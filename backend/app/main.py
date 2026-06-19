@@ -1242,6 +1242,68 @@ WHERE code IN (
 ]
 
 
+async def _sync_all_content_string_keys() -> None:
+    """Ensure StringKeys exist for ALL current Safety Tips / Part B / Part C content.
+
+    _seed_safety_tips_content only runs _sync_*_to_translation for rows that did not
+    exist yet (if row is None).  Content expanded later via admin PATCH endpoints gets
+    its StringKeys created by those endpoints — but if content was ever saved via a path
+    that bypassed the PATCH endpoint, or the sync function was not yet wired at the time
+    the content was expanded, those extra slides/bullets have no StringKey rows.
+    Result: the translation system is unaware of them, the dashboard shows nothing
+    pending, and the app falls back to English for all languages on those strings.
+
+    This function reads the live AppSetting values and re-runs the sync for every
+    content record on every startup.  All sync functions are idempotent:
+      - StringKey creation uses IF NOT EXISTS semantics (checks before inserting).
+      - auto_translate_content skips keys that already have a non-missing translation.
+    """
+    from app.routers.content import (
+        _sync_safety_tips_to_translation,
+        _sync_slideshow_to_translation,
+        DISASTER_TYPES,
+    )
+    from app.models.app_setting import AppSetting
+
+    logger.info("_sync_all_content_string_keys: starting")
+
+    keys_to_fetch = (
+        [f"content_safety-tips_{dt}" for dt in DISASTER_TYPES]
+        + ["content_reporting-guidelines", "content_first-aid"]
+    )
+
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            select(AppSetting).where(AppSetting.key.in_(keys_to_fetch))
+        )
+        settings_map = {row.key: row.value for row in result.scalars().all()}
+
+    for dt in DISASTER_TYPES:
+        key = f"content_safety-tips_{dt}"
+        data = settings_map.get(key)
+        if data and data.get("slides"):
+            try:
+                await _sync_safety_tips_to_translation(dt, data["slides"])
+            except Exception as exc:
+                logger.warning("Content key sync failed for safety-tips/%s: %s", dt, exc)
+
+    data_b = settings_map.get("content_reporting-guidelines")
+    if data_b and data_b.get("slides"):
+        try:
+            await _sync_slideshow_to_translation("B", data_b["slides"])
+        except Exception as exc:
+            logger.warning("Content key sync failed for reporting-guidelines: %s", exc)
+
+    data_c = settings_map.get("content_first-aid")
+    if data_c and data_c.get("slides"):
+        try:
+            await _sync_slideshow_to_translation("C", data_c["slides"])
+        except Exception as exc:
+            logger.warning("Content key sync failed for first-aid: %s", exc)
+
+    logger.info("_sync_all_content_string_keys: complete")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Vuln fix: EXPORT_URL_SIGN_SECRET must not be the known public default.
@@ -1277,6 +1339,9 @@ async def lifespan(app: FastAPI):
     await _seed_default_crisis()
     await _seed_notification_types()
     await _seed_safety_tips_content()
+    # Sync StringKeys for all existing content — not just what was seeded on first
+    # startup.  Catches any slides/bullets added after initial deployment.
+    asyncio.create_task(_sync_all_content_string_keys())
     # Promote all auto-translated draft/approved translations to published so the
     # language package endpoint serves them without requiring manual admin approval.
     # Runs on every startup — idempotent. Also kicks off a background auto-translate
