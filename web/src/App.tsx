@@ -156,6 +156,14 @@ function OnboardingRoute() {
 // Rendered inside <BrowserRouter> so useLocation is available.
 // Re-applies the saved language on every route change, preventing the i18n
 // singleton from drifting back to English after React Router navigates.
+const RTL_LANGS = new Set(["ar"]);
+
+function applyDocumentDirection(lang: string) {
+  const dir = RTL_LANGS.has(lang) ? "rtl" : "ltr";
+  document.documentElement.dir = dir;
+  document.documentElement.lang = lang;
+}
+
 function AppContent() {
   const location = useLocation();
 
@@ -167,6 +175,18 @@ function AppContent() {
       if (!loaded) loadLanguagePackage(savedLang).catch(() => {});
     });
   }, [location.pathname]);
+
+  // Keep <html dir> and <html lang> in sync with the active i18n language.
+  // Arabic is the only RTL language among the 6 UN languages.
+  // Runs on mount (catches page reloads) and on every language change.
+  useEffect(() => {
+    const savedLang = localStorage.getItem("cr_language") ?? "en";
+    applyDocumentDirection(savedLang);
+
+    const handler = (lang: string) => applyDocumentDirection(lang);
+    i18n.on("languageChanged", handler);
+    return () => { i18n.off("languageChanged", handler); };
+  }, []);
 
   // Flush any queued progress entries as soon as the browser reports online.
   // Also attempt once on mount in case the app was offline at last use.

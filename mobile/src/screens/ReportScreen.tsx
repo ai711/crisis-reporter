@@ -1220,7 +1220,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
         const compressed = await ImageManipulator.manipulateAsync(
           workingUri,
           [],
-          { compress: 0.5, format: ImageManipulator.SaveFormat.JPEG }
+          { compress: 0.82, format: ImageManipulator.SaveFormat.JPEG }
         );
         finalUri = compressed.uri;
         compressionApplied = true;
@@ -1235,7 +1235,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
         const compressed = await ImageManipulator.manipulateAsync(
           workingUri,
           [],
-          { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG }
+          { compress: 0.82, format: ImageManipulator.SaveFormat.JPEG }
         );
         finalUri = compressed.uri;
         compressionApplied = true;

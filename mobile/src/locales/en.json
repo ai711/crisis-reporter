@@ -150,7 +150,9 @@
     "forgotPasswordMessage": "Please contact your UNDP coordinator to reset your password.",
     "errorInvalid": "Invalid email or password. Please try again.",
     "errorGeneric": "Something went wrong. Please try again.",
-    "invalid_email": "Please enter a valid email address."
+    "invalid_email": "Please enter a valid email address.",
+    "no_account": "Don't have an account?",
+    "validation": "Please enter your email and password."
   },
   "profile": {
     "title": "Create Account",
@@ -159,7 +161,9 @@
     "phonePlaceholder": "Phone number (optional)",
     "saveButton": "Save Profile",
     "reporterIdLabel": "Your Reporter ID",
-    "validationMessage": "Please fill in at least one field to continue."
+    "validationMessage": "Please fill in at least one field to continue.",
+    "anon_gate_heading": "Create a free account to save your profile and earn badges.",
+    "anon_gate_subtext": "You can still submit reports anonymously without an account."
   },
   "welcomeCard": {
     "body": "Crisis Reporter helps you document damage to buildings and infrastructure after a disaster. You can report earthquakes, floods, conflicts, and other crises. Your reports help UNDP get help to the right places faster.",
@@ -243,6 +247,34 @@
     "review": "Review",
     "submit": "Submit"
   },
+  "badges": {
+    "title": "Badges & Certifications",
+    "locked_title": "Badges are locked",
+    "locked_body": "Add your email or phone number to your profile to unlock badges and certifications",
+    "go_to_profile": "Go to Profile",
+    "section_available": "Available Badges",
+    "section_your_badges": "Your Badges",
+    "safety_name": "Safety Training Badge",
+    "safety_desc_locked": "Complete all safety training modules in Crisis Reporter.",
+    "safety_earned_desc": "You completed the Crisis Response Safety Protocol. This certification validates your field readiness.",
+    "part_a_progress": "Part A: {{n}}/9 completed · Part B: {{status}}",
+    "status_completed": "Completed",
+    "status_not_started": "Not started",
+    "status_earned": "Earned ✓",
+    "status_locked": "Locked",
+    "continue_safety": "Continue Safety Tips",
+    "referral_name": "Community Referral",
+    "referral_desc": "Refer a friend who installs the app and completes safety training",
+    "referral_status": "Status: Coming soon — referral program launching later",
+    "referral_count": "{{count}} successful referrals",
+    "refer_a_friend": "Refer a Friend",
+    "user_id_label": "User ID",
+    "profile_active": "Profile Active",
+    "earned_on_label": "Earned on",
+    "share_badge": "Share Badge",
+    "visibility_note": "Badges are only visible inside the app at this stage. Shareable certificates coming soon.",
+    "security_note": "Badges are linked to your verified ID. Sharing capabilities are currently restricted for security compliance."
+  },
   "locationScreen": {
     "searchPlaceholder": "Search for a street, landmark, or building...",
     "offlineBanner": "You are offline. Please enter your location details below.",
@@ -250,6 +282,7 @@
     "gpsUnavailable": "GPS signal not available. Your manual location details will be used.",
     "gpsUnavailableOnline": "Your GPS location is not available. You can still select a building on the map or use the search bar to find your location.",
     "manualAtLeastOne": "At least one field must be filled in to continue.",
+    "manualAddressRequired": "* Address is required to continue when offline",
     "manualAddress": "Address",
     "manualAddressPlaceholder": "Street address or area name",
     "manualLandmark": "Landmark",

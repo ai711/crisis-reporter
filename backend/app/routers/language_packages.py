@@ -2406,6 +2406,9 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
     ("badges.referral_status",   "ui_badges", "Status: Coming soon — referral program launching later"),
     ("badges.referral_count",    "ui_badges", "{{count}} successful referrals"),
     ("badges.refer_a_friend",    "ui_badges", "Refer a Friend"),
+    ("badges.status_completed",  "ui_badges", "Completed"),
+    ("badges.status_not_started","ui_badges", "Not started"),
+    ("badges.continue_safety",   "ui_badges", "Continue Safety Tips"),
 
     # Onboarding
     ("onboarding.subtitle",         "ui_onboarding", "Helping UNDP respond faster to crises around the world"),
@@ -3041,6 +3044,7 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
     ("locationScreen.duplicateWarningContinue",   "ui_location", "Continue"),
     ("locationScreen.duplicateWarningGoBack",     "ui_location", "Go Back"),
     ("locationScreen.cancelButton",               "ui_location", "Cancel"),
+    ("locationScreen.manualAddressRequired",      "ui_location", "* Address is required to continue when offline"),
 
     # ── Location offline/GPS messages (web) ──
     ("location.offline_banner",           "ui_location", "No internet connection. Please enter your location details below."),

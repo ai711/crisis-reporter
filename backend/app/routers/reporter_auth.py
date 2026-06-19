@@ -1,11 +1,12 @@
 import hashlib
 from datetime import datetime, timezone
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, text
 from pydantic import BaseModel, field_validator
 
+from app.config import settings
 from app.database import get_db
 from app.models.reporter import Reporter
 from app.services.auth import (
@@ -16,6 +17,36 @@ from app.services.auth import (
 )
 from app.services.encryption import encrypt_field, decrypt_field, hash_field
 from app.services.dependencies import get_current_reporter, get_optional_reporter
+
+
+# ── Cookie helpers ─────────────────────────────────────────────────────────────
+
+def _set_reporter_cookies(response: Response, access_token: str, refresh_token: str) -> None:
+    """Set HttpOnly auth cookies for web clients.
+    Mobile clients ignore cookies and use the response body tokens instead."""
+    response.set_cookie(
+        key="cr_access_token",
+        value=access_token,
+        httponly=True,
+        secure=settings.COOKIE_SECURE,
+        samesite="lax",
+        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        path="/",
+    )
+    response.set_cookie(
+        key="cr_refresh_token",
+        value=refresh_token,
+        httponly=True,
+        secure=settings.COOKIE_SECURE,
+        samesite="lax",
+        max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
+        path="/api/reporter/auth/refresh",
+    )
+
+
+def _clear_reporter_cookies(response: Response) -> None:
+    response.delete_cookie(key="cr_access_token", path="/")
+    response.delete_cookie(key="cr_refresh_token", path="/api/reporter/auth/refresh")
 
 router = APIRouter(prefix="/api/reporter/auth", tags=["Reporter Auth"])
 
@@ -72,7 +103,7 @@ class TokenResponse(BaseModel):
 
 
 class RefreshRequest(BaseModel):
-    refresh_token: str
+    refresh_token: Optional[str] = None  # Optional: web uses cookie, mobile sends body
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
@@ -139,6 +170,7 @@ async def create_anonymous_session(
 @router.post("/register", response_model=TokenResponse)
 async def register(
     request: RegisterRequest,
+    response: Response,
     db: AsyncSession = Depends(get_db),
 ):
     """Register a verified reporter account.
@@ -202,6 +234,8 @@ async def register(
         context="reporter",
     )
 
+    _set_reporter_cookies(response, tokens["access_token"], tokens["refresh_token"])
+
     return TokenResponse(
         **tokens,
         reporter_id=reporter.display_id,
@@ -212,6 +246,7 @@ async def register(
 @router.post("/login", response_model=TokenResponse)
 async def login(
     request: LoginRequest,
+    response: Response,
     db: AsyncSession = Depends(get_db),
 ):
     """Login with email and password — verified reporters only."""

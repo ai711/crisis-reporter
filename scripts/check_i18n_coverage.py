@@ -3,10 +3,10 @@
 check_i18n_coverage.py
 ======================
 CI guard: every literal t('key') call in web/src and mobile/src must be
-covered by _SEED_KEYS (the translation pipeline) OR by the static en.json
-bundle (English-only fallback).
+covered by _SEED_KEYS (the translation pipeline) OR by the platform's own
+static en.json bundle (English-only fallback).
 
-THREE checks are performed:
+FOUR checks are performed:
 
   CHECK A — Pipeline gap (WARNING, non-blocking by default)
     A key is in en.json AND used in code AND absent from _SEED_KEYS.
@@ -14,20 +14,34 @@ THREE checks are performed:
     Exit code 1 when --strict is passed.
 
   CHECK B — English broken (ERROR, always blocking)
-    A key is used in code AND absent from BOTH en.json AND _SEED_KEYS.
-    These produce a missing-translation fallback even in English right now.
+    A key is used in platform code AND absent from THAT PLATFORM's en.json
+    AND absent from _SEED_KEYS.
+    Platform-specific: web code vs web en.json, mobile code vs mobile en.json.
     Exit code 2 always.
+
+    (Previous versions used a union of both en.json files, which masked
+    mobile keys that existed only in web/src/locales/en.json — those would
+    appear covered but fail at mobile static-fallback time when offline.)
 
   CHECK C — Dead seed keys (INFO, never blocking)
     A key is in _SEED_KEYS but not called by any literal t() in code.
     Dynamic template-literal keys are excluded via known pattern prefixes.
     Printed as informational; does not affect exit code.
 
+  CHECK D — Cross-platform locale gap (WARNING, non-blocking)
+    A key is used on one platform and exists in that platform's code and
+    seed_keys (so it works online), but is absent from the OTHER platform's
+    en.json. Affects offline static fallback only.
+    E.g. mobile code uses a key that is only in web/src/locales/en.json — a
+    reporter offline on Android would get the key name instead of English text.
+    Suppress with --no-platform-gap.
+
 Usage
 -----
-  python scripts/check_i18n_coverage.py            # standard run
-  python scripts/check_i18n_coverage.py --strict   # also fail on CHECK A
-  python scripts/check_i18n_coverage.py --no-dead  # suppress CHECK C output
+  python scripts/check_i18n_coverage.py               # standard run
+  python scripts/check_i18n_coverage.py --strict      # also fail on CHECK A
+  python scripts/check_i18n_coverage.py --no-dead     # suppress CHECK C output
+  python scripts/check_i18n_coverage.py --no-platform-gap  # suppress CHECK D
 
 Exit codes
 ----------
@@ -126,6 +140,26 @@ def is_dynamic(key):
     return any(key.startswith(p) or key == p.rstrip("_") for p in DYNAMIC_PREFIXES)
 
 
+def find_files_for_key(key, src_dirs):
+    """Return list of relative file paths that contain a literal t('key') call."""
+    pat = re.compile(r"""(?<![A-Za-z0-9_$])t\(['"]([^'"]+)['"]""")
+    hits = []
+    for src_dir in src_dirs:
+        for dirpath, _, filenames in os.walk(src_dir):
+            for fname in filenames:
+                if not (fname.endswith(".ts") or fname.endswith(".tsx")):
+                    continue
+                fpath = os.path.join(dirpath, fname)
+                try:
+                    with open(fpath, encoding="utf-8", errors="ignore") as f:
+                        content = f.read()
+                except Exception:
+                    continue
+                if any(m.group(1) == key for m in pat.finditer(content)):
+                    hits.append(os.path.relpath(fpath, ROOT))
+    return hits
+
+
 # ── main ───────────────────────────────────────────────────────────────────────
 
 def main():
@@ -135,6 +169,8 @@ def main():
                         help="Fail (exit 1) on CHECK A pipeline-gap findings")
     parser.add_argument("--no-dead", action="store_true",
                         help="Suppress CHECK C dead-key output")
+    parser.add_argument("--no-platform-gap", action="store_true",
+                        help="Suppress CHECK D cross-platform locale-gap output")
     args = parser.parse_args()
 
     lang_pkg  = os.path.join(ROOT, "backend", "app", "routers", "language_packages.py")
@@ -150,6 +186,7 @@ def main():
     with open(mob_en, encoding="utf-8") as f:
         mob_flat = flatten_json(json.load(f))
 
+    # Union for CHECK A (pipeline coverage is platform-agnostic)
     all_en_keys = set(web_flat) | set(mob_flat)
 
     web_code_keys = grep_literal_keys(web_src)
@@ -157,15 +194,22 @@ def main():
     all_code_keys = web_code_keys | mob_code_keys
 
     # ── CHECK A: in en.json + used in code, but NOT in _SEED_KEYS ────────────
+    # Union: if either platform has it in en.json, English works somewhere;
+    # the pipeline gap is the common concern (non-English speakers).
     check_a = sorted(
         k for k in all_code_keys
         if k in all_en_keys and k not in seed_keys and not is_dynamic(k)
     )
 
-    # ── CHECK B: used in code, NOT in en.json, NOT in _SEED_KEYS ─────────────
-    check_b = sorted(
-        k for k in all_code_keys
-        if k not in all_en_keys and k not in seed_keys and not is_dynamic(k)
+    # ── CHECK B: platform-specific — used in platform code, NOT in THAT
+    #    platform's en.json, AND NOT in _SEED_KEYS (both fallbacks missing) ──
+    check_b_web = sorted(
+        k for k in web_code_keys
+        if k not in web_flat and k not in seed_keys and not is_dynamic(k)
+    )
+    check_b_mob = sorted(
+        k for k in mob_code_keys
+        if k not in mob_flat and k not in seed_keys and not is_dynamic(k)
     )
 
     # ── CHECK C: in _SEED_KEYS but no literal t() call found ─────────────────
@@ -174,34 +218,47 @@ def main():
         if k not in all_code_keys and not is_dynamic(k)
     )
 
+    # ── CHECK D: cross-platform locale gap ────────────────────────────────────
+    # Mobile code uses a key that exists in web en.json but not mobile en.json.
+    # Key may be in seed_keys (works online), but offline Android falls through
+    # to static en.json and won't find it → shows the raw key string.
+    check_d_mob_missing = sorted(
+        k for k in mob_code_keys
+        if k in web_flat and k not in mob_flat and not is_dynamic(k)
+    )
+    # Symmetric: web code uses a key only in mobile en.json.
+    check_d_web_missing = sorted(
+        k for k in web_code_keys
+        if k in mob_flat and k not in web_flat and not is_dynamic(k)
+    )
+
     # ── Report ────────────────────────────────────────────────────────────────
     ok = True
     exit_code = 0
 
-    if check_b:
+    # CHECK B — web
+    if check_b_web:
         print(f"\n{'='*60}")
-        print(f"CHECK B — ENGLISH BROKEN ({len(check_b)} keys)")
-        print("These t() calls have no match in en.json OR _SEED_KEYS.")
-        print("English users see a missing-translation fallback right now.")
+        print(f"CHECK B (WEB) — ENGLISH BROKEN ({len(check_b_web)} keys)")
+        print("Used in web code — absent from web/src/locales/en.json AND _SEED_KEYS.")
+        print("Web users see a missing-translation fallback right now.")
         print("="*60)
-        pat_broken = re.compile(r"""(?<![A-Za-z0-9_$])t\(['"]([^'"]+)['"]""")
-        for k in check_b:
-            # Find which files call this key (pure Python walk — works on Windows)
-            hits = []
-            for src_dir in [web_src, mob_src]:
-                for dirpath, _, filenames in os.walk(src_dir):
-                    for fname in filenames:
-                        if not (fname.endswith(".ts") or fname.endswith(".tsx")):
-                            continue
-                        fpath = os.path.join(dirpath, fname)
-                        try:
-                            with open(fpath, encoding="utf-8", errors="ignore") as f:
-                                content = f.read()
-                        except Exception:
-                            continue
-                        if any(m.group(1) == k for m in pat_broken.finditer(content)):
-                            hits.append(os.path.relpath(fpath, ROOT))
-            print(f"  [BROKEN] {k}  ({', '.join(hits) if hits else 'location unknown'})")
+        for k in check_b_web:
+            hits = find_files_for_key(k, [web_src])
+            print(f"  [BROKEN-WEB] {k}  ({', '.join(hits) if hits else 'location unknown'})")
+        ok = False
+        exit_code |= 2
+
+    # CHECK B — mobile
+    if check_b_mob:
+        print(f"\n{'='*60}")
+        print(f"CHECK B (MOBILE) — ENGLISH BROKEN ({len(check_b_mob)} keys)")
+        print("Used in mobile code — absent from mobile/src/locales/en.json AND _SEED_KEYS.")
+        print("Mobile users see a missing-translation fallback right now.")
+        print("="*60)
+        for k in check_b_mob:
+            hits = find_files_for_key(k, [mob_src])
+            print(f"  [BROKEN-MOB] {k}  ({', '.join(hits) if hits else 'location unknown'})")
         ok = False
         exit_code |= 2
 
@@ -230,8 +287,8 @@ def main():
             ok = False
             exit_code |= 1
 
-    if not check_a and not check_b:
-        print("CHECK A + B: PASS — all t() keys are covered by _SEED_KEYS or en.json")
+    if not check_a and not check_b_web and not check_b_mob:
+        print("CHECK A + B: PASS -- all t() keys are covered by _SEED_KEYS or en.json")
 
     if check_c and not args.no_dead:
         print(f"\n{'='*60}")
@@ -243,8 +300,23 @@ def main():
         if len(check_c) > 20:
             print(f"  ... and {len(check_c) - 20} more (run with --no-dead to suppress)")
 
+    if (check_d_mob_missing or check_d_web_missing) and not args.no_platform_gap:
+        total_d = len(check_d_mob_missing) + len(check_d_web_missing)
+        print(f"\n{'='*60}")
+        print(f"CHECK D — PLATFORM GAP ({total_d} keys)")
+        print("Keys used on one platform but absent from that platform's en.json.")
+        print("Online: works (seed_keys pipeline). Offline static fallback: BROKEN.")
+        print("Fix: copy the key into the missing platform's en.json.")
+        print("Suppress with --no-platform-gap if offline fallback is not a concern.")
+        print("="*60)
+        for k in check_d_mob_missing:
+            print(f"  [MOBILE-MISSING] {k}  (in web en.json, not mobile en.json)")
+        for k in check_d_web_missing:
+            print(f"  [WEB-MISSING] {k}  (in mobile en.json, not web en.json)")
+
+    en_keys_count = len(all_en_keys)
     print(f"\n{'PASS' if ok else 'FAIL'}  (seed_keys={len(seed_keys)}, "
-          f"code_keys={len(all_code_keys)}, en_keys={len(all_en_keys)})")
+          f"code_keys={len(all_code_keys)}, en_keys={en_keys_count})")
     sys.exit(exit_code)
 
 

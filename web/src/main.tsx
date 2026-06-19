@@ -18,6 +18,8 @@ import { loadLanguagePackage, loadLanguagePackageFromCache } from "./i18n";
 import App from "./App.tsx";
 import "./index.css";
 import { registerSyncTriggers, resetStuckItems, registerBackgroundSync } from "./utils/offlineQueue";
+import { flushPendingAnonRegistration } from "./services/auth";
+import { useAuthStore } from "./stores/authStore";
 import { fetchAndCacheCountries } from "./utils/countryListCache";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
@@ -67,12 +69,27 @@ const queryClient = new QueryClient({
     }
   } catch { /* ignore */ }
 
+  // ── Flush any pending anonymous registration queued while the reporter was
+  // offline during onboarding. Must run before registerSyncTriggers so that
+  // the reporter_id is stored before any queued reports attempt to sync.
+  const _anonRegCallback = (reporterId: string) => {
+    useAuthStore.getState().setReporter(reporterId, false);
+  };
+  await flushPendingAnonRegistration(_anonRegCallback).catch(() => { /* non-critical */ });
+
   // ── Reset any items stuck in "syncing" from a previous session that was killed
   // mid-flight. Must run before registerSyncTriggers so the sync pass picks them up.
   await resetStuckItems().catch(() => { /* non-critical */ });
 
   // ── Register offline sync triggers.
   registerSyncTriggers(API_URL);
+
+  // ── Retry pending anonymous registration when connectivity is restored.
+  // Registered after registerSyncTriggers so the reporter_id is set before
+  // the report-sync pass that registerSyncTriggers schedules on the same event.
+  window.addEventListener("online", () => {
+    flushPendingAnonRegistration(_anonRegCallback).catch(() => { /* non-critical */ });
+  });
 
   // ── Register the Web Background Sync tag (no-op on iOS Safari).
   // This allows the SW to trigger a sync pass while the tab is backgrounded.

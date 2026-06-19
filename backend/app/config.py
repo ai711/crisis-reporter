@@ -93,6 +93,10 @@ class Settings(BaseSettings):
     EXPORT_URL_SIGN_SECRET: str = ""
     EXPORT_DOWNLOAD_EXPIRY_MINUTES: int = 15
 
+    # Auth cookies — set COOKIE_SECURE=false in local dev (.env) when running
+    # over plain HTTP; always True in production (Railway HTTPS).
+    COOKIE_SECURE: bool = True
+
     # CORS — origins allowed to call the API
     ALLOWED_ORIGINS: list[str] = [
         "http://localhost:5173",

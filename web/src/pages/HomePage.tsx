@@ -4,12 +4,11 @@ import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { useAuthStore } from "../stores/authStore";
 import { WEB_SESSION_ID } from "../utils/sessionId";
-import { detectPlatform } from "../services/auth";
+import { detectPlatform, queueAnonRegistration } from "../services/auth";
 import api, { tokenStorage } from "../services/api";
 import CrisisTypeModal from "../components/CrisisTypeModal";
 import { loadLanguagePackageFromCache } from "../i18n";
 import { getPendingItems } from "../utils/offlineQueue";
-import { generateUUID } from "../utils/uuid";
 import type { QueuedReport } from "../types";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
@@ -137,42 +136,34 @@ export default function HomePage() {
     setLoginPromptBusy(true);
     setLoginPromptOpen(false);
 
-    let assignedId: string | null;
+    const regPayload = {
+      device_id: WEB_SESSION_ID,
+      platform: detectPlatform(),
+      country_code: (() => { try { return localStorage.getItem("cr_country"); } catch { return null; } })(),
+      language_code: (() => { try { return localStorage.getItem("cr_language") || "en"; } catch { return "en"; } })(),
+      tc_accepted_at: new Date().toISOString(),
+    };
 
     try {
       const res = await api.post<{ reporter_id: string; access_token?: string; refresh_token?: string }>(
         "/api/reporters/register",
-        {
-          device_id: WEB_SESSION_ID,
-          platform: detectPlatform(),
-          country_code: (() => { try { return localStorage.getItem("cr_country"); } catch { return null; } })(),
-          language_code: (() => { try { return localStorage.getItem("cr_language") || "en"; } catch { return "en"; } })(),
-          tc_accepted_at: new Date().toISOString(),
-        }
+        regPayload
       );
-      assignedId = res.data.reporter_id;
-      if (res.data.access_token) {
-        tokenStorage.setTokens(res.data.access_token, res.data.refresh_token ?? "", res.data.reporter_id);
+      const { reporter_id, access_token, refresh_token } = res.data;
+      if (access_token) {
+        tokenStorage.setTokens(access_token, refresh_token ?? "", reporter_id);
       }
-      if (res.data.reporter_id) {
-        setReporter(res.data.reporter_id, false);
-        localStorage.setItem("cr_reporter_id", res.data.reporter_id);
+      if (reporter_id) {
+        try { localStorage.setItem("cr_reporter_id", reporter_id); } catch { /* ignore */ }
+        setReporter(reporter_id, false);
       }
     } catch {
-      assignedId = `local_${generateUUID().replace(/-/g, "").slice(0, 12)}`;
+      // Offline — queue the payload for retry when connectivity returns.
+      // flushPendingAnonRegistration() in main.tsx retries on the online event
+      // and on every subsequent startup until the registration succeeds.
+      queueAnonRegistration(regPayload);
     }
 
-    // Only persist real backend-assigned IDs to localStorage.
-    // "local_" fallback IDs are session-only: the backend has never seen them
-    // and any API call using one returns 404. Persisting them would cause
-    // cascading 404s on every subsequent session until the user clears storage.
-    if (assignedId && !assignedId.startsWith("local_")) {
-      try { localStorage.setItem("cr_reporter_id", assignedId); } catch { /* ignore */ }
-      // Only store real IDs in Zustand. local_ IDs are session-only fallbacks —
-      // persisting them to Zustand (which writes localStorage["cr_auth"]) would
-      // make the app think the reporter is registered across sessions.
-      setReporter(assignedId, false);
-    }
     setLoginPromptBusy(false);
 
     try {

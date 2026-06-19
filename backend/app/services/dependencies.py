@@ -10,16 +10,28 @@ from app.models.dashboard_user import DashboardUser
 from app.models.reporter import Reporter
 from app.models.role import Role
 
-# Bearer token extractor
-security = HTTPBearer()
+# Bearer token extractor (kept for OpenAPI docs / mobile clients that use Bearer)
+security = HTTPBearer(auto_error=False)
+
+
+def _extract_token(request: Request, cookie_name: str) -> str | None:
+    """Read JWT from HttpOnly cookie (web clients) or Authorization header (mobile).
+    Cookie takes precedence — if present it was set server-side and is XSS-safe."""
+    token = request.cookies.get(cookie_name)
+    if token:
+        return token
+    auth = request.headers.get("Authorization", "")
+    if auth.startswith("Bearer "):
+        return auth[7:]
+    return None
 
 
 async def get_current_dashboard_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+    request: Request,
     db: AsyncSession = Depends(get_db),
 ) -> DashboardUser:
     """Dependency — extracts and verifies JWT for dashboard routes.
-    Use this on any route that requires a logged-in UNDP staff member."""
+    Checks HttpOnly cookie first (web), then Authorization header (mobile/API)."""
 
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -27,8 +39,12 @@ async def get_current_dashboard_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
 
+    raw_token = _extract_token(request, "dash_access_token")
+    if not raw_token:
+        raise credentials_exception
+
     try:
-        payload = decode_token(credentials.credentials)
+        payload = decode_token(raw_token)
 
         # Enforce dashboard context — reporter tokens cannot access dashboard
         if payload.get("ctx") != "dashboard":
@@ -133,11 +149,11 @@ def require_section_access(section_key: str, require_edit: bool = False):
 
 
 async def get_current_reporter(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+    request: Request,
     db: AsyncSession = Depends(get_db),
 ) -> Reporter:
     """Dependency — extracts and verifies JWT for reporter routes.
-    Use this on routes that require a verified reporter account."""
+    Checks HttpOnly cookie first (web PWA), then Authorization header (Android)."""
 
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -145,8 +161,12 @@ async def get_current_reporter(
         headers={"WWW-Authenticate": "Bearer"},
     )
 
+    raw_token = _extract_token(request, "cr_access_token")
+    if not raw_token:
+        raise credentials_exception
+
     try:
-        payload = decode_token(credentials.credentials)
+        payload = decode_token(raw_token)
 
         # Enforce reporter context — dashboard tokens cannot access reporter routes
         if payload.get("ctx") != "reporter":
@@ -188,17 +208,16 @@ async def get_redis(request: Request):
 # Optional reporter auth — used on routes that accept both
 # anonymous and verified reporters
 async def get_optional_reporter(
-    credentials: HTTPAuthorizationCredentials = Depends(
-        HTTPBearer(auto_error=False)
-    ),
+    request: Request,
     db: AsyncSession = Depends(get_db),
 ) -> Reporter | None:
-    """Dependency — returns reporter if token provided, None if anonymous."""
-    if not credentials:
+    """Dependency — returns reporter if token provided (cookie or Bearer), None if anonymous."""
+    raw_token = _extract_token(request, "cr_access_token")
+    if not raw_token:
         return None
 
     try:
-        payload = decode_token(credentials.credentials)
+        payload = decode_token(raw_token)
         if payload.get("ctx") != "reporter":
             return None
         if payload.get("type") != "access":

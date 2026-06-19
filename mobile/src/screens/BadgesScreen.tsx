@@ -11,6 +11,7 @@ import {
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
+import { useTranslation } from 'react-i18next';
 import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../services/api';
@@ -51,6 +52,7 @@ type LoadState = 'loading' | 'ready';
 export default function BadgesScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
+  const { t } = useTranslation();
 
   const [loadState, setLoadState] = useState<LoadState>('loading');
   const [isLocked, setIsLocked] = useState(false);
@@ -146,7 +148,7 @@ export default function BadgesScreen() {
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
             <MaterialIcons name="arrow-back" size={scale(24)} color="#0468B1" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Badges</Text>
+          <Text style={styles.headerTitle}>{t('badges.title')}</Text>
           <View style={styles.backBtn} />
         </View>
         <ActivityIndicator color="#0468B1" style={{ marginTop: 40 }} />
@@ -164,7 +166,7 @@ export default function BadgesScreen() {
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
             <MaterialIcons name="arrow-back" size={scale(24)} color="#0468B1" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Badges</Text>
+          <Text style={styles.headerTitle}>{t('badges.title')}</Text>
           <View style={styles.backBtn} />
         </View>
 
@@ -176,22 +178,22 @@ export default function BadgesScreen() {
           <View style={styles.lockedBanner}>
             <MaterialIcons name="lock" size={scale(24)} color="#6C4500" />
             <View style={{ flex: 1, marginLeft: 12 }}>
-              <Text style={styles.lockedBannerTitle}>Badges are locked</Text>
+              <Text style={styles.lockedBannerTitle}>{t('badges.locked_title')}</Text>
               <Text style={styles.lockedBannerBody}>
-                Add your email or phone number to your profile to unlock badges and certifications
+                {t('badges.locked_body')}
               </Text>
               <TouchableOpacity
                 onPress={() => navigation.navigate('ReporterProfileScreen')}
                 style={styles.lockedBannerLink}
               >
-                <Text style={styles.lockedBannerLinkText}>Go to Profile</Text>
+                <Text style={styles.lockedBannerLinkText}>{t('badges.go_to_profile')}</Text>
                 <MaterialIcons name="arrow-forward" size={scale(14)} color="#0468B1" />
               </TouchableOpacity>
             </View>
           </View>
 
           {/* Section label */}
-          <Text style={styles.sectionLabel}>Available Badges</Text>
+          <Text style={styles.sectionLabel}>{t('badges.section_available')}</Text>
 
           {/* Safety Training Badge (locked) */}
           <View style={styles.lockedBadgeCard}>
@@ -205,17 +207,19 @@ export default function BadgesScreen() {
                 </View>
               </View>
               <View style={{ flex: 1, marginLeft: 14 }}>
-                <Text style={styles.lockedBadgeName}>Safety Training Badge</Text>
+                <Text style={styles.lockedBadgeName}>{t('badges.safety_name')}</Text>
                 <Text style={styles.lockedBadgeDesc}>
-                  Complete both Part A and Part B of Safety Tips to earn this badge
+                  {t('badges.safety_desc_locked')}
                 </Text>
               </View>
             </View>
 
             {/* Progress */}
             <Text style={styles.progressLabel}>
-              Part A: {completedPartA}/9 completed · Part B:{' '}
-              {partBDone ? 'Completed' : 'Not started'}
+              {t('badges.part_a_progress', {
+                n: completedPartA,
+                status: partBDone ? t('badges.status_completed') : t('badges.status_not_started'),
+              })}
             </Text>
             <View style={styles.progressBarBg}>
               <View
@@ -233,7 +237,7 @@ export default function BadgesScreen() {
               style={styles.outlineBtn}
               onPress={() => navigation.navigate('SafetyTipsScreen')}
             >
-              <Text style={styles.outlineBtnText}>Continue Safety Tips</Text>
+              <Text style={styles.outlineBtnText}>{t('badges.continue_safety')}</Text>
               <MaterialIcons name="arrow-forward" size={scale(16)} color="#0468B1" />
             </TouchableOpacity>
           </View>
@@ -250,13 +254,13 @@ export default function BadgesScreen() {
                 </View>
               </View>
               <View style={{ flex: 1, marginLeft: 14 }}>
-                <Text style={styles.lockedBadgeName}>Referral Badge</Text>
+                <Text style={styles.lockedBadgeName}>{t('badges.referral_name')}</Text>
                 <Text style={styles.lockedBadgeDesc}>
-                  Refer a friend who installs the app and completes safety training
+                  {t('badges.referral_desc')}
                 </Text>
                 <View style={styles.comingSoonChip}>
                   <Text style={styles.comingSoonText}>
-                    Status: Coming soon — referral program launching later
+                    {t('badges.referral_status')}
                   </Text>
                 </View>
               </View>
@@ -265,7 +269,7 @@ export default function BadgesScreen() {
 
           {/* Bottom note */}
           <Text style={styles.bottomNote}>
-            Badges are only visible inside the app at this stage. Shareable certificates coming soon.
+            {t('badges.visibility_note')}
           </Text>
         </ScrollView>
       </View>
@@ -283,7 +287,7 @@ export default function BadgesScreen() {
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <MaterialIcons name="arrow-back" size={scale(24)} color="#0468B1" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Badges</Text>
+        <Text style={styles.headerTitle}>{t('badges.title')}</Text>
         <View style={styles.backBtn} />
       </View>
 
@@ -298,11 +302,11 @@ export default function BadgesScreen() {
           </View>
           <View style={{ flex: 1, marginLeft: 12 }}>
             <Text style={styles.profileName}>{reporterName}</Text>
-            <Text style={styles.profileId}>User ID: {displayId}</Text>
+            <Text style={styles.profileId}>{t('badges.user_id_label')}: {displayId}</Text>
           </View>
           <View style={styles.activeChip}>
             <View style={styles.activeDot} />
-            <Text style={styles.activeChipText}>Profile Active</Text>
+            <Text style={styles.activeChipText}>{t('badges.profile_active')}</Text>
           </View>
         </View>
 
@@ -310,7 +314,7 @@ export default function BadgesScreen() {
         <View style={styles.divider} />
 
         {/* Section label */}
-        <Text style={styles.sectionLabel}>Your Badges</Text>
+        <Text style={styles.sectionLabel}>{t('badges.section_your_badges')}</Text>
 
         {/* Safety Training Badge */}
         {trainingComplete ? (
@@ -331,24 +335,23 @@ export default function BadgesScreen() {
                 </View>
                 {/* EARNED chip */}
                 <View style={styles.earnedChip}>
-                  <Text style={styles.earnedChipText}>EARNED ✓</Text>
+                  <Text style={styles.earnedChipText}>{t('badges.status_earned')}</Text>
                 </View>
               </View>
 
-              <Text style={styles.earnedBadgeName}>Safety Training Badge</Text>
+              <Text style={styles.earnedBadgeName}>{t('badges.safety_name')}</Text>
               <Text style={styles.earnedBadgeDesc}>
-                You completed both Part A and Part B of the Crisis Response Safety
-                Protocol. This certification validates your field readiness.
+                {t('badges.safety_earned_desc')}
               </Text>
 
               <View style={styles.earnedFooter}>
                 <View>
-                  <Text style={styles.earnedDateLabel}>EARNED ON</Text>
+                  <Text style={styles.earnedDateLabel}>{t('badges.earned_on_label')}</Text>
                   <Text style={styles.earnedDateValue}>{earnedDate}</Text>
                 </View>
                 <TouchableOpacity style={styles.shareBtn} disabled>
                   <MaterialIcons name="share" size={scale(14)} color="#717782" />
-                  <Text style={styles.shareBtnText}>Share Badge</Text>
+                  <Text style={styles.shareBtnText}>{t('badges.share_badge')}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -366,15 +369,17 @@ export default function BadgesScreen() {
                 </View>
               </View>
               <View style={{ flex: 1, marginLeft: 14 }}>
-                <Text style={styles.lockedBadgeName}>Safety Training Badge</Text>
+                <Text style={styles.lockedBadgeName}>{t('badges.safety_name')}</Text>
                 <Text style={styles.lockedBadgeDesc}>
-                  Complete both Part A and Part B of Safety Tips to earn this badge
+                  {t('badges.safety_desc_locked')}
                 </Text>
               </View>
             </View>
             <Text style={styles.progressLabel}>
-              Part A: {completedPartA}/9 completed · Part B:{' '}
-              {partBDone ? 'Completed' : 'Not started'}
+              {t('badges.part_a_progress', {
+                n: completedPartA,
+                status: partBDone ? t('badges.status_completed') : t('badges.status_not_started'),
+              })}
             </Text>
             <View style={styles.progressBarBg}>
               <View
@@ -391,7 +396,7 @@ export default function BadgesScreen() {
               style={styles.outlineBtn}
               onPress={() => navigation.navigate('SafetyTipsScreen')}
             >
-              <Text style={styles.outlineBtnText}>Continue Safety Tips</Text>
+              <Text style={styles.outlineBtnText}>{t('badges.continue_safety')}</Text>
               <MaterialIcons name="arrow-forward" size={scale(16)} color="#0468B1" />
             </TouchableOpacity>
           </View>
@@ -404,12 +409,12 @@ export default function BadgesScreen() {
           </View>
           <View style={{ flex: 1, marginLeft: 14 }}>
             <View style={styles.referralTitleRow}>
-              <Text style={styles.referralName}>Referral Badge</Text>
-              <Text style={styles.lockedLabel}>LOCKED</Text>
+              <Text style={styles.referralName}>{t('badges.referral_name')}</Text>
+              <Text style={styles.lockedLabel}>{t('badges.status_locked')}</Text>
             </View>
-            <Text style={styles.referralCount}>0 successful referrals</Text>
+            <Text style={styles.referralCount}>{t('badges.referral_count', { count: 0 })}</Text>
             <TouchableOpacity style={styles.referralBtn}>
-              <Text style={styles.referralBtnText}>Refer a Friend</Text>
+              <Text style={styles.referralBtnText}>{t('badges.refer_a_friend')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -418,8 +423,7 @@ export default function BadgesScreen() {
         <View style={styles.infoNote}>
           <MaterialIcons name="info-outline" size={scale(14)} color="#717782" style={{ marginTop: 1 }} />
           <Text style={styles.infoNoteText}>
-            Badges are only visible inside the app and linked to your verified ID. Sharing
-            capabilities are currently restricted for security compliance.
+            {t('badges.security_note')}
           </Text>
         </View>
       </ScrollView>
@@ -699,6 +703,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#FFFFFF',
     letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
   earnedBadgeName: {
     fontSize: scale(18),
