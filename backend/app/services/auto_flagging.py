@@ -42,6 +42,15 @@ def update_thresholds(**kwargs) -> None:
             _thresholds[key] = value
 
 
+def init_redis(client) -> None:
+    """Wire the shared app.state.redis pool into this module.
+    Called once from main.py lifespan after the pool is created.
+    Falls back to lazy-init if never called (dev/test environments).
+    """
+    global _geo_redis_client
+    _geo_redis_client = client
+
+
 # ── IP geolocation helpers ────────────────────────────────────────────────────
 
 async def _geolocate_ip(ip: str) -> str | None:
@@ -514,34 +523,36 @@ async def auto_flag_report(report_id: str, delay: int = 10) -> None:
                     })
 
             # ── Rule 9: Duplicate image ───────────────────────────────────────
-            photos_r = await db.execute(
-                select(Photo).where(Photo.report_id == report.id)
-            )
-            new_photos = photos_r.scalars().all()
-            for new_photo in new_photos:
-                if not new_photo.photo_hash:
-                    continue
-                dup_photo_r = await db.execute(
-                    select(Photo).where(and_(
-                        Photo.photo_hash == new_photo.photo_hash,
-                        Photo.report_id != report.id,
-                    )).limit(1)
+            # Two queries total regardless of photo count:
+            # 1. Collect all non-null hashes for this report's photos.
+            # 2. One JOIN query finds any matching photo + its report serial_number.
+            own_hashes_r = await db.execute(
+                select(Photo.photo_hash).where(
+                    and_(Photo.report_id == report.id, Photo.photo_hash.isnot(None))
                 )
-                dup_photo = dup_photo_r.scalar_one_or_none()
-                if dup_photo:
-                    dup_sn_r = await db.execute(
-                        select(Report.serial_number).where(Report.id == dup_photo.report_id)
-                    )
+            )
+            own_hashes = own_hashes_r.scalars().all()
+            if own_hashes:
+                dup_r = await db.execute(
+                    select(Photo.id, Photo.report_id, Report.serial_number)
+                    .join(Report, Photo.report_id == Report.id)
+                    .where(and_(
+                        Photo.photo_hash.in_(own_hashes),
+                        Photo.report_id != report.id,
+                    ))
+                    .limit(1)
+                )
+                dup_row = dup_r.first()
+                if dup_row:
                     triggered_rules.append({
                         "rule_id": "9",
                         "reason": "duplicate_image",
                         "metadata": {
-                            "matching_photo_id": str(dup_photo.id),
-                            "matching_report_id": str(dup_photo.report_id),
-                            "matching_report_serial_number": dup_sn_r.scalar_one_or_none(),
+                            "matching_photo_id": str(dup_row[0]),
+                            "matching_report_id": str(dup_row[1]),
+                            "matching_report_serial_number": dup_row[2],
                         },
                     })
-                    break  # one matching photo is sufficient
 
             # ── Persist flag transition ───────────────────────────────────────
             new_flag = "red" if triggered_rules else "green"

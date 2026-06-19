@@ -1426,9 +1426,14 @@ async def lifespan(app: FastAPI):
                 logger.info("Admin account created: admin@crisisreporter.org")
     except Exception as e:
         logger.error("Admin reset migration error: %s", e)
-    # Shared Redis connection on app state (used by soft-lock service and review queue)
+    # Shared Redis pool — one pool for the entire process lifetime.
+    # auto_flagging and dashboard_sse reuse this pool instead of creating their own.
     import redis.asyncio as aioredis
+    from app.services import auto_flagging as _af
+    from app.routers import dashboard_sse as _sse
     app.state.redis = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
+    _af.init_redis(app.state.redis)
+    _sse.init_redis(app.state.redis)
     # Translation config diagnostic — logged every startup so misconfiguration
     # is visible immediately rather than silently falling back to LibreTranslate.
     if settings.TRANSLATION_PRIMARY == "google":

@@ -12,6 +12,15 @@ from app.config import settings
 
 router = APIRouter(prefix="/api/dashboard", tags=["Dashboard SSE"])
 
+# Shared Redis client — wired from main.py lifespan via init_redis().
+# Falls back to a one-shot connection in publish_event if never set (dev/test).
+_redis_client = None
+
+
+def init_redis(client) -> None:
+    global _redis_client
+    _redis_client = client
+
 
 async def event_generator(request: Request, crisis_id: str):
     """Generate SSE events for connected dashboard clients.
@@ -95,12 +104,12 @@ async def dashboard_stream(
 
 async def publish_event(crisis_id: str, event_type: str, data: dict):
     """Publish an event to all connected dashboard clients for a crisis.
-    
+
     Called from:
     - Report submission (after auto-flagging assigns green/orange)
     - Manual flag updates
     - Reporter block/unblock
-    
+
     Usage:
         await publish_event(crisis_id, "report_confirmed", {
             "report_id": str(report.id),
@@ -109,20 +118,28 @@ async def publish_event(crisis_id: str, event_type: str, data: dict):
             "longitude": 72.5714,
         })
     """
-    import redis.asyncio as aioredis
+    payload = json.dumps({
+        "type": event_type,
+        "crisis_id": str(crisis_id),
+        "ts": datetime.utcnow().isoformat(),
+        **data,
+    })
+    channel = f"dashboard:{crisis_id}"
 
+    if _redis_client is not None:
+        # Use the shared pool — no connection created or destroyed per call.
+        try:
+            await _redis_client.publish(channel, payload)
+        except Exception:
+            pass
+        return
+
+    # Fallback: one-shot connection for dev/test environments where lifespan
+    # may not have called init_redis().
+    import redis.asyncio as aioredis
     try:
-        redis_client = aioredis.from_url(settings.REDIS_URL)
-        payload = json.dumps({
-            "type": event_type,
-            "crisis_id": str(crisis_id),
-            "ts": datetime.utcnow().isoformat(),
-            **data,
-        })
-        channel = f"dashboard:{crisis_id}"
-        await redis_client.publish(channel, payload)
-        await redis_client.aclose()
+        rc = aioredis.from_url(settings.REDIS_URL)
+        await rc.publish(channel, payload)
+        await rc.aclose()
     except Exception:
-        # Redis unavailable — event not published
-        # Dashboard will receive data on next poll
         pass
