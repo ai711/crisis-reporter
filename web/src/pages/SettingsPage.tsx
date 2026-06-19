@@ -228,8 +228,8 @@ export default function SettingsPage() {
     setModal(null);
   };
 
-  const handleSignOut = () => {
-    logoutReporter();
+  const handleSignOut = async () => {
+    await logoutReporter();
     logout();
     navigate("/");
   };

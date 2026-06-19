@@ -185,41 +185,26 @@ const MAX_RETRIES = 5;
 let isSyncing = false;
 
 // Attempt a silent token refresh before the sync pass so that a 15-minute
-// access-token expiry doesn't stall the entire queue.  Returns the fresh
-// access token (or the existing one if still valid, or null for anonymous users).
-async function refreshAccessTokenIfNeeded(apiBaseUrl: string): Promise<string | null> {
-  const currentToken = localStorage.getItem("cr_access_token");
-  const refreshToken  = localStorage.getItem("cr_refresh_token");
-
-  if (!refreshToken) return currentToken; // Anonymous user — no token to refresh
+// access-token expiry doesn't stall the entire queue.
+// Tokens live in HttpOnly cookies — the browser sends and rotates them automatically.
+// Anonymous users have no cookie; the refresh call is a no-op for them (404/401 is ignored).
+async function refreshAccessTokenIfNeeded(apiBaseUrl: string): Promise<void> {
+  const reporterId = localStorage.getItem("cr_reporter_id");
+  if (!reporterId) return; // Anonymous user — no cookie to refresh
 
   try {
-    const refreshController = new AbortController();
-    const refreshTimeoutId = setTimeout(() => refreshController.abort(), 20000);
-    const res = await fetch(`${apiBaseUrl}/api/reporter/auth/refresh`, {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 20000);
+    await fetch(`${apiBaseUrl}/api/reporter/auth/refresh`, {
       method: "POST",
+      credentials: "include", // sends HttpOnly cookie; server rotates and sets new cookies
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refresh_token: refreshToken }),
-      signal: refreshController.signal,
+      body: JSON.stringify({}),
+      signal: controller.signal,
     });
-    clearTimeout(refreshTimeoutId);
-
-    if (res.ok) {
-      const data = await res.json();
-      if (data.access_token) {
-        localStorage.setItem("cr_access_token", data.access_token);
-        if (data.refresh_token) {
-          localStorage.setItem("cr_refresh_token", data.refresh_token);
-        }
-        return data.access_token;
-      }
-    }
-    // Refresh endpoint returned a non-200 (e.g. 401 = refresh token expired).
-    // Fall back to the current access token — the per-item auth_expired handler
-    // will surface the issue on first use.
-    return currentToken;
+    clearTimeout(timeoutId);
   } catch {
-    return currentToken; // Network error — carry on with existing token
+    // Network error — carry on; per-item 401 handler will stop the pass if needed
   }
 }
 
@@ -234,9 +219,9 @@ export async function syncQueue(apiBaseUrl: string): Promise<void> {
     const pending = await getPendingItems();
     if (pending.length === 0) return;
 
-    // Proactively refresh the access token once for the whole pass rather than
-    // letting each item hit a 401 and burning time on per-item retries.
-    const accessToken = await refreshAccessTokenIfNeeded(apiBaseUrl);
+    // Proactively refresh the HttpOnly auth cookie once before the whole pass
+    // rather than letting each item hit a 401 and burning time on per-item retries.
+    await refreshAccessTokenIfNeeded(apiBaseUrl);
 
     for (const item of pending) {
       // Promote exhausted items to "failed" so the UI can surface them
@@ -252,19 +237,13 @@ export async function syncQueue(apiBaseUrl: string): Promise<void> {
       await updateItemStatus(item.local_id, "syncing");
 
       try {
-        // Submit report — use the pre-refreshed token for all items in this pass
-        const headers: Record<string, string> = {
-          "Content-Type": "application/json",
-        };
-        if (accessToken) {
-          headers["Authorization"] = `Bearer ${accessToken}`;
-        }
-
+        // Submit report — cookie is sent automatically via credentials: 'include'
         const reportController = new AbortController();
         const reportTimeoutId = setTimeout(() => reportController.abort(), 20000);
         const reportResponse = await fetch(`${apiBaseUrl}/api/reports`, {
           method: "POST",
-          headers,
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify(item.report),
           signal: reportController.signal,
         });
@@ -288,16 +267,11 @@ export async function syncQueue(apiBaseUrl: string): Promise<void> {
             new File([photo.blob], photo.filename, { type: photo.content_type })
           );
 
-          const photoHeaders: Record<string, string> = {};
-          if (accessToken) {
-            photoHeaders["Authorization"] = `Bearer ${accessToken}`;
-          }
-
           const photoController = new AbortController();
           const photoTimeoutId = setTimeout(() => photoController.abort(), 120000);
           const photoResponse = await fetch(`${apiBaseUrl}/api/photos`, {
             method: "POST",
-            headers: photoHeaders,
+            credentials: "include",
             body: formData,
             signal: photoController.signal,
           });

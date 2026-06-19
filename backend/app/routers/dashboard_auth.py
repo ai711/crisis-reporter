@@ -14,7 +14,7 @@ import time
 import threading
 from collections import defaultdict
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Optional
 
 # ── Security settings cache (module-level, refreshed every 60 s) ──────────────
 # Avoids a DB hit on every login attempt while still reacting to admin changes.
@@ -52,6 +52,7 @@ from fastapi import (
     Form,
     HTTPException,
     Request,
+    Response,
     UploadFile,
     status,
 )
@@ -73,6 +74,37 @@ from app.services.dependencies import get_current_dashboard_user
 from app.services.storage import storage_service
 
 router = APIRouter(prefix="/api/dashboard/auth", tags=["Dashboard Auth"])
+
+
+# ── Cookie helpers ─────────────────────────────────────────────────────────────
+
+def _set_dashboard_cookies(response: Response, access_token: str, refresh_token: str) -> None:
+    """Set HttpOnly auth cookies for web clients.
+    API/mobile clients ignore cookies and use the response body tokens instead."""
+    response.set_cookie(
+        key="dash_access_token",
+        value=access_token,
+        httponly=True,
+        secure=settings.COOKIE_SECURE,
+        samesite="lax",
+        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        path="/",
+    )
+    response.set_cookie(
+        key="dash_refresh_token",
+        value=refresh_token,
+        httponly=True,
+        secure=settings.COOKIE_SECURE,
+        samesite="lax",
+        max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
+        path="/api/dashboard/auth/refresh",
+    )
+
+
+def _clear_dashboard_cookies(response: Response) -> None:
+    response.delete_cookie(key="dash_access_token", path="/")
+    response.delete_cookie(key="dash_refresh_token", path="/api/dashboard/auth/refresh")
+
 
 # ── Role permissions helper ───────────────────────────────────────────────────
 
@@ -202,7 +234,7 @@ class TokenResponse(BaseModel):
 
 
 class RefreshRequest(BaseModel):
-    refresh_token: str
+    refresh_token: Optional[str] = None  # Optional: web uses cookie, API clients send body
 
 
 async def _user_response(user: DashboardUser, db: AsyncSession) -> DashboardUserResponse:
@@ -230,6 +262,7 @@ async def _user_response(user: DashboardUser, db: AsyncSession) -> DashboardUser
 async def login(
     request: Request,
     body: LoginRequest,
+    response: Response,
     db: AsyncSession = Depends(get_db),
 ):
     """Dashboard staff login.
@@ -292,6 +325,8 @@ async def login(
         extra_claims={"email": user.email, "name": user.full_name},
     )
 
+    _set_dashboard_cookies(response, tokens["access_token"], tokens["refresh_token"])
+
     inactivity = _sec_cache.get("session_timeout", settings.INACTIVITY_TIMEOUT_MINUTES)
     return {
         **tokens,
@@ -305,17 +340,29 @@ async def login(
 
 @router.post("/refresh", response_model=TokenResponse)
 async def refresh_token(
-    request: RefreshRequest,
+    http_request: Request,
+    body: RefreshRequest,
+    response: Response,
     db: AsyncSession = Depends(get_db),
 ):
     """Silently refresh an expired access token using a valid refresh token.
+    Web clients: refresh token read from HttpOnly cookie (body token optional).
+    API/mobile clients: refresh token sent in request body.
     Called automatically by the frontend HTTP interceptor — never interrupts
     an active user session."""
 
     import jwt as pyjwt
 
+    # Cookie takes precedence (web); fall back to body (API clients)
+    raw_refresh = http_request.cookies.get("dash_refresh_token") or body.refresh_token
+    if not raw_refresh:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="No refresh token provided",
+        )
+
     try:
-        payload = decode_token(request.refresh_token)
+        payload = decode_token(raw_refresh)
     except pyjwt.ExpiredSignatureError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -357,6 +404,8 @@ async def refresh_token(
         extra_claims={"email": user.email, "name": user.full_name},
     )
 
+    _set_dashboard_cookies(response, tokens["access_token"], tokens["refresh_token"])
+
     inactivity = _sec_cache.get("session_timeout", settings.INACTIVITY_TIMEOUT_MINUTES)
     return {
         **tokens,
@@ -369,11 +418,12 @@ async def refresh_token(
 
 @router.post("/logout")
 async def logout(
+    response: Response,
     current_user: DashboardUser = Depends(get_current_dashboard_user),
 ):
-    """Logout — client must discard tokens on receipt.
-    JWTs are stateless; server-side invalidation relies on token expiry.
-    The client clears local storage regardless of this response."""
+    """Logout — clears HttpOnly cookies (web) and instructs client to discard stored tokens.
+    JWTs are stateless; server-side invalidation relies on token expiry."""
+    _clear_dashboard_cookies(response)
     return {"message": "Logged out successfully"}
 
 
@@ -538,6 +588,7 @@ class ResetExpiredPasswordRequest(BaseModel):
 @router.post("/reset-expired-password", response_model=TokenResponse)
 async def reset_expired_password(
     body: ResetExpiredPasswordRequest,
+    response: Response,
     db: AsyncSession = Depends(get_db),
 ):
     """Reset a password that has expired without requiring an active session.
@@ -580,6 +631,8 @@ async def reset_expired_password(
         context="dashboard",
         extra_claims={"email": user.email, "name": user.full_name},
     )
+
+    _set_dashboard_cookies(response, tokens["access_token"], tokens["refresh_token"])
 
     inactivity = _sec_cache.get("session_timeout", settings.INACTIVITY_TIMEOUT_MINUTES)
     return {

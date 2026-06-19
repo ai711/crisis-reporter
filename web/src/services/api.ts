@@ -8,64 +8,64 @@ const BASE_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 const api: AxiosInstance = axios.create({
   baseURL: BASE_URL,
   timeout: 20000,
+  withCredentials: true, // send HttpOnly cookies on every request
   headers: {
     "Content-Type": "application/json",
   },
 });
 
 // ── Token storage helpers ─────────────────────────────────────────────────────
+// Web app uses HttpOnly cookies for access/refresh tokens (XSS-safe).
+// localStorage only tracks whether the user is authenticated (reporter ID).
+// Mobile (React Native) uses SecureStore + Bearer header — unaffected by this.
 
-const TOKEN_KEY = "cr_access_token";
-const REFRESH_KEY = "cr_refresh_token";
 const REPORTER_ID_KEY = "cr_reporter_id";
 
 export const tokenStorage = {
-  getAccessToken: () => localStorage.getItem(TOKEN_KEY),
-  getRefreshToken: () => localStorage.getItem(REFRESH_KEY),
+  /** Returns a truthy sentinel if the user is authenticated, null otherwise.
+   *  The actual token lives in an HttpOnly cookie — JS cannot read it. */
+  getAccessToken: (): string | null =>
+    localStorage.getItem(REPORTER_ID_KEY) ? "cookie-auth" : null,
+
+  /** Always null — refresh token is in an HttpOnly cookie. */
+  getRefreshToken: (): null => null,
+
   getReporterId: () => localStorage.getItem(REPORTER_ID_KEY),
 
-  setTokens: (accessToken: string, refreshToken: string, reporterId: string) => {
-    localStorage.setItem(TOKEN_KEY, accessToken);
-    localStorage.setItem(REFRESH_KEY, refreshToken);
+  /** Only stores the reporter ID; tokens are set as cookies by the server. */
+  setTokens: (_accessToken: string, _refreshToken: string, reporterId: string) => {
     localStorage.setItem(REPORTER_ID_KEY, reporterId);
   },
 
   clearTokens: () => {
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(REFRESH_KEY);
     localStorage.removeItem(REPORTER_ID_KEY);
   },
 };
 
-// ── Request interceptor — attach token ────────────────────────────────────────
+// ── Request interceptor — no Bearer header needed (cookie handles auth) ───────
 
 api.interceptors.request.use(
-  (config: InternalAxiosRequestConfig) => {
-    const token = tokenStorage.getAccessToken();
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
+  (config: InternalAxiosRequestConfig) => config,
   (error) => Promise.reject(error)
 );
 
 // ── Response interceptor — silent token refresh ───────────────────────────────
 // CRITICAL: Token refresh must NEVER interrupt active form flow or submission.
 // This interceptor handles refresh at the HTTP layer — invisible to the UI.
+// The refresh call sends the HttpOnly cookie; the server rotates both cookies.
 
 let isRefreshing = false;
 let failedQueue: Array<{
-  resolve: (token: string) => void;
+  resolve: () => void;
   reject: (error: unknown) => void;
 }> = [];
 
-const processQueue = (error: unknown, token: string | null = null) => {
+const processQueue = (error: unknown) => {
   failedQueue.forEach(({ resolve, reject }) => {
     if (error) {
       reject(error);
-    } else if (token) {
-      resolve(token);
+    } else {
+      resolve();
     }
   });
   failedQueue = [];
@@ -89,9 +89,8 @@ api.interceptors.response.use(
       return Promise.reject(error);
     }
 
-    const refreshToken = tokenStorage.getRefreshToken();
-    if (!refreshToken) {
-      tokenStorage.clearTokens();
+    // No reporter ID means the user is not logged in — don't attempt refresh
+    if (!tokenStorage.getReporterId()) {
       return Promise.reject(error);
     }
 
@@ -99,31 +98,25 @@ api.interceptors.response.use(
       // Queue this request until refresh completes
       return new Promise((resolve, reject) => {
         failedQueue.push({ resolve, reject });
-      }).then((token) => {
-        originalRequest.headers.Authorization = `Bearer ${token}`;
-        return api(originalRequest);
-      });
+      }).then(() => api(originalRequest));
     }
 
     originalRequest._retry = true;
     isRefreshing = true;
 
     try {
-      const response = await axios.post(
+      // Cookie is sent automatically — no body token needed
+      await axios.post(
         `${BASE_URL}/api/reporter/auth/refresh`,
-        { refresh_token: refreshToken }
+        {},
+        { withCredentials: true }
       );
 
-      const { access_token, refresh_token, reporter_id } = response.data;
-      tokenStorage.setTokens(access_token, refresh_token, reporter_id);
-
-      // Retry all queued requests with new token
-      processQueue(null, access_token);
-
-      originalRequest.headers.Authorization = `Bearer ${access_token}`;
+      // Server rotated cookies; retry queued requests (they'll use the new cookie)
+      processQueue(null);
       return api(originalRequest);
     } catch (refreshError) {
-      processQueue(refreshError, null);
+      processQueue(refreshError);
       tokenStorage.clearTokens();
       return Promise.reject(refreshError);
     } finally {

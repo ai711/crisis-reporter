@@ -13,7 +13,6 @@ import {
   submitReviewDecision,
   releaseSoftLock,
   API_BASE,
-  tokenStorage,
 } from "../services/api";
 
 // ── Flag reason metadata ───────────────────────────────────────────────────────
@@ -121,13 +120,10 @@ export default function ReviewPanel({
 
     function handleBeforeUnload() {
       if (!lockHeldRef.current) return;
-      const token = tokenStorage.getAccessToken();
       fetch(`${API_BASE}/api/review-queue/release-lock`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
+        credentials: "include", // sends HttpOnly dash_access_token cookie
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ item_type: "report", item_id: reportId }),
         keepalive: true,
       });

@@ -84,9 +84,13 @@ export async function loginReporter(
   return tokens;
 }
 
-export function logoutReporter(): void {
+export async function logoutReporter(): Promise<void> {
+  try {
+    await api.post("/api/reporter/auth/logout");
+  } catch {
+    // Best-effort — clear local state even if the server call fails
+  }
   tokenStorage.clearTokens();
-  localStorage.removeItem("cr_reporter_id");
 }
 
 // ── Offline anonymous registration queue ──────────────────────────────────────

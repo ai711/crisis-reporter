@@ -284,6 +284,8 @@ async def login(
         context="reporter",
     )
 
+    _set_reporter_cookies(response, tokens["access_token"], tokens["refresh_token"])
+
     return TokenResponse(
         **tokens,
         reporter_id=reporter.display_id,
@@ -293,16 +295,28 @@ async def login(
 
 @router.post("/refresh")
 async def refresh_token(
-    request: RefreshRequest,
+    http_request: Request,
+    body: RefreshRequest,
+    response: Response,
     db: AsyncSession = Depends(get_db),
 ):
     """Silently refresh reporter access token.
+    Web clients: refresh token read from HttpOnly cookie (body token optional).
+    Mobile clients: refresh token sent in request body.
     Called automatically by HTTP interceptor — never interrupts active form flow."""
 
     import jwt as pyjwt
 
+    # Cookie takes precedence (web); fall back to body (mobile)
+    raw_refresh = http_request.cookies.get("cr_refresh_token") or body.refresh_token
+    if not raw_refresh:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="No refresh token provided",
+        )
+
     try:
-        payload = decode_token(request.refresh_token)
+        payload = decode_token(raw_refresh)
     except pyjwt.ExpiredSignatureError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -337,8 +351,18 @@ async def refresh_token(
         context="reporter",
     )
 
+    _set_reporter_cookies(response, tokens["access_token"], tokens["refresh_token"])
+
     return {
         **tokens,
         "reporter_id": reporter.display_id,
         "is_verified": reporter.is_verified,
     }
+
+
+@router.post("/logout")
+async def logout(response: Response):
+    """Clear reporter auth cookies (web clients).
+    Mobile clients should discard their locally stored tokens."""
+    _clear_reporter_cookies(response)
+    return {"message": "Logged out"}

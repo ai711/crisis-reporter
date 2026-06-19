@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useCallback } from "react";
-import { tokenStorage, API_BASE } from "../services/api";
+import { API_BASE } from "../services/api";
 import type { SSEEvent } from "../types";
 
 interface UseSSEOptions {
@@ -17,16 +17,14 @@ export function useSSE({ crisisId, onEvent, enabled = true }: UseSSEOptions) {
   const connect = useCallback(() => {
     if (!crisisId || !enabled) return;
 
-    const token = tokenStorage.getAccessToken();
-    if (!token) return;
-
     // Close existing connection
     if (eventSourceRef.current) {
       eventSourceRef.current.close();
     }
 
-    const url = `${API_BASE}/api/dashboard/stream?crisis_id=${crisisId}&token=${token}`;
-    const es = new EventSource(url);
+    // withCredentials sends the HttpOnly dash_access_token cookie automatically
+    const url = `${API_BASE}/api/dashboard/stream?crisis_id=${crisisId}`;
+    const es = new EventSource(url, { withCredentials: true });
 
     es.onmessage = (event) => {
       try {

@@ -6,51 +6,53 @@ const BASE_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
 const api: AxiosInstance = axios.create({
   baseURL: BASE_URL,
+  withCredentials: true, // send HttpOnly cookies on every request
   headers: { "Content-Type": "application/json" },
 });
 
-// ── Token storage ─────────────────────────────────────────────────────────────
-
-const TOKEN_KEY = "dash_access_token";
-const REFRESH_KEY = "dash_refresh_token";
+// ── Token storage helpers ─────────────────────────────────────────────────────
+// Dashboard uses HttpOnly cookies for access/refresh tokens (XSS-safe).
+// Auth state lives in the Zustand auth store (persisted via zustand/persist).
+// tokenStorage interface is kept for backward-compat with callers (isAuthenticated, etc).
 
 export const tokenStorage = {
-  getAccessToken: () => localStorage.getItem(TOKEN_KEY),
-  getRefreshToken: () => localStorage.getItem(REFRESH_KEY),
-  setTokens: (access: string, refresh: string) => {
-    localStorage.setItem(TOKEN_KEY, access);
-    localStorage.setItem(REFRESH_KEY, refresh);
-  },
+  /** Returns a truthy sentinel when the user is logged in; null otherwise. */
+  getAccessToken: (): string | null =>
+    useAuthStore.getState().user ? "cookie-auth" : null,
+
+  /** Always null — refresh token is in an HttpOnly cookie. */
+  getRefreshToken: (): null => null,
+
+  /** No-op: cookies are set by the server on login/refresh. */
+  setTokens: (_access: string, _refresh: string) => { /* cookies set server-side */ },
+
+  /** Reset local auth state; cookies are cleared by the logout endpoint. */
   clearTokens: () => {
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(REFRESH_KEY);
+    useAuthStore.getState().reset();
   },
 };
 
-// ── Request interceptor ───────────────────────────────────────────────────────
+// ── Request interceptor — no Bearer header needed (cookie handles auth) ───────
 
 api.interceptors.request.use(
-  (config: InternalAxiosRequestConfig) => {
-    const token = tokenStorage.getAccessToken();
-    if (token) config.headers.Authorization = `Bearer ${token}`;
-    return config;
-  },
+  (config: InternalAxiosRequestConfig) => config,
   (error) => Promise.reject(error)
 );
 
 // ── Response interceptor — silent token refresh ───────────────────────────────
 // CRITICAL: Refresh must never interrupt active dashboard operations.
+// The refresh call sends the HttpOnly cookie; the server rotates both cookies.
 
 let isRefreshing = false;
 let failedQueue: Array<{
-  resolve: (token: string) => void;
+  resolve: () => void;
   reject: (error: unknown) => void;
 }> = [];
 
-const processQueue = (error: unknown, token: string | null = null) => {
+const processQueue = (error: unknown) => {
   failedQueue.forEach(({ resolve, reject }) => {
     if (error) reject(error);
-    else if (token) resolve(token);
+    else resolve();
   });
   failedQueue = [];
 };
@@ -73,38 +75,33 @@ api.interceptors.response.use(
       return Promise.reject(error);
     }
 
-    const refreshToken = tokenStorage.getRefreshToken();
-    if (!refreshToken) {
-      tokenStorage.clearTokens();
-      useAuthStore.getState().reset();
-      window.location.href = "/login?reason=session_expired";
+    // No user in auth store means not logged in — don't attempt refresh
+    if (!useAuthStore.getState().user) {
       return Promise.reject(error);
     }
 
     if (isRefreshing) {
       return new Promise((resolve, reject) => {
         failedQueue.push({ resolve, reject });
-      }).then((token) => {
-        originalRequest.headers.Authorization = `Bearer ${token}`;
-        return api(originalRequest);
-      });
+      }).then(() => api(originalRequest));
     }
 
     originalRequest._retry = true;
     isRefreshing = true;
 
     try {
-      const response = await axios.post(
+      // Cookie is sent automatically — no body token needed
+      await axios.post(
         `${BASE_URL}/api/dashboard/auth/refresh`,
-        { refresh_token: refreshToken }
+        {},
+        { withCredentials: true }
       );
-      const { access_token, refresh_token } = response.data;
-      tokenStorage.setTokens(access_token, refresh_token);
-      processQueue(null, access_token);
-      originalRequest.headers.Authorization = `Bearer ${access_token}`;
+
+      // Server rotated cookies; retry queued requests (they'll use the new cookie)
+      processQueue(null);
       return api(originalRequest);
     } catch (refreshError) {
-      processQueue(refreshError, null);
+      processQueue(refreshError);
       tokenStorage.clearTokens();
       useAuthStore.getState().reset();
       window.location.href = "/login?reason=session_expired";
