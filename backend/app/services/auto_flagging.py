@@ -63,8 +63,12 @@ async def _geolocate_ip(ip: str) -> str | None:
         return None
     try:
         import httpx
+        from app.config import settings as _cfg
+        url = f"http://ip-api.com/json/{ip}?fields=countryCode,status"
+        if _cfg.IPAPI_KEY:
+            url += f"&key={_cfg.IPAPI_KEY}"
         async with httpx.AsyncClient(timeout=5.0) as client:
-            r = await client.get(f"http://ip-api.com/json/{ip}?fields=countryCode,status")
+            r = await client.get(url)
             data = r.json()
             if data.get("status") == "success":
                 return data.get("countryCode")

@@ -271,12 +271,37 @@ Runs in `backend/app/services/auto_flagging.py` as a FastAPI `BackgroundTask` (n
 4. **No location** `no_location` — report has neither GPS coordinates nor a text address
 5. **Coordinated GPS duplicate** `coordinated_gps_duplicate` — **DISABLED by default** (`gps_duplicate_enabled: false` in `_thresholds`). When enabled: a *different* reporter submitted from within ~100 m (configurable via `duplicate_radius_degrees`) in the last 24 h. Disabled because legitimate reporters often report the same damaged building. Enable via `PATCH /api/flag-rules {"gps_duplicate_enabled": true}` if needed.
 6. **Rapid submission** `high_submission_rate` → also applies 24 h device pause — same reporter submitted ≥ 14 other reports (configurable via `rapid_submission_count`, triggers on the 15th) in the last 1 h (configurable via `rapid_submission_window_hours`); pause side effect fires unconditionally when Rule 6 triggers
-7. **IP country mismatch** `ip_country_mismatch` — submission IP geolocates to a different country than the reporter's selected country; uses Redis-cached geolocation (24h TTL per IP hash) to stay within ip-api.com's 45 req/min free-tier limit; logs `WARNING` when throttled/unavailable so ops can monitor; VPN usage produces false positives
+7. **IP country mismatch** `ip_country_mismatch` — submission IP geolocates to a different country than the reporter's selected country; uses Redis-cached geolocation (24h TTL per IP hash) to stay within ip-api.com's 45 req/min free-tier limit; logs `WARNING` when throttled/unavailable so ops can monitor; VPN usage produces false positives. Set `IPAPI_KEY` env var to unlock 15,000 req/min if WARNING logs appear under sustained load.
 8. **Same IP, multiple device IDs** `same_ip_multiple_devices` — ≥ `SAME_IP_DEVICE_THRESHOLD` distinct reporter IDs from the same IP hash in the last 24 h; metadata includes `other_reporters` list with `{id, display_id}` so reviewers can click through to each profile
 9. **Duplicate image** `duplicate_image` — a photo on this report has the same SHA-256 hash as a photo on a previous report; metadata includes `matching_report_id` and `matching_report_serial_number` for reviewer cross-reference
 10. **All pass** → Green — report appears on the map immediately and is included in all exports
 
 **Property creation** — when a report reaches Green or Orange (either automatically or via manual approval), `get_or_create_property` runs in a separate session to create or update the property record and set `report.property_id`. This links the report to its Location Page.
+
+### Auto-Flagging — High-Volume Architecture Notes
+
+These improvements were applied after a code review (June 2026). Document is kept here so future work picks up from where we left off.
+
+**Implemented (already in codebase):**
+- **Shared Redis pool** — `auto_flagging.py` and `dashboard_sse.py` both receive the single `app.state.redis` pool via `init_redis()` called from main.py lifespan. No second pool is created. `publish_event` uses the shared pool directly (previously opened and closed a TCP connection on every flag-change event).
+- **Rule 9 JOIN** — duplicate-image detection now uses 2 DB queries regardless of photo count (one for own hashes, one JOIN for match + serial number). Previously used 1 + N + 1 queries.
+- **ip-api.com key** — `IPAPI_KEY` env var supported. When set it is appended to the geolocation URL, unlocking 15,000 req/min. Activate only if `WARNING` logs show Rule 7 being skipped under sustained load (unlikely at <1,000 reports/day given the 24h Redis cache).
+- **Rule 3 fix** — queued reports with zero photos now correctly trigger the no_photos rule (the `was_queued` guard previously wrapped the entire rule block, not just the sleep).
+- **Rule 1b fix** — auto-block side effect skips if reporter is already `pending_auto_block_confirmation` to prevent timer reset abuse.
+- **Rule 7 narrowed except** — `base64.b64decode` / `decrypt_field` run outside the try block; only the external `_geolocate_ip_cached` network call is wrapped.
+
+**Deferred — ARQ queue migration (do when volume exceeds ~1,000 reports/day):**
+
+The current architecture uses FastAPI `BackgroundTask` for auto-flagging. If the server restarts mid-flight, in-progress tasks are lost and reports stay grey until the stuck-report monitor re-queues them (~5–10 min delay). The stuck-report monitor catches every case — this is resilience delay, not data loss.
+
+When migrating to ARQ (already wired into the project at `backend/app/worker.py`):
+1. Register `auto_flag_report` as an ARQ job function in `WorkerSettings` in `worker.py`.
+2. In `backend/app/routers/reports.py`, replace `background_tasks.add_task(auto_flag_report, ...)` with `await request.app.state.arq_pool.enqueue_job("auto_flag_report", report_id, _defer_by=10)`.
+3. In `monitor_stuck_grey_reports()` in `auto_flagging.py`, replace `asyncio.create_task(auto_flag_report(...))` with an ARQ enqueue call.
+4. Ensure the Railway ARQ worker service is active and shares the same `REDIS_URL` as the web service.
+5. Test: submit a report, kill the web server immediately, verify ARQ worker picks it up and flags it correctly.
+
+The `_defer_by=10` in ARQ replaces the `asyncio.sleep(10)` in the current BackgroundTask — ARQ delays job execution by 10 seconds server-side so the report is committed before the job runs.
 
 ### Multilingual
 - 6 UN languages: ar, zh, en, fr, ru, es (all `is_protected=TRUE`, cannot be deleted)

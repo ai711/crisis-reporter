@@ -60,6 +60,12 @@ class Settings(BaseSettings):
     FIRST_ADMIN_EMAIL: str = ""
     FIRST_ADMIN_PASSWORD: str = ""
 
+    # IP geolocation (Rule 7 — IP country mismatch)
+    # Free tier: 45 req/min (Redis-cached per IP for 24 h, so effective rate is much lower).
+    # Set IPAPI_KEY to unlock 15,000 req/min ($15/month at ip-api.com/pricing).
+    # When set, the key is appended to every geolocation request URL automatically.
+    IPAPI_KEY: str = ""
+
     # Auto-flagging thresholds
     SAME_IP_DEVICE_THRESHOLD: int = 3   # distinct device IDs from one IP in 24 h before red flag
 
