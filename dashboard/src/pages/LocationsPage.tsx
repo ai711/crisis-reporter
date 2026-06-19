@@ -217,7 +217,7 @@ export default function LocationsPage() {
   // render and destabilise the dependency array.
   const sortedItems = useMemo(() => {
     const items: Property[] = data?.items ?? [];
-    if (sortedItems.length === 0) return items;
+    if (items.length === 0) return items;
     return [...items].sort((a, b) => {
       const av = a[sortBy as keyof Property];
       const bv = b[sortBy as keyof Property];

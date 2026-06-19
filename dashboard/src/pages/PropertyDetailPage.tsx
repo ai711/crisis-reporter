@@ -457,9 +457,9 @@ function CommentsThread({ propertyId, crisisId }: { propertyId: string; crisisId
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 const CONFIRM_OPTIONS = [
-  { value: "completely_destroyed", label: "Completely Destroyed" },
-  { value: "partially_damaged", label: "Partially Damaged" },
-  { value: "minimal_or_no_damage", label: "Minimal or No Damage" },
+  { value: "complete", label: "Completely Destroyed" },
+  { value: "partial", label: "Partially Damaged" },
+  { value: "minimal", label: "Minimal or No Damage" },
   { value: null, label: "Clear Confirmed Status" },
 ] as const;
 

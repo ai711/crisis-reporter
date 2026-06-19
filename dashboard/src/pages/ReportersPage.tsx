@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Users, X, Filter } from "lucide-react";
+import { Users, X } from "lucide-react";
 import Header from "../components/Header";
 import { usePageTitle } from "../hooks/usePageTitle";
 import PageSpinner from "../components/PageSpinner";
@@ -27,7 +27,6 @@ function useDebounced<T>(value: T, delay: number): T {
 // ── Platform label ────────────────────────────────────────────────────────────
 
 function platformCell(row: ReporterListRow): string {
-  // Use platform_label (human-readable) if available; fall back to raw platform value
   const base = row.platform_label || row.platform;
   if (!base) return "—";
   if (row.app_version) return `${base} — v${row.app_version}`;
@@ -35,12 +34,12 @@ function platformCell(row: ReporterListRow): string {
   return base;
 }
 
-// ── Filter panel ──────────────────────────────────────────────────────────────
+// ── Filter state ──────────────────────────────────────────────────────────────
 
 interface FilterState {
-  profileTypes: string[];
-  profileStatuses: string[];
-  platforms: string[];
+  profileType: string;
+  profileStatus: string;
+  platform: string;
   country: string;
   dateFrom: string;
   dateTo: string;
@@ -49,9 +48,9 @@ interface FilterState {
 }
 
 const EMPTY_FILTERS: FilterState = {
-  profileTypes: [],
-  profileStatuses: [],
-  platforms: [],
+  profileType: "",
+  profileStatus: "",
+  platform: "",
   country: "",
   dateFrom: "",
   dateTo: "",
@@ -60,234 +59,11 @@ const EMPTY_FILTERS: FilterState = {
 };
 
 function countActiveFilters(f: FilterState): number {
-  return (
-    f.profileTypes.length +
-    f.profileStatuses.length +
-    f.platforms.length +
-    [f.country, f.dateFrom, f.dateTo, f.reportCountMin, f.reportCountMax].filter(Boolean).length
-  );
+  return [
+    f.profileType, f.profileStatus, f.platform, f.country,
+    f.dateFrom, f.dateTo, f.reportCountMin, f.reportCountMax,
+  ].filter(Boolean).length;
 }
-
-const PROFILE_TYPE_OPTIONS = [
-  { value: "anonymous_no_reports", label: "Anonymous — No Reports" },
-  { value: "anonymous_with_reports", label: "Anonymous — With Reports" },
-  { value: "named_profile", label: "Named Profile" },
-];
-
-const PROFILE_STATUS_OPTIONS = [
-  { value: "active", label: "Active" },
-  { value: "flagged", label: "Flagged" },
-  { value: "blocked", label: "Blocked" },
-];
-
-const PLATFORM_OPTIONS = [
-  { value: "Native App iOS", label: "Native App iOS" },
-  { value: "Native App Android", label: "Native App Android" },
-  { value: "PWA iOS", label: "PWA iOS" },
-  { value: "PWA Android", label: "PWA Android" },
-  { value: "Plain Web", label: "Plain Web" },
-];
-
-interface FilterPanelProps {
-  filters: FilterState;
-  onChange: (f: FilterState) => void;
-  onClear: () => void;
-  onClose: () => void;
-}
-
-function FilterPanel({ filters, onChange, onClear, onClose }: FilterPanelProps) {
-  function toggleArr(key: "profileTypes" | "profileStatuses" | "platforms", val: string) {
-    const arr = filters[key];
-    const next = arr.includes(val) ? arr.filter((x) => x !== val) : [...arr, val];
-    onChange({ ...filters, [key]: next });
-  }
-
-  return (
-    <div style={fp.backdrop} onClick={onClose}>
-      <div style={fp.panel} onClick={(e) => e.stopPropagation()}>
-        <div style={fp.header}>
-          <span style={fp.title}>Filters</span>
-          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-            <button style={fp.clearBtn} onClick={onClear}>Clear all</button>
-            <button style={fp.closeBtn} onClick={onClose}><X size={16} /></button>
-          </div>
-        </div>
-
-        <div style={fp.section}>
-          <div style={fp.sectionTitle}>Profile Type</div>
-          {PROFILE_TYPE_OPTIONS.map((opt) => (
-            <label key={opt.value} style={fp.checkRow}>
-              <input
-                type="checkbox"
-                checked={filters.profileTypes.includes(opt.value)}
-                onChange={() => toggleArr("profileTypes", opt.value)}
-                style={{ marginRight: 8 }}
-              />
-              {opt.label}
-            </label>
-          ))}
-        </div>
-
-        <div style={fp.section}>
-          <div style={fp.sectionTitle}>Profile Status</div>
-          {PROFILE_STATUS_OPTIONS.map((opt) => (
-            <label key={opt.value} style={fp.checkRow}>
-              <input
-                type="checkbox"
-                checked={filters.profileStatuses.includes(opt.value)}
-                onChange={() => toggleArr("profileStatuses", opt.value)}
-                style={{ marginRight: 8 }}
-              />
-              {opt.label}
-            </label>
-          ))}
-        </div>
-
-        <div style={fp.section}>
-          <div style={fp.sectionTitle}>Platform</div>
-          {PLATFORM_OPTIONS.map((opt) => (
-            <label key={opt.value} style={fp.checkRow}>
-              <input
-                type="checkbox"
-                checked={filters.platforms.includes(opt.value)}
-                onChange={() => toggleArr("platforms", opt.value)}
-                style={{ marginRight: 8 }}
-              />
-              {opt.label}
-            </label>
-          ))}
-        </div>
-
-        <div style={fp.section}>
-          <div style={fp.sectionTitle}>Country</div>
-          <input
-            style={fp.textInput}
-            placeholder="e.g. UA, SY…"
-            value={filters.country}
-            onChange={(e) => onChange({ ...filters, country: e.target.value })}
-          />
-        </div>
-
-        <div style={fp.section}>
-          <div style={fp.sectionTitle}>Date Range</div>
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <input
-              type="date"
-              style={{ ...fp.textInput, flex: 1 }}
-              value={filters.dateFrom}
-              onChange={(e) => onChange({ ...filters, dateFrom: e.target.value })}
-            />
-            <span style={{ color: "var(--c-text-subtle)", fontSize: "var(--text-xs)" }}>–</span>
-            <input
-              type="date"
-              style={{ ...fp.textInput, flex: 1 }}
-              value={filters.dateTo}
-              onChange={(e) => onChange({ ...filters, dateTo: e.target.value })}
-            />
-          </div>
-        </div>
-
-        <div style={fp.section}>
-          <div style={fp.sectionTitle}>Report Count</div>
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <input
-              type="number"
-              style={{ ...fp.textInput, flex: 1 }}
-              placeholder="More than…"
-              value={filters.reportCountMin}
-              onChange={(e) => onChange({ ...filters, reportCountMin: e.target.value })}
-              min={0}
-            />
-            <input
-              type="number"
-              style={{ ...fp.textInput, flex: 1 }}
-              placeholder="Fewer than…"
-              value={filters.reportCountMax}
-              onChange={(e) => onChange({ ...filters, reportCountMax: e.target.value })}
-              min={0}
-            />
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-const fp: Record<string, React.CSSProperties> = {
-  backdrop: {
-    position: "fixed",
-    inset: 0,
-    zIndex: 500,
-  },
-  panel: {
-    position: "absolute",
-    top: 54,
-    right: 0,
-    background: "var(--c-surface-lowest)",
-    border: "1.5px solid var(--c-border)",
-    borderRadius: "var(--radius-xl)",
-    boxShadow: "var(--shadow-float)",
-    padding: "16px 20px 20px",
-    width: 340,
-    maxHeight: "80vh",
-    overflowY: "auto",
-    zIndex: 501,
-  },
-  header: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  title: { fontSize: "var(--text-md)", fontWeight: 700, color: "var(--c-text-primary)" },
-  clearBtn: {
-    background: "none",
-    border: "none",
-    color: "var(--c-primary-container)",
-    fontSize: "var(--text-xs)",
-    fontWeight: 600,
-    cursor: "pointer",
-    padding: 0,
-    textDecoration: "underline",
-  },
-  closeBtn: {
-    background: "none",
-    border: "none",
-    cursor: "pointer",
-    color: "var(--c-text-muted)",
-    padding: 2,
-    display: "flex",
-    alignItems: "center",
-  },
-  section: { marginBottom: 18 },
-  sectionTitle: {
-    fontSize: "var(--text-xs)",
-    fontWeight: 700,
-    color: "var(--c-text-muted)",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    marginBottom: 8,
-  },
-  checkRow: {
-    display: "flex",
-    alignItems: "center",
-    fontSize: "var(--text-sm)",
-    color: "var(--c-text-secondary)",
-    marginBottom: 6,
-    cursor: "pointer",
-  },
-  textInput: {
-    border: "1.5px solid var(--c-border)",
-    borderRadius: "var(--radius-md)",
-    padding: "7px 10px",
-    fontSize: "var(--text-sm)",
-    color: "var(--c-text-primary)",
-    background: "var(--c-surface-lowest)",
-    outline: "none",
-    width: "100%",
-    boxSizing: "border-box" as const,
-  },
-};
 
 // ── StatusPill ────────────────────────────────────────────────────────────────
 
@@ -307,9 +83,7 @@ export default function ReportersPage() {
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounced(search, 400);
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
-  const [showFilters, setShowFilters] = useState(false);
   const [hoveredRow, setHoveredRow] = useState<string | null>(null);
-  const filterBtnRef = useRef<HTMLDivElement>(null);
 
   const [allItems, setAllItems] = useState<ReporterListRow[]>([]);
   const [total, setTotal] = useState(0);
@@ -321,9 +95,9 @@ export default function ReportersPage() {
 
   const queryParams: Record<string, string | number> = { limit: PAGE_SIZE };
   if (debouncedSearch) queryParams.search = debouncedSearch;
-  if (filters.profileTypes.length > 0) queryParams.profile_type = filters.profileTypes.join(",");
-  if (filters.profileStatuses.length > 0) queryParams.profile_status = filters.profileStatuses.join(",");
-  if (filters.platforms.length > 0) queryParams.platform = filters.platforms.join(",");
+  if (filters.profileType) queryParams.profile_type = filters.profileType;
+  if (filters.profileStatus) queryParams.profile_status = filters.profileStatus;
+  if (filters.platform) queryParams.platform = filters.platform;
   if (filters.country) queryParams.country = filters.country;
   if (filters.dateFrom) queryParams.date_from = filters.dateFrom;
   if (filters.dateTo) queryParams.date_to = filters.dateTo;
@@ -365,9 +139,16 @@ export default function ReportersPage() {
 
   const activeFilterCount = countActiveFilters(filters);
 
+  function clearAll() {
+    setSearch("");
+    setFilters(EMPTY_FILTERS);
+  }
+
   function openProfile(reporterId: string) {
     window.open("/reporters/" + reporterId, "_blank");
   }
+
+  const hasAnyClear = search.length > 0 || activeFilterCount > 0;
 
   return (
     <div style={s.container}>
@@ -377,12 +158,12 @@ export default function ReportersPage() {
       />
 
       <div style={s.content}>
-        {/* Search bar */}
-        <div style={s.searchRow}>
+        {/* Toolbar row: search + clear all */}
+        <div style={s.toolbar}>
           <div style={s.searchWrap}>
             <input
               style={s.searchInput}
-              placeholder="Search by Reporter ID, device ID, name, email, or IP address"
+              placeholder="Search by Reporter ID, device ID, name, email, or IP"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
@@ -393,32 +174,99 @@ export default function ReportersPage() {
             )}
           </div>
 
-          {/* Filters button */}
-          <div ref={filterBtnRef} style={{ position: "relative" }}>
-            <button
-              style={{
-                ...s.filterBtn,
-                background: showFilters || activeFilterCount > 0 ? "rgba(4,104,177,0.08)" : "var(--c-surface-lowest)",
-                borderColor: showFilters || activeFilterCount > 0 ? "var(--c-primary-container)" : "var(--c-border)",
-                color: showFilters || activeFilterCount > 0 ? "var(--c-primary-container)" : "var(--c-text-secondary)",
-              }}
-              onClick={() => setShowFilters((v) => !v)}
-            >
-              <Filter size={14} style={{ marginRight: 6 }} />
-              Filters
-              {activeFilterCount > 0 && (
-                <span style={s.filterBadge}>{activeFilterCount} active</span>
-              )}
+          {hasAnyClear && (
+            <button style={s.clearAllBtn} onClick={clearAll}>
+              Clear All{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
             </button>
-            {showFilters && (
-              <FilterPanel
-                filters={filters}
-                onChange={setFilters}
-                onClear={() => setFilters(EMPTY_FILTERS)}
-                onClose={() => setShowFilters(false)}
-              />
-            )}
-          </div>
+          )}
+        </div>
+
+        {/* Inline filter bar */}
+        <div style={s.filterBar}>
+          <select
+            style={s.inlineSelect}
+            value={filters.profileStatus}
+            onChange={(e) => setFilters({ ...filters, profileStatus: e.target.value })}
+          >
+            <option value="">All Statuses</option>
+            <option value="active">Active</option>
+            <option value="flagged">Flagged</option>
+            <option value="blocked">Blocked</option>
+          </select>
+
+          <div style={s.filterDivider} />
+
+          <select
+            style={s.inlineSelect}
+            value={filters.profileType}
+            onChange={(e) => setFilters({ ...filters, profileType: e.target.value })}
+          >
+            <option value="">All Types</option>
+            <option value="anonymous_no_reports">Anon — No Reports</option>
+            <option value="anonymous_with_reports">Anon — With Reports</option>
+            <option value="named_profile">Named Profile</option>
+          </select>
+
+          <div style={s.filterDivider} />
+
+          <select
+            style={s.inlineSelect}
+            value={filters.platform}
+            onChange={(e) => setFilters({ ...filters, platform: e.target.value })}
+          >
+            <option value="">All Platforms</option>
+            <option value="Native App iOS">iOS App</option>
+            <option value="Native App Android">Android App</option>
+            <option value="PWA iOS">PWA iOS</option>
+            <option value="PWA Android">PWA Android</option>
+            <option value="Plain Web">Plain Web</option>
+          </select>
+
+          <div style={s.filterDivider} />
+
+          <input
+            style={s.inlineTextInput}
+            placeholder="Country"
+            value={filters.country}
+            onChange={(e) => setFilters({ ...filters, country: e.target.value })}
+          />
+
+          <div style={s.filterDivider} />
+
+          <input
+            type="date"
+            style={s.inlineDateInput}
+            title="From date"
+            value={filters.dateFrom}
+            onChange={(e) => setFilters({ ...filters, dateFrom: e.target.value })}
+          />
+          <span style={{ color: "var(--c-text-subtle)", fontSize: "var(--text-xs)" }}>–</span>
+          <input
+            type="date"
+            style={s.inlineDateInput}
+            title="To date"
+            value={filters.dateTo}
+            onChange={(e) => setFilters({ ...filters, dateTo: e.target.value })}
+          />
+
+          <div style={s.filterDivider} />
+
+          <input
+            type="number"
+            style={s.inlineNumberInput}
+            placeholder="Min reports"
+            value={filters.reportCountMin}
+            onChange={(e) => setFilters({ ...filters, reportCountMin: e.target.value })}
+            min={0}
+          />
+          <input
+            type="number"
+            style={s.inlineNumberInput}
+            placeholder="Max reports"
+            value={filters.reportCountMax}
+            onChange={(e) => setFilters({ ...filters, reportCountMax: e.target.value })}
+            min={0}
+          />
         </div>
 
         {/* Table */}
@@ -550,22 +398,19 @@ const s: Record<string, React.CSSProperties> = {
   container: { display: "flex", flexDirection: "column", height: "100vh" },
   content: { flex: 1, padding: "24px 32px", overflow: "auto" },
 
-  searchRow: {
-    background: "var(--c-surface-lowest)",
-    borderRadius: "var(--radius-lg)",
-    padding: "12px 20px",
-    boxShadow: "var(--shadow-sm)",
-    marginBottom: 24,
+  toolbar: {
     display: "flex",
     gap: 12,
     alignItems: "center",
-    flexWrap: "wrap" as const,
+    marginBottom: 8,
   },
   searchWrap: {
-    flex: 1,
     position: "relative",
     display: "flex",
     alignItems: "center",
+    minWidth: 200,
+    maxWidth: 380,
+    flex: "0 1 380px",
   },
   searchInput: {
     width: "100%",
@@ -589,25 +434,73 @@ const s: Record<string, React.CSSProperties> = {
     alignItems: "center",
     padding: 2,
   },
-  filterBtn: {
-    display: "inline-flex",
-    alignItems: "center",
+  clearAllBtn: {
     padding: "8px 14px",
-    border: "1.5px solid",
+    background: "none",
+    border: "1.5px solid var(--c-border)",
     borderRadius: "var(--radius-md)",
     fontSize: "var(--text-sm)",
     fontWeight: 600,
+    color: "var(--c-text-secondary)",
     cursor: "pointer",
     whiteSpace: "nowrap" as const,
   },
-  filterBadge: {
-    marginLeft: 8,
-    background: "var(--c-primary-container)",
-    color: "#fff",
+
+  filterBar: {
+    display: "flex",
+    flexWrap: "wrap" as const,
+    gap: 6,
+    alignItems: "center",
+    background: "var(--c-surface-lowest)",
+    border: "1.5px solid var(--c-border-ghost)",
+    borderRadius: "var(--radius-lg)",
+    padding: "10px 14px",
+    marginBottom: 16,
+  },
+  filterDivider: {
+    width: 1,
+    height: 20,
+    background: "var(--c-border-ghost)",
+    flexShrink: 0,
+  },
+  inlineSelect: {
+    border: "1px solid var(--c-border-ghost)",
+    borderRadius: "var(--radius-sm)",
+    padding: "5px 8px",
     fontSize: "var(--text-xs)",
-    fontWeight: 700,
-    borderRadius: 10,
-    padding: "2px 7px",
+    color: "var(--c-text-secondary)",
+    background: "var(--c-surface-low)",
+    cursor: "pointer",
+    outline: "none",
+  },
+  inlineTextInput: {
+    border: "1px solid var(--c-border-ghost)",
+    borderRadius: "var(--radius-sm)",
+    padding: "5px 8px",
+    fontSize: "var(--text-xs)",
+    color: "var(--c-text-secondary)",
+    background: "var(--c-surface-low)",
+    outline: "none",
+    width: 90,
+  },
+  inlineDateInput: {
+    border: "1px solid var(--c-border-ghost)",
+    borderRadius: "var(--radius-sm)",
+    padding: "5px 8px",
+    fontSize: "var(--text-xs)",
+    color: "var(--c-text-secondary)",
+    background: "var(--c-surface-low)",
+    outline: "none",
+  },
+  inlineNumberInput: {
+    border: "1px solid var(--c-border-ghost)",
+    borderRadius: "var(--radius-sm)",
+    padding: "5px 8px",
+    fontSize: "var(--text-xs)",
+    color: "var(--c-text-secondary)",
+    background: "var(--c-surface-low)",
+    outline: "none",
+    width: 100,
   },
 
   countRow: {
