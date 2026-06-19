@@ -90,9 +90,10 @@ class PropertyStats(BaseModel):
 
 
 class ReporterRow(BaseModel):
-    reporter_id: str
-    most_recent_damage_level: Optional[str]
-    most_recent_submitted_at: Optional[datetime]
+    report_id: str
+    serial_number: Optional[int]
+    damage_level: Optional[str]
+    submitted_at: Optional[datetime]
     platform: Optional[str]
     flag_status: Optional[str]
 
@@ -100,8 +101,9 @@ class ReporterRow(BaseModel):
 class ConflictWarningDetail(BaseModel):
     majority_level: Optional[str]
     majority_count: int
+    minority_count: int
     total_reports: int
-    minority_percentage: float
+    minority_percentage: float  # 0–100
 
 
 class PropertyDetail(BaseModel):
@@ -117,6 +119,8 @@ class PropertyDetail(BaseModel):
     country: Optional[str]
     crisis_id: Optional[str]
     confirmed_status: Optional[str]
+    confirmed_by: Optional[str]
+    confirmed_at: Optional[datetime]
     auto_confirmed: bool
     manual_confirmed_lock: bool
     has_conflict_warning: bool
@@ -578,10 +582,12 @@ async def get_property_detail(
         total_q = sum(damage_distribution.values())
         max_lvl = max(damage_distribution, key=lambda k: damage_distribution[k])
         max_cnt = damage_distribution[max_lvl]
-        minority_pct = round(1.0 - max_cnt / total_q, 4) if total_q else 0.0
+        minority_cnt = total_q - max_cnt
+        minority_pct = round((1.0 - max_cnt / total_q) * 100, 1) if total_q else 0.0
         conflict_details = ConflictWarningDetail(
             majority_level=max_lvl,
             majority_count=max_cnt,
+            minority_count=minority_cnt,
             total_reports=total_q,
             minority_percentage=minority_pct,
         )
@@ -593,34 +599,37 @@ async def get_property_detail(
     crisis_id_row = crisis_id_result.scalar_one_or_none()
     crisis_id_str = str(crisis_id_row) if crisis_id_row else None
 
-    # Reporter rows — one per unique reporter (most recent qualifying report)
-    reporter_sq = (
+    # Resolve confirmed_by to a display name
+    confirmed_by_name: Optional[str] = None
+    if prop.confirmed_by and not prop.auto_confirmed:
+        user_result = await db.execute(
+            select(DashboardUser.full_name).where(DashboardUser.id == prop.confirmed_by)
+        )
+        confirmed_by_name = user_result.scalar_one_or_none()
+
+    # Individual qualifying reports — one row per report, sorted most recent first
+    individual_result = await db.execute(
         select(
-            Report.reporter_id,
+            Report.id,
+            Report.serial_number,
             Report.damage_level,
             Report.submitted_at,
             Report.platform,
             Report.flag_status,
-            func.row_number().over(
-                partition_by=Report.reporter_id,
-                order_by=Report.submitted_at.desc(),
-            ).label("rn"),
         )
-        .where(and_(*qual_filters, Report.reporter_id.isnot(None)))
-        .subquery()
-    )
-    reporter_rows_result = await db.execute(
-        select(reporter_sq).where(reporter_sq.c.rn == 1)
+        .where(and_(*qual_filters))
+        .order_by(Report.submitted_at.desc())
     )
     reporter_rows = [
         ReporterRow(
-            reporter_id=str(r.reporter_id),
-            most_recent_damage_level=_CODE_TO_SNAKE.get(r.damage_level),
-            most_recent_submitted_at=r.submitted_at,
-            platform=r.platform,
-            flag_status=r.flag_status,
+            report_id=str(r[0]),
+            serial_number=r[1],
+            damage_level=_CODE_TO_SNAKE.get(r[2]) if r[2] else None,
+            submitted_at=r[3],
+            platform=r[4],
+            flag_status=r[5],
         )
-        for r in reporter_rows_result.all()
+        for r in individual_result.all()
     ]
 
     return PropertyDetail(
@@ -636,6 +645,8 @@ async def get_property_detail(
         country=country,
         crisis_id=crisis_id_str,
         confirmed_status=_CODE_TO_SNAKE.get(prop.confirmed_status) if prop.confirmed_status else None,
+        confirmed_by=confirmed_by_name,
+        confirmed_at=prop.confirmed_at,
         auto_confirmed=prop.auto_confirmed,
         manual_confirmed_lock=prop.manual_confirmed_lock,
         has_conflict_warning=prop.has_conflict_warning,

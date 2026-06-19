@@ -388,12 +388,12 @@ export interface PropertyDetail extends Property {
 }
 
 export interface ReporterRow {
-  reporter_id: string;
-  reporter_name: string | null;
-  most_recent_damage_level: string;
-  most_recent_submitted_at: string;
-  platform: string;
-  flag_status: string;
+  report_id: string;
+  serial_number: number | null;
+  damage_level: string | null;
+  submitted_at: string | null;
+  platform: string | null;
+  flag_status: string | null;
 }
 
 export interface PropertyComment {
