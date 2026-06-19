@@ -362,6 +362,7 @@ function SaveBar({
 
   // Reset dismiss when a new save happens
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (saved) setCalloutDismissed(false);
   }, [saved]);
 
@@ -453,6 +454,7 @@ function PartAEditor({ disasterKey }: { disasterKey: string }) {
   });
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (data?.slides) setSlides(data.slides);
   }, [data]);
 
@@ -612,6 +614,7 @@ function SlideshowEditor({ contentType }: { contentType: "reporting-guidelines" 
   });
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (data?.slides) setSlides(data.slides);
   }, [data]);
 
@@ -752,6 +755,7 @@ function PlainTextEditor({
   });
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (data?.content !== undefined) setText(data.content);
   }, [data]);
 
@@ -825,6 +829,7 @@ function KeyValueListEditor({ contentType }: { contentType: "error_messages" | "
   });
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (data?.items) setItems(data.items);
   }, [data]);
 

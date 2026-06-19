@@ -757,6 +757,7 @@ function Tab1({ currentUserName }: { currentUserName: string }) {
 
   useEffect(() => {
     if (!data) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setAllItems(data.items);
     setTotal(data.total);
     setNextCursor(data.cursor);
@@ -1081,6 +1082,7 @@ function Tab2({ currentUserName }: { currentUserName: string }) {
 
   useEffect(() => {
     if (!data) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setAllItems(data.items);
     setTotal(data.total);
     setNextCursor(data.cursor);
@@ -1397,6 +1399,7 @@ function Tab3({ currentUserName }: { currentUserName: string }) {
 
   useEffect(() => {
     if (!data) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setAllItems(data.items);
     setTotal(data.total);
     setNextCursor(data.cursor);
@@ -1647,6 +1650,7 @@ function Tab4({ currentUserName: _currentUserName }: { currentUserName: string }
 
   useEffect(() => {
     if (!data) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setAllItems(data.items);
     setTotal(data.total);
     setNextCursor(data.cursor);

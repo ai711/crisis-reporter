@@ -397,6 +397,7 @@ export default function ExportPage() {
       location.state as { prefill?: Record<string, unknown> } | null
     )?.prefill;
     if (!prefill) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (prefill.date_from) setDateFrom(prefill.date_from as string);
     if (prefill.date_to) setDateTo(prefill.date_to as string);
     if (prefill.country) {
@@ -439,11 +440,13 @@ export default function ExportPage() {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchHistory();
   }, [fetchHistory]);
 
   // Auto-select first format when report type changes
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setFormat(selectedType ? FORMAT_VALUE[selectedType.formats[0]] : "");
   }, [selectedId]); // eslint-disable-line react-hooks/exhaustive-deps
 

@@ -81,7 +81,7 @@ export default function MainMapPage() {
   const [country, setCountry] = useState("");
   const [showRecovered, setShowRecovered] = useState(false);
 
-  useLayoutEffect(() => { setSelectedPinRef.current = setSelectedPin; });
+  useLayoutEffect(() => { setSelectedPinRef.current = setSelectedPin; }, [setSelectedPin]);
 
   // ── Seconds ticker ────────────────────────────────────────────────────────
   useEffect(() => {

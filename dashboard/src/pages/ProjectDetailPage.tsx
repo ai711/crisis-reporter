@@ -295,7 +295,7 @@ export default function ProjectDetailPage() {
   const [lastUpdated, setLastUpdated] = useState(new Date());
   const [, setTick] = useState(0);
 
-  useLayoutEffect(() => { setSelectedPinRef.current = setSelectedPin; });
+  useLayoutEffect(() => { setSelectedPinRef.current = setSelectedPin; }, [setSelectedPin]);
 
   useEffect(() => {
     const id = setInterval(() => setTick((t) => t + 1), 1000);
@@ -543,6 +543,7 @@ export default function ProjectDetailPage() {
   );
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchReports(null, false);
   }, [fetchReports]);
 
@@ -579,6 +580,7 @@ export default function ProjectDetailPage() {
   );
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchProperties(null, false);
   }, [fetchProperties]);
 

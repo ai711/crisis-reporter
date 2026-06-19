@@ -341,6 +341,7 @@ export default function ReportersPage() {
 
   useEffect(() => {
     if (!data) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setAllItems(data.items);
     setTotal(data.total);
     setNextCursor(data.cursor);

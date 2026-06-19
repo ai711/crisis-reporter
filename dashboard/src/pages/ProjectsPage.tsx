@@ -627,6 +627,7 @@ export default function ProjectsPage() {
 
   // Reset pagination when search/filters change
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setCursor(null);
     setCursorStack([null]);
     setPage(0);

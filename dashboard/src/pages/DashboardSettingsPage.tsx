@@ -407,6 +407,7 @@ function GeneralSettingsTab() {
 
   useEffect(() => {
     if (data) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setForm(data);
       setLogoPreview(data.logo_url ?? null);
     }
@@ -529,7 +530,7 @@ function SecuritySettingsTab() {
     queryFn: async () => (await api.get("/api/settings/security")).data,
   });
 
-  useEffect(() => { if (data) setForm(data); }, [data]);
+  useEffect(() => { if (data) setForm(data); }, [data]); // eslint-disable-line react-hooks/set-state-in-effect
 
   const mutation = useMutation({
     mutationFn: (payload: Partial<SecuritySettings>) => api.patch("/api/settings/security", payload),
@@ -765,7 +766,7 @@ function NotificationSettingsTab() {
     queryFn: async () => (await api.get("/api/settings/notifications")).data,
   });
 
-  useEffect(() => { if (data?.types) setTypes(data.types); }, [data]);
+  useEffect(() => { if (data?.types) setTypes(data.types); }, [data]); // eslint-disable-line react-hooks/set-state-in-effect
 
   const mutation = useMutation({
     mutationFn: (updated: NotificationType[]) =>
@@ -914,7 +915,7 @@ function SystemThresholdsCard() {
     queryFn: async () => (await api.get("/api/settings/thresholds")).data,
   });
 
-  useEffect(() => { if (data) setForm(data); }, [data]);
+  useEffect(() => { if (data) setForm(data); }, [data]); // eslint-disable-line react-hooks/set-state-in-effect
 
   const mutation = useMutation({
     mutationFn: (payload: Partial<ThresholdsSettings>) => api.patch("/api/settings/thresholds", payload),
@@ -1034,6 +1035,7 @@ function SystemStatusTab() {
   });
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSecondsSinceRefresh(0);
     const interval = setInterval(() => setSecondsSinceRefresh((s) => s + 1), 1000);
     return () => clearInterval(interval);

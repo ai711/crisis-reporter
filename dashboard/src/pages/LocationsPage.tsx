@@ -42,15 +42,6 @@ function LockIcon() {
   );
 }
 
-function FilterIcon() {
-  return (
-    <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor"
-      strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
-    </svg>
-  );
-}
-
 function ColumnsIcon() {
   return (
     <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -153,23 +144,17 @@ export default function LocationsPage() {
   const [cursor, setCursor] = useState<string | null>(null);
   const [cursorStack, setCursorStack] = useState<(string | null)[]>([null]);
   const [pageIndex, setPageIndex] = useState(0);
-  const [filterOpen, setFilterOpen] = useState(false);
   const [filters, setFilters] = useState<Filters>({ ...DEFAULT_FILTERS });
-  const [pendingFilters, setPendingFilters] = useState<Filters>({ ...DEFAULT_FILTERS });
-  const [fetchProjects, setFetchProjects] = useState(false);
-  const filterRef = useRef<HTMLDivElement>(null);
   const [visibleCols, setVisibleCols] = useState<Set<string>>(DEFAULT_VISIBLE);
   const [colsOpen, setColsOpen] = useState(false);
   const colsRef = useRef<HTMLDivElement>(null);
 
-  // Fetch projects when filter panel is first opened
   const { data: projectsData } = useQuery<ProjectsListResponse>({
     queryKey: ["locations-filter-projects"],
     queryFn: async () => {
       const res = await getDashboardProjects({ status: "active,closed", limit: 200 });
       return res.data as ProjectsListResponse;
     },
-    enabled: fetchProjects,
     staleTime: 1000 * 60 * 5,
   });
   const projectOptions: ProjectListRow[] = projectsData?.items ?? [];
@@ -184,18 +169,6 @@ export default function LocationsPage() {
     staleTime: 1000 * 60 * 2,
   });
 
-  // Close filter panel on outside click
-  useEffect(() => {
-    if (!filterOpen) return;
-    const handler = (e: MouseEvent) => {
-      if (filterRef.current && !filterRef.current.contains(e.target as Node)) {
-        setFilterOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [filterOpen]);
-
   // Close columns panel on outside click
   useEffect(() => {
     if (!colsOpen) return;
@@ -208,19 +181,17 @@ export default function LocationsPage() {
     return () => document.removeEventListener("mousedown", handler);
   }, [colsOpen]);
 
-  // Build query params
+  // Build query params — param names must match backend list_properties() signature
   const buildParams = (): Record<string, string | number | boolean> => {
-    const p: Record<string, string | number | boolean> = {
-      limit: pageSize,
-    };
+    const p: Record<string, string | number | boolean> = { limit: pageSize };
     if (cursor) p.cursor = cursor;
     if (search.trim()) p.search = search.trim();
     if (showUnreviewed) p.show_unreviewed = true;
-    if (filters.conflict_only) p.conflict_only = true;
-    if (filters.confirmed_status_filter === "confirmed") p.confirmed_only = true;
-    if (filters.confirmed_status_filter === "unconfirmed") p.unconfirmed_only = true;
-    if (!filters.property_status.active && filters.property_status.recovered) p.status = "Recovered";
-    if (filters.property_status.active && !filters.property_status.recovered) p.status = "Active";
+    if (filters.conflict_only) p.conflict_warning = true;
+    if (filters.confirmed_status_filter === "confirmed") p.confirmed_status = "set";
+    if (filters.confirmed_status_filter === "unconfirmed") p.confirmed_status = "unset";
+    if (!filters.property_status.active && filters.property_status.recovered) p.property_status = "recovered";
+    if (filters.property_status.active && !filters.property_status.recovered) p.property_status = "active";
     if (filters.country.trim()) p.country = filters.country.trim();
     if (filters.date_from) p.date_from = filters.date_from;
     if (filters.date_to) p.date_to = filters.date_to;
@@ -237,14 +208,16 @@ export default function LocationsPage() {
     },
   });
 
-  const items: Property[] = data?.items ?? [];
   const total: number = data?.total ?? 0;
   const hasMore: boolean = data?.has_more ?? false;
   const nextCursor: string | null = data?.cursor ?? null;
 
-  // Client-side sort — backend ignores sort_by/sort_dir; we sort the fetched page here
+  // Client-side sort — backend ignores sort_by/sort_dir; we sort the fetched page here.
+  // items is derived inside the memo so ?? [] doesn't create a new array ref on every
+  // render and destabilise the dependency array.
   const sortedItems = useMemo(() => {
-    if (items.length === 0) return items;
+    const items: Property[] = data?.items ?? [];
+    if (sortedItems.length === 0) return items;
     return [...items].sort((a, b) => {
       const av = a[sortBy as keyof Property];
       const bv = b[sortBy as keyof Property];
@@ -257,7 +230,7 @@ export default function LocationsPage() {
           : String(av).localeCompare(String(bv));
       return sortDir === "asc" ? cmp : -cmp;
     });
-  }, [items, sortBy, sortDir]);
+  }, [data, sortBy, sortDir]);
 
   // Sort handler — client-side sort within the loaded page; resets to page 1 so the
   // user sorts from the beginning of the dataset, not mid-cursor.
@@ -303,16 +276,8 @@ export default function LocationsPage() {
     (filters.damage_level.length > 0 ? 1 : 0) +
     (filters.project_serial_id ? 1 : 0);
 
-  const applyFilters = () => {
-    setFilters({ ...pendingFilters });
-    setFilterOpen(false);
-    resetPagination();
-  };
-
   const clearFilters = () => {
-    setPendingFilters({ ...DEFAULT_FILTERS });
     setFilters({ ...DEFAULT_FILTERS });
-    setFilterOpen(false);
     resetPagination();
   };
 
@@ -364,230 +329,26 @@ export default function LocationsPage() {
           </span>
         </div>
 
-        {/* ── Toolbar ── */}
+        {/* ── Toolbar: search + columns ── */}
         <div style={styles.toolbar}>
           <div style={styles.searchWrap}>
             <span style={styles.searchIcon}><SearchIcon /></span>
             <input
               style={styles.searchInput}
               type="text"
-              placeholder="Search by property name, address, or Property ID…"
+              placeholder="Search by name, address, or Property ID…"
               value={search}
               onChange={(e) => { setSearch(e.target.value); resetPagination(); }}
             />
           </div>
 
-          <div style={{ position: "relative" }} ref={filterRef}>
-            <button
-              style={{
-                ...styles.filterBtn,
-                background: activeFilterCount > 0 ? "rgba(4,104,177,0.08)" : "var(--c-surface-low)",
-                border: activeFilterCount > 0 ? "1.5px solid var(--c-primary-container)" : "1.5px solid var(--c-border)",
-                color: activeFilterCount > 0 ? "var(--c-primary-container)" : "var(--c-text-secondary)",
-              }}
-              onClick={() => {
-                setPendingFilters({ ...filters });
-                setFetchProjects(true);
-                setFilterOpen((o) => !o);
-              }}
-            >
-              <FilterIcon />
-              <span style={{ marginLeft: 6 }}>Filters</span>
-              {activeFilterCount > 0 && (
-                <span style={styles.filterBadge}>{activeFilterCount}</span>
-              )}
+          {activeFilterCount > 0 && (
+            <button style={styles.clearAllBtn} onClick={clearFilters}>
+              Clear All ({activeFilterCount})
             </button>
+          )}
 
-            {filterOpen && (
-              <div style={styles.filterPanel} onClick={(e) => e.stopPropagation()}>
-                <div style={styles.filterTitle}>Filter Properties</div>
-
-                {/* Conflict warning — highlighted as primary QA filter */}
-                <div style={{
-                  ...styles.filterSection,
-                  background: pendingFilters.conflict_only
-                    ? "rgba(245,166,35,0.10)"
-                    : "rgba(245,166,35,0.05)",
-                  border: `1.5px solid ${pendingFilters.conflict_only ? "rgba(245,166,35,0.5)" : "rgba(245,166,35,0.2)"}`,
-                  borderRadius: "var(--radius-md)",
-                  padding: "10px 12px",
-                }}>
-                  <label style={{ ...styles.filterCheckLabel, marginBottom: 0 }}>
-                    <input
-                      type="checkbox"
-                      checked={pendingFilters.conflict_only}
-                      onChange={(e) =>
-                        setPendingFilters((f) => ({ ...f, conflict_only: e.target.checked }))
-                      }
-                      style={{ marginRight: 8 }}
-                    />
-                    <div>
-                      <div style={{ color: "#92400e", fontWeight: 700, fontSize: "var(--text-sm)" }}>
-                        <AlertTriangleIcon size={13} />
-                        {" "}Properties with conflicting assessments
-                      </div>
-                      <div style={{ fontSize: "var(--text-xs)", color: "var(--c-text-muted)", marginTop: 3 }}>
-                        Show only properties where reporters disagree on damage level (≥25% minority)
-                      </div>
-                    </div>
-                  </label>
-                </div>
-
-                {/* Confirmed status */}
-                <div style={styles.filterSection}>
-                  <div style={styles.filterLabel}>Confirmed Status</div>
-                  {(["all", "confirmed", "unconfirmed"] as const).map((opt) => (
-                    <label key={opt} style={styles.filterRadioLabel}>
-                      <input
-                        type="radio"
-                        name="confirmed_status_filter"
-                        value={opt}
-                        checked={pendingFilters.confirmed_status_filter === opt}
-                        onChange={() =>
-                          setPendingFilters((f) => ({ ...f, confirmed_status_filter: opt }))
-                        }
-                        style={{ marginRight: 8 }}
-                      />
-                      {opt === "all" ? "All" : opt === "confirmed" ? "Confirmed only" : "Not yet confirmed"}
-                    </label>
-                  ))}
-                </div>
-
-                {/* Property status */}
-                <div style={styles.filterSection}>
-                  <div style={styles.filterLabel}>Property Status</div>
-                  <label style={styles.filterCheckLabel}>
-                    <input
-                      type="checkbox"
-                      checked={pendingFilters.property_status.active}
-                      onChange={(e) =>
-                        setPendingFilters((f) => ({
-                          ...f,
-                          property_status: { ...f.property_status, active: e.target.checked },
-                        }))
-                      }
-                      style={{ marginRight: 8 }}
-                    />
-                    Active
-                  </label>
-                  <label style={styles.filterCheckLabel}>
-                    <input
-                      type="checkbox"
-                      checked={pendingFilters.property_status.recovered}
-                      onChange={(e) =>
-                        setPendingFilters((f) => ({
-                          ...f,
-                          property_status: { ...f.property_status, recovered: e.target.checked },
-                        }))
-                      }
-                      style={{ marginRight: 8 }}
-                    />
-                    Recovered
-                  </label>
-                </div>
-
-                {/* Country */}
-                <div style={styles.filterSection}>
-                  <div style={styles.filterLabel}>Country</div>
-                  <input
-                    style={styles.filterInput}
-                    type="text"
-                    placeholder="e.g. Ukraine"
-                    value={pendingFilters.country}
-                    onChange={(e) =>
-                      setPendingFilters((f) => ({ ...f, country: e.target.value }))
-                    }
-                  />
-                </div>
-
-                {/* Date range */}
-                <div style={styles.filterSection}>
-                  <div style={styles.filterLabel}>Most Recent Report — Date Range</div>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <input
-                      style={{ ...styles.filterInput, flex: 1 }}
-                      type="date"
-                      value={pendingFilters.date_from}
-                      onChange={(e) =>
-                        setPendingFilters((f) => ({ ...f, date_from: e.target.value }))
-                      }
-                    />
-                    <input
-                      style={{ ...styles.filterInput, flex: 1 }}
-                      type="date"
-                      value={pendingFilters.date_to}
-                      onChange={(e) =>
-                        setPendingFilters((f) => ({ ...f, date_to: e.target.value }))
-                      }
-                    />
-                  </div>
-                </div>
-
-                {/* Damage level */}
-                <div style={styles.filterSection}>
-                  <div style={styles.filterLabel}>Damage Level</div>
-                  {DAMAGE_LEVEL_OPTIONS.map((opt) => (
-                    <label key={opt.value} style={styles.filterCheckLabel}>
-                      <input
-                        type="checkbox"
-                        checked={pendingFilters.damage_level.includes(opt.value)}
-                        onChange={(e) =>
-                          setPendingFilters((f) => ({
-                            ...f,
-                            damage_level: e.target.checked
-                              ? [...f.damage_level, opt.value]
-                              : f.damage_level.filter((v) => v !== opt.value),
-                          }))
-                        }
-                        style={{ marginRight: 8 }}
-                      />
-                      <span style={{
-                        color: opt.value === "completely_destroyed" ? "var(--c-flag-red)"
-                          : opt.value === "partially_damaged" ? "var(--c-flag-orange)"
-                          : "var(--c-flag-green)",
-                        fontWeight: 500,
-                      }}>
-                        {opt.label}
-                      </span>
-                    </label>
-                  ))}
-                </div>
-
-                {/* Project */}
-                <div style={styles.filterSection}>
-                  <div style={styles.filterLabel}>Project</div>
-                  <select
-                    style={styles.filterInput}
-                    value={pendingFilters.project_serial_id}
-                    onChange={(e) =>
-                      setPendingFilters((f) => ({ ...f, project_serial_id: e.target.value }))
-                    }
-                  >
-                    <option value="">All projects</option>
-                    {projectOptions.map((proj) => (
-                      <option key={proj.serial_id} value={proj.serial_id}>
-                        {proj.name} ({proj.serial_id})
-                      </option>
-                    ))}
-                  </select>
-                  <div style={{ fontSize: "var(--text-xs)", color: "var(--c-text-subtle)", marginTop: 6 }}>
-                    Filtering by project shows only properties with reports linked to that project.
-                  </div>
-                </div>
-
-                <div style={styles.filterActions}>
-                  <button style={styles.filterClearBtn} onClick={clearFilters}>
-                    Clear all
-                  </button>
-                  <button style={styles.filterApplyBtn} onClick={applyFilters}>
-                    Apply Filters
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* ── Columns visibility toggle ── */}
+          {/* Columns visibility toggle */}
           <div style={{ position: "relative" }} ref={colsRef}>
             <button
               style={{
@@ -637,6 +398,121 @@ export default function LocationsPage() {
               </div>
             )}
           </div>
+        </div>
+
+        {/* ── Inline filter bar ── */}
+        <div style={styles.filterBar}>
+          {/* Conflict warning toggle chip */}
+          <button
+            style={{
+              ...styles.conflictChip,
+              background: filters.conflict_only ? "rgba(245,166,35,0.15)" : "var(--c-surface-low)",
+              borderColor: filters.conflict_only ? "rgba(245,166,35,0.6)" : "var(--c-border)",
+              color: filters.conflict_only ? "#92400e" : "var(--c-text-secondary)",
+            }}
+            onClick={() => { setFilters((f) => ({ ...f, conflict_only: !f.conflict_only })); resetPagination(); }}
+            title="Show only properties with conflicting assessments (≥25% minority)"
+          >
+            <AlertTriangleIcon size={12} />
+            <span>Conflict</span>
+          </button>
+
+          <span style={styles.filterDivider} />
+
+          {/* Confirmed status */}
+          <select
+            style={styles.inlineSelect}
+            value={filters.confirmed_status_filter}
+            onChange={(e) => { setFilters((f) => ({ ...f, confirmed_status_filter: e.target.value as Filters["confirmed_status_filter"] })); resetPagination(); }}
+            title="Filter by confirmed status"
+          >
+            <option value="all">All Confirmed</option>
+            <option value="confirmed">Confirmed Only</option>
+            <option value="unconfirmed">Not Confirmed</option>
+          </select>
+
+          {/* Damage level */}
+          <select
+            style={styles.inlineSelect}
+            value={filters.damage_level[0] ?? ""}
+            onChange={(e) => { setFilters((f) => ({ ...f, damage_level: e.target.value ? [e.target.value] : [] })); resetPagination(); }}
+            title="Filter by damage level"
+          >
+            <option value="">Any Damage</option>
+            {DAMAGE_LEVEL_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+
+          {/* Property status */}
+          <select
+            style={styles.inlineSelect}
+            value={
+              filters.property_status.active && filters.property_status.recovered ? "both"
+              : filters.property_status.active ? "active"
+              : "recovered"
+            }
+            onChange={(e) => {
+              const v = e.target.value;
+              setFilters((f) => ({
+                ...f,
+                property_status: { active: v !== "recovered", recovered: v !== "active" },
+              }));
+              resetPagination();
+            }}
+            title="Filter by property status"
+          >
+            <option value="both">All Status</option>
+            <option value="active">Active Only</option>
+            <option value="recovered">Recovered Only</option>
+          </select>
+
+          <span style={styles.filterDivider} />
+
+          {/* Country */}
+          <input
+            style={styles.inlineTextInput}
+            type="text"
+            placeholder="Country…"
+            value={filters.country}
+            onChange={(e) => { setFilters((f) => ({ ...f, country: e.target.value })); resetPagination(); }}
+            title="Filter by country"
+          />
+
+          {/* Project */}
+          {projectOptions.length > 0 && (
+            <select
+              style={styles.inlineSelect}
+              value={filters.project_serial_id}
+              onChange={(e) => { setFilters((f) => ({ ...f, project_serial_id: e.target.value })); resetPagination(); }}
+              title="Filter by project"
+            >
+              <option value="">All Projects</option>
+              {projectOptions.map((proj) => (
+                <option key={proj.serial_id} value={proj.serial_id}>{proj.name} ({proj.serial_id})</option>
+              ))}
+            </select>
+          )}
+
+          <span style={styles.filterDivider} />
+
+          {/* Date range */}
+          <span style={{ fontSize: "var(--text-xs)", color: "var(--c-text-muted)", whiteSpace: "nowrap" as const, flexShrink: 0 }}>From</span>
+          <input
+            style={styles.inlineDateInput}
+            type="date"
+            value={filters.date_from}
+            onChange={(e) => { setFilters((f) => ({ ...f, date_from: e.target.value })); resetPagination(); }}
+            title="Most recent report from date"
+          />
+          <span style={{ fontSize: "var(--text-xs)", color: "var(--c-text-muted)", flexShrink: 0 }}>To</span>
+          <input
+            style={styles.inlineDateInput}
+            type="date"
+            value={filters.date_to}
+            onChange={(e) => { setFilters((f) => ({ ...f, date_to: e.target.value })); resetPagination(); }}
+            title="Most recent report to date"
+          />
         </div>
 
         {/* ── Show unreviewed toggle ── */}
@@ -690,7 +566,7 @@ export default function LocationsPage() {
             <PageSpinner />
           )}
 
-          {!isLoading && !isError && items.length === 0 && (
+          {!isLoading && !isError && sortedItems.length === 0 && (
             <EmptyState
               icon={<Home size={28} color="var(--c-text-subtle)" />}
               title="No properties yet"
@@ -698,14 +574,17 @@ export default function LocationsPage() {
             />
           )}
 
-          {!isLoading && !isError && items.length > 0 && (
+          {!isLoading && !isError && sortedItems.length > 0 && (
             <table style={styles.table}>
               <thead>
                 <tr style={styles.thead}>
                   {COLUMN_DEFS.filter((c) => visibleCols.has(c.id)).map((col) => (
                     <th
                       key={col.id}
-                      style={styles.th}
+                      style={{
+                        ...styles.th,
+                        ...(col.id === "has_conflict_warning" ? { textAlign: "center" as const } : {}),
+                      }}
                       onClick={() => col.sortField && handleSort(col.sortField)}
                       title={col.tooltip}
                     >
@@ -786,7 +665,7 @@ export default function LocationsPage() {
                         );
                       case "has_conflict_warning":
                         return (
-                          <td key={colId} style={styles.td}>
+                          <td key={colId} style={{ ...styles.td, textAlign: "center" as const }}>
                             {prop.has_conflict_warning && (
                               <span style={styles.conflictIcon} title="Conflicting assessments from reporters">
                                 <AlertTriangleIcon size={18} />
@@ -847,7 +726,7 @@ export default function LocationsPage() {
         </div>
 
         {/* ── Pagination ── */}
-        {!isLoading && items.length > 0 && (
+        {!isLoading && sortedItems.length > 0 && (
           <div style={styles.pagination}>
             <span style={styles.paginationInfo}>
               {total > 0
@@ -946,17 +825,97 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: "var(--radius-lg)",
     padding: "12px 16px",
     boxShadow: "var(--shadow-sm)",
-    marginBottom: 16,
+    marginBottom: 8,
     display: "flex",
     alignItems: "center",
     gap: 10,
     flexWrap: "wrap" as const,
     border: "1px solid var(--c-border-ghost)",
   },
+  filterBar: {
+    background: "var(--c-surface-lowest)",
+    borderRadius: "var(--radius-lg)",
+    padding: "10px 16px",
+    boxShadow: "var(--shadow-sm)",
+    marginBottom: 14,
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    flexWrap: "wrap" as const,
+    border: "1px solid var(--c-border-ghost)",
+  },
+  conflictChip: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 5,
+    padding: "6px 12px",
+    borderRadius: "var(--radius-md)",
+    fontSize: "var(--text-sm)",
+    fontWeight: 600,
+    cursor: "pointer",
+    border: "1.5px solid",
+    transition: "all 0.15s",
+    flexShrink: 0,
+    whiteSpace: "nowrap" as const,
+  },
+  filterDivider: {
+    width: 1,
+    height: 20,
+    background: "var(--c-border)",
+    flexShrink: 0,
+    alignSelf: "center",
+  },
+  inlineSelect: {
+    padding: "6px 10px",
+    border: "1.5px solid var(--c-border)",
+    borderRadius: "var(--radius-md)",
+    fontSize: "var(--text-sm)",
+    color: "var(--c-text-primary)",
+    background: "var(--c-surface-lowest)",
+    cursor: "pointer",
+    outline: "none",
+    flexShrink: 0,
+  },
+  inlineTextInput: {
+    padding: "6px 10px",
+    border: "1.5px solid var(--c-border)",
+    borderRadius: "var(--radius-md)",
+    fontSize: "var(--text-sm)",
+    color: "var(--c-text-primary)",
+    background: "var(--c-surface-lowest)",
+    outline: "none",
+    width: 110,
+    flexShrink: 0,
+  },
+  inlineDateInput: {
+    padding: "6px 8px",
+    border: "1.5px solid var(--c-border)",
+    borderRadius: "var(--radius-md)",
+    fontSize: "var(--text-xs)",
+    color: "var(--c-text-primary)",
+    background: "var(--c-surface-lowest)",
+    outline: "none",
+    flexShrink: 0,
+  },
+  clearAllBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    padding: "8px 14px",
+    background: "rgba(4,104,177,0.08)",
+    border: "1.5px solid var(--c-primary-container)",
+    borderRadius: "var(--radius-md)",
+    fontSize: "var(--text-sm)",
+    fontWeight: 600,
+    color: "var(--c-primary-container)",
+    cursor: "pointer",
+    whiteSpace: "nowrap" as const,
+    flexShrink: 0,
+  },
   searchWrap: {
     flex: 1,
     position: "relative" as const,
-    minWidth: 280,
+    minWidth: 200,
+    maxWidth: 340,
     display: "flex",
     alignItems: "center",
   },

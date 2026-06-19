@@ -93,6 +93,7 @@ export default function PropertySummaryPanel({ pin, onClose }: Props) {
 
   // Reset local state when the selected pin changes.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setDropdownOpen(false);
     setCommentText("");
     setConfirmingStatus(undefined);

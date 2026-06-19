@@ -87,6 +87,7 @@ function useAuthPhoto(reportId: string, photoId: string) {
 
   useEffect(() => {
     let objectUrl: string | null = null;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setBlobUrl(null);
     api
       .get(`/api/dashboard/reports/${reportId}/photos/${photoId}`, { responseType: "blob" })

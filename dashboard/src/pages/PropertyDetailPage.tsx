@@ -13,12 +13,11 @@ import {
   postPropertyComment,
   setRecoveryStatus,
   flagPropertyForReview,
-  getReporterVersionHistory,
 } from "../services/api";
 import { formatDamageLevel, formatDateTime } from "../utils/formatters";
 import { useHasAccess } from "../hooks/useHasAccess";
 import { useSSE } from "../hooks/useSSE";
-import type { PropertyDetail, PropertyComment, VersionHistoryEntry, ReporterRow, SSEEvent } from "../types";
+import type { PropertyDetail, PropertyComment, ReporterRow, SSEEvent } from "../types";
 
 const MAPTILER_KEY = import.meta.env.VITE_MAPTILER_KEY || "";
 
@@ -66,24 +65,6 @@ function AlertTriangleIcon({ size = 18 }: { size?: number }) {
   );
 }
 
-function ChevronDownIcon() {
-  return (
-    <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor"
-      strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <polyline points="6 9 12 15 18 9" />
-    </svg>
-  );
-}
-
-function ChevronUpIcon() {
-  return (
-    <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor"
-      strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <polyline points="18 15 12 9 6 15" />
-    </svg>
-  );
-}
-
 function MapPinIcon() {
   return (
     <svg width={13} height={13} viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -123,6 +104,7 @@ function ConfirmedStatusModal({
   const [comment, setComment] = useState("");
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (isOpen) setComment("");
   }, [isOpen]);
 
@@ -194,6 +176,7 @@ function RecoveryModal({ isOpen, onClose, action, onConfirm, isSubmitting, error
   const [comment, setComment] = useState("");
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (isOpen) setComment("");
   }, [isOpen]);
 
@@ -251,185 +234,61 @@ function RecoveryModal({ isOpen, onClose, action, onConfirm, isSubmitting, error
   );
 }
 
-// ── Reporter Version Row ──────────────────────────────────────────────────────
+// ── Report Row (individual qualifying report) ─────────────────────────────────
 
-function ReporterVersionRow({
-  propertyId,
-  row,
-  showUnreviewed,
-}: {
-  propertyId: string;
-  row: ReporterRow;
-  showUnreviewed: boolean;
-}) {
-  const [expanded, setExpanded] = useState(false);
-  const [versions, setVersions] = useState<VersionHistoryEntry[] | null>(null);
-  const [loadingVersions, setLoadingVersions] = useState(false);
+function ReportTableRow({ row }: { row: ReporterRow }) {
   const [hovered, setHovered] = useState(false);
-
-  const handleExpand = async () => {
-    if (!expanded && versions === null) {
-      setLoadingVersions(true);
-      try {
-        const res = await getReporterVersionHistory(propertyId, row.reporter_id);
-        setVersions(res.data);
-      } catch {
-        setVersions([]);
-      } finally {
-        setLoadingVersions(false);
-      }
-    }
-    setExpanded((e) => !e);
-  };
-
-  const isUnreviewed = row.flag_status === "grey" || row.flag_status === "red";
-  const dmgColor = DAMAGE_COLORS[row.most_recent_damage_level] ?? "#888";
-  const flagColor = FLAG_COLORS[row.flag_status] ?? "#888";
+  const dmgColor = DAMAGE_COLORS[row.damage_level ?? ""] ?? "#888";
+  const flagColor = FLAG_COLORS[row.flag_status ?? ""] ?? "#888";
 
   return (
-    <>
-      <tr
-        style={{
-          ...s.tr,
-          background: isUnreviewed
-            ? (hovered ? "rgba(245,166,35,0.09)" : "rgba(245,166,35,0.04)")
-            : (hovered ? "var(--c-surface-low)" : "var(--c-surface-lowest)"),
-          opacity: isUnreviewed && !showUnreviewed ? 0 : 1,
-          display: isUnreviewed && !showUnreviewed ? "none" : undefined,
-        }}
-        onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => setHovered(false)}
-      >
-        {/* Reporter ID */}
-        <td style={s.td}>
-          <span
-            style={s.link}
-            onClick={() => window.open("/reporters/" + row.reporter_id, "_blank")}
-            role="link"
-            tabIndex={0}
-            onKeyDown={(e) => { if (e.key === "Enter") window.open("/reporters/" + row.reporter_id, "_blank"); }}
-          >
-            #{row.reporter_id.slice(0, 10).toUpperCase()}
-          </span>
-        </td>
-        {/* Name */}
-        <td style={s.td}>
-          {row.reporter_name
-            ? <span style={{ color: "var(--c-text-primary)", fontWeight: 500 }}>{row.reporter_name}</span>
-            : <span style={s.muted}>Anonymous</span>}
-        </td>
-        {/* Damage */}
-        <td style={s.td}>
+    <tr
+      style={{
+        ...s.tr,
+        background: hovered ? "var(--c-surface-low)" : "var(--c-surface-lowest)",
+        cursor: "pointer",
+      }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      onClick={() => window.open("/reports/" + row.report_id, "_blank")}
+    >
+      {/* Report ID */}
+      <td style={s.td}>
+        <span
+          style={s.link}
+          onClick={(e) => { e.stopPropagation(); window.open("/reports/" + row.report_id, "_blank"); }}
+          role="link"
+          tabIndex={0}
+          onKeyDown={(e) => { if (e.key === "Enter") window.open("/reports/" + row.report_id, "_blank"); }}
+        >
+          {row.serial_number != null ? `#${row.serial_number}` : `${row.report_id.slice(0, 8)}…`}
+        </span>
+      </td>
+      {/* Damage */}
+      <td style={s.td}>
+        {row.damage_level ? (
           <span style={{ ...s.pill, background: dmgColor }}>
-            {formatDamageLevel(row.most_recent_damage_level)}
+            {formatDamageLevel(row.damage_level)}
           </span>
-        </td>
-        {/* Date */}
-        <td style={s.td}>
-          <span style={{ fontSize: "var(--text-xs)", color: "var(--c-text-secondary)" }}>
-            {formatDateTime(row.most_recent_submitted_at)}
-          </span>
-        </td>
-        {/* Platform */}
-        <td style={s.td}>
-          <span style={s.platformBadge}>{row.platform}</span>
-        </td>
-        {/* Flag */}
-        <td style={s.td}>
-          <span style={{ ...s.flagChip, background: flagColor }}>
-            {row.flag_status.charAt(0).toUpperCase() + row.flag_status.slice(1)}
-          </span>
-        </td>
-        {/* Expand */}
-        <td style={{ ...s.td, textAlign: "right" as const }}>
-          <button style={s.expandBtn} onClick={handleExpand} aria-label="Toggle version history">
-            {expanded ? <ChevronUpIcon /> : <ChevronDownIcon />}
-          </button>
-        </td>
-      </tr>
-
-      {/* Version history expansion */}
-      {expanded && (
-        <tr style={{ background: "rgba(4,104,177,0.03)" }}>
-          <td colSpan={7} style={{ padding: "12px 20px 16px" }}>
-            {loadingVersions && (
-              <div style={{ color: "var(--c-text-muted)", fontSize: "var(--text-sm)" }}>Loading version history…</div>
-            )}
-            {!loadingVersions && versions !== null && versions.length <= 1 && (
-              <div style={{ color: "var(--c-text-muted)", fontSize: "var(--text-sm)", fontStyle: "italic" }}>
-                This is the only submission from this reporter for this property.
-              </div>
-            )}
-            {!loadingVersions && versions !== null && versions.length > 1 && (
-              <div>
-                <div style={{ fontSize: "var(--text-xs)", fontWeight: 700, color: "var(--c-text-muted)", textTransform: "uppercase" as const, letterSpacing: "0.08em", marginBottom: 8 }}>
-                  Version History ({versions.length} submissions)
-                </div>
-                <table style={{ width: "100%", borderCollapse: "collapse" as const, fontSize: 12 }}>
-                  <thead>
-                    <tr>
-                      {["Ver.", "Report ID", "Submitted At", "Damage Level", "Flag Status", "Change Note"].map((h) => (
-                        <th key={h} style={{
-                          padding: "6px 10px", textAlign: "left" as const,
-                          color: "var(--c-text-muted)", fontWeight: 600,
-                          borderBottom: "1px solid var(--c-border-ghost)",
-                          fontSize: "var(--text-xs)", textTransform: "uppercase" as const,
-                          letterSpacing: "0.06em",
-                        }}>
-                          {h}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {versions.map((v, index) => (
-                      <tr key={v.report_id}>
-                        <td style={{ padding: "6px 10px" }}>
-                          <span style={{
-                            background: "var(--c-surface-high)", borderRadius: "var(--radius-sm)",
-                            padding: "2px 7px", fontSize: "var(--text-xs)", fontFamily: "monospace",
-                            color: "var(--c-text-muted)",
-                          }}>
-                            v{versions.length - index}
-                          </span>
-                        </td>
-                        <td style={{ padding: "6px 10px" }}>
-                          <span
-                            style={s.link}
-                            onClick={() => window.open("/reports/" + v.report_id, "_blank")}
-                            role="link"
-                            tabIndex={0}
-                            onKeyDown={(e) => { if (e.key === "Enter") window.open("/reports/" + v.report_id, "_blank"); }}
-                          >
-                            {v.serial_number != null ? `#${v.serial_number}` : `${v.report_id.slice(0, 8)}…`}
-                          </span>
-                        </td>
-                        <td style={{ padding: "6px 10px", color: "var(--c-text-secondary)", fontSize: "var(--text-xs)" }}>
-                          {formatDateTime(v.submitted_at)}
-                        </td>
-                        <td style={{ padding: "6px 10px" }}>
-                          <span style={{ ...s.pill, background: DAMAGE_COLORS[v.damage_level] ?? "var(--c-text-muted)", fontSize: "var(--text-xs)" }}>
-                            {formatDamageLevel(v.damage_level)}
-                          </span>
-                        </td>
-                        <td style={{ padding: "6px 10px" }}>
-                          <span style={{ ...s.flagChip, background: FLAG_COLORS[v.flag_status] ?? "var(--c-text-muted)", fontSize: "var(--text-xs)" }}>
-                            {v.flag_status.charAt(0).toUpperCase() + v.flag_status.slice(1)}
-                          </span>
-                        </td>
-                        <td style={{ padding: "6px 10px", color: "var(--c-text-secondary)", fontSize: "var(--text-xs)" }}>
-                          {v.change_note ?? <span style={s.muted}>—</span>}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </td>
-        </tr>
-      )}
-    </>
+        ) : <span style={s.muted}>—</span>}
+      </td>
+      {/* Date */}
+      <td style={s.td}>
+        <span style={{ fontSize: "var(--text-xs)", color: "var(--c-text-secondary)" }}>
+          {row.submitted_at ? formatDateTime(row.submitted_at) : "—"}
+        </span>
+      </td>
+      {/* Platform */}
+      <td style={s.td}>
+        <span style={s.platformBadge}>{row.platform ?? "—"}</span>
+      </td>
+      {/* Flag */}
+      <td style={s.td}>
+        <span style={{ ...s.flagChip, background: flagColor }}>
+          {(row.flag_status ?? "").charAt(0).toUpperCase() + (row.flag_status ?? "").slice(1)}
+        </span>
+      </td>
+    </tr>
   );
 }
 
@@ -630,9 +489,6 @@ export default function PropertyDetailPage() {
   const [overrideSubmitting, setOverrideSubmitting] = useState(false);
   const [overrideSuccess, setOverrideSuccess] = useState(false);
 
-  // ── Reporter rows
-  const [showUnreviewed, setShowUnreviewed] = useState(false);
-
   // ── Toast
   const [toast, setToast] = useState<string | null>(null);
   const showToast = (msg: string) => {
@@ -665,6 +521,7 @@ export default function PropertyDetailPage() {
   // Pre-fill override fields when property loads
   useEffect(() => {
     if (property) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setOverrideName(property.override_name ?? "");
       setOverrideLat(property.override_lat?.toString() ?? "");
       setOverrideLng(property.override_lng?.toString() ?? "");
@@ -800,11 +657,7 @@ export default function PropertyDetailPage() {
     ? `https://api.maptiler.com/maps/streets/static/${displayLng.toFixed(5)},${displayLat.toFixed(5)},15/360x200.png?key=${MAPTILER_KEY}`
     : null;
 
-  // Unreviewed count (guard against undefined reporter_rows)
   const safeReporterRows = reporter_rows ?? [];
-  const unreviewedCount = safeReporterRows.filter(
-    (r) => r.flag_status === "grey" || r.flag_status === "red"
-  ).length;
 
   return (
     <div style={s.page}>
@@ -878,7 +731,11 @@ export default function PropertyDetailPage() {
                       color: confirmedColor ? "var(--c-text-muted)" : "var(--c-flag-orange)",
                       letterSpacing: "0.04em",
                     }}>
-                      {confirmedColor ? `Confirmed by ${property.confirmed_by ?? "staff"}` : "NOT YET CONFIRMED"}
+                      {confirmedColor
+                        ? property.auto_confirmed
+                          ? "Auto-confirmed"
+                          : `Confirmed by ${property.confirmed_by ?? "Staff"}`
+                        : "NOT YET CONFIRMED"}
                     </span>
                     {/* Property ID */}
                     <span style={{ fontSize: "var(--text-xs)", color: "var(--c-text-subtle)", fontFamily: "monospace" }}>
@@ -1002,8 +859,8 @@ export default function PropertyDetailPage() {
                     {cwd ? (
                       <>
                         Majority assessment: <strong>{formatDamageLevel(cwd.majority_level)}</strong>.{" "}
-                        {cwd.minority_count} reporter{cwd.minority_count !== 1 ? "s" : ""} ({cwd.minority_percentage}%) disagree.
-                        {" "}Review the reporter rows below and use <strong>Set Confirmed Status</strong> in the panel to the right to resolve.
+                        {cwd.minority_count} report{cwd.minority_count !== 1 ? "s" : ""} ({cwd.minority_percentage}%) disagree.
+                        {" "}Review the assessments below and use <strong>Set Confirmed Status</strong> in the panel to the right to resolve.
                       </>
                     ) : (
                       <>
@@ -1016,53 +873,20 @@ export default function PropertyDetailPage() {
               </div>
             )}
 
-            {/* Reporter Assessments */}
+            {/* Report Assessments */}
             <div style={s.card}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-                <div>
-                  <div style={s.cardTitleRow}>
-                    <div style={s.sectionLabel}>Reporter Assessments</div>
-                  </div>
-                  <div style={{ fontSize: "var(--text-xs)", color: "var(--c-text-subtle)", marginTop: 2 }}>
-                    {safeReporterRows.filter(r => r.flag_status === "green" || r.flag_status === "orange").length} qualifying reports
-                    {unreviewedCount > 0 && ` · ${unreviewedCount} unreviewed`}
-                  </div>
+              <div style={{ marginBottom: 14 }}>
+                <div style={s.sectionLabel}>Report Assessments</div>
+                <div style={{ fontSize: "var(--text-xs)", color: "var(--c-text-subtle)", marginTop: 2 }}>
+                  {safeReporterRows.length} qualifying {safeReporterRows.length === 1 ? "report" : "reports"} (green / orange)
                 </div>
-                <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
-                  <div
-                    style={{
-                      ...s.toggle,
-                      background: showUnreviewed ? "var(--c-primary-container)" : "var(--c-text-subtle)",
-                    }}
-                    onClick={() => setShowUnreviewed((v) => !v)}
-                    role="switch"
-                    aria-checked={showUnreviewed}
-                    tabIndex={0}
-                    onKeyDown={(e) => {
-                      if (e.key === " " || e.key === "Enter") setShowUnreviewed((v) => !v);
-                    }}
-                  >
-                    <div style={{
-                      ...s.toggleThumb,
-                      transform: showUnreviewed ? "translateX(20px)" : "translateX(2px)",
-                    }} />
-                  </div>
-                  <span style={{ fontSize: "var(--text-xs)", color: "var(--c-text-muted)", whiteSpace: "nowrap" as const }}>
-                    Show unreviewed
-                    {unreviewedCount > 0 && (
-                      <span style={{ marginLeft: 4, background: "rgba(245,166,35,0.2)", color: "#92400e", borderRadius: 10, padding: "1px 6px", fontSize: 10, fontWeight: 700 }}>
-                        {unreviewedCount}
-                      </span>
-                    )}
-                  </span>
-                </label>
               </div>
 
               <div style={{ overflowX: "auto" }}>
                 <table style={s.table}>
                   <thead>
                     <tr style={{ background: "var(--c-surface-low)" }}>
-                      {["Reporter ID", "Name", "Damage Level", "Submitted At", "Platform", "Flag", ""].map((h) => (
+                      {["Report ID", "Damage Level", "Submitted At", "Platform", "Flag"].map((h) => (
                         <th key={h} style={s.th}>{h}</th>
                       ))}
                     </tr>
@@ -1070,18 +894,13 @@ export default function PropertyDetailPage() {
                   <tbody>
                     {safeReporterRows.length === 0 ? (
                       <tr>
-                        <td colSpan={7} style={{ padding: "32px", textAlign: "center" as const, color: "var(--c-text-muted)", fontSize: "var(--text-sm)", fontStyle: "italic" }}>
-                          No reporter assessments yet.
+                        <td colSpan={5} style={{ padding: "32px", textAlign: "center" as const, color: "var(--c-text-muted)", fontSize: "var(--text-sm)", fontStyle: "italic" }}>
+                          No qualifying reports yet.
                         </td>
                       </tr>
                     ) : (
                       safeReporterRows.map((row) => (
-                        <ReporterVersionRow
-                          key={row.reporter_id}
-                          propertyId={propertyId!}
-                          row={row}
-                          showUnreviewed={showUnreviewed}
-                        />
+                        <ReportTableRow key={row.report_id} row={row} />
                       ))
                     )}
                   </tbody>

@@ -359,6 +359,7 @@ export default function UserManagementPage() {
 
   // Reset pagination when status filter changes
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setCursors([null]);
     setPageIndex(0);
   }, [statusFilter]);

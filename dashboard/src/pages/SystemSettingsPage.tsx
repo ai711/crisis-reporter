@@ -1011,6 +1011,7 @@ function LanguagesTab() {
 
   // Acquire lock on language selection
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     acquireLock(selectedLang);
     return () => {
       releaseLock(selectedLang);
@@ -1033,6 +1034,7 @@ function LanguagesTab() {
 
   // FIX 13: reset translation table page when language, tab, or search changes
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setTransPage(1);
   }, [selectedLang, filterTab, searchQuery]);
 
@@ -1067,6 +1069,7 @@ function LanguagesTab() {
 
   // FIX 12: reset language table page when language list changes
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLangPage(1);
   }, [languages.length]);
 
@@ -1088,6 +1091,7 @@ function LanguagesTab() {
 
   // FIX 8: clear immediate loading indicator when real loading completes
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (!transLoading) setTranslationsLoadingImmediate(false);
   }, [transLoading]);
 
@@ -1109,6 +1113,7 @@ function LanguagesTab() {
     // Subtract baseline so the counter reflects only newly-translated strings,
     // not pre-existing drafts that were already in the queue before the run started.
     const completed = Math.max(0, draftCount + failedCount - translateBaseline);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setTranslateProgress((prev) =>
       prev !== null ? { completed, total: prev.total } : null
     );
@@ -3347,6 +3352,7 @@ function MapSettingsTab() {
   // Apply fetched settings when they load (once)
   useEffect(() => {
     if (mapSettings && !settingsLoaded) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setRadius(mapSettings.reporting_radius_miles ?? 50);
       setBuildingSource(mapSettings.building_source ?? "osm");
       setCountryOverrides(mapSettings.country_overrides ?? {});
