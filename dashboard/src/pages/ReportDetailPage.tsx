@@ -7,8 +7,6 @@ import {
   ChevronDown,
   ChevronRight,
   AlertTriangle,
-  X,
-  CheckCircle2,
   User,
 } from "lucide-react";
 import Header from "../components/Header";
@@ -20,7 +18,7 @@ import api from "../services/api";
 import { useAuthStore } from "../stores/authStore";
 import { useHasAccess } from "../hooks/useHasAccess";
 import type { ReportDetail, FlagStatus, FlagEvent, VersionHistoryItem, QuestionAnswer, ReportProjectRef } from "../types";
-import { formatDamageLevel, formatDateTime, toTitleCase } from "../utils/formatters";
+import { formatDamageLevel, formatDateTime, toTitleCase, countryCodeToName } from "../utils/formatters";
 import { usePageTitle } from "../hooks/usePageTitle";
 
 const MAPTILER_KEY = import.meta.env.VITE_MAPTILER_KEY || "";
@@ -268,11 +266,11 @@ function FlagReasonDetail({ flagEvents, flagColor }: { flagEvents: FlagEvent[]; 
           <p style={styles.flagContextHeader}>IP country mismatch detected</p>
           <div style={styles.flagContextRow}>
             <span style={styles.flagContextLabel}>IP-geolocated country</span>
-            <span style={styles.flagContextValue}>{String(meta?.geolocated_country ?? "—")}</span>
+            <span style={styles.flagContextValue}>{countryCodeToName(meta?.geolocated_country as string)}</span>
           </div>
           <div style={{ ...styles.flagContextRow, borderBottom: "none" }}>
             <span style={styles.flagContextLabel}>Reporter-selected country</span>
-            <span style={styles.flagContextValue}>{String(meta?.reporter_selected_country ?? "—")}</span>
+            <span style={styles.flagContextValue}>{countryCodeToName(meta?.reporter_selected_country as string)}</span>
           </div>
           <p style={styles.flagContextNote}>VPN usage may cause false positives. The submission IP is shown in the report details below.</p>
         </div>
@@ -621,24 +619,6 @@ export default function ReportDetailPage() {
             <span style={styles.breadcrumbCurrent}>{reportLabel}</span>
           </nav>
           <div style={styles.actionBar}>
-            {canEditReports && report.flag_status === "red" && (
-              <>
-                <button
-                  style={{ ...styles.discardReportBtn, opacity: isActionPending ? 0.6 : 1 }}
-                  disabled={isActionPending}
-                  onClick={() => openActionModal("Discard", "discarded")}
-                >
-                  <X size={16} /> Discard Report
-                </button>
-                <button
-                  style={{ ...styles.approveReportBtn, opacity: isActionPending ? 0.6 : 1 }}
-                  disabled={isActionPending}
-                  onClick={() => openActionModal("Approve", "orange")}
-                >
-                  <CheckCircle2 size={16} /> Approve Report
-                </button>
-              </>
-            )}
             {canEditReports && report.flag_status === "grey" && isSuperadmin && (
               <button
                 style={{ ...styles.emergencyOverrideBtn, opacity: isActionPending ? 0.6 : 1 }}
@@ -1105,7 +1085,7 @@ export default function ReportDetailPage() {
                 {report.reporter_country_code && (
                   <div style={styles.reporterStat}>
                     <p style={styles.reporterStatLabel}>Country</p>
-                    <p style={styles.reporterStatValue}>{report.reporter_country_code}</p>
+                    <p style={styles.reporterStatValue}>{countryCodeToName(report.reporter_country_code)}</p>
                   </div>
                 )}
               </div>

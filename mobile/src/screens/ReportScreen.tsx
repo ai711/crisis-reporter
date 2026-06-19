@@ -31,6 +31,7 @@ import api, { API_BASE } from "../services/api";
 import * as Device from 'expo-device';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as FileSystem from 'expo-file-system';
+import * as MediaLibrary from 'expo-media-library';
 import { addToQueue, syncQueue, getQueue, removeFromQueue, queuePhotosForReport, saveDirectSubmittedRecord } from "../utils/offlineQueue";
 import { haversineKm, milesToKm, saveCrisisMeta, loadCrisisMeta, saveFenceRadiusMeta, loadFenceRadiusMeta, getGpsFenceRadius, type FenceRadiusMeta } from "../utils/geo";
 import NetInfo from "@react-native-community/netinfo";
@@ -40,6 +41,7 @@ import type { DamageLevel, QueuedPhoto, ProcessedPhoto } from "../types";
 const MAPTILER_KEY = process.env.EXPO_PUBLIC_MAPTILER_KEY ?? "";
 const MAP_STYLE_URL = `https://api.maptiler.com/maps/dataviz-light/style.json?key=${MAPTILER_KEY}`;
 const ANSWERS_KEY = 'cr_draft_answers';
+const DRAFT_PHOTO_DIR = `${FileSystem.Paths.document.uri}cr_draft_photos/`;
 
 const OFFLINE_COUNTRY_FALLBACK = [
   { code: "AF", name: "Afghanistan" }, { code: "BD", name: "Bangladesh" },
@@ -752,7 +754,10 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
             {
               text: t('questions.recoveryStartFresh'),
               style: 'destructive',
-              onPress: async () => { await AsyncStorage.removeItem(ANSWERS_KEY); },
+              onPress: async () => {
+                await AsyncStorage.removeItem(ANSWERS_KEY);
+                FileSystem.deleteAsync(DRAFT_PHOTO_DIR, { idempotent: true }).catch(() => {});
+              },
             },
             {
               text: t('questions.recoveryContinue'),
@@ -771,6 +776,18 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                 setStep('damage');
                 if (draft.damageQuestion) setDamageQuestion(draft.damageQuestion);
                 if (draft.additionalQuestion) setAdditionalQuestion(draft.additionalQuestion);
+                if (draft.photos?.length > 0) {
+                  void (async () => {
+                    const valid: ProcessedPhoto[] = [];
+                    for (const p of draft.photos as ProcessedPhoto[]) {
+                      try {
+                        const info = await FileSystem.getInfoAsync(p.uri);
+                        if (info.exists) valid.push(p);
+                      } catch { /* skip missing file */ }
+                    }
+                    if (valid.length > 0) setPhotos(valid);
+                  })();
+                }
               },
             },
           ]
@@ -808,6 +825,23 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
   // Per-question answer persistence — called after each successful Next tap
   const saveDraftAnswers = async () => {
     try {
+      // Copy current photos to a stable directory so URIs survive a crash
+      let persistedPhotoMeta: ProcessedPhoto[] = [];
+      if (photos.length > 0) {
+        try {
+          await FileSystem.deleteAsync(DRAFT_PHOTO_DIR, { idempotent: true });
+          await FileSystem.makeDirectoryAsync(DRAFT_PHOTO_DIR, { intermediates: true });
+          for (let i = 0; i < photos.length; i++) {
+            const p = photos[i];
+            const ext = p.mimeType.includes('png') ? 'png' : 'jpg';
+            const dest = `${DRAFT_PHOTO_DIR}photo_${i}.${ext}`;
+            await FileSystem.copyAsync({ from: p.uri, to: dest });
+            persistedPhotoMeta.push({ ...p, uri: dest });
+          }
+        } catch {
+          // Photo copy failed — answers saved without photo metadata
+        }
+      }
       const draft = {
         damageQuestion,
         damageLevel,
@@ -822,6 +856,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
         pressingNeedsOther,
         additionalAnswers,
         additionalQuestion,
+        photos: persistedPhotoMeta,
         savedAt: new Date().toISOString(),
       };
       await AsyncStorage.setItem(ANSWERS_KEY, JSON.stringify(draft));
@@ -1258,6 +1293,12 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
         const processed = await processPhoto(asset.uri, asset.mimeType ?? '');
         if (processed) {
           setPhotos((prev) => [...prev, processed]);
+          void (async () => {
+            try {
+              const { status } = await MediaLibrary.requestPermissionsAsync();
+              if (status === 'granted') await MediaLibrary.saveToLibraryAsync(asset.uri);
+            } catch { /* non-critical */ }
+          })();
         }
       }
     } catch (e) {
@@ -1343,13 +1384,20 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
               quality: 1,
             });
             if (!result.canceled && result.assets?.[0]) {
-              const processed = await processPhoto(result.assets[0].uri, result.assets[0].mimeType ?? '');
+              const capturedUri = result.assets[0].uri;
+              const processed = await processPhoto(capturedUri, result.assets[0].mimeType ?? '');
               if (processed) {
                 setPhotos((prev) => {
                   const updated = [...prev];
                   updated[index] = processed;
                   return updated;
                 });
+                void (async () => {
+                  try {
+                    const { status } = await MediaLibrary.requestPermissionsAsync();
+                    if (status === 'granted') await MediaLibrary.saveToLibraryAsync(capturedUri);
+                  } catch { /* non-critical */ }
+                })();
               }
             }
           },
@@ -1520,6 +1568,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
     setAdditionalAnswers({});
     setAdditionalQuestion(0);
     AsyncStorage.removeItem(ANSWERS_KEY).catch(() => {});
+    FileSystem.deleteAsync(DRAFT_PHOTO_DIR, { idempotent: true }).catch(() => {});
     setPhotos([]);
     setGpsCoords(null);
     setSelectedBuilding(null);
@@ -2592,16 +2641,14 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
       <Modal visible={showDupeWarning} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
-            <Text style={styles.modalTitle}>Report already submitted for this location</Text>
-            <Text style={styles.modalBody}>
-              It looks like you may have already submitted a report for this building. Submitting again could create a duplicate. Are you sure you want to continue?
-            </Text>
+            <Text style={styles.modalTitle}>{t('report.dupe_title')}</Text>
+            <Text style={styles.modalBody}>{t('report.dupe_body')}</Text>
             <View style={styles.modalButtons}>
               <TouchableOpacity
                 style={styles.secondaryButton}
                 onPress={() => setShowDupeWarning(false)}
               >
-                <Text style={styles.secondaryButtonText}>Cancel</Text>
+                <Text style={styles.secondaryButtonText}>{t('common.cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.primaryButton, { flex: 1 }]}
@@ -2616,7 +2663,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                   await doSubmit(t2, online);
                 }}
               >
-                <Text style={styles.primaryButtonText}>Submit Anyway</Text>
+                <Text style={styles.primaryButtonText}>{t('report.dupe_submit_anyway')}</Text>
               </TouchableOpacity>
             </View>
           </View>

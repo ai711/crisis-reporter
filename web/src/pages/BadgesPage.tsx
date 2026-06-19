@@ -94,7 +94,7 @@ export default function BadgesPage() {
   const [reporterName, setReporterName] = useState("Reporter");
   const [trainingComplete, setTrainingComplete] = useState(false);
   const [earnedDate, setEarnedDate] = useState(() => formatDate(new Date()));
-  const [loadingProfile, setLoadingProfile] = useState(!!reporterId);
+  const [loadingProfile, setLoadingProfile] = useState(typeof reporterId === "string" && !!reporterId);
 
   // Part A from localStorage for progress bar in locked state
   const completedModules = countCompletedModules();
@@ -119,7 +119,7 @@ export default function BadgesPage() {
   // Fetch reporter profile + safety progress
   useEffect(() => {
     // Skip API call for session-only local IDs — backend has never seen them
-    if (!reporterId || reporterId.startsWith("local_")) { setLoadingProfile(false); return; }
+    if (!reporterId || typeof reporterId !== "string" || reporterId.startsWith("local_")) { setLoadingProfile(false); return; }
 
     Promise.all([
       api.get<{ email: string | null; phone_number: string | null; first_name: string | null; last_name: string | null; created_at?: string }>(`/api/reporters/${reporterId}`),

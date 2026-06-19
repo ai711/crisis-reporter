@@ -98,7 +98,7 @@ export default function ProfilePage() {
   // ── Load profile ────────────────────────────────────────────────────────────
   useEffect(() => {
     // Skip API call for session-only local IDs — backend has never seen them
-    if (!reporterId || reporterId.startsWith("local_")) { setLoading(false); return; }
+    if (!reporterId || typeof reporterId !== "string" || reporterId.startsWith("local_")) { setLoading(false); return; }
     api
       .get<ReporterProfile>(`/api/reporters/${reporterId}`)
       .then((res) => {
@@ -217,7 +217,7 @@ export default function ProfilePage() {
   // ── Anonymous gate ──────────────────────────────────────────────────────────
   // Treat local_ IDs (offline-created fallbacks the backend never saw) the same
   // as no ID — show the login/register prompt rather than an empty profile form.
-  if (!reporterId || reporterId.startsWith("local_")) {
+  if (!reporterId || typeof reporterId !== "string" || reporterId.startsWith("local_")) {
     return (
       <div style={s.page}>
         <header style={s.header}>

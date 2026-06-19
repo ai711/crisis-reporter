@@ -24,6 +24,7 @@ import {
   formatDamageLevel,
   formatProfileType,
   formatProfileStatus,
+  countryCodeToName,
 } from "../utils/formatters";
 
 // ── Chip class helpers ─────────────────────────────────────────────────────────
@@ -591,7 +592,7 @@ function ReportsSection({ reporterId }: { reporterId: string }) {
                       </button>
                     </td>
                     <td style={s.subTd}>{formatDateTime(r.created_at)}</td>
-                    <td style={s.subTd}>{r.country || "—"}</td>
+                    <td style={s.subTd}>{countryCodeToName(r.country)}</td>
                     <td style={s.subTd}>
                       <span className={damageChipClass(r.damage_level)}>
                         {formatDamageLevel(r.damage_level)}
@@ -906,7 +907,7 @@ export default function ReporterDetailPage() {
                   padding: "2px 8px",
                   fontWeight: 500,
                 }}>
-                  {reporter.country}
+                  {countryCodeToName(reporter.country)}
                 </span>
               )}
               <span style={s.memberSince}>
@@ -923,7 +924,7 @@ export default function ReporterDetailPage() {
               <DetailRow label="Reporter ID" value={<span style={{ fontFamily: "monospace" }}>{reporter.reporter_id}</span>} />
               <DetailRow label="Device ID" value={reporter.device_id ? <span style={{ fontFamily: "monospace", fontSize: 12 }}>{reporter.device_id}</span> : "—"} />
               <DetailRow label="IP Address" value={reporter.ip_address ? <span style={{ fontFamily: "monospace" }}>{reporter.ip_address}</span> : "—"} />
-              <DetailRow label="Country" value={reporter.country || "—"} />
+              <DetailRow label="Country" value={countryCodeToName(reporter.country)} />
               <DetailRow label="MCC (cell tower)" value={reporter.mcc || "—"} />
               <DetailRow
                 label={<span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>Device Model <InfoTip tip="From the reporter's most recent report — reflects their latest device, not registration." /></span> as unknown as string}
@@ -1006,18 +1007,32 @@ export default function ReporterDetailPage() {
             <div style={{display: 'flex', gap: 12}}>
               {['A', 'B', 'C'].map(part => {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const done = (reporter as any).safety_progress?.[`part_${part.toLowerCase()}_complete`];
+                const sp = (reporter as any).safety_progress;
+                const done = sp?.[`part_${part.toLowerCase()}_complete`];
+                const isPartA = part === 'A';
+                const partACount: number = isPartA ? (sp?.part_a_count ?? 0) : 0;
+                const partATotal: number = isPartA ? (sp?.part_a_total ?? 9) : 0;
+                const inProgress = isPartA && !done && partACount > 0;
+                const bgColor = done
+                  ? 'rgba(56,161,105,0.1)'
+                  : inProgress ? 'rgba(237,137,54,0.1)' : 'var(--c-surface-low)';
+                const textColor = done
+                  ? 'var(--c-flag-green)'
+                  : inProgress ? 'var(--c-flag-orange)' : 'var(--c-text-muted)';
+                const subColor = done
+                  ? 'var(--c-flag-green)'
+                  : inProgress ? 'var(--c-flag-orange)' : 'var(--c-text-subtle)';
+                const label = done
+                  ? '✓ Complete'
+                  : inProgress ? `${partACount} / ${partATotal} done` : 'Not started';
                 return (
                   <div key={part} style={{flex: 1, textAlign: 'center', padding: '10px 0',
-                    background: done ? 'rgba(56,161,105,0.1)' : 'var(--c-surface-low)',
-                    borderRadius: 'var(--radius-md)'}}>
-                    <div style={{fontSize: 'var(--text-sm)', fontWeight: 700,
-                      color: done ? 'var(--c-flag-green)' : 'var(--c-text-muted)'}}>
+                    background: bgColor, borderRadius: 'var(--radius-md)'}}>
+                    <div style={{fontSize: 'var(--text-sm)', fontWeight: 700, color: textColor}}>
                       Part {part}
                     </div>
-                    <div style={{fontSize: 'var(--text-xs)', color: done
-                      ? 'var(--c-flag-green)' : 'var(--c-text-subtle)', marginTop: 2}}>
-                      {done ? '✓ Complete' : 'Not started'}
+                    <div style={{fontSize: 'var(--text-xs)', color: subColor, marginTop: 2}}>
+                      {label}
                     </div>
                   </div>
                 );

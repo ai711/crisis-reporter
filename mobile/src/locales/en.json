@@ -37,7 +37,10 @@
     "question_number": "Question {{number}} of {{total}}",
     "complete": "Completely Damaged",
     "location_outside_crisis_area": "Your selected location appears to be outside the primary crisis area. You can still submit if this is correct.",
-    "loading_buildings": "Loading footprints…"
+    "loading_buildings": "Loading footprints…",
+    "dupe_title": "Possible duplicate report",
+    "dupe_body": "It looks like you may have already submitted a report for this building. Submitting again could create a duplicate. Are you sure you want to continue?",
+    "dupe_submit_anyway": "Submit anyway"
   },
   "map": {
     "loading": "Loading map...",

@@ -14,6 +14,7 @@ import { extractExif } from "../utils/exifExtraction";
 import SubmissionStepper, { type StepperStep } from "../components/SubmissionStepper";
 import type { DamageLevel, QueuedPhoto, ReportSubmitRequest } from "../types";
 import { addToQueue, isIndexedDBAvailable, requestSyncNotificationPermission } from "../utils/offlineQueue";
+import { saveDraftPhotos, loadDraftPhotos, clearDraftPhotos } from "../utils/draftPhotoStore";
 import { generateUUID } from "../utils/uuid";
 import { haversineKm, milesToKm, saveCrisisMeta, loadCrisisMeta, saveFenceRadiusMeta, loadFenceRadiusMeta, getGpsFenceRadius, type FenceRadiusMeta } from "../utils/geo";
 import { WEB_SESSION_ID } from "../utils/sessionId";
@@ -443,6 +444,7 @@ export default function ReportPage() {
   const gpsMarkerRef = useRef<maplibregl.Marker | null>(null); // B9
   const pinMarkerRef = useRef<maplibregl.Marker | null>(null); // B6
   const contentScrollRef = useRef<HTMLDivElement>(null);
+  const submitErrorRef = useRef<HTMLDivElement>(null);
 
   // Scroll content to top whenever the review step becomes active.
   // requestAnimationFrame defers until after React finishes painting the new step,
@@ -454,6 +456,14 @@ export default function ReportPage() {
       });
     }
   }, [step]);
+
+  // Scroll the error banner into view whenever a submit error appears.
+  useEffect(() => {
+    if (!submitError) return;
+    requestAnimationFrame(() => {
+      submitErrorRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    });
+  }, [submitError]);
 
   // Manage blob URLs for photo previews — create once per photos change, revoke on cleanup
   useEffect(() => {
@@ -732,6 +742,7 @@ export default function ReportPage() {
           features: [{ type: "Feature", properties: props, geometry: geom }],
         } as Parameters<maplibregl.GeoJSONSource["setData"]>[0]);
 
+        setShowDuplicateInlineWarning(false);
         setPendingBuilding({
           id: String(props.osm_id),
           name: props.name || "",
@@ -909,6 +920,7 @@ export default function ReportPage() {
   // B3 — Cancel building selection from popup
   const handleBuildingCancel = () => {
     setPendingBuilding(null);
+    setShowDuplicateInlineWarning(false);
     // Restore previous confirmed selection highlight (or clear if none)
     if (!selectedBuildingId) {
       (mapRef.current?.getSource("selected-building") as maplibregl.GeoJSONSource | undefined)
@@ -1060,6 +1072,7 @@ export default function ReportPage() {
           pinDropCoords, locationEntryMethod,
         }));
       } catch { /* localStorage full or unavailable */ }
+      if (photos.length > 0) void saveDraftPhotos(photos);
     };
   }); // no deps — runs every render so the closure is always fresh
 
@@ -1124,6 +1137,7 @@ export default function ReportPage() {
         pinDropCoords, locationEntryMethod,
       }));
     } catch { /* localStorage full or unavailable */ }
+    if (photos.length > 0) void saveDraftPhotos(photos);
   }, [step, damageQuestion]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Debounced save (1.2 s) triggered by changes to text / selection fields within a step.
@@ -1157,6 +1171,12 @@ export default function ReportPage() {
     gpsLatitude, gpsLongitude, selectedBuildingId, selectedBuildingName,
     buildingCentroidLat, buildingCentroidLng, pinDropCoords, locationEntryMethod,
   ]);
+
+  // Save photo blobs to IndexedDB whenever photos change so draft restore has them.
+  useEffect(() => {
+    if (isSubmittedRef.current || draftPrompt === "showing") return;
+    void saveDraftPhotos(photos);
+  }, [photos]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Photo validation wiring ──────────────────────────────────────────────────
 
@@ -1411,6 +1431,7 @@ export default function ReportPage() {
 
   const clearDraft = () => {
     try { localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ }
+    void clearDraftPhotos();
     setDraftPrompt("dismissed");
   };
 
@@ -1452,6 +1473,9 @@ export default function ReportPage() {
       if (typeof d.locationEntryMethod === "string")
         setLocationEntryMethod(d.locationEntryMethod as "map_selection" | "pin_drop" | "manual_text" | null);
     } catch { /* corrupted draft — ignore */ }
+    void loadDraftPhotos().then((saved) => {
+      if (saved.length > 0) setPhotos(saved);
+    });
     setDraftPrompt("dismissed");
   };
 
@@ -1782,16 +1806,24 @@ export default function ReportPage() {
       setSubmittedReportId(reportId);
       isSubmittedRef.current = true;
       try { localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ }
+      void clearDraftPhotos();
       setSubmitted(true);
     } catch (err: unknown) {
       clearTimeout(timeoutId);
       const isAbort = err instanceof Error && err.name === "AbortError";
       const isTimeout = isAbort || (err instanceof Error && (err as { code?: string }).code === "ECONNABORTED");
+      const axiosErr = err as { response?: { status?: number; data?: unknown }; code?: string };
+      const isNetworkError = !axiosErr?.response && (
+        !navigator.onLine ||
+        axiosErr?.code === "ERR_NETWORK" ||
+        (err instanceof Error && err.message === "Network Error")
+      );
       if (isTimeout) {
         setSubmitError("timeout");
+      } else if (isNetworkError) {
+        setSubmitError("no_internet");
       } else {
         // Log full error to console so 422 validation detail is visible in DevTools
-        const axiosErr = err as { response?: { status?: number; data?: unknown } };
         if (axiosErr?.response) {
           console.error("[ReportPage] submit error", axiosErr.response.status, axiosErr.response.data);
         } else {
@@ -3432,36 +3464,38 @@ export default function ReportPage() {
                 </div>
               </div>
 
-              {/* E32 — No internet error (amber card) */}
-              {submitError === "no_internet" && (
-                <div style={{ background: "#FFF9F0", border: "1px solid rgba(245,166,35,0.3)", borderRadius: 12, padding: "16px", marginBottom: 8 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                    <span className="material-symbols-outlined" style={{ fontSize: 20, color: "#F5A623" }}>wifi_off</span>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: "#F5A623", textTransform: "uppercase" as const, letterSpacing: "0.08em" }}>{t('report.error_no_connection')}</span>
+              <div ref={submitErrorRef}>
+                {/* E32 — No internet error (amber card) */}
+                {submitError === "no_internet" && (
+                  <div style={{ background: "#FFF9F0", border: "1px solid rgba(245,166,35,0.3)", borderRadius: 12, padding: "16px", marginBottom: 8 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                      <span className="material-symbols-outlined" style={{ fontSize: 20, color: "#F5A623" }}>wifi_off</span>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: "#F5A623", textTransform: "uppercase" as const, letterSpacing: "0.08em" }}>{t('report.error_no_connection')}</span>
+                    </div>
+                    <p style={{ margin: "0 0 4px", fontSize: 14, color: "#1B1C1C" }}>{t('report.error_no_internet')}</p>
+                    <p style={{ margin: "0 0 12px", color: "#717782", fontSize: 13 }}>{t('report.error_no_internet_warning')}</p>
+                    <button
+                      style={{ color: "#0468B1", background: "none", border: "none", textDecoration: "underline", cursor: "pointer", fontSize: 14, fontWeight: 600, padding: 0, fontFamily: "inherit" }}
+                      onClick={() => void handleSubmit()}
+                    >{t('common.retry')}</button>
                   </div>
-                  <p style={{ margin: "0 0 4px", fontSize: 14, color: "#1B1C1C" }}>{t('report.error_no_internet')}</p>
-                  <p style={{ margin: "0 0 12px", color: "#717782", fontSize: 13 }}>{t('report.error_no_internet_warning')}</p>
-                  <button
-                    style={{ color: "#0468B1", background: "none", border: "none", textDecoration: "underline", cursor: "pointer", fontSize: 14, fontWeight: 600, padding: 0, fontFamily: "inherit" }}
-                    onClick={() => void handleSubmit()}
-                  >{t('common.retry')}</button>
-                </div>
-              )}
+                )}
 
-              {/* E35 — Timeout error */}
-              {submitError === "timeout" && (
-                <div style={{ color: "#E53E3E", fontSize: "0.875rem", margin: "8px 0", textAlign: "center" as const }}>
-                  <p style={{ margin: "0 0 8px" }}>{t('report.error_timeout')}</p>
-                  <button
-                    style={{ color: "#0468B1", background: "none", border: "none", textDecoration: "underline", cursor: "pointer", fontSize: "0.875rem" }}
-                    onClick={() => void handleSubmit()}
-                  >{t('common.retry')}</button>
-                </div>
-              )}
+                {/* E35 — Timeout error */}
+                {submitError === "timeout" && (
+                  <div style={{ color: "#E53E3E", fontSize: "0.875rem", margin: "8px 0", textAlign: "center" as const }}>
+                    <p style={{ margin: "0 0 8px" }}>{t('report.error_timeout')}</p>
+                    <button
+                      style={{ color: "#0468B1", background: "none", border: "none", textDecoration: "underline", cursor: "pointer", fontSize: "0.875rem" }}
+                      onClick={() => void handleSubmit()}
+                    >{t('common.retry')}</button>
+                  </div>
+                )}
 
-              {submitError === "server_error" && error && (
-                <p style={styles.error}>{error}</p>
-              )}
+                {submitError === "server_error" && error && (
+                  <p style={styles.error}>{error}</p>
+                )}
+              </div>
             </div>
           );
         })()}

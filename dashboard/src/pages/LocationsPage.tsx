@@ -6,7 +6,7 @@ import PageSpinner from "../components/PageSpinner";
 import EmptyState from "../components/EmptyState";
 import ErrorState from "../components/ErrorState";
 import { getProperties, getDashboardProjects, getPropertyStats } from "../services/api";
-import { formatDamageLevel, formatDateTime } from "../utils/formatters";
+import { formatDamageLevel, formatDateTime, countryCodeToName } from "../utils/formatters";
 import { usePageTitle } from "../hooks/usePageTitle";
 import type { Property, PropertiesListResponse, PropertyStats, ProjectListRow, ProjectsListResponse } from "../types";
 
@@ -757,7 +757,7 @@ export default function LocationsPage() {
                           </td>
                         );
                       case "country":
-                        return <td key={colId} style={styles.td}>{prop.country ?? "—"}</td>;
+                        return <td key={colId} style={styles.td}>{countryCodeToName(prop.country)}</td>;
                       case "current_damage_level":
                         return (
                           <td key={colId} style={styles.td}>

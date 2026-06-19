@@ -298,12 +298,22 @@ async def get_reporter_detail(
     )
     first_report_at, last_report_at = date_result.one()
 
-    # Safety Tips progress — separate table, one row per completed part ("A", "B", "C")
+    # Safety Tips progress — separate table, one row per completed part.
+    # Part A stores per-disaster entries ("A_earthquake", "A_flood", …) — 9 total.
+    # Parts B and C store a single entry ("B", "C").
+    _PART_A_TOTAL = 9
     sp_result = await db.execute(
         select(SafetyProgress).where(SafetyProgress.reporter_id == reporter.id)
     )
     sp_records = list(sp_result.scalars().all())
     parts_done = {r.part_completed for r in sp_records}
+    # Count unique Part A disaster entries (stored as "A_<disaster>" or legacy "A")
+    part_a_disasters = {
+        p for p in parts_done
+        if p == "A" or (len(p) > 2 and p[:2] == "A_")
+    }
+    # Legacy "A" entry counts as all 9 done (written by old clients)
+    part_a_count = _PART_A_TOTAL if "A" in part_a_disasters else len(part_a_disasters)
 
     profile_type = _compute_profile_type(reporter)
 
@@ -351,10 +361,11 @@ async def get_reporter_detail(
         "first_report_at": first_report_at.isoformat() if first_report_at else None,
         "last_report_at": last_report_at.isoformat() if last_report_at else None,
         "safety_progress": {
-            "part_a_complete": "A" in parts_done,
+            "part_a_complete": part_a_count >= _PART_A_TOTAL,
+            "part_a_count": part_a_count,
+            "part_a_total": _PART_A_TOTAL,
             "part_b_complete": "B" in parts_done,
             "part_c_complete": "C" in parts_done,
-            "part_a_count": sum(1 for r in sp_records if r.part_completed == "A"),
         },
     }
 

@@ -391,7 +391,7 @@ function SlideViewerA({
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden" }}>
+    <div style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden", minHeight: 0 }}>
       {/* Counter + dots */}
       <div style={{ padding: "10px 24px", background: BG, borderBottom: `1px solid #E4E2E1`, display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
         <span style={{ fontSize: 12, color: "#717782", fontWeight: 500 }}>
@@ -405,7 +405,7 @@ function SlideViewerA({
       </div>
 
       {/* Slide content — title and bullet text come pre-translated from the backend */}
-      <div style={{ flex: 1, overflowY: "auto", padding: "24px" }}>
+      <div style={{ flex: 1, overflowY: "auto", padding: "24px", minHeight: 0 }}>
         <h3 style={{ margin: "0 0 16px", fontSize: 17, fontWeight: 700, color: "#1B1C1C", lineHeight: 1.4 }}>
           {slide.title}
         </h3>
@@ -496,7 +496,7 @@ function SlideViewerBC({
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden" }}>
+    <div style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden", minHeight: 0 }}>
       {/* Counter + dots */}
       <div style={{ padding: "10px 24px", background: BG, borderBottom: `1px solid #E4E2E1`, display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
         <span style={{ fontSize: 12, color: "#717782", fontWeight: 500 }}>
@@ -510,7 +510,7 @@ function SlideViewerBC({
       </div>
 
       {/* Slide content */}
-      <div style={{ flex: 1, overflowY: "auto", padding: "24px" }}>
+      <div style={{ flex: 1, overflowY: "auto", padding: "24px", minHeight: 0 }}>
         <div style={{ background: "#F6F3F2", border: "1.5px solid #E4E2E1", borderRadius: 16, padding: "20px" }}>
           <h3 style={{ margin: "0 0 14px", fontSize: 17, fontWeight: 700, color: "#1B1C1C", lineHeight: 1.4 }}>
             {slide.title}
@@ -624,8 +624,8 @@ export default function SafetyTipsPage() {
     }
 
     return (
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", background: BG }}>
-        <header className="page-header" style={{ background: BG, borderBottom: "1px solid #E4E2E1" }}>
+      <div style={{ height: "100dvh", display: "flex", flexDirection: "column", background: BG }}>
+        <header className="page-header" style={{ background: BG, borderBottom: "1px solid #E4E2E1", flexShrink: 0 }}>
           <button className="page-header-back" onClick={() => setView(backTarget)}>
             <svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={BLUE} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
               <polyline points="15 18 9 12 15 6" />
@@ -634,7 +634,7 @@ export default function SafetyTipsPage() {
           <span className="page-header-title">{slideTitle}</span>
           <div className="page-header-spacer" />
         </header>
-        <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+        <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column", minHeight: 0 }}>
           {part === "A" ? (
             <SlideViewerA
               key={disasterId}

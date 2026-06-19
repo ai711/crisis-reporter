@@ -105,3 +105,15 @@ export const toTitleCase = (s: string | null | undefined): string => {
   if (!s) return "—";
   return s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 };
+
+const _countryNames = new Intl.DisplayNames(["en"], { type: "region" });
+
+export const countryCodeToName = (code: string | null | undefined): string => {
+  if (!code) return "—";
+  const upper = code.toUpperCase();
+  try {
+    return _countryNames.of(upper) ?? upper;
+  } catch {
+    return upper;
+  }
+};
