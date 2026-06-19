@@ -96,6 +96,10 @@ class Settings(BaseSettings):
     # Auth cookies — set COOKIE_SECURE=false in local dev (.env) when running
     # over plain HTTP; always True in production (Railway HTTPS).
     COOKIE_SECURE: bool = True
+    # SameSite policy — must be "none" in production when the frontend and backend
+    # are on different Railway domains (cross-origin). "none" requires COOKIE_SECURE=true.
+    # Set COOKIE_SAMESITE=none in Railway env vars; leave as "lax" for local dev.
+    COOKIE_SAMESITE: str = "lax"
 
     # CORS — origins allowed to call the API
     ALLOWED_ORIGINS: list[str] = [
