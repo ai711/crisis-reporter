@@ -45,7 +45,7 @@ api.interceptors.request.use(
 
 let isRefreshing = false;
 let failedQueue: Array<{
-  resolve: () => void;
+  resolve: (value?: unknown) => void;
   reject: (error: unknown) => void;
 }> = [];
 
