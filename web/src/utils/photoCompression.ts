@@ -63,7 +63,7 @@ export async function compressPhoto(file: File): Promise<CompressionResult> {
   }
 
   // Target: ~1 MB for 1.5–8 MB files, ~1.5 MB for files above 8 MB
-  const targetQuality = file.size > 8 * 1024 * 1024 ? 0.88 : 0.82;
+  const targetQuality = 0.82;
 
   try {
     const source = await loadImageSource(file);

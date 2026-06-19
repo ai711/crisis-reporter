@@ -437,6 +437,12 @@ export interface ReviewQueueCounts {
   tab4_count: number;
 }
 
+export interface TriggeredRule {
+  rule_id: string; // "1a" | "1b" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9"
+  reason: string;
+  metadata: Record<string, unknown> | null;
+}
+
 export interface Tab1Row {
   report_id: string;
   serial_number?: number | null;
@@ -446,6 +452,7 @@ export interface Tab1Row {
   infrastructure_types: string[];
   crisis_type: string | null;
   flag_reasons: string[];
+  triggered_rules: TriggeredRule[];
   reporter_id: string;
   reporter_display_id: string;
   time_in_queue: number; // seconds

@@ -256,17 +256,24 @@ Token refresh MUST happen silently at the HTTP client layer (axios interceptor).
 - `discarded` → manually marked as spam/invalid; permanently excluded from map, exports, and statistics; hidden from Reports list by default (must explicitly select Discarded filter to see); never deleted from the database
 
 ### Auto-Flagging Order
-Runs in `backend/app/services/auto_flagging.py` as a FastAPI `BackgroundTask` (not ARQ) immediately after every report submission. Rules are evaluated in order; the first match that sets the flag to Red stops further evaluation. Thresholds are configurable at runtime via `PATCH /api/flag-rules`.
+Runs in `backend/app/services/auto_flagging.py` as a FastAPI `BackgroundTask` (not ARQ) immediately after every report submission. **All 9 rules run regardless of earlier triggers.** Every rule that fires appends an entry to `triggered_rules`. A single `FlagEvent` is written at the end with the full list in `flag_metadata["triggered_rules"]`. The review queue popup displays all triggered rules with contextual links (matched reporter profiles, duplicate reports). Thresholds are configurable at runtime via `PATCH /api/flag-rules`.
 
-1. **Blocked device ID** → Red — reporter's `device_id_hash` matches a manually-blocked reporter profile; also auto-blocks the submitting reporter with a pending confirmation window
-2. **IP blocked reporter match** → Red — ⚠️ **DISABLED**: requires `ip_address_hash` column on `Reporter` model which does not yet exist; TODO tracked in repo issues
-3. **No photo** → Red — report has zero photos attached (with a 20-second grace window for slow uploads on non-queued reports)
-4. **No location** → Red — report has neither GPS coordinates nor a text address
-5. **Coordinated GPS duplicate** → Red — a *different* reporter submitted from within ~100 m (configurable via `duplicate_radius_degrees`) in the last 24 h (configurable via `duplicate_window_hours`)
-6. **Rapid submission** → Red + 24 h device pause — same reporter submitted ≥ 5 reports (configurable via `rapid_submission_count`) in the last 1 h (configurable via `rapid_submission_window_hours`); also applies a 24-hour submission pause to that reporter profile
-7. **IP country mismatch** → Red — submission IP geolocates to a different country than the reporter's selected country; only runs when `ip_address_encrypted` is set; stores `submission_ip`, `geolocated_country`, `reporter_selected_country` in flag metadata for reviewer context; VPN usage may produce false positives
-8. **Same IP, multiple device IDs** → Red — ≥ `SAME_IP_DEVICE_THRESHOLD` distinct reporter IDs submitted from the same IP hash in the last 24 h; stores `other_reporter_ids` list in flag metadata so reviewers can assess coordinated spam vs. legitimate shared network
-9. **Duplicate image** → Red — a photo attached to this report has the same SHA-256 hash as a photo on a previous report; stores `matching_report_id` and `matching_report_serial_number` in flag metadata for reviewer comparison
+**`triggered_rules` entry structure:**
+```json
+{"rule_id": "1b", "reason": "blocked_device", "metadata": {"matched_blocked_reporter_id": "...", ...}}
+```
+
+1. **Blocked device ID** — Two sub-rules both evaluated:
+   - **1a** `reporter_blocked`: reporter's own profile is directly marked `is_blocked=True`
+   - **1b** `blocked_device`: reporter's `device_id_hash` matches another manually-blocked profile; also auto-blocks the submitting reporter with a pending confirmation window (side effect always fires)
+2. **IP blocked reporter match** `blocked_ip` — submission IP hash matches a blocked reporter's stored IP hash; fully active (`Reporter.ip_address_hash` column exists and is migrated)
+3. **No photo** `no_photos` — report has zero photos (with a 20-second grace window for slow uploads on non-queued reports)
+4. **No location** `no_location` — report has neither GPS coordinates nor a text address
+5. **Coordinated GPS duplicate** `coordinated_gps_duplicate` — **DISABLED by default** (`gps_duplicate_enabled: false` in `_thresholds`). When enabled: a *different* reporter submitted from within ~100 m (configurable via `duplicate_radius_degrees`) in the last 24 h. Disabled because legitimate reporters often report the same damaged building. Enable via `PATCH /api/flag-rules {"gps_duplicate_enabled": true}` if needed.
+6. **Rapid submission** `high_submission_rate` → also applies 24 h device pause — same reporter submitted ≥ 14 other reports (configurable via `rapid_submission_count`, triggers on the 15th) in the last 1 h (configurable via `rapid_submission_window_hours`); pause side effect fires unconditionally when Rule 6 triggers
+7. **IP country mismatch** `ip_country_mismatch` — submission IP geolocates to a different country than the reporter's selected country; uses Redis-cached geolocation (24h TTL per IP hash) to stay within ip-api.com's 45 req/min free-tier limit; logs `WARNING` when throttled/unavailable so ops can monitor; VPN usage produces false positives
+8. **Same IP, multiple device IDs** `same_ip_multiple_devices` — ≥ `SAME_IP_DEVICE_THRESHOLD` distinct reporter IDs from the same IP hash in the last 24 h; metadata includes `other_reporters` list with `{id, display_id}` so reviewers can click through to each profile
+9. **Duplicate image** `duplicate_image` — a photo on this report has the same SHA-256 hash as a photo on a previous report; metadata includes `matching_report_id` and `matching_report_serial_number` for reviewer cross-reference
 10. **All pass** → Green — report appears on the map immediately and is included in all exports
 
 **Property creation** — when a report reaches Green or Orange (either automatically or via manual approval), `get_or_create_property` runs in a separate session to create or update the property record and set `report.property_id`. This links the report to its Location Page.

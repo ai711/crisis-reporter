@@ -27,10 +27,13 @@ class FlagRulesResponse(BaseModel):
         description="Time window (hours) for duplicate detection"
     )
     rapid_submission_count: int = Field(
-        description="Maximum reports a reporter may submit within the rapid window before a red flag"
+        description="Reports-in-window threshold; triggers on the (count+1)th submission"
     )
     rapid_submission_window_hours: int = Field(
         description="Time window (hours) for rapid submission detection"
+    )
+    gps_duplicate_enabled: bool = Field(
+        description="Rule 5 — GPS duplicate check (disabled by default; legitimate reporters often report the same location)"
     )
 
 
@@ -50,6 +53,10 @@ class FlagRulesUpdate(BaseModel):
     rapid_submission_window_hours: Optional[int] = Field(
         default=None, gt=0,
         description="New rapid submission window in hours"
+    )
+    gps_duplicate_enabled: Optional[bool] = Field(
+        default=None,
+        description="Enable or disable Rule 5 (GPS duplicate detection)"
     )
 
 

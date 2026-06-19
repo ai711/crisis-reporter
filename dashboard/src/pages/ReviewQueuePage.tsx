@@ -34,6 +34,7 @@ import type {
   Tab3Row,
   Tab4Row,
   ReviewQueueListResponse,
+  TriggeredRule,
 } from "../types";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
@@ -45,15 +46,16 @@ const GREEN = "var(--c-flag-green)";
 const PAGE_SIZE = 25;
 
 const FLAG_REASON_LABELS: Record<string, string> = {
+  reporter_blocked:           "Blocked Reporter",
+  blocked_device:             "Blocked Device",
+  blocked_ip:                 "Blocked IP",
+  no_photos:                  "No Photos",
+  no_location:                "No Location",
+  coordinated_gps_duplicate:  "GPS Duplicate",
+  high_submission_rate:       "High Submission Rate",
   ip_country_mismatch:        "IP Country Mismatch",
   same_ip_multiple_devices:   "Multi-Device IP",
   duplicate_image:            "Duplicate Image",
-  coordinated_gps_duplicate:  "GPS Duplicate",
-  high_submission_rate:       "High Rate",
-  no_photos:                  "No Photos",
-  no_location:                "No Location",
-  blocked_device:             "Blocked Device",
-  blocked_ip:                 "Blocked IP",
   duplicate_submission:       "Duplicate",
 };
 
@@ -456,6 +458,131 @@ function ForceResolutionModal({
   );
 }
 
+// ── RuleMetadataDetail ────────────────────────────────────────────────────────
+// Renders rule-specific contextual data (links to matched reporters/reports)
+// inside the Flag Reasons section of the review modal.
+
+function RuleMetadataDetail({ rule }: { rule: TriggeredRule }) {
+  const meta = rule.metadata;
+  if (!meta) return null;
+
+  const detailStyle: React.CSSProperties = {
+    fontSize: 12,
+    color: "var(--c-text-secondary)",
+    marginTop: 5,
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    flexWrap: "wrap",
+  };
+
+  if (rule.rule_id === "1b" && meta.matched_blocked_reporter_id) {
+    return (
+      <div style={detailStyle}>
+        <span>Matched blocked profile:</span>
+        <button
+          style={s.linkBtn}
+          onClick={() => window.open("/reporters/" + String(meta.matched_blocked_reporter_id), "_blank")}
+        >
+          View profile →
+        </button>
+      </div>
+    );
+  }
+
+  if (rule.rule_id === "2" && meta.matched_blocked_reporter_id) {
+    return (
+      <div style={detailStyle}>
+        <span>Submission IP matches blocked profile:</span>
+        <button
+          style={s.linkBtn}
+          onClick={() => window.open("/reporters/" + String(meta.matched_blocked_reporter_id), "_blank")}
+        >
+          View profile →
+        </button>
+      </div>
+    );
+  }
+
+  if (rule.rule_id === "5" && meta.matching_report_serial_number != null) {
+    return (
+      <div style={detailStyle}>
+        <span>Same location as:</span>
+        <button
+          style={s.linkBtn}
+          onClick={() => window.open("/reports/" + String(meta.matching_report_id), "_blank")}
+        >
+          #{String(meta.matching_report_serial_number)} →
+        </button>
+      </div>
+    );
+  }
+
+  if (rule.rule_id === "6" && meta.count_in_window != null) {
+    return (
+      <div style={detailStyle}>
+        <span>
+          {Number(meta.count_in_window)} submissions in{" "}
+          {Number(meta.window_hours)}h (threshold: {Number(meta.threshold)})
+        </span>
+      </div>
+    );
+  }
+
+  if (rule.rule_id === "7" && meta.geolocated_country) {
+    return (
+      <div style={detailStyle}>
+        <span>
+          IP geolocated to{" "}
+          <strong style={{ color: "var(--c-text-primary)" }}>
+            {String(meta.geolocated_country)}
+          </strong>
+          , reporter registered as{" "}
+          <strong style={{ color: "var(--c-text-primary)" }}>
+            {String(meta.reporter_selected_country)}
+          </strong>
+        </span>
+      </div>
+    );
+  }
+
+  if (rule.rule_id === "8" && Array.isArray(meta.other_reporters)) {
+    const reporters = meta.other_reporters as Array<{ id: string; display_id: string | null }>;
+    return (
+      <div style={detailStyle}>
+        <span>{Number(meta.device_count)} devices from same IP in 24h:</span>
+        {reporters.map((r, i) => (
+          <span key={r.id}>
+            {i > 0 && <span style={{ color: "var(--c-text-muted)" }}>, </span>}
+            <button
+              style={s.linkBtn}
+              onClick={() => window.open("/reporters/" + r.id, "_blank")}
+            >
+              #{r.display_id ?? r.id.slice(0, 8)}
+            </button>
+          </span>
+        ))}
+      </div>
+    );
+  }
+
+  if (rule.rule_id === "9" && meta.matching_report_serial_number != null) {
+    return (
+      <div style={detailStyle}>
+        <span>Duplicate image from report:</span>
+        <button
+          style={s.linkBtn}
+          onClick={() => window.open("/reports/" + String(meta.matching_report_id), "_blank")}
+        >
+          #{String(meta.matching_report_serial_number)} →
+        </button>
+      </div>
+    );
+  }
+
+  return null;
+}
+
 // ── Tab1ReviewModal ────────────────────────────────────────────────────────────
 
 interface Tab1ReviewModalProps {
@@ -468,8 +595,17 @@ function Tab1ReviewModal({ row, onClose, onSuccess }: Tab1ReviewModalProps) {
   const qc = useQueryClient();
   const [comment, setComment] = useState("");
   const [flagAssessments, setFlagAssessments] = useState<
-    Array<{ reason: string; dismissed: boolean }>
-  >(() => row.flag_reasons.map((r) => ({ reason: r, dismissed: false })));
+    Array<{ rule_id: string; reason: string; dismissed: boolean }>
+  >(() => {
+    if (row.triggered_rules.length > 0) {
+      return row.triggered_rules.map((r) => ({
+        rule_id: r.rule_id,
+        reason: r.reason,
+        dismissed: false,
+      }));
+    }
+    return row.flag_reasons.map((r) => ({ rule_id: "unknown", reason: r, dismissed: false }));
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -491,9 +627,13 @@ function Tab1ReviewModal({ row, onClose, onSuccess }: Tab1ReviewModalProps) {
     }
   }
 
-  function toggleDismissed(reason: string) {
+  function toggleDismissed(ruleId: string, reason: string) {
     setFlagAssessments((prev) =>
-      prev.map((a) => (a.reason === reason ? { ...a, dismissed: !a.dismissed } : a))
+      prev.map((a) =>
+        a.rule_id === ruleId && a.reason === reason
+          ? { ...a, dismissed: !a.dismissed }
+          : a
+      )
     );
   }
 
@@ -597,52 +737,77 @@ function Tab1ReviewModal({ row, onClose, onSuccess }: Tab1ReviewModalProps) {
           {/* Flag Reasons */}
           <div style={rms.section}>
             <div style={rms.sectionHeader}>
-              <span style={rms.sectionTitle}>Flag Reasons</span>
+              <span style={rms.sectionTitle}>
+                Flag Reasons
+                {flagAssessments.length > 1 && (
+                  <span style={{
+                    marginLeft: 8,
+                    fontSize: 11,
+                    fontWeight: 700,
+                    background: "var(--c-flag-red)",
+                    color: "#fff",
+                    borderRadius: 10,
+                    padding: "1px 7px",
+                  }}>
+                    {flagAssessments.length}
+                  </span>
+                )}
+              </span>
               <span style={rms.sectionHint}>
-                Check "Dismiss" next to any reason you believe is a false positive
+                Check "False positive" next to any reason you believe is incorrect
               </span>
             </div>
             <div style={rms.reasonsList}>
-              {flagAssessments.map((a) => (
-                <label
-                  key={a.reason}
-                  style={{
-                    ...rms.reasonRow,
-                    opacity: a.dismissed ? 0.6 : 1,
-                    background: a.dismissed
-                      ? "var(--c-surface-lowest)"
-                      : "var(--c-surface-low)",
-                  }}
-                >
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <span style={s.flagPill}>
-                      <AlertTriangle size={10} />
-                      {flagReasonLabel(a.reason)}
-                    </span>
-                    {a.dismissed && (
-                      <span style={rms.dismissedTag}>✓ dismissed</span>
-                    )}
+              {flagAssessments.map((a) => {
+                const matchedRule = row.triggered_rules.find(
+                  (r) => r.rule_id === a.rule_id && r.reason === a.reason
+                );
+                return (
+                  <div
+                    key={`${a.rule_id}-${a.reason}`}
+                    style={{
+                      ...rms.reasonRow,
+                      alignItems: "flex-start",
+                      cursor: "default",
+                      opacity: a.dismissed ? 0.6 : 1,
+                      background: a.dismissed
+                        ? "var(--c-surface-lowest)"
+                        : "var(--c-surface-low)",
+                    }}
+                  >
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <span style={s.flagPill}>
+                          <AlertTriangle size={10} />
+                          {flagReasonLabel(a.reason)}
+                        </span>
+                        {a.dismissed && (
+                          <span style={rms.dismissedTag}>✓ dismissed</span>
+                        )}
+                      </div>
+                      {matchedRule && <RuleMetadataDetail rule={matchedRule} />}
+                    </div>
+                    <label style={{ ...rms.dismissToggle, cursor: "pointer", flexShrink: 0 }}>
+                      <input
+                        type="checkbox"
+                        checked={a.dismissed}
+                        onChange={() => toggleDismissed(a.rule_id, a.reason)}
+                        style={{ accentColor: "#16A34A", cursor: "pointer" }}
+                      />
+                      <span
+                        style={{
+                          fontSize: 12,
+                          color: a.dismissed ? "#16A34A" : "var(--c-text-muted)",
+                          fontWeight: a.dismissed ? 600 : 400,
+                          userSelect: "none",
+                        }}
+                      >
+                        False positive
+                      </span>
+                    </label>
                   </div>
-                  <div style={rms.dismissToggle}>
-                    <input
-                      type="checkbox"
-                      checked={a.dismissed}
-                      onChange={() => toggleDismissed(a.reason)}
-                      style={{ accentColor: "#16A34A", cursor: "pointer" }}
-                    />
-                    <span
-                      style={{
-                        fontSize: 12,
-                        color: a.dismissed ? "#16A34A" : "var(--c-text-muted)",
-                        fontWeight: a.dismissed ? 600 : 400,
-                        userSelect: "none",
-                      }}
-                    >
-                      False positive
-                    </span>
-                  </div>
-                </label>
-              ))}
+                );
+              })}
             </div>
           </div>
 

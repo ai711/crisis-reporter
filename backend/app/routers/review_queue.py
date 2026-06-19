@@ -316,25 +316,46 @@ async def get_tab1(
     if has_more:
         rows = rows[:limit]
 
-    # Batch-fetch flag reasons for all report IDs
+    # Batch-fetch flag events — extract triggered_rules (new format) or
+    # raw reason text (legacy format) for each report.
     if rows:
         report_ids = [str(r[0].id) for r in rows]
-        reasons_result = await db.execute(
-            select(FlagEvent.report_id, FlagEvent.reason)
+        events_result = await db.execute(
+            select(
+                FlagEvent.report_id,
+                FlagEvent.reason,
+                FlagEvent.flag_metadata,
+                FlagEvent.changed_by,
+            )
             .where(
                 and_(
                     FlagEvent.report_id.in_([uuid.UUID(rid) for rid in report_ids]),
                     FlagEvent.flag_to == "red",
-                    FlagEvent.reason.isnot(None),
                 )
             )
+            .order_by(FlagEvent.created_at.desc())
         )
         flag_reasons_map: dict[str, list[str]] = {}
-        for report_id, reason in reasons_result.all():
-            key = str(report_id)
-            flag_reasons_map.setdefault(key, []).append(reason)
+        triggered_rules_map: dict[str, list[dict]] = {}
+
+        for report_id_val, reason, metadata, changed_by in events_result.all():
+            key = str(report_id_val)
+            # New format: auto-flag event with triggered_rules list in metadata
+            if (
+                changed_by == "auto"
+                and metadata
+                and "triggered_rules" in metadata
+                and key not in triggered_rules_map
+            ):
+                rules: list[dict] = metadata["triggered_rules"]
+                triggered_rules_map[key] = rules
+                flag_reasons_map[key] = [r.get("reason", "") for r in rules if r.get("reason")]
+            elif reason and key not in triggered_rules_map:
+                # Legacy event without triggered_rules structure
+                flag_reasons_map.setdefault(key, []).append(reason)
     else:
         flag_reasons_map = {}
+        triggered_rules_map = {}
 
     # Also filter by flag_reason if provided (post-fetch since it's in metadata)
     items = []
@@ -359,6 +380,7 @@ async def get_tab1(
             "infrastructure_types": infra_types,
             "crisis_type": report.disaster_type,
             "flag_reasons": reasons,
+            "triggered_rules": triggered_rules_map.get(rid, []),
             "reporter_id": str(report.reporter_id) if report.reporter_id else None,
             "reporter_display_id": reporter_display_id,
             "time_in_queue": max(0, time_in_queue),

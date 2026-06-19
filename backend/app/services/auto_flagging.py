@@ -1,9 +1,10 @@
 """Auto-flagging service.
 
 Runs as a FastAPI BackgroundTask after every report submission.
-Evaluates the new report against ordered rules and transitions its
-flag from grey to green (pass) or red (fail), then writes a FlagEvent
-and publishes an SSE flag_changed event to the dashboard.
+Evaluates the new report against ALL ordered rules regardless of earlier
+triggers. Every rule that fires appends an entry to `triggered_rules`.
+A single FlagEvent is written at the end with the full list stored in
+flag_metadata["triggered_rules"].
 
 Thresholds are held in a module-level dict and can be updated at
 runtime via the /api/flag-rules PATCH endpoint without a restart.
@@ -13,7 +14,7 @@ import asyncio
 import ipaddress
 import logging
 from datetime import datetime, timezone, timedelta
-from sqlalchemy import select, func, and_, or_
+from sqlalchemy import select, func, and_
 
 from app.database import AsyncSessionLocal
 
@@ -24,8 +25,9 @@ log = logging.getLogger(__name__)
 _thresholds: dict = {
     "duplicate_radius_degrees": 0.001,   # ~100 m at equator
     "duplicate_window_hours": 24,
-    "rapid_submission_count": 5,
+    "rapid_submission_count": 14,        # triggers on the 15th submission
     "rapid_submission_window_hours": 1,
+    "gps_duplicate_enabled": False,      # Rule 5 disabled by default (see notes)
 }
 
 
@@ -33,14 +35,14 @@ def get_thresholds() -> dict:
     return dict(_thresholds)
 
 
-def update_thresholds(**kwargs: float | int) -> None:
+def update_thresholds(**kwargs) -> None:
     valid = set(_thresholds.keys())
     for key, value in kwargs.items():
         if key in valid:
             _thresholds[key] = value
 
 
-# ── IP geolocation helper ─────────────────────────────────────────────────────
+# ── IP geolocation helpers ────────────────────────────────────────────────────
 
 async def _geolocate_ip(ip: str) -> str | None:
     """Return ISO country code for a public IP, or None if unavailable."""
@@ -60,6 +62,54 @@ async def _geolocate_ip(ip: str) -> str | None:
     except Exception:
         pass
     return None
+
+
+_geo_redis_client = None
+
+
+async def _get_geo_redis():
+    """Lazy-init a shared Redis client for the IP geolocation cache."""
+    global _geo_redis_client
+    if _geo_redis_client is None:
+        try:
+            import redis.asyncio as aioredis
+            from app.config import settings as _s
+            _geo_redis_client = aioredis.from_url(_s.REDIS_URL, decode_responses=True)
+        except Exception:
+            pass
+    return _geo_redis_client
+
+
+async def _geolocate_ip_cached(ip: str, ip_hash: str) -> str | None:
+    """Geolocate an IP with Redis caching (24h TTL keyed by ip_hash).
+
+    Cache hit → no external call.
+    Cache miss → calls ip-api.com (45 req/min free tier), stores result.
+    Returns ISO country code or None.
+    """
+    _CACHE_KEY = f"geo:{ip_hash}"
+    _CACHE_TTL = 86400   # 24 hours
+    _NONE_SENTINEL = "_none_"
+
+    try:
+        rc = await _get_geo_redis()
+        if rc:
+            cached = await rc.get(_CACHE_KEY)
+            if cached is not None:
+                return None if cached == _NONE_SENTINEL else cached
+    except Exception:
+        pass
+
+    result = await _geolocate_ip(ip)
+
+    try:
+        rc = await _get_geo_redis()
+        if rc:
+            await rc.setex(_CACHE_KEY, _CACHE_TTL, result or _NONE_SENTINEL)
+    except Exception:
+        pass
+
+    return result
 
 
 # ── Real-time project linking ────────────────────────────────────────────────
@@ -108,8 +158,14 @@ async def _link_report_to_projects(db, report) -> None:
 # ── Background task entry point ───────────────────────────────────────────────
 
 async def auto_flag_report(report_id: str, delay: int = 10) -> None:
-    """Evaluate flagging rules for *report_id* and persist the result.
-    delay=0 when called from the stuck-report monitor (report already committed)."""
+    """Evaluate all flagging rules for *report_id* and persist the result.
+
+    All 9 rules run regardless of earlier triggers. Every rule that fires
+    appends an entry to triggered_rules. A single FlagEvent is written with
+    the full list in flag_metadata["triggered_rules"].
+
+    delay=0 when called from the stuck-report monitor (report already committed).
+    """
     if delay > 0:
         await asyncio.sleep(delay)
 
@@ -127,76 +183,91 @@ async def auto_flag_report(report_id: str, delay: int = 10) -> None:
                 log.warning("auto_flag_report: report %s not found", report_id)
                 return
 
-            new_flag = "green"
-            flag_reason: str | None = None
-            flag_metadata: dict | None = None
+            # Accumulates every rule that fires this run
+            triggered_rules: list[dict] = []
 
-            # ── Rule 1: Blocked device ID match ───────────────────────────────
-            # If the reporter's device_id_hash matches any manually-blocked reporter,
-            # auto-block this reporter and flag the report Red immediately.
-            if new_flag == "green" and report.reporter_id:
+            # Fetch submitting reporter once — reused across Rules 1, 6, 7
+            current_reporter = None
+            if report.reporter_id:
                 rep_result = await db.execute(
                     select(Reporter).where(Reporter.id == report.reporter_id)
                 )
                 current_reporter = rep_result.scalar_one_or_none()
-                if current_reporter and current_reporter.device_id_hash:
-                    # Also flag if the submitting reporter is themselves blocked
-                    if current_reporter.is_blocked and new_flag != "red":
-                        new_flag = "red"
-                        flag_reason = "reporter_blocked"
-                    blocked_match_result = await db.execute(
-                        select(Reporter).where(
-                            and_(
-                                Reporter.device_id_hash == current_reporter.device_id_hash,
-                                Reporter.is_blocked == True,
-                                Reporter.id != current_reporter.id,
-                            )
-                        ).limit(1)
-                    )
-                    matched_blocked = blocked_match_result.scalar_one_or_none()
-                    if matched_blocked:
-                        new_flag = "red"
-                        flag_reason = "Device ID matches a blocked reporter profile"
-                        flag_metadata = {
+
+            # ── Rule 1: Blocked device ID ─────────────────────────────────────
+            # 1a: reporter is themselves directly blocked
+            # 1b: device ID matches another blocked reporter → auto-block pending
+            if current_reporter and current_reporter.device_id_hash:
+                if current_reporter.is_blocked:
+                    triggered_rules.append({
+                        "rule_id": "1a",
+                        "reason": "reporter_blocked",
+                        "metadata": None,
+                    })
+
+                blocked_match_result = await db.execute(
+                    select(Reporter).where(
+                        and_(
+                            Reporter.device_id_hash == current_reporter.device_id_hash,
+                            Reporter.is_blocked == True,
+                            Reporter.id != current_reporter.id,
+                        )
+                    ).limit(1)
+                )
+                matched_blocked = blocked_match_result.scalar_one_or_none()
+                if matched_blocked:
+                    triggered_rules.append({
+                        "rule_id": "1b",
+                        "reason": "blocked_device",
+                        "metadata": {
                             "matched_blocked_reporter_id": str(matched_blocked.id),
                             "device_id_hash": current_reporter.device_id_hash,
-                        }
-                        current_reporter.is_blocked = True
-                        current_reporter.profile_status = "blocked"
-                        current_reporter.auto_blocked_at = datetime.now(timezone.utc)
-                        current_reporter.auto_block_expires_at = (
-                            datetime.now(timezone.utc)
-                            + timedelta(hours=settings.AUTO_BLOCK_CONFIRMATION_HOURS)
+                        },
+                    })
+                    # Side effect: auto-block submitting reporter (pending staff confirmation)
+                    current_reporter.is_blocked = True
+                    current_reporter.profile_status = "blocked"
+                    current_reporter.auto_blocked_at = datetime.now(timezone.utc)
+                    current_reporter.auto_block_expires_at = (
+                        datetime.now(timezone.utc)
+                        + timedelta(hours=settings.AUTO_BLOCK_CONFIRMATION_HOURS)
+                    )
+                    current_reporter.pending_auto_block_confirmation = True
+                    current_reporter.matched_blocked_reporter_id = str(matched_blocked.id)
+                    current_reporter.auto_block_confirmed = False
+                    db.add(current_reporter)
+                    matched_display = (
+                        str(matched_blocked.display_id)
+                        if matched_blocked.display_id
+                        else str(matched_blocked.id)
+                    )
+                    try:
+                        from app.services.reporter_activity_service import write_activity_log
+                        await write_activity_log(
+                            db,
+                            reporter_id=current_reporter.id,
+                            action="auto_blocked",
+                            source="System",
+                            previous_value="active",
+                            new_value="blocked",
+                            matched_reporter_id=matched_display,
+                            comment=(
+                                f"Automatically blocked — device ID matches manually "
+                                f"blocked profile {matched_display}"
+                            ),
                         )
-                        current_reporter.pending_auto_block_confirmation = True
-                        current_reporter.matched_blocked_reporter_id = str(matched_blocked.id)
-                        current_reporter.auto_block_confirmed = False
-                        db.add(current_reporter)
-                        matched_display = str(matched_blocked.display_id) if matched_blocked.display_id else str(matched_blocked.id)
-                        try:
-                            from app.services.reporter_activity_service import write_activity_log
-                            await write_activity_log(
-                                db,
-                                reporter_id=current_reporter.id,
-                                action="auto_blocked",
-                                source="System",
-                                previous_value="active",
-                                new_value="blocked",
-                                matched_reporter_id=matched_display,
-                                comment=f"Automatically blocked — device ID matches manually blocked profile {matched_display}",
-                            )
-                        except Exception:
-                            log.exception("auto_flag_report: activity log write failed for auto_blocked %s", current_reporter.id)
-                        log.info(
-                            "auto_flag_report: reporter %s auto-blocked — device_id matches blocked reporter %s",
-                            current_reporter.id, matched_blocked.id,
+                    except Exception:
+                        log.exception(
+                            "auto_flag_report: activity log failed for auto_blocked %s",
+                            current_reporter.id,
                         )
+                    log.info(
+                        "auto_flag_report: reporter %s auto-blocked — device_id matches %s",
+                        current_reporter.id, matched_blocked.id,
+                    )
 
-            # ── Rule 2: IP blocked reporter match ────────────────────────────
-            # Check if the submission IP hash matches any blocked reporter's stored IP hash.
-            # reporter.ip_address_hash is updated on every submission in reports.py,
-            # so it reflects their most-recent IP rather than only the first one.
-            if new_flag == "green" and report.ip_address_hash:
+            # ── Rule 2: IP matches a blocked reporter ─────────────────────────
+            if report.ip_address_hash:
                 blocked_ip_result = await db.execute(
                     select(Reporter).where(
                         and_(
@@ -208,18 +279,21 @@ async def auto_flag_report(report_id: str, delay: int = 10) -> None:
                 )
                 matched_ip_blocked = blocked_ip_result.scalar_one_or_none()
                 if matched_ip_blocked:
-                    new_flag = "red"
-                    flag_reason = "Submission IP matches a blocked reporter"
-                    flag_metadata = {
-                        "matched_blocked_reporter_id": str(matched_ip_blocked.id),
-                        "ip_address_hash": report.ip_address_hash,
-                    }
+                    triggered_rules.append({
+                        "rule_id": "2",
+                        "reason": "blocked_ip",
+                        "metadata": {
+                            "matched_blocked_reporter_id": str(matched_ip_blocked.id),
+                            "ip_address_hash": report.ip_address_hash,
+                        },
+                    })
                     log.info(
-                        "auto_flag_report: report %s flagged Red — IP hash matches blocked reporter %s",
+                        "auto_flag_report: report %s — IP hash matches blocked reporter %s",
                         report_id, matched_ip_blocked.id,
                     )
 
-            # ── Rule 3: Photo validation ──────────────────────────────────────
+            # ── Rule 3: No photos ─────────────────────────────────────────────
+            # Grace window: wait up to 20 s for slow photo uploads on new reports.
             async def _photo_count() -> int:
                 r = await db.execute(
                     select(func.count(Photo.id)).where(Photo.report_id == report.id)
@@ -233,28 +307,38 @@ async def auto_flag_report(report_id: str, delay: int = 10) -> None:
                     await asyncio.sleep(20)
                     photo_count = await _photo_count()
                 if photo_count == 0:
-                    new_flag = "red"
-                    flag_reason = "No photos attached"
+                    triggered_rules.append({
+                        "rule_id": "3",
+                        "reason": "no_photos",
+                        "metadata": None,
+                    })
 
-            # ── Rule 4: Location validation ───────────────────────────────────
-            if new_flag == "green":
-                has_gps = report.gps_latitude is not None and report.gps_longitude is not None
-                has_address = bool(report.location_address and report.location_address.strip())
-                if not has_gps and not has_address:
-                    new_flag = "red"
-                    flag_reason = "No location provided"
+            # ── Rule 4: No location ───────────────────────────────────────────
+            has_gps = report.gps_latitude is not None and report.gps_longitude is not None
+            has_address = bool(report.location_address and report.location_address.strip())
+            if not has_gps and not has_address:
+                triggered_rules.append({
+                    "rule_id": "4",
+                    "reason": "no_location",
+                    "metadata": None,
+                })
 
-            # ── Rule 5: Coordinated spam detection ────────────────────────────
+            # ── Rule 5: Coordinated GPS duplicate (disabled by default) ───────
+            # Disabled because legitimate reporters often submit from the same
+            # damaged location, which would trigger false positives. Enable via
+            # PATCH /api/flag-rules {"gps_duplicate_enabled": true} if needed.
             if (
-                new_flag == "green"
+                _thresholds.get("gps_duplicate_enabled", False)
                 and report.reporter_id is not None
                 and report.gps_latitude is not None
                 and report.gps_longitude is not None
             ):
                 radius = _thresholds["duplicate_radius_degrees"]
-                dup_window = datetime.now(timezone.utc) - timedelta(hours=_thresholds["duplicate_window_hours"])
-                dup_result = await db.execute(
-                    select(func.count(Report.id)).where(and_(
+                dup_window = datetime.now(timezone.utc) - timedelta(
+                    hours=_thresholds["duplicate_window_hours"]
+                )
+                dup_row_result = await db.execute(
+                    select(Report.id, Report.serial_number).where(and_(
                         Report.reporter_id != report.reporter_id,
                         Report.crisis_id == report.crisis_id,
                         Report.id != report.id,
@@ -265,14 +349,23 @@ async def auto_flag_report(report_id: str, delay: int = 10) -> None:
                         Report.gps_longitude.between(
                             report.gps_longitude - radius, report.gps_longitude + radius
                         ),
-                    ))
+                    )).limit(1)
                 )
-                if (dup_result.scalar() or 0) > 0:
-                    new_flag = "red"
-                    flag_reason = "Possible coordinated duplicate — different reporter, same location"
+                dup_row = dup_row_result.first()
+                if dup_row:
+                    triggered_rules.append({
+                        "rule_id": "5",
+                        "reason": "coordinated_gps_duplicate",
+                        "metadata": {
+                            "matching_report_id": str(dup_row[0]),
+                            "matching_report_serial_number": dup_row[1],
+                        },
+                    })
 
-            # ── Rule 6: Rapid submission detection ────────────────────────────
-            if new_flag == "green" and report.reporter_id is not None:
+            # ── Rule 6: Rapid submission ──────────────────────────────────────
+            # Triggers on the (rapid_submission_count + 1)th submission in the window.
+            # Side effect: 24-hour submission pause on the reporter.
+            if report.reporter_id is not None:
                 rapid_window = datetime.now(timezone.utc) - timedelta(
                     hours=_thresholds["rapid_submission_window_hours"]
                 )
@@ -283,15 +376,25 @@ async def auto_flag_report(report_id: str, delay: int = 10) -> None:
                         Report.created_at >= rapid_window,
                     ))
                 )
-                if (rapid_result.scalar() or 0) >= _thresholds["rapid_submission_count"]:
-                    new_flag = "red"
-                    flag_reason = "High submission rate detected"
-                    # Apply 24-hour submission pause on the reporter
+                rapid_count = rapid_result.scalar() or 0
+                if rapid_count >= _thresholds["rapid_submission_count"]:
+                    triggered_rules.append({
+                        "rule_id": "6",
+                        "reason": "high_submission_rate",
+                        "metadata": {
+                            "count_in_window": rapid_count,
+                            "window_hours": _thresholds["rapid_submission_window_hours"],
+                            "threshold": _thresholds["rapid_submission_count"],
+                        },
+                    })
+                    # Apply 24-hour submission pause
                     try:
-                        pause_rep_result = await db.execute(
-                            select(Reporter).where(Reporter.id == report.reporter_id)
-                        )
-                        pause_reporter = pause_rep_result.scalar_one_or_none()
+                        pause_reporter = current_reporter
+                        if pause_reporter is None:
+                            pause_rep_result = await db.execute(
+                                select(Reporter).where(Reporter.id == report.reporter_id)
+                            )
+                            pause_reporter = pause_rep_result.scalar_one_or_none()
                         if pause_reporter and not pause_reporter.is_paused:
                             pause_expires = datetime.now(timezone.utc) + timedelta(hours=24)
                             pause_reporter.is_paused = True
@@ -325,48 +428,53 @@ async def auto_flag_report(report_id: str, delay: int = 10) -> None:
                                     f"in {int(_thresholds['rapid_submission_window_hours'])} hour(s).",
                                 )
                             except Exception:
-                                log.exception("auto_flag_report: reporter_auto_paused notification failed")
+                                log.exception(
+                                    "auto_flag_report: reporter_auto_paused notification failed"
+                                )
                     except Exception:
-                        log.exception("auto_flag_report: pause apply failed for reporter %s", report.reporter_id)
+                        log.exception(
+                            "auto_flag_report: pause apply failed for reporter %s",
+                            report.reporter_id,
+                        )
 
-            # ── Rule 7: IP country mismatch ──────────────────────────────────
-            if new_flag == "green" and report.ip_address_hash:
+            # ── Rule 7: IP country mismatch (Redis-cached geolocation) ────────
+            # ip-api.com free tier is capped at 45 req/min. Redis caching means
+            # each unique IP is geolocated at most once per 24 hours.
+            if report.ip_address_hash:
                 try:
-                    # Decrypt the IP to geolocate it
                     import base64
                     from app.services.encryption import decrypt_field
                     raw_ip = decrypt_field(base64.b64decode(report.ip_address_encrypted))
-                    geo_country = await _geolocate_ip(raw_ip)
+                    geo_country = await _geolocate_ip_cached(raw_ip, report.ip_address_hash)
 
-                    # Reporter country comes from the linked Reporter record
-                    reporter_country: str | None = None
-                    if report.reporter_id:
-                        rep_r = await db.execute(
-                            select(Reporter).where(Reporter.id == report.reporter_id)
-                        )
-                        rep = rep_r.scalar_one_or_none()
-                        if rep:
-                            reporter_country = rep.country_code
+                    reporter_country: str | None = (
+                        current_reporter.country_code if current_reporter else None
+                    )
 
                     if (
                         geo_country
                         and reporter_country
                         and geo_country.upper() != reporter_country.upper()
                     ):
-                        new_flag = "red"
-                        flag_reason = "ip_country_mismatch"
-                        flag_metadata = {
-                            # submission_ip intentionally omitted — raw IP must not be
-                            # stored in plaintext in flag_events. The decrypted IP is
-                            # available on-demand via ReportDetail.submission_ip.
-                            "geolocated_country": geo_country,
-                            "reporter_selected_country": reporter_country,
-                        }
+                        triggered_rules.append({
+                            "rule_id": "7",
+                            "reason": "ip_country_mismatch",
+                            "metadata": {
+                                # Raw IP intentionally omitted — stored encrypted on the report.
+                                # Use ReportDetail.submission_ip for on-demand decryption.
+                                "geolocated_country": geo_country,
+                                "reporter_selected_country": reporter_country,
+                            },
+                        })
                 except Exception:
-                    log.debug("auto_flag_report: IP country check skipped for %s", report_id)
+                    log.warning(
+                        "auto_flag_report: Rule 7 (IP country) skipped for %s — "
+                        "geolocation unavailable or throttled",
+                        report_id,
+                    )
 
             # ── Rule 8: Same IP, multiple device IDs ──────────────────────────
-            if new_flag == "green" and report.ip_address_hash:
+            if report.ip_address_hash:
                 ip_window = datetime.now(timezone.utc) - timedelta(hours=24)
                 same_ip_result = await db.execute(
                     select(Report.reporter_id).where(and_(
@@ -377,48 +485,65 @@ async def auto_flag_report(report_id: str, delay: int = 10) -> None:
                         Report.reporter_id != report.reporter_id,
                     )).distinct()
                 )
-                other_reporter_ids = [str(r) for r in same_ip_result.scalars().all()]
+                other_reporter_id_list = same_ip_result.scalars().all()
 
-                if len(other_reporter_ids) >= settings.SAME_IP_DEVICE_THRESHOLD:
-                    new_flag = "red"
-                    flag_reason = "same_ip_multiple_devices"
-                    flag_metadata = {
-                        "ip_hash": report.ip_address_hash,
-                        "other_reporter_ids": other_reporter_ids,
-                        "device_count": len(other_reporter_ids) + 1,
-                        "window_hours": 24,
-                    }
-
-            # ── Rule 9: Duplicate image detection ─────────────────────────────
-            if new_flag == "green":
-                photos_r = await db.execute(
-                    select(Photo).where(Photo.report_id == report.id)
-                )
-                new_photos = photos_r.scalars().all()
-                for new_photo in new_photos:
-                    if not new_photo.photo_hash:
-                        continue
-                    dup_photo_r = await db.execute(
-                        select(Photo).where(and_(
-                            Photo.photo_hash == new_photo.photo_hash,
-                            Photo.report_id != report.id,
-                        )).limit(1)
-                    )
-                    dup_photo = dup_photo_r.scalar_one_or_none()
-                    if dup_photo:
-                        new_flag = "red"
-                        flag_reason = "duplicate_image"
-                        dup_sn_r = await db.execute(
-                            select(Report.serial_number).where(Report.id == dup_photo.report_id)
+                if len(other_reporter_id_list) >= settings.SAME_IP_DEVICE_THRESHOLD:
+                    # Enrich with display_ids so reviewers see Reporter #N links
+                    display_rows = await db.execute(
+                        select(Reporter.id, Reporter.display_id).where(
+                            Reporter.id.in_(other_reporter_id_list)
                         )
-                        flag_metadata = {
+                    )
+                    other_reporters = [
+                        {"id": str(rid), "display_id": did}
+                        for rid, did in display_rows.all()
+                    ]
+                    triggered_rules.append({
+                        "rule_id": "8",
+                        "reason": "same_ip_multiple_devices",
+                        "metadata": {
+                            "ip_hash": report.ip_address_hash,
+                            "other_reporters": other_reporters,
+                            "device_count": len(other_reporters) + 1,
+                            "window_hours": 24,
+                        },
+                    })
+
+            # ── Rule 9: Duplicate image ───────────────────────────────────────
+            photos_r = await db.execute(
+                select(Photo).where(Photo.report_id == report.id)
+            )
+            new_photos = photos_r.scalars().all()
+            for new_photo in new_photos:
+                if not new_photo.photo_hash:
+                    continue
+                dup_photo_r = await db.execute(
+                    select(Photo).where(and_(
+                        Photo.photo_hash == new_photo.photo_hash,
+                        Photo.report_id != report.id,
+                    )).limit(1)
+                )
+                dup_photo = dup_photo_r.scalar_one_or_none()
+                if dup_photo:
+                    dup_sn_r = await db.execute(
+                        select(Report.serial_number).where(Report.id == dup_photo.report_id)
+                    )
+                    triggered_rules.append({
+                        "rule_id": "9",
+                        "reason": "duplicate_image",
+                        "metadata": {
                             "matching_photo_id": str(dup_photo.id),
                             "matching_report_id": str(dup_photo.report_id),
                             "matching_report_serial_number": dup_sn_r.scalar_one_or_none(),
-                        }
-                        break
+                        },
+                    })
+                    break  # one matching photo is sufficient
 
             # ── Persist flag transition ───────────────────────────────────────
+            new_flag = "red" if triggered_rules else "green"
+            flag_reason = triggered_rules[0]["reason"] if triggered_rules else None
+            flag_metadata = {"triggered_rules": triggered_rules} if triggered_rules else None
+
             old_flag = report.flag_status
             if new_flag != old_flag:
                 report.flag_status = new_flag
@@ -431,9 +556,10 @@ async def auto_flag_report(report_id: str, delay: int = 10) -> None:
                     flag_metadata=flag_metadata,
                 ))
                 await db.commit()
+                rule_ids = ", ".join(r["rule_id"] for r in triggered_rules)
                 log.info(
-                    "auto_flag_report: report %s flagged %s → %s (%s)",
-                    report_id, old_flag, new_flag, flag_reason,
+                    "auto_flag_report: report %s %s → %s (%d rule(s): %s)",
+                    report_id, old_flag, new_flag, len(triggered_rules), rule_ids,
                 )
 
                 try:
@@ -446,10 +572,13 @@ async def auto_flag_report(report_id: str, delay: int = 10) -> None:
                             "flag_from": old_flag,
                             "flag_to": new_flag,
                             "reason": flag_reason,
+                            "rule_count": len(triggered_rules),
                         },
                     )
                 except Exception:
-                    log.exception("auto_flag_report: SSE publish failed for %s", report_id)
+                    log.exception(
+                        "auto_flag_report: SSE publish failed for %s", report_id
+                    )
 
                 if new_flag == "red":
                     try:
@@ -458,11 +587,14 @@ async def auto_flag_report(report_id: str, delay: int = 10) -> None:
                         label = f"#{sn}" if sn else report_id[:8]
                         await fire_notification(
                             "new_red_flagged_report",
-                            f"Report {label} was automatically flagged Red and requires review.",
+                            f"Report {label} was automatically flagged Red "
+                            f"({len(triggered_rules)} rule(s) triggered) and requires review.",
                             label=label,
                         )
                     except Exception:
-                        log.exception("auto_flag_report: notification fire failed for %s", report_id)
+                        log.exception(
+                            "auto_flag_report: notification fire failed for %s", report_id
+                        )
 
             # ── Property creation — Green and Orange flags only ────────────────
             if new_flag in ("green", "orange"):
@@ -473,8 +605,6 @@ async def auto_flag_report(report_id: str, delay: int = 10) -> None:
                         update_conflict_warning,
                     )
                     async with AsyncSessionLocal() as prop_db:
-                        # Use explicit SELECT (not .get) to avoid identity-map issues on the
-                        # expired outer-session object after db.commit().
                         _pr = await prop_db.execute(
                             select(Report).where(Report.id == report.id)
                         )
@@ -493,12 +623,15 @@ async def auto_flag_report(report_id: str, delay: int = 10) -> None:
                             )
                 except Exception:
                     log.exception(
-                        "auto_flag_report: property creation failed for report %s", report_id
+                        "auto_flag_report: property creation failed for report %s",
+                        report_id,
                     )
 
         except Exception:
             await db.rollback()
-            log.exception("auto_flag_report: unexpected error for report %s", report_id)
+            log.exception(
+                "auto_flag_report: unexpected error for report %s", report_id
+            )
             raise
 
 
@@ -520,7 +653,9 @@ async def monitor_stuck_grey_reports() -> None:
             row = await _db.execute(_sel(AppSetting).where(AppSetting.key == "thresholds"))
             rec = row.scalar_one_or_none()
             if rec and isinstance(rec.value, dict):
-                threshold_minutes = rec.value.get("stuck_report_threshold_minutes", threshold_minutes)
+                threshold_minutes = rec.value.get(
+                    "stuck_report_threshold_minutes", threshold_minutes
+                )
     except Exception:
         pass
 
@@ -539,7 +674,6 @@ async def monitor_stuck_grey_reports() -> None:
             if not stuck:
                 return
 
-            # Fire grey_flag_processing_delay notification (cooldown prevents spam)
             try:
                 from app.services.notification_service import fire_notification
                 await fire_notification(
@@ -555,10 +689,10 @@ async def monitor_stuck_grey_reports() -> None:
                     (datetime.now(timezone.utc) - report.created_at).total_seconds() / 60
                 )
                 log.warning(
-                    "STUCK_GREY_REPORT report_id=%s crisis_id=%s minutes_stuck=%d — re-running auto-flag",
+                    "STUCK_GREY_REPORT report_id=%s crisis_id=%s minutes_stuck=%d — "
+                    "re-running auto-flag",
                     report.id, report.crisis_id, minutes_stuck,
                 )
-                # Re-run auto-flagging without delay — report is already committed
                 asyncio.create_task(auto_flag_report(str(report.id), delay=0))
                 try:
                     from app.routers.dashboard_sse import publish_event
@@ -572,7 +706,9 @@ async def monitor_stuck_grey_reports() -> None:
                         },
                     )
                 except Exception:
-                    log.debug("monitor_stuck_grey_reports: SSE publish failed for %s", report.id)
+                    log.debug(
+                        "monitor_stuck_grey_reports: SSE publish failed for %s", report.id
+                    )
 
         except Exception:
             log.exception("monitor_stuck_grey_reports: error during check")
