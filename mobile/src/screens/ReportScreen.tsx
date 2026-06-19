@@ -1090,7 +1090,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
       return !!(selectedBuilding || pinCoords || locationAddress?.trim());
     }
     if (locationScenario === 'offline_gps') {
-      return !!locationGpsCoords;
+      return !!(locationAddress?.trim());
     }
     if (locationScenario === 'offline_no_gps') {
       return !!(locationAddress?.trim());
@@ -2548,7 +2548,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
               )}
 
               {/* Manual entry fields */}
-              <Text style={styles.manualFieldLabel}>{t('locationScreen.manualAddress')}{locationScenario === 'offline_no_gps' ? ' *' : ''}</Text>
+              <Text style={styles.manualFieldLabel}>{t('locationScreen.manualAddress')} *</Text>
               <TextInput
                 style={styles.manualInput}
                 placeholder={t('locationScreen.manualAddressPlaceholder')}
@@ -2578,10 +2578,10 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
               />
               <Text style={styles.manualFieldHint}>e.g. Residential Block 4B, Al-Nour Mosque</Text>
 
-              {/* At least one field required note */}
-              {!locationAddress && !locationLandmark && !locationBuildingName && (
+              {/* Address required note */}
+              {!locationAddress && (
                 <Text style={styles.manualRequiredNote}>
-                  {t('locationScreen.manualAtLeastOne')}
+                  {t('locationScreen.manualAddressRequired', '* Address is required to continue when offline')}
                 </Text>
               )}
             </ScrollView>
@@ -4464,6 +4464,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: screenWidth * 0.06,
     paddingTop: 8,
     paddingBottom: 24,
+    flexGrow: 1,
   },
   manualFieldLabel: {
     fontSize: scale(14),

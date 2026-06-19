@@ -1480,11 +1480,11 @@ export default function ReportPage() {
   };
 
   // G5 — Valid if any usable coordinate or text field is filled.
-  // When offline without GPS, address is specifically required (asterisk is enforced).
+  // When offline (no map available), address is always required regardless of GPS.
   const isLocationValid = (): boolean => {
     if (gpsGeofenceBlocked) return false;
+    if (locationOffline && !connectionLostMidSession) return locationAddress.trim().length > 0;
     if ((gpsLatitude !== null && gpsLongitude !== null) || buildingCentroidLat !== null || pinDropCoords !== null) return true;
-    if (locationOffline && gpsLatitude === null) return locationAddress.trim().length > 0;
     return locationAddress.trim().length > 0 || locationLandmark.trim().length > 0 || locationBuildingName.trim().length > 0;
   };
 
@@ -2459,7 +2459,14 @@ export default function ReportPage() {
             )}
 
             {/* Bottom panel */}
-            <div style={styles.locationPanel}>
+            <div style={{
+              ...styles.locationPanel,
+              ...(locationOffline && !connectionLostMidSession ? {
+                maxHeight: "none",
+                overflowY: "visible",
+                flex: 1,
+              } : {}),
+            }}>
 
               {/* Offline form header label */}
               {locationOffline && !connectionLostMidSession && (
@@ -2711,7 +2718,7 @@ export default function ReportPage() {
                 <div style={{ display: "flex", flexDirection: "column", gap: locationOffline ? 16 : 8 }}>
                   {/* Address */}
                   <div>
-                    {locationOffline && <label style={styles.fieldLabel}>{t('report.address_label', 'Address')}{gpsLatitude === null ? ' *' : ''}</label>}
+                    {locationOffline && <label style={styles.fieldLabel}>{t('report.address_label', 'Address')} *</label>}
                     <input
                       style={styles.input}
                       type="text"
@@ -2769,9 +2776,9 @@ export default function ReportPage() {
                     )}
                   </div>
 
-                  {locationOffline && gpsLatitude === null && (
+                  {locationOffline && !connectionLostMidSession && (
                     <p style={{ fontSize: 11, color: "#717782", margin: 0 }}>
-                      {t('report.address_required_offline', '* Address is required to continue when GPS is unavailable')}
+                      {t('report.address_required_offline', '* Address is required to continue when offline')}
                     </p>
                   )}
                 </div>
