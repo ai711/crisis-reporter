@@ -279,23 +279,22 @@ function FlagReasonDetail({ flagEvents, flagColor }: { flagEvents: FlagEvent[]; 
     }
 
     if (reason === "same_ip_multiple_devices") {
-      // Backend stores other_reporter_ids as a plain string array
-      const otherReporterIds = (meta?.other_reporter_ids as string[]) ?? [];
+      const otherReporters = (meta?.other_reporters as Array<{ id: string; display_id: string | null }>) ?? [];
       return (
         <div style={styles.flagContextCard}>
           <p style={styles.flagContextHeader}>Multiple device IDs from the same IP address.</p>
           <p style={{ fontSize: 12, color: "#717782", margin: "0 0 10px" }}>
-            {otherReporterIds.length} other reporter{otherReporterIds.length !== 1 ? "s" : ""} submitted from this IP within 24 hours.
+            {otherReporters.length} other reporter{otherReporters.length !== 1 ? "s" : ""} submitted from this IP within 24 hours.
           </p>
-          {otherReporterIds.length > 0 && (
+          {otherReporters.length > 0 && (
             <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              {otherReporterIds.map((reporterId, i) => (
-                <div key={i} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              {otherReporters.map((r) => (
+                <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <button
                     style={styles.flagContextLink}
-                    onClick={() => window.open(`/reporters/${reporterId}`, "_blank")}
+                    onClick={() => window.open(`/reporters/${r.id}`, "_blank")}
                   >
-                    {reporterId.slice(0, 8).toUpperCase()} ↗
+                    #{r.display_id ?? r.id.slice(0, 8).toUpperCase()} ↗
                   </button>
                 </div>
               ))}

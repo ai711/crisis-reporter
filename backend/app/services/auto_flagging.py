@@ -224,47 +224,51 @@ async def auto_flag_report(report_id: str, delay: int = 10) -> None:
                             "device_id_hash": current_reporter.device_id_hash,
                         },
                     })
-                    # Side effect: auto-block submitting reporter (pending staff confirmation)
-                    current_reporter.is_blocked = True
-                    current_reporter.profile_status = "blocked"
-                    current_reporter.auto_blocked_at = datetime.now(timezone.utc)
-                    current_reporter.auto_block_expires_at = (
-                        datetime.now(timezone.utc)
-                        + timedelta(hours=settings.AUTO_BLOCK_CONFIRMATION_HOURS)
-                    )
-                    current_reporter.pending_auto_block_confirmation = True
-                    current_reporter.matched_blocked_reporter_id = str(matched_blocked.id)
-                    current_reporter.auto_block_confirmed = False
-                    db.add(current_reporter)
-                    matched_display = (
-                        str(matched_blocked.display_id)
-                        if matched_blocked.display_id
-                        else str(matched_blocked.id)
-                    )
-                    try:
-                        from app.services.reporter_activity_service import write_activity_log
-                        await write_activity_log(
-                            db,
-                            reporter_id=current_reporter.id,
-                            action="auto_blocked",
-                            source="System",
-                            previous_value="active",
-                            new_value="blocked",
-                            matched_reporter_id=matched_display,
-                            comment=(
-                                f"Automatically blocked — device ID matches manually "
-                                f"blocked profile {matched_display}"
-                            ),
+                    # Side effect: auto-block submitting reporter (pending staff confirmation).
+                    # Guard: skip if already pending — re-running the side effect would reset
+                    # auto_blocked_at and auto_block_expires_at, letting the reporter
+                    # perpetually delay the confirmation window by submitting new reports.
+                    if not current_reporter.pending_auto_block_confirmation:
+                        current_reporter.is_blocked = True
+                        current_reporter.profile_status = "blocked"
+                        current_reporter.auto_blocked_at = datetime.now(timezone.utc)
+                        current_reporter.auto_block_expires_at = (
+                            datetime.now(timezone.utc)
+                            + timedelta(hours=settings.AUTO_BLOCK_CONFIRMATION_HOURS)
                         )
-                    except Exception:
-                        log.exception(
-                            "auto_flag_report: activity log failed for auto_blocked %s",
-                            current_reporter.id,
+                        current_reporter.pending_auto_block_confirmation = True
+                        current_reporter.matched_blocked_reporter_id = str(matched_blocked.id)
+                        current_reporter.auto_block_confirmed = False
+                        db.add(current_reporter)
+                        matched_display = (
+                            str(matched_blocked.display_id)
+                            if matched_blocked.display_id
+                            else str(matched_blocked.id)
                         )
-                    log.info(
-                        "auto_flag_report: reporter %s auto-blocked — device_id matches %s",
-                        current_reporter.id, matched_blocked.id,
-                    )
+                        try:
+                            from app.services.reporter_activity_service import write_activity_log
+                            await write_activity_log(
+                                db,
+                                reporter_id=current_reporter.id,
+                                action="auto_blocked",
+                                source="System",
+                                previous_value="active",
+                                new_value="blocked",
+                                matched_reporter_id=matched_display,
+                                comment=(
+                                    f"Automatically blocked — device ID matches manually "
+                                    f"blocked profile {matched_display}"
+                                ),
+                            )
+                        except Exception:
+                            log.exception(
+                                "auto_flag_report: activity log failed for auto_blocked %s",
+                                current_reporter.id,
+                            )
+                        log.info(
+                            "auto_flag_report: reporter %s auto-blocked — device_id matches %s",
+                            current_reporter.id, matched_blocked.id,
+                        )
 
             # ── Rule 2: IP matches a blocked reporter ─────────────────────────
             if report.ip_address_hash:
@@ -302,16 +306,18 @@ async def auto_flag_report(report_id: str, delay: int = 10) -> None:
 
             photo_count = await _photo_count()
             if photo_count == 0 and not report.was_queued:
+                # Grace window: wait for slow live photo uploads.
+                # Queued reports are fully uploaded before auto_flag runs — skip sleep.
                 age_seconds = (datetime.now(timezone.utc) - report.created_at).total_seconds()
                 if age_seconds < 30:
                     await asyncio.sleep(20)
                     photo_count = await _photo_count()
-                if photo_count == 0:
-                    triggered_rules.append({
-                        "rule_id": "3",
-                        "reason": "no_photos",
-                        "metadata": None,
-                    })
+            if photo_count == 0:
+                triggered_rules.append({
+                    "rule_id": "3",
+                    "reason": "no_photos",
+                    "metadata": None,
+                })
 
             # ── Rule 4: No location ───────────────────────────────────────────
             has_gps = report.gps_latitude is not None and report.gps_longitude is not None
@@ -440,17 +446,15 @@ async def auto_flag_report(report_id: str, delay: int = 10) -> None:
             # ── Rule 7: IP country mismatch (Redis-cached geolocation) ────────
             # ip-api.com free tier is capped at 45 req/min. Redis caching means
             # each unique IP is geolocated at most once per 24 hours.
-            if report.ip_address_hash:
+            if report.ip_address_hash and report.ip_address_encrypted:
+                import base64
+                from app.services.encryption import decrypt_field
+                raw_ip = decrypt_field(base64.b64decode(report.ip_address_encrypted))
+                reporter_country: str | None = (
+                    current_reporter.country_code if current_reporter else None
+                )
                 try:
-                    import base64
-                    from app.services.encryption import decrypt_field
-                    raw_ip = decrypt_field(base64.b64decode(report.ip_address_encrypted))
                     geo_country = await _geolocate_ip_cached(raw_ip, report.ip_address_hash)
-
-                    reporter_country: str | None = (
-                        current_reporter.country_code if current_reporter else None
-                    )
-
                     if (
                         geo_country
                         and reporter_country
