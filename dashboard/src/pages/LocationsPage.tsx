@@ -259,7 +259,8 @@ export default function LocationsPage() {
     });
   }, [items, sortBy, sortDir]);
 
-  // Sort handler — purely client-side, no refetch needed
+  // Sort handler — client-side sort within the loaded page; resets to page 1 so the
+  // user sorts from the beginning of the dataset, not mid-cursor.
   const handleSort = (field: SortField) => {
     if (field === sortBy) {
       setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -267,6 +268,7 @@ export default function LocationsPage() {
       setSortBy(field);
       setSortDir("desc");
     }
+    resetPagination();
   };
 
   const resetPagination = () => {

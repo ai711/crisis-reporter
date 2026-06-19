@@ -523,7 +523,7 @@ async def _sync_onboarding_to_translation(new_text: str) -> None:
         logging.getLogger(__name__).error("Onboarding translation sync failed: %s", exc)
 
 
-async def _sync_messages_to_translation(items: list[dict]) -> None:
+async def _sync_messages_to_translation(items: list[dict], content_type: str = "error_messages") -> None:
     """Update StringKey rows for error/system message items and trigger auto-translation."""
     try:
         from app.routers.language_packages import ensure_string_keys_synced
@@ -552,7 +552,7 @@ async def _sync_messages_to_translation(items: list[dict]) -> None:
                     )
             await db.commit()
             await ensure_string_keys_synced(db)
-        asyncio.create_task(auto_translate_content("messages"))
+        asyncio.create_task(auto_translate_content(content_type))
     except Exception as exc:
         import logging
         logging.getLogger(__name__).error("Messages translation sync failed: %s", exc)
@@ -598,7 +598,12 @@ async def patch_content(
     if payload.content is not None:
         updated: dict = {"content": payload.content, "version": new_version, "updated_at": now}
     elif payload.slides is not None:
-        updated = {"slides": payload.slides, "version": new_version, "updated_at": now}
+        slides_data = (
+            _ensure_slide_ids(payload.slides)
+            if content_type in ("reporting-guidelines", "first-aid")
+            else payload.slides
+        )
+        updated = {"slides": slides_data, "version": new_version, "updated_at": now}
     elif payload.items is not None:
         updated = {"items": payload.items, "version": new_version, "updated_at": now}
     else:
@@ -623,12 +628,9 @@ async def patch_content(
     elif content_type == "onboarding" and payload.content is not None:
         asyncio.create_task(_sync_onboarding_to_translation(payload.content))
     elif content_type in ("error_messages", "system_messages") and payload.items is not None:
-        asyncio.create_task(_sync_messages_to_translation(payload.items))
+        asyncio.create_task(_sync_messages_to_translation(payload.items, content_type))
     elif content_type in ("reporting-guidelines", "first-aid") and payload.slides is not None:
-        slides_with_ids = _ensure_slide_ids(payload.slides)
-        updated["slides"] = slides_with_ids
-        await _upsert(db, key, updated)
         part = "B" if content_type == "reporting-guidelines" else "C"
-        asyncio.create_task(_sync_slideshow_to_translation(part, slides_with_ids))
+        asyncio.create_task(_sync_slideshow_to_translation(part, updated["slides"]))
 
     return updated
