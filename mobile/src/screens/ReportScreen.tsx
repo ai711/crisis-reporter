@@ -579,14 +579,17 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
     });
   }, [locationScenario]);
 
-  // Version-gated question package sync — loads cache immediately, only re-downloads if version changed
+  // Version-gated question package sync — loads cache immediately, only re-downloads if version changed.
+  // Cache keys include the language code so switching language always triggers a fresh download.
   useEffect(() => {
     const checkAndSyncQuestions = async () => {
       const langCode = await AsyncStorage.getItem('cr_language') || 'en';
+      const pkgCacheKey = `cr_question_package_${langCode}`;
+      const versionCacheKey = `cr_question_content_version_${langCode}`;
 
       // Load cached package immediately so questions render without waiting for network
-      const cachedStr = await AsyncStorage.getItem('cr_question_package');
-      const cachedVersion = await AsyncStorage.getItem('cr_question_content_version');
+      const cachedStr = await AsyncStorage.getItem(pkgCacheKey);
+      const cachedVersion = await AsyncStorage.getItem(versionCacheKey);
       if (cachedStr) {
         try {
           setQuestionPackage(JSON.parse(cachedStr));
@@ -605,12 +608,12 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
           return;
         }
 
-        // Version differs or no cache — download full package
+        // Version differs or no cache — download full package in the reporter's language
         const response = await api.get<ActivePackage>(`/api/question-packages/active?lang=${langCode}`);
         if (response.data) {
           setQuestionPackage(response.data);
-          await AsyncStorage.setItem('cr_question_package', JSON.stringify(response.data));
-          await AsyncStorage.setItem('cr_question_content_version', latestVersion || response.data.version);
+          await AsyncStorage.setItem(pkgCacheKey, JSON.stringify(response.data));
+          await AsyncStorage.setItem(versionCacheKey, latestVersion || response.data.version);
         }
       } catch (error) {
         // Network error — use cached package silently
@@ -825,6 +828,10 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
   // ── Question package helpers ──────────────────────────────────────────────────
 
   const qTitle = (n: number, fallback: string): string => {
+    // Try i18next language package first (key: Q1_LABEL, Q2_LABEL, …)
+    const langVal = t(`Q${n}_LABEL`, { defaultValue: '' });
+    if (langVal) return langVal;
+    // Fall back to question package API text (translated by backend when lang≠en) or hardcoded fallback
     const found = questionPackage?.questions.find((q) => q.order_index === n);
     return found ? found.question_text : fallback;
   };
@@ -834,9 +841,14 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
     fallback: Array<{ value: string; label: string }>
   ): Array<{ value: string; label: string }> => {
     const found = questionPackage?.questions.find((q) => q.order_index === n);
-    if (found?.options?.length)
-      return found.options.map((o) => ({ value: o.option_value, label: o.option_text }));
-    return fallback;
+    const source = found?.options?.length
+      ? found.options.map((o) => ({ value: o.option_value, label: o.option_text }))
+      : fallback;
+    // Overlay i18next translation for each option (key: Q1_OPT_MINIMAL, …)
+    return source.map((o) => {
+      const langVal = t(`Q${n}_OPT_${o.value.toUpperCase()}`, { defaultValue: '' });
+      return { value: o.value, label: langVal || o.label };
+    });
   };
 
   // Additional questions — those beyond the 8 core questions (order_index > 8)

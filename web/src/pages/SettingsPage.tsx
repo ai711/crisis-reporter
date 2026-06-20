@@ -192,9 +192,10 @@ export default function SettingsPage() {
 
     // F3: Silent question package version check for the newly selected country.
     try {
-      const cachedPkg = localStorage.getItem("cr_question_package");
-      const cachedVersion = cachedPkg ? JSON.parse(cachedPkg).version : null;
       const langCode = localStorage.getItem("cr_language") || "en";
+      const pkgCacheKey = `cr_question_package_${langCode}`;
+      const cachedPkg = localStorage.getItem(pkgCacheKey);
+      const cachedVersion = cachedPkg ? JSON.parse(cachedPkg).version : null;
 
       const res = await api.get<{ version: string; [key: string]: unknown }>(
         "/api/question-packages/active",
@@ -203,7 +204,7 @@ export default function SettingsPage() {
       const data = res.data;
 
       if (data.version !== cachedVersion) {
-        try { localStorage.setItem("cr_question_package", JSON.stringify(data)); } catch { /* storage full — silent */ }
+        try { localStorage.setItem(pkgCacheKey, JSON.stringify(data)); } catch { /* storage full — silent */ }
       }
     } catch { /* network unavailable — silent, existing package remains */ }
   };

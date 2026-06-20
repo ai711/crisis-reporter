@@ -19,7 +19,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy import select, or_, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -288,6 +288,7 @@ async def _auto_publish_language(db: AsyncSession, language_code: str) -> bool:
 
 @router.get("/active", response_model=ActivePackageOut)
 async def get_active_package(
+    lang: str = Query("en"),
     db: AsyncSession = Depends(get_db),
 ) -> ActivePackageOut:
     """
@@ -297,6 +298,11 @@ async def get_active_package(
     Public endpoint — no authentication required.
     Called by the reporter app (PWA and Android) on startup to fetch and cache
     the current question set.
+
+    Pass ?lang=tr (or ar/zh/fr/ru/es) to receive question text and option text
+    pre-translated via the published Translation rows for that language.
+    Falls back to the English source text for any key that has no published
+    translation yet.
     """
     result = await db.execute(
         select(QuestionPackage)
@@ -316,11 +322,61 @@ async def get_active_package(
         [q for q in pkg.questions if q.is_active], key=lambda q: q.order_index
     )
 
+    # Build a translation lookup keyed on StringKey.key for non-English requests.
+    # Keys follow the pattern registered at package-creation time:
+    #   Q{order_index}_LABEL       — question title
+    #   Q{order_index}_OPT_{VALUE} — option text
+    translations: dict[str, str] = {}
+    if lang != "en":
+        from app.models.language_package import StringKey, Translation
+        q_keys = [f"Q{q.order_index}_LABEL" for q in active_questions]
+        opt_keys = [
+            f"Q{q.order_index}_OPT_{o.option_value.upper()}"
+            for q in active_questions
+            for o in q.options
+        ]
+        all_keys = q_keys + opt_keys
+        if all_keys:
+            trans_result = await db.execute(
+                select(StringKey.key, Translation.translated_text)
+                .join(Translation, Translation.string_key_id == StringKey.id)
+                .where(
+                    Translation.language_code == lang,
+                    Translation.status == "published",
+                    StringKey.key.in_(all_keys),
+                )
+            )
+            translations = {row.key: row.translated_text for row in trans_result.all()}
+
+    def _build_translated(q: Question) -> QuestionOut:
+        q_key = f"Q{q.order_index}_LABEL"
+        return QuestionOut(
+            id=str(q.id),
+            question_text=translations.get(q_key, q.question_text),
+            question_type=q.question_type,
+            order_index=q.order_index,
+            is_mandatory=q.is_mandatory,
+            is_active=q.is_active,
+            is_core=q.is_core,
+            options=[
+                OptionOut(
+                    id=str(o.id),
+                    option_text=translations.get(
+                        f"Q{q.order_index}_OPT_{o.option_value.upper()}",
+                        o.option_text,
+                    ),
+                    option_value=o.option_value,
+                    order_index=o.order_index,
+                )
+                for o in q.options
+            ],
+        )
+
     return ActivePackageOut(
         id=str(pkg.id),
         version=pkg.version,
         published_at=pkg.published_at,  # type: ignore[arg-type]
-        questions=[_build_question_out(q) for q in active_questions],
+        questions=[_build_translated(q) for q in active_questions],
     )
 
 

@@ -1,18 +1,19 @@
 import React from 'react';
 import { View, Text, StyleSheet, Dimensions } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 
 const { width: screenWidth } = Dimensions.get('window');
 const scale = (size: number) => Math.round((screenWidth / 375) * size);
 
 type MIName = React.ComponentProps<typeof MaterialIcons>['name'];
 
-const STEPS: { label: string; icon: MIName }[] = [
-  { label: 'PHOTO', icon: 'camera-alt' },
-  { label: 'LOCATION', icon: 'location-on' },
-  { label: 'QUESTIONS', icon: 'description' },
-  { label: 'REVIEW', icon: 'visibility' },
-  { label: 'SUBMIT', icon: 'check-circle' },
+const STEP_KEYS: { key: string; icon: MIName }[] = [
+  { key: 'stepper.step_photo',     icon: 'camera-alt' },
+  { key: 'stepper.step_location',  icon: 'location-on' },
+  { key: 'stepper.step_questions', icon: 'description' },
+  { key: 'stepper.step_review',    icon: 'visibility' },
+  { key: 'stepper.step_submit',    icon: 'check-circle' },
 ];
 
 type StepIndicatorProps = {
@@ -20,17 +21,18 @@ type StepIndicatorProps = {
 };
 
 export default function StepIndicator({ currentStep }: StepIndicatorProps) {
+  const { t } = useTranslation();
   return (
     <View style={styles.container}>
       <View style={styles.row}>
-        {STEPS.map((step, index) => {
+        {STEP_KEYS.map((step, index) => {
           const stepNumber = index + 1;
           const isActive = stepNumber === currentStep;
           const isComplete = stepNumber < currentStep;
           const isPending = stepNumber > currentStep;
 
           return (
-            <React.Fragment key={step.label}>
+            <React.Fragment key={step.key}>
               {/* Connecting line before this step (skip for first) */}
               {index > 0 && (
                 <View
@@ -80,7 +82,7 @@ export default function StepIndicator({ currentStep }: StepIndicatorProps) {
                   ]}
                   numberOfLines={1}
                 >
-                  {step.label}
+                  {t(step.key)}
                 </Text>
               </View>
             </React.Fragment>

@@ -62,11 +62,13 @@ export default function HomePage() {
 
     const runVersionCheck = async () => {
       try {
-        const cached = localStorage.getItem("cr_question_package");
+        const langCode = localStorage.getItem("cr_language") || "en";
+        const pkgCacheKey = `cr_question_package_${langCode}`;
+
+        const cached = localStorage.getItem(pkgCacheKey);
         const cachedVersion = cached
           ? (JSON.parse(cached) as { version?: string }).version ?? null
           : null;
-        const langCode = localStorage.getItem("cr_language") || "en";
 
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 8000);
@@ -85,7 +87,7 @@ export default function HomePage() {
         if (pkg.version === cachedVersion) return; // Already up to date
 
         // Newer version available — write silently, no UI change
-        try { localStorage.setItem("cr_question_package", JSON.stringify(data)); } catch { /* storage full — ignore */ }
+        try { localStorage.setItem(pkgCacheKey, JSON.stringify(data)); } catch { /* storage full — ignore */ }
       } catch {
         // Network error or abort — silent fail, cached package used by the report flow
       }

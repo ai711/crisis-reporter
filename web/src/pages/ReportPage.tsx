@@ -595,12 +595,15 @@ export default function ReportPage() {
     setOfflineReportCountry(countryCode || localStorage.getItem("cr_country") || null);
   }, [locationOffline, gpsLatitude]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Load question package from localStorage first; fall back to network on first visit
+  // Load question package from localStorage first; fall back to network on first visit.
+  // Cache key includes the language code so a language switch always fetches a fresh package.
   useEffect(() => {
     if (step !== "damage") return;
     const loadPackage = async () => {
+      const langCode = languageCode || localStorage.getItem("cr_language") || "en";
+      const pkgCacheKey = `cr_question_package_${langCode}`;
       try {
-        const cached = localStorage.getItem("cr_question_package");
+        const cached = localStorage.getItem(pkgCacheKey);
         if (cached) {
           const parsed = JSON.parse(cached) as ActivePackage;
           setQuestionPackage(parsed);
@@ -608,17 +611,19 @@ export default function ReportPage() {
         }
       } catch { /* corrupted cache — fall through to network */ }
       try {
-        const res = await api.get<ActivePackage>("/api/question-packages/active");
+        const res = await api.get<ActivePackage>("/api/question-packages/active", {
+          params: { lang: langCode },
+        });
         setQuestionPackage(res.data);
         try {
-          localStorage.setItem("cr_question_package", JSON.stringify(res.data));
+          localStorage.setItem(pkgCacheKey, JSON.stringify(res.data));
         } catch { /* localStorage full — silent */ }
       } catch {
         // silent — bundled hardcoded questions remain as fallback
       }
     };
     loadPackage();
-  }, [step]);
+  }, [step, languageCode]);
 
   // Pre-fill Q3 infrastructure name with OSM building name captured at location step
   useEffect(() => {
