@@ -1,4 +1,5 @@
 import logging
+import re
 
 import httpx
 
@@ -64,6 +65,28 @@ async def _translate_via_libretranslate(text: str, target_lang: str, source_lang
         return translated_text
 
 
+_VAR_PATTERN = re.compile(r'\{\{[^}]+\}\}')
+
+
+def _protect_vars(text: str) -> tuple[str, list[str]]:
+    """Replace {{var}} placeholders with numeric tokens like [0], [1].
+    MT systems won't translate numeric tokens, preventing variable name corruption.
+    Returns (modified_text, ordered_list_of_originals).
+    """
+    originals: list[str] = []
+    def _sub(m: re.Match) -> str:
+        idx = len(originals)
+        originals.append(m.group())
+        return f"[{idx}]"
+    return _VAR_PATTERN.sub(_sub, text), originals
+
+
+def _restore_vars(text: str, originals: list[str]) -> str:
+    for idx, original in enumerate(originals):
+        text = text.replace(f"[{idx}]", original)
+    return text
+
+
 async def translate_text(text: str, target_lang: str, source_lang: str = "en") -> tuple[str, str]:
     """Translate text, returning (translated_text, service_used).
 
@@ -71,24 +94,28 @@ async def translate_text(text: str, target_lang: str, source_lang: str = "en") -
     "google", falling back to LibreTranslate on any error. Falls back to
     LibreTranslate directly when no Google key is set.
     """
+    # Protect {{variable}} interpolation placeholders so MT systems never translate
+    # the variable names inside them (e.g. {{number}} must not become {{número}}).
+    protected, originals = _protect_vars(text)
+
     log.info("translate_text called: primary=%s, has_google_key=%s", settings.TRANSLATION_PRIMARY, bool(settings.GOOGLE_TRANSLATE_API_KEY))
     if settings.GOOGLE_TRANSLATE_API_KEY and settings.TRANSLATION_PRIMARY == "google":
         try:
-            result = await _translate_via_google(text, target_lang, source_lang)
-            return result, "google"
+            result = await _translate_via_google(protected, target_lang, source_lang)
+            return _restore_vars(result, originals), "google"
         except Exception as exc:
             log.warning(
                 "Google Translate failed for [%s], falling back to LibreTranslate: %s",
                 target_lang,
                 exc,
             )
-        result = await _translate_via_libretranslate(text, target_lang, source_lang)
-        return result, "libretranslate"
+        result = await _translate_via_libretranslate(protected, target_lang, source_lang)
+        return _restore_vars(result, originals), "libretranslate"
 
     # LibreTranslate is primary. Fall back to Google when the language is unsupported.
     try:
-        result = await _translate_via_libretranslate(text, target_lang, source_lang)
-        return result, "libretranslate"
+        result = await _translate_via_libretranslate(protected, target_lang, source_lang)
+        return _restore_vars(result, originals), "libretranslate"
     except ValueError as exc:
         if settings.GOOGLE_TRANSLATE_API_KEY:
             log.warning(
@@ -96,6 +123,6 @@ async def translate_text(text: str, target_lang: str, source_lang: str = "en") -
                 target_lang,
                 exc,
             )
-            result = await _translate_via_google(text, target_lang, source_lang)
-            return result, "google"
+            result = await _translate_via_google(protected, target_lang, source_lang)
+            return _restore_vars(result, originals), "google"
         raise

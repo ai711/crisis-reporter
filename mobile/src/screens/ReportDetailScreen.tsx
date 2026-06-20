@@ -118,7 +118,7 @@ export default function ReportDetailScreen() {
       const response = await api.get(`/api/reports/${reportId}`);
       setReport(response.data);
     } catch {
-      setError('Could not load report. Please try again.');
+      setError(t('report.detail_load_error'));
     } finally {
       setLoading(false);
     }
@@ -148,7 +148,7 @@ export default function ReportDetailScreen() {
       <View style={[styles.container, { paddingTop: insets.top }]}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-            <Text style={styles.backText}>← Back</Text>
+            <Text style={styles.backText}>{t('common.back')}</Text>
           </TouchableOpacity>
           <Text style={styles.headerTitle}>{t('reportDetail.header_title')}</Text>
           <View style={styles.backBtn} />
@@ -168,7 +168,7 @@ export default function ReportDetailScreen() {
       <View style={[styles.container, { paddingTop: insets.top }]}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-            <Text style={styles.backText}>← Back</Text>
+            <Text style={styles.backText}>{t('common.back')}</Text>
           </TouchableOpacity>
           <Text style={styles.headerTitle}>{t('reportDetail.header_title')}</Text>
           <View style={styles.backBtn} />

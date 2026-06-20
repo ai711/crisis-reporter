@@ -139,6 +139,36 @@ async def _seed_notification_types() -> None:
         logger.info("Notification types seeded/updated to Chapter 13 spec")
 
 
+async def _patch_mistranslated_interpolation_vars() -> None:
+    """Fix translations where {{variable}} names were incorrectly translated.
+
+    The auto-translate pipeline now protects {{...}} patterns before sending to MT,
+    so this only runs once to clean up any bad rows that were created before the fix.
+    """
+    # Map of wrong placeholder text → correct placeholder text
+    patches = [
+        ("{{número}}", "{{number}}"),
+        ("{{numéro}}", "{{number}}"),
+        ("{{nombre}}", "{{number}}"),
+        ("{{номер}}", "{{number}}"),
+        ("{{数}}", "{{number}}"),
+    ]
+    try:
+        async with AsyncSessionLocal() as db:
+            from sqlalchemy import text as sa_text
+            for wrong, correct in patches:
+                await db.execute(
+                    sa_text(
+                        "UPDATE translations SET translated_text = REPLACE(translated_text, :wrong, :correct)"
+                        " WHERE translated_text LIKE :pattern"
+                    ),
+                    {"wrong": wrong, "correct": correct, "pattern": f"%{wrong}%"},
+                )
+            await db.commit()
+    except Exception as e:
+        logger.warning("_patch_mistranslated_interpolation_vars failed: %s", e)
+
+
 async def _seed_safety_tips_content() -> None:
     """Seed rich multi-slide safety tips content for all 9 disaster types and Parts B/C.
 
@@ -1339,6 +1369,7 @@ async def lifespan(app: FastAPI):
     await _seed_default_crisis()
     await _seed_notification_types()
     await _seed_safety_tips_content()
+    await _patch_mistranslated_interpolation_vars()
     # Sync StringKeys for all existing content — not just what was seeded on first
     # startup.  Catches any slides/bullets added after initial deployment.
     asyncio.create_task(_sync_all_content_string_keys())

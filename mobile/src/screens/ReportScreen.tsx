@@ -2642,7 +2642,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                     {t('locationScreen.offlineBanner')}
                   </Text>
                   <Text style={styles.offlineBannerSecondary}>
-                    Your GPS coordinates are still being recorded in the background
+                    {t('map.offline_gps_note')}
                   </Text>
                 </View>
               </View>
@@ -2789,7 +2789,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                   style={styles.footerGradientBtn}
                 >
                   <Text style={[styles.footerPillBtnText, !isLocationValid() && styles.footerPillBtnTextDisabled]}>
-                    Next
+                    {t('common.next')}
                   </Text>
                   <MaterialIcons name="arrow-forward" size={scale(20)} color={isLocationValid() ? '#FFFFFF' : '#9CA3AF'} />
                 </LinearGradient>
@@ -2800,7 +2800,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                   style={styles.footerTextBackBtn}
                   onPress={() => setStep("photos")}
                 >
-                  <Text style={styles.footerTextBackBtnText}>← Back</Text>
+                  <Text style={styles.footerTextBackBtnText}>{t('common.back')}</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -3063,7 +3063,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
             {/* ── STEP 1: PHOTOS ── */}
             {step === "photos" && (
               <View style={styles.step}>
-                <Text style={styles.stepLabel}>STEP 1 OF 5 — ADD PHOTO</Text>
+                <Text style={styles.stepLabel}>{t('report.step_1_of_5')}</Text>
 
                 {/* Empty state */}
                 {photos.length === 0 && (
@@ -3132,7 +3132,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                 {/* Status text */}
                 {photos.length > 0 && photos.length < 3 && (
                   <Text style={styles.photoStatusText}>
-                    {photos.length} of 3 photos added. You can add up to 3.
+                    {t('report.photos_added_count', { count: photos.length })}
                   </Text>
                 )}
 
@@ -3518,7 +3518,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                 })()}
 
                 {showQuestionHint && damageQuestion <= 8 && !isDamageQuestionAnswered() && (
-                  <Text style={styles.questionHint}>Please answer this question to continue.</Text>
+                  <Text style={styles.questionHint}>{t('questions.answerHint')}</Text>
                 )}
               </View>
             )}
@@ -3544,7 +3544,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                   style={styles.footerGradientBtn}
                 >
                   <Text style={[styles.footerPillBtnText, photos.length === 0 && styles.footerPillBtnTextDisabled]}>
-                    Next
+                    {t('common.next')}
                   </Text>
                   <MaterialIcons name="arrow-forward" size={scale(20)} color={photos.length === 0 ? '#9CA3AF' : '#FFFFFF'} />
                 </LinearGradient>
@@ -3561,7 +3561,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                   onPress={handleDamageBack}
                 >
                   <MaterialIcons name="arrow-back" size={scale(18)} color="#0468B1" />
-                  <Text style={styles.footerBackPillText}>Back</Text>
+                  <Text style={styles.footerBackPillText}>{t('common.back')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={{ flex: 1 }}
@@ -3579,7 +3579,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                     end={{ x: 1, y: 1 }}
                     style={styles.footerGradientBtnFlex}
                   >
-                    <Text style={styles.footerPillBtnText}>Next</Text>
+                    <Text style={styles.footerPillBtnText}>{t('common.next')}</Text>
                     <MaterialIcons name="arrow-forward" size={scale(18)} color="#FFFFFF" />
                   </LinearGradient>
                 </TouchableOpacity>
@@ -3832,7 +3832,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
               </LinearGradient>
             </TouchableOpacity>
             <Text style={styles.reviewPrivacyNote}>
-              Your report is encrypted and shared only with authorized UNDP staff.
+              {t('report.review_privacy_note')}
             </Text>
           </View>
         </View>

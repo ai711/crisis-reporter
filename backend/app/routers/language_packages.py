@@ -2308,6 +2308,7 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
     ("report.submit",            "ui_report", "Submit Report"),
     ("report.submitting",        "ui_report", "Submitting..."),
     ("report.error",             "ui_report", "Failed to submit report. Please try again."),
+    ("report.detail_load_error", "ui_report", "Could not load report. Please try again."),
     ("report.success_title",     "ui_report", "Report Submitted"),
     ("report.submit_another",    "ui_report", "Submit Another Report"),
     ("report.dupe_title",        "ui_report", "Possible duplicate report"),

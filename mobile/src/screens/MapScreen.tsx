@@ -366,7 +366,7 @@ export default function MapScreen() {
                 style={{ marginTop: 2 }}
               />
               <Text style={styles.gpsNoteText}>
-                Your GPS location is still being recorded in the background
+                {t('map.offline_gps_note')}
               </Text>
             </View>
 

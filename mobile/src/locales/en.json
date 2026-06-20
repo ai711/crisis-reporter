@@ -52,7 +52,11 @@
     "map_instruction": "Tap a building or drop a pin to select location",
     "pin_location_label": "Pin location",
     "no_photo_yet": "No photo added yet",
-    "answer_placeholder": "Enter your answer..."
+    "answer_placeholder": "Enter your answer...",
+    "step_1_of_5": "STEP 1 OF 5 — ADD PHOTO",
+    "photos_added_count": "{{count}} of 3 photos added. You can add up to 3.",
+    "review_privacy_note": "Your report is encrypted and shared only with authorized UNDP staff.",
+    "detail_load_error": "Could not load report. Please try again."
   },
   "map": {
     "loading": "Loading map...",
@@ -122,6 +126,7 @@
   },
   "common": {
     "back": "← Back",
+    "next": "Next",
     "cancel": "Cancel",
     "show": "Show",
     "hide": "Hide",
