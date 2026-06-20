@@ -439,7 +439,23 @@ async def create_package(
                 )
             )
 
+        # Register question strings in the translation pipeline (idempotent)
+        from app.models.language_package import StringKey
+        _q_label_key = f"Q{q_in.order_index}_LABEL"
+        if (await db.execute(select(StringKey).where(StringKey.key == _q_label_key))).scalar_one_or_none() is None:
+            db.add(StringKey(key=_q_label_key, category="question", english_text=q_in.question_text, is_active=True))
+        for _opt in q_in.options:
+            _opt_key = f"Q{q_in.order_index}_OPT_{_opt.option_value.upper()}"
+            if (await db.execute(select(StringKey).where(StringKey.key == _opt_key))).scalar_one_or_none() is None:
+                db.add(StringKey(key=_opt_key, category="answer", english_text=_opt.option_text, is_active=True))
+
     await db.commit()
+
+    try:
+        from app.routers.language_packages import ensure_string_keys_synced
+        await ensure_string_keys_synced(db)
+    except Exception as exc:
+        log.warning("create_package: ensure_string_keys_synced failed: %s", exc)
 
     # Re-fetch with eager-loaded relationships for the response
     result = await db.execute(
@@ -575,7 +591,23 @@ async def add_question_to_draft(
             order_index=order,
         ))
 
+    # Register question strings in the translation pipeline (idempotent)
+    from app.models.language_package import StringKey
+    _q_label_key = f"Q{next_order}_LABEL"
+    if (await db.execute(select(StringKey).where(StringKey.key == _q_label_key))).scalar_one_or_none() is None:
+        db.add(StringKey(key=_q_label_key, category="question", english_text=request.question_text, is_active=True))
+    for _opt in request.options:
+        _opt_key = f"Q{next_order}_OPT_{_opt.option_value.upper()}"
+        if (await db.execute(select(StringKey).where(StringKey.key == _opt_key))).scalar_one_or_none() is None:
+            db.add(StringKey(key=_opt_key, category="answer", english_text=_opt.option_text, is_active=True))
+
     await db.commit()
+
+    try:
+        from app.routers.language_packages import ensure_string_keys_synced
+        await ensure_string_keys_synced(db)
+    except Exception as exc:
+        log.warning("add_question_to_draft: ensure_string_keys_synced failed: %s", exc)
 
     # Re-fetch
     result = await db.execute(

@@ -3372,7 +3372,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                   const qType = aq.type ?? 'single_select';
                   return (
                     <View style={styles.questionBlock}>
-                      <Text style={styles.questionTitleLarge}>{aq.question_text}</Text>
+                      <Text style={styles.questionTitleLarge}>{t(`Q${aq.order_index}_LABEL`, { defaultValue: aq.question_text })}</Text>
 
                       {qType === 'single_select' && (aq.options ?? []).map((opt) => {
                         const isSelected = additionalAnswers[qKey] === opt.option_value;
@@ -3386,7 +3386,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                             }}
                           >
                             <View style={styles.optionCardLeft}>
-                              <Text style={[styles.optionCardTitle, isSelected && styles.optionCardTitleSelected]}>{opt.option_text}</Text>
+                              <Text style={[styles.optionCardTitle, isSelected && styles.optionCardTitleSelected]}>{t(`Q${aq.order_index}_OPT_${opt.option_value.toUpperCase()}`, { defaultValue: opt.option_text })}</Text>
                             </View>
                             <View style={[styles.optionCardRadio, isSelected && styles.optionCardRadioSelected]}>
                               {isSelected && <View style={styles.optionCardRadioDot} />}
@@ -3411,7 +3411,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                             }}
                           >
                             <View style={styles.optionCardLeft}>
-                              <Text style={[styles.optionCardTitle, selected && styles.optionCardTitleSelected]}>{opt.option_text}</Text>
+                              <Text style={[styles.optionCardTitle, selected && styles.optionCardTitleSelected]}>{t(`Q${aq.order_index}_OPT_${opt.option_value.toUpperCase()}`, { defaultValue: opt.option_text })}</Text>
                             </View>
                             <View style={[styles.optionCardCheckbox, selected && styles.optionCardCheckboxSelected]}>
                               {selected && <Text style={styles.optionCardCheckmark}>✓</Text>}
@@ -3691,17 +3691,17 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                       const labels = (aq as any).options
                         ? (answer as string[]).map((v) => {
                             const opt = (aq as any).options.find((o: any) => o.option_value === v);
-                            return opt ? opt.option_text : v;
+                            return opt ? t(`Q${(aq as any).order_index}_OPT_${opt.option_value.toUpperCase()}`, { defaultValue: opt.option_text }) : v;
                           })
                         : (answer as string[]);
                       displayValue = labels.join(', ');
                     } else {
                       const opt = (aq as any).options?.find((o: any) => o.option_value === answer);
-                      displayValue = opt ? opt.option_text : String(answer ?? '—');
+                      displayValue = opt ? t(`Q${(aq as any).order_index}_OPT_${opt.option_value.toUpperCase()}`, { defaultValue: opt.option_text }) : String(answer ?? '—');
                     }
                     return (
                       <View key={qKey} style={styles.reviewRow}>
-                        <Text style={styles.reviewLabel}>{(aq as any).question_text ?? qKey}</Text>
+                        <Text style={styles.reviewLabel}>{t(`Q${(aq as any).order_index}_LABEL`, { defaultValue: (aq as any).question_text ?? qKey })}</Text>
                         <Text style={styles.reviewValue}>{displayValue}</Text>
                       </View>
                     );

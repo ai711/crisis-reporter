@@ -3124,7 +3124,7 @@ export default function ReportPage() {
               const selectedValue: string = typeof currentVal === "string" ? currentVal : "";
               return (
                 <>
-                  <h2 style={styles.questionTitle}>{aq.question_text} *</h2>
+                  <h2 style={styles.questionTitle}>{t(`Q${aq.order_index}_LABEL`, { defaultValue: aq.question_text })} *</h2>
                   {isMulti && <p style={styles.photoHint}>{t('report.select_all_apply')}</p>}
                   {aq.options.map((opt) => {
                     const isSelected = isMulti ? selectedValues.includes(opt.option_value) : selectedValue === opt.option_value;
@@ -3152,7 +3152,7 @@ export default function ReportPage() {
                         <div style={{ ...styles.checkbox, ...(isSelected ? styles.checkboxSelected : {}) }}>
                           {isSelected && <span style={styles.checkmark}>✓</span>}
                         </div>
-                        <span style={styles.checkRowText}>{opt.option_text}</span>
+                        <span style={styles.checkRowText}>{t(`Q${aq.order_index}_OPT_${opt.option_value.toUpperCase()}`, { defaultValue: opt.option_text })}</span>
                       </div>
                     ) : (
                       <div
@@ -3171,7 +3171,7 @@ export default function ReportPage() {
                           ...styles.radioCircle,
                           border: isSelected ? "6px solid #0468B1" : "2px solid #C1C7D2",
                         }} />
-                        <span style={styles.radioLabel}>{opt.option_text}</span>
+                        <span style={styles.radioLabel}>{t(`Q${aq.order_index}_OPT_${opt.option_value.toUpperCase()}`, { defaultValue: opt.option_text })}</span>
                       </div>
                     );
                   })}
@@ -3461,10 +3461,19 @@ export default function ReportPage() {
                     const idx = parseInt(orderIdxStr) - 9;
                     const q = additionalQuestions[idx];
                     if (!q) return null;
+                    const displayAnswer = Array.isArray(answer)
+                      ? (answer as string[]).map((v) => {
+                          const opt = q.options?.find((o: ApiOption) => o.option_value === v);
+                          return opt ? t(`Q${q.order_index}_OPT_${opt.option_value.toUpperCase()}`, { defaultValue: opt.option_text }) : v;
+                        }).join(", ")
+                      : (() => {
+                          const opt = q.options?.find((o: ApiOption) => o.option_value === String(answer));
+                          return opt ? t(`Q${q.order_index}_OPT_${opt.option_value.toUpperCase()}`, { defaultValue: opt.option_text }) : String(answer ?? "—");
+                        })();
                     return (
                       <div key={orderIdxStr} style={styles.reviewDataCard}>
-                        <p style={styles.reviewDataLabel}>{q.question_text}</p>
-                        <p style={styles.reviewDataValue}>{Array.isArray(answer) ? answer.join(", ") : answer}</p>
+                        <p style={styles.reviewDataLabel}>{t(`Q${q.order_index}_LABEL`, { defaultValue: q.question_text })}</p>
+                        <p style={styles.reviewDataValue}>{displayAnswer}</p>
                       </div>
                     );
                   })}
