@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,7 +11,7 @@ import {
   type NativeSyntheticEvent,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 import {
   Map as MLMap,
@@ -260,6 +260,34 @@ export default function MapScreen() {
     }
   };
 
+  // Auto-center on GPS when the map first loads or when the tab is focused.
+  const mapLoadedRef = useRef(false);
+
+  const centerOnGps = useCallback(async () => {
+    try {
+      const { status } = await Location.getForegroundPermissionsAsync();
+      if (status !== 'granted') return;
+      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      cameraRef.current?.flyTo({
+        center: [loc.coords.longitude, loc.coords.latitude],
+        zoom: 14,
+        duration: 800,
+      });
+    } catch { /* silent — map stays at default center */ }
+  }, []);
+
+  const handleMapLoaded = useCallback(() => {
+    mapLoadedRef.current = true;
+    centerOnGps();
+  }, [centerOnGps]);
+
+  // Re-center when the user taps the Map tab while it's already mounted.
+  useFocusEffect(
+    useCallback(() => {
+      if (mapLoadedRef.current) centerOnGps();
+    }, [centerOnGps]),
+  );
+
   // Request location permission on mount so the UserLocation dot appears
   // without requiring the user to tap the re-centre button first.
   useEffect(() => {
@@ -443,6 +471,7 @@ export default function MapScreen() {
         attribution={false}
         onPress={() => setSelectedReport(null)}
         onRegionDidChange={handleRegionChange}
+        onDidFinishLoadingMap={handleMapLoaded}
       >
         <Camera
           ref={cameraRef}

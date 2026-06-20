@@ -2285,7 +2285,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
         <View style={styles.backBtnTouch} />
       </View>
 
-      {step !== 'review' && <StepIndicator currentStep={getStepNumber(step)} />}
+      {step !== 'review' && step !== 'location' && <StepIndicator currentStep={getStepNumber(step)} />}
 
       {/* Step 2 — Location */}
       {step === "location" && (
