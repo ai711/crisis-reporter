@@ -79,13 +79,14 @@ async function saveQueue(queue: QueuedReport[]): Promise<void> {
 export function addToQueue(
   report: ReportSubmitRequest,
   photos: QueuedPhoto[]
-): Promise<string> {
+): Promise<{ local_id: string; anyPhotoCopyFailed: boolean }> {
   const local_id = `local_${Date.now()}_${Math.random().toString(36).slice(2)}`;
   return withQueueLock(async () => {
     // Copy photos to documentDirectory before persisting the queue entry.
     // Android can clear the Expo cache directory under low-storage pressure;
     // documentDirectory is never cleared by the OS.
     let persistedPhotos = photos;
+    let anyPhotoCopyFailed = false;
     try {
       await ensurePhotoDir();
       persistedPhotos = await Promise.all(
@@ -95,12 +96,14 @@ export function addToQueue(
             await FileSystem.copyAsync({ from: photo.uri, to: dest });
             return { ...photo, persistent_uri: dest };
           } catch {
-            return photo; // Fall back to original URI if copy fails
+            anyPhotoCopyFailed = true;
+            return { ...photo, copy_failed: true }; // no persistent_uri — at risk of Android cache clearing
           }
         })
       );
     } catch {
-      persistedPhotos = photos; // Fall back if directory creation fails
+      if (photos.length > 0) anyPhotoCopyFailed = true;
+      persistedPhotos = photos.map((p) => ({ ...p, copy_failed: true }));
     }
 
     const queue = await getQueue();
@@ -118,7 +121,7 @@ export function addToQueue(
     await saveQueue(queue);
     await notifyQueueChange();
     void scheduleQueuedReminder(local_id);
-    return local_id;
+    return { local_id, anyPhotoCopyFailed };
   });
 }
 
@@ -159,6 +162,7 @@ export async function queuePhotosForReport(reportId: string, photos: QueuedPhoto
     });
     await saveQueue(queue);
     await notifyQueueChange();
+    void scheduleQueuedReminder(local_id);
   });
 }
 
@@ -325,6 +329,7 @@ async function scheduleQueuedReminder(local_id: string): Promise<void> {
         title: "Pending offline report",
         body: "Open Crisis Reporter to submit your saved report when you have a connection.",
         sound: true,
+        data: { local_id },
       },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
@@ -349,6 +354,12 @@ async function showSyncNotification(title: string, body: string): Promise<void> 
 // ── Sync engine ───────────────────────────────────────────────────────────────
 
 const MAX_RETRIES = 5;
+
+// Minimum wait between successive retries: 2, 4, 8, 16, 30 minutes.
+// Prevents burning all 5 retries in 5 minutes when the server is temporarily down.
+function getBackoffMs(retryCount: number): number {
+  return Math.min(Math.pow(2, retryCount) * 60_000, 30 * 60_000);
+}
 
 let isSyncing = false;
 
@@ -421,9 +432,12 @@ export async function syncQueue(apiBaseUrl: string): Promise<void> {
     // Read inside the lock so a concurrent addToQueue can't produce a torn snapshot.
     const pending = await withQueueLock(async () => {
       const queue = await getQueue();
-      return queue.filter(
-        (item) => item.status === "pending" && item.retry_count < MAX_RETRIES
-      );
+      return queue.filter((item) => {
+        if (item.status !== "pending" || item.retry_count >= MAX_RETRIES) return false;
+        if (item.retry_count === 0 || !item.last_attempt_at) return true;
+        const elapsed = Date.now() - new Date(item.last_attempt_at).getTime();
+        return elapsed >= getBackoffMs(item.retry_count);
+      });
     });
 
     if (pending.length === 0) return;

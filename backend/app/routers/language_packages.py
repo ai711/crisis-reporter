@@ -2502,6 +2502,7 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
     ("review.queue_waiting_upload",  "ui_report", "1 report waiting to upload"),
     ("review.queue_auto_upload",     "ui_report", "Your report will upload automatically when internet is available."),
     ("review.queue_retry_helper",    "ui_report", "Tap to attempt upload if you have a connection"),
+    ("review.photoCopyWarning",      "ui_report", "Photos couldn't be saved to persistent storage and may be lost if you close the app before syncing. Submit while the app is open for best results."),
     ("review.gps_captured_note",     "ui_report", "GPS location captured and attached to this report"),
     ("review.still_offline_title",   "ui_report", "Still offline"),
     ("review.still_offline_body",    "ui_report", "Internet is not available yet. Your report is saved and will send automatically."),

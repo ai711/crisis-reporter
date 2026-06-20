@@ -75,6 +75,7 @@ export interface QueuedPhoto {
   content_type: string;
   display_order: number;
   persistent_uri?: string;
+  copy_failed?: boolean;
 }
 
 export type ProcessedPhoto = {

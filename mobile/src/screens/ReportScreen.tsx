@@ -344,6 +344,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
   const [photos, setPhotos] = useState<ProcessedPhoto[]>([]);
   const [isPhotoProcessing, setIsPhotoProcessing] = useState(false);
   const [mapTilesLoading, setMapTilesLoading] = useState(false);
+  const [photoCopyWarning, setPhotoCopyWarning] = useState(false);
 
   // Location
   const [gpsCoords, setGpsCoords] = useState<{ lat: number; lng: number } | null>(null);
@@ -1828,9 +1829,10 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
         display_order: i,
       }));
       // ReportSubmitRequest type predates multi-type infra fields — cast to bypass
-      const localId = await addToQueue({ ...reportPayload, was_queued: true } as any, queuedPhotos);
+      const { local_id: localId, anyPhotoCopyFailed } = await addToQueue({ ...reportPayload, was_queued: true } as any, queuedPhotos);
       // Store so the delete and retry handlers can reference this specific queue entry
       queuedLocalIdRef.current = localId;
+      if (anyPhotoCopyFailed) setPhotoCopyWarning(true);
       await saveSubmittedLocation();
       if (!isMountedRef.current) return;
       setSubmittedReportId(null);
@@ -2113,6 +2115,13 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
 
         {Platform.OS === 'android' && (
           <Text style={styles.queuePlatformNote}>{t('review.queueAndroidNote')}</Text>
+        )}
+
+        {photoCopyWarning && photos.length > 0 && (
+          <View style={styles.photoCopyWarningBanner}>
+            <MaterialIcons name="warning" size={scale(16)} color="#D97706" />
+            <Text style={styles.photoCopyWarningText}>{t('review.photoCopyWarning')}</Text>
+          </View>
         )}
 
         {/* Pending sync card */}
@@ -5021,6 +5030,22 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     marginBottom: 16,
     paddingHorizontal: 8,
+  },
+  photoCopyWarningBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#FEF3C7',
+    borderRadius: 8,
+    padding: scale(12),
+    gap: scale(8),
+    width: '100%',
+    marginBottom: 12,
+  },
+  photoCopyWarningText: {
+    flex: 1,
+    fontSize: scale(13),
+    color: '#92400E',
+    lineHeight: scale(18),
   },
 
   // ── LOADING / ERROR SCREENS ─────────────────────────────────────────────────

@@ -498,6 +498,7 @@
     "queue_waiting_upload": "1 report waiting to upload",
     "queue_auto_upload": "Your report will upload automatically when internet is available.",
     "queue_retry_helper": "Tap to attempt upload if you have a connection",
+    "photoCopyWarning": "Photos couldn't be saved to persistent storage and may be lost if you close the app before syncing. Submit while the app is open for best results.",
     "gps_captured_note": "GPS location captured and attached to this report",
     "still_offline_title": "Still offline",
     "still_offline_body": "Internet is not available yet. Your report is saved and will send automatically.",

@@ -14,7 +14,7 @@ import NetInfo from "@react-native-community/netinfo";
 import { useAuthStore } from "./src/stores/authStore";
 import { initDeviceId, syncRegistrationQueue } from "./src/services/auth";
 import { flushProgressQueue } from "./src/utils/progressQueue";
-import { syncQueue, resetStuckItems } from "./src/utils/offlineQueue";
+import { syncQueue, resetStuckItems, getQueue } from "./src/utils/offlineQueue";
 import { API_BASE } from "./src/services/api";
 import "./src/i18n";
 
@@ -72,12 +72,20 @@ function Navigation() {
     // the app is fully killed (minimum 15-minute OS interval).
     registerBackgroundSync().catch(() => { /* non-critical */ });
 
-    // Navigate to My Reports when the user taps a sync notification
-    // (both foreground and background/killed-app taps).
-    const notifSub = Notifications.addNotificationResponseReceivedListener(() => {
-      if (navigationRef.isReady()) {
-        navigationRef.navigate("MyReports" as never);
+    // Navigate to the specific queued report when the user taps a sync notification,
+    // falling back to MyReports if the item was already uploaded.
+    const notifSub = Notifications.addNotificationResponseReceivedListener(async (response) => {
+      const localId = response.notification.request.content.data?.local_id as string | undefined;
+      if (!navigationRef.isReady()) return;
+      if (localId) {
+        const queue = await getQueue();
+        const queuedReport = queue.find((i) => i.local_id === localId);
+        if (queuedReport) {
+          (navigationRef as any).navigate("QueuedReportDetailScreen", { queuedReport });
+          return;
+        }
       }
+      navigationRef.navigate("MyReports" as never);
     });
     return () => notifSub.remove();
   }, []);
