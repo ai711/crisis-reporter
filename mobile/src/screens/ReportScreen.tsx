@@ -1741,11 +1741,66 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
         exif_width: photo.exif?.width || null,
         exif_height: photo.exif?.height || null,
       })),
-      question_answers: Object.entries(additionalAnswers).map(([questionId, answer]) => ({
-        question_id: questionId,
-        answer: Array.isArray(answer) ? null : answer,
-        answers: Array.isArray(answer) ? answer : null,
-      })),
+      // Unified question_answers format — matches web/PWA exactly so the
+      // dashboard can render Q1–Q8 and any additional questions from the
+      // same code path for both platforms.
+      question_answers: [
+        // Q1 — Damage Level
+        { question_order: 1, option_value: damageLevel, option_text: DAMAGE_LABELS[damageLevel] ?? damageLevel },
+        // Q2 — Infrastructure Type (multi-select)
+        {
+          question_order: 2,
+          option_values: infrastructureTypes,
+          option_texts: infrastructureTypes.map((v) => INFRA_LABELS[v] ?? v),
+          ...(infrastructureTypes.includes('other') && infrastructureOther
+            ? { other_text: infrastructureOther }
+            : {}),
+        },
+        // Q3 — Infrastructure Name (free text)
+        { question_order: 3, free_text: infrastructureName },
+        // Q4 — Disaster Type
+        { question_order: 4, option_value: disasterType, option_text: t(`disaster_types.${disasterType}`, { defaultValue: disasterType }) },
+        // Q5 — Debris Blocking
+        { question_order: 5, option_value: debrisBlocking, option_text: DEBRIS_LABELS[debrisBlocking] ?? debrisBlocking },
+        // Q6 — Electricity Condition
+        { question_order: 6, option_value: electricityCondition, option_text: ELECTRICITY_LABELS[electricityCondition] ?? electricityCondition },
+        // Q7 — Health Services Condition
+        { question_order: 7, option_value: healthServicesCondition, option_text: HEALTH_LABELS[healthServicesCondition] ?? healthServicesCondition },
+        // Q8 — Pressing Needs (multi-select)
+        {
+          question_order: 8,
+          option_values: pressingNeeds,
+          option_texts: pressingNeeds.map((v) => PRESSING_NEEDS_LABELS[v] ?? v),
+          ...(pressingNeeds.includes('other') && pressingNeedsOther
+            ? { other_text: pressingNeedsOther }
+            : {}),
+        },
+        // Q9+ — additional questions from the question package (dynamic)
+        ...additionalQuestions.map((aq: any) => {
+          const ans = additionalAnswers[String(aq.order_index)];
+          if (aq.type === 'free_text') {
+            return { question_order: aq.order_index, question_text: aq.question_text, free_text: ans ?? null };
+          }
+          if (Array.isArray(ans)) {
+            const optTexts = (aq.options ?? [])
+              .filter((o: any) => ans.includes(o.option_value))
+              .map((o: any) => o.option_text);
+            return {
+              question_order: aq.order_index,
+              question_text: aq.question_text,
+              option_values: ans,
+              ...(optTexts.length > 0 ? { option_texts: optTexts } : {}),
+            };
+          }
+          const opt = (aq.options ?? []).find((o: any) => o.option_value === ans);
+          return {
+            question_order: aq.order_index,
+            question_text: aq.question_text,
+            option_value: ans ?? null,
+            ...(opt ? { option_text: opt.option_text } : {}),
+          };
+        }),
+      ],
       was_queued: false,
     };
 
@@ -3628,13 +3683,25 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                 ))}
 
                 {additionalQuestions.length > 0 &&
-                  Object.entries(additionalAnswers).map(([qId, answer]) => {
-                    const aq = additionalQuestions.find((q: any) => q.id === qId);
+                  Object.entries(additionalAnswers).map(([qKey, answer]) => {
+                    const aq = additionalQuestions.find((q: any) => String(q.order_index) === qKey);
                     if (!aq) return null;
-                    const displayValue = Array.isArray(answer) ? answer.join(', ') : String(answer);
+                    let displayValue: string;
+                    if (Array.isArray(answer)) {
+                      const labels = (aq as any).options
+                        ? (answer as string[]).map((v) => {
+                            const opt = (aq as any).options.find((o: any) => o.option_value === v);
+                            return opt ? opt.option_text : v;
+                          })
+                        : (answer as string[]);
+                      displayValue = labels.join(', ');
+                    } else {
+                      const opt = (aq as any).options?.find((o: any) => o.option_value === answer);
+                      displayValue = opt ? opt.option_text : String(answer ?? '—');
+                    }
                     return (
-                      <View key={qId} style={styles.reviewRow}>
-                        <Text style={styles.reviewLabel}>{(aq as any).text ?? (aq as any).question_text ?? qId}</Text>
+                      <View key={qKey} style={styles.reviewRow}>
+                        <Text style={styles.reviewLabel}>{(aq as any).question_text ?? qKey}</Text>
                         <Text style={styles.reviewValue}>{displayValue}</Text>
                       </View>
                     );
