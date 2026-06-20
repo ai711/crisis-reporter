@@ -168,7 +168,10 @@ export async function queuePhotosForReport(reportId: string, photos: QueuedPhoto
 
 export async function getQueueCount(): Promise<number> {
   const queue = await getQueue();
-  return queue.filter((item) => item.status === "pending").length;
+  // Photo-only retry items (existing_report_id set) mean the report is already on the
+  // server — only photos are retrying. Don't count these as "pending report" in the
+  // home screen banner since the report is already visible in the dashboard.
+  return queue.filter((item) => item.status === "pending" && !item.existing_report_id).length;
 }
 
 export function updateItemStatus(

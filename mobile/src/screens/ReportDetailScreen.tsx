@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  ActivityIndicator, Image, Linking,
+  ActivityIndicator, Image, Modal, Dimensions, StatusBar,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -105,6 +105,7 @@ export default function ReportDetailScreen() {
   const [report, setReport] = useState<ReportDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [viewerUrl, setViewerUrl] = useState<string | null>(null);
 
   const fetchReport = useCallback(async () => {
     if (!reportId) {
@@ -192,7 +193,7 @@ export default function ReportDetailScreen() {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Text style={styles.backText}>← Back</Text>
+          <Text style={styles.backText}>{t('common.back')}</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>
           {report.serial_number ? `Report #${report.serial_number}` : 'Report Detail'}
@@ -224,7 +225,7 @@ export default function ReportDetailScreen() {
                 return (
                   <TouchableOpacity
                     key={i}
-                    onPress={() => Linking.openURL(full)}
+                    onPress={() => setViewerUrl(full)}
                     activeOpacity={0.8}
                   >
                     <Image
@@ -299,6 +300,33 @@ export default function ReportDetailScreen() {
 
         <View style={{ height: insets.bottom + 24 }} />
       </ScrollView>
+
+      {/* Full-screen photo viewer */}
+      <Modal
+        visible={viewerUrl !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setViewerUrl(null)}
+        statusBarTranslucent
+      >
+        <StatusBar backgroundColor="#000" barStyle="light-content" />
+        <View style={styles.viewerOverlay}>
+          <TouchableOpacity
+            style={styles.viewerClose}
+            onPress={() => setViewerUrl(null)}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          >
+            <Text style={styles.viewerCloseText}>✕</Text>
+          </TouchableOpacity>
+          {viewerUrl ? (
+            <Image
+              source={{ uri: viewerUrl }}
+              style={styles.viewerImage}
+              resizeMode="contain"
+            />
+          ) : null}
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -385,4 +413,34 @@ const styles = StyleSheet.create({
 
   // Description
   description: { fontSize: 14, color: '#333333', lineHeight: 22 },
+
+  // Full-screen photo viewer
+  viewerOverlay: {
+    flex: 1,
+    backgroundColor: '#000',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  viewerClose: {
+    position: 'absolute',
+    top: 48,
+    right: 20,
+    zIndex: 10,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: 20,
+    width: 36,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  viewerCloseText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '700',
+    lineHeight: 20,
+  },
+  viewerImage: {
+    width: Dimensions.get('window').width,
+    height: Dimensions.get('window').height,
+  },
 });
