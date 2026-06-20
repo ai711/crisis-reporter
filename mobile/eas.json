@@ -3,14 +3,14 @@
     "version": ">= 16.0.0",
     "appVersionSource": "local"
   },
-  "env": {
-    "EAS_BUILD_NO_EXPO_GO_WARNING": "true"
-  },
   "build": {
     "development": {
       "developmentClient": true,
       "distribution": "internal",
       "channel": "development",
+      "env": {
+        "EAS_BUILD_NO_EXPO_GO_WARNING": "true"
+      },
       "android": {
         "buildType": "apk"
       }
@@ -18,12 +18,18 @@
     "preview": {
       "distribution": "internal",
       "channel": "preview",
+      "env": {
+        "EAS_BUILD_NO_EXPO_GO_WARNING": "true"
+      },
       "android": {
         "buildType": "apk"
       }
     },
     "production": {
       "channel": "production",
+      "env": {
+        "EAS_BUILD_NO_EXPO_GO_WARNING": "true"
+      },
       "android": {
         "buildType": "apk"
       }
