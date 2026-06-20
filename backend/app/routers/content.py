@@ -277,6 +277,7 @@ async def _sync_safety_tips_to_translation(
 
         live_key_names = {kn for kn, _, _ in keys_to_ensure}
 
+        any_changed = False
         async with AsyncSessionLocal() as db:
             for key_name, english_text, category in keys_to_ensure:
                 result = await db.execute(
@@ -290,11 +291,14 @@ async def _sync_safety_tips_to_translation(
                         category=category,
                         is_active=True,
                     ))
+                    any_changed = True
                 else:
                     if not existing.is_active:
                         existing.is_active = True
+                        any_changed = True
                     if existing.english_text != english_text:
                         existing.english_text = english_text
+                        any_changed = True
                         # Reset non-published translations so auto-translate re-queues them.
                         # Published rows stay intact for in-flight language packages.
                         await db.execute(
@@ -324,7 +328,8 @@ async def _sync_safety_tips_to_translation(
 
             await db.commit()
             await ensure_string_keys_synced(db)
-        asyncio.create_task(auto_translate_content("safety-tips"))
+        if any_changed:
+            asyncio.create_task(auto_translate_content("safety-tips"))
 
     except Exception as exc:
         import logging
@@ -399,6 +404,7 @@ async def _sync_slideshow_to_translation(
 
         live_key_names = {kn for kn, _, _ in keys_to_ensure}
 
+        any_changed = False
         async with AsyncSessionLocal() as db:
             for key_name, english_text, category in keys_to_ensure:
                 result = await db.execute(
@@ -412,11 +418,14 @@ async def _sync_slideshow_to_translation(
                         category=category,
                         is_active=True,
                     ))
+                    any_changed = True
                 else:
                     if not existing.is_active:
                         existing.is_active = True
+                        any_changed = True
                     if existing.english_text != english_text:
                         existing.english_text = english_text
+                        any_changed = True
                         # Reset non-published translations so auto-translate re-queues them.
                         # Published rows stay intact for in-flight language packages.
                         await db.execute(
@@ -445,7 +454,8 @@ async def _sync_slideshow_to_translation(
 
             await db.commit()
             await ensure_string_keys_synced(db)
-        asyncio.create_task(auto_translate_content(content_type))
+        if any_changed:
+            asyncio.create_task(auto_translate_content(content_type))
 
     except Exception as exc:
         import logging

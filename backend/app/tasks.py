@@ -14,6 +14,7 @@ Both follow the same LibreTranslate pattern used by
 POST /api/translations/auto-translate in language_packages.py.
 """
 
+import asyncio
 import logging
 from datetime import datetime, timezone
 
@@ -29,6 +30,14 @@ log = logging.getLogger(__name__)
 # Fallback used only when the DB cannot be reached
 _FALLBACK_LANGUAGES = ["ar", "zh", "fr", "ru", "es"]
 
+# Delay between successive translation requests to stay under the public
+# LibreTranslate free-tier rate limit (~1 req/sec). Ignored when using a
+# self-hosted or paid instance, but harmless there.
+_INTER_REQUEST_DELAY = 0.6  # seconds
+
+# How long to back off when a 429 is received before retrying once.
+_RATE_LIMIT_BACKOFF = 65  # seconds
+
 
 async def _active_target_languages(db) -> list[str]:
     """Return all active non-English language codes from the DB."""
@@ -40,17 +49,28 @@ async def _active_target_languages(db) -> list[str]:
 
 
 async def _translate_text(client: httpx.AsyncClient, text: str, target: str) -> str:
-    """Call LibreTranslate and return translated text, or raise on failure."""
+    """Call LibreTranslate and return translated text.
+
+    Retries once after backing off if the server returns 429.
+    Raises on any other failure.
+    """
     url = settings.LIBRETRANSLATE_URL.rstrip("/") + "/translate"
-    resp = await client.post(
-        url,
-        json={"q": text, "source": "en", "target": target, "format": "text"},
-    )
-    resp.raise_for_status()
-    result = resp.json().get("translatedText", "")
-    if not result:
-        raise ValueError("Empty translatedText in LibreTranslate response")
-    return result
+    payload = {"q": text, "source": "en", "target": target, "format": "text"}
+    for attempt in range(2):
+        resp = await client.post(url, json=payload)
+        if resp.status_code == 429 and attempt == 0:
+            log.warning(
+                "_translate_text: rate-limited for lang=%s — backing off %ds before retry",
+                target, _RATE_LIMIT_BACKOFF,
+            )
+            await asyncio.sleep(_RATE_LIMIT_BACKOFF)
+            continue
+        resp.raise_for_status()
+        result = resp.json().get("translatedText", "")
+        if not result:
+            raise ValueError("Empty translatedText in LibreTranslate response")
+        return result
+    raise RuntimeError(f"Translation failed for lang={target} after rate-limit retry")
 
 
 async def auto_translate_question_package(package_version: str) -> None:
@@ -74,7 +94,6 @@ async def auto_translate_question_package(package_version: str) -> None:
             log.info("auto_translate_question_package: no active question keys found")
             return
 
-        translate_url = settings.LIBRETRANSLATE_URL.rstrip("/") + "/translate"
         translated_total = 0
         target_languages = await _active_target_languages(db)
 
@@ -109,19 +128,7 @@ async def auto_translate_question_package(package_version: str) -> None:
 
                 for sk in keys_to_translate:
                     try:
-                        resp = await client.post(
-                            translate_url,
-                            json={
-                                "q": sk.english_text,
-                                "source": "en",
-                                "target": lang_code,
-                                "format": "text",
-                            },
-                        )
-                        resp.raise_for_status()
-                        translated_text = resp.json().get("translatedText", "")
-                        if not translated_text:
-                            continue
+                        translated_text = await _translate_text(client, sk.english_text, lang_code)
                         existing_row = missing_by_key.get(sk.id)
                         if existing_row is not None:
                             existing_row.translated_text = translated_text
@@ -136,6 +143,7 @@ async def auto_translate_question_package(package_version: str) -> None:
                                 translated_by="auto",
                             ))
                         translated_total += 1
+                        await asyncio.sleep(_INTER_REQUEST_DELAY)
                     except Exception as exc:
                         log.warning(
                             "auto_translate_question_package: failed key=%s lang=%s: %s",
@@ -208,7 +216,6 @@ async def auto_translate_content(content_type: str) -> None:
             log.info("auto_translate_content: no active keys for category=%s", category)
             return
 
-        translate_url = settings.LIBRETRANSLATE_URL.rstrip("/") + "/translate"
         translated_total = 0
         target_languages = await _active_target_languages(db)
 
@@ -243,19 +250,7 @@ async def auto_translate_content(content_type: str) -> None:
 
                 for sk in keys_to_translate:
                     try:
-                        resp = await client.post(
-                            translate_url,
-                            json={
-                                "q": sk.english_text,
-                                "source": "en",
-                                "target": lang_code,
-                                "format": "text",
-                            },
-                        )
-                        resp.raise_for_status()
-                        translated_text = resp.json().get("translatedText", "")
-                        if not translated_text:
-                            continue
+                        translated_text = await _translate_text(client, sk.english_text, lang_code)
                         existing_row = missing_by_key.get(sk.id)
                         if existing_row is not None:
                             existing_row.translated_text = translated_text
@@ -270,6 +265,7 @@ async def auto_translate_content(content_type: str) -> None:
                                 translated_by="auto",
                             ))
                         translated_total += 1
+                        await asyncio.sleep(_INTER_REQUEST_DELAY)
                     except Exception as exc:
                         log.warning(
                             "auto_translate_content: failed key=%s lang=%s: %s",
