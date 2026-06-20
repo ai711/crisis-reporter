@@ -218,8 +218,11 @@ function makeTip(t: (key: string, opts?: any) => string) {
 export default function SafetyTipsScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const tip = makeTip(t);
+  const lang = i18n.language || 'en';
+  const langParam = lang !== 'en' ? `?lang=${encodeURIComponent(lang)}` : '';
+  const langSuffix = lang !== 'en' ? `_${lang}` : '';
 
   const [viewState, setViewState] = useState<ViewState>({ screen: 'overview' });
   const [progressA, setProgressA] = useState<Record<string, boolean>>({});
@@ -285,10 +288,11 @@ export default function SafetyTipsScreen() {
       setLoadState('loaded');
 
       // Background update: fetch API version; only update if content was changed by admin.
+      // Cache keys are language-aware so Turkish content doesn't overwrite the English cache.
       fetchContent(
-        `cr_tips_a_${key}`,
-        `cr_tips_v_a_${key}`,
-        `/api/content/safety-tips/${key}`,
+        `cr_tips_a_${key}${langSuffix}`,
+        `cr_tips_v_a_${key}${langSuffix}`,
+        `/api/content/safety-tips/${key}${langParam}`,
         (freshSlides) => {
           // Override hardcoded fallback whenever the API returns any slides.
           if (freshSlides.length > 0) setSlides(freshSlides);
@@ -300,9 +304,9 @@ export default function SafetyTipsScreen() {
       setSlides(HARDCODED_PART_B);
       setLoadState('loaded');
       fetchContent(
-        'cr_tips_b',
-        'cr_tips_v_b',
-        '/api/content/reporting-guidelines',
+        `cr_tips_b${langSuffix}`,
+        `cr_tips_v_b${langSuffix}`,
+        `/api/content/reporting-guidelines${langParam}`,
         (freshSlides) => { if (freshSlides.length > 0) setSlides(freshSlides); },
         () => {},
       );
@@ -311,14 +315,14 @@ export default function SafetyTipsScreen() {
       setSlides(HARDCODED_PART_C);
       setLoadState('loaded');
       fetchContent(
-        'cr_tips_c',
-        'cr_tips_v_c',
-        '/api/content/first-aid',
+        `cr_tips_c${langSuffix}`,
+        `cr_tips_v_c${langSuffix}`,
+        `/api/content/first-aid${langParam}`,
         (freshSlides) => { if (freshSlides.length > 0) setSlides(freshSlides); },
         () => {},
       );
     }
-  }, [viewState]);
+  }, [viewState, lang]);
 
   const syncPartComplete = useCallback((partCompleted: string) => {
     const reporterId = useAuthStore.getState().reporterId;
@@ -582,11 +586,11 @@ export default function SafetyTipsScreen() {
     } else if (viewState.screen === 'part_b_slides') {
       setSlides(HARDCODED_PART_B);
       setLoadState('loaded');
-      fetchContent('cr_tips_b', 'cr_tips_v_b', '/api/content/reporting-guidelines', setSlides, setLoadState);
+      fetchContent(`cr_tips_b${langSuffix}`, `cr_tips_v_b${langSuffix}`, `/api/content/reporting-guidelines${langParam}`, setSlides, setLoadState);
     } else {
       setSlides(HARDCODED_PART_C);
       setLoadState('loaded');
-      fetchContent('cr_tips_c', 'cr_tips_v_c', '/api/content/first-aid', setSlides, setLoadState);
+      fetchContent(`cr_tips_c${langSuffix}`, `cr_tips_v_c${langSuffix}`, `/api/content/first-aid${langParam}`, setSlides, setLoadState);
     }
   };
 

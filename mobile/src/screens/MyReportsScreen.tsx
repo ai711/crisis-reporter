@@ -183,8 +183,13 @@ export default function MyReportsScreen() {
     try {
       const queue = await getQueue();
       // Show pending, syncing, and failed items — exclude sent
+      // Exclude photo-only retries (existing_report_id set) — the report body is
+      // already on the server and appears in the Submitted section; showing these
+      // here too causes a confusing duplicate entry.
       const active = queue.filter(
-        (r) => r.status === 'pending' || r.status === 'syncing' || r.status === 'failed'
+        (r) =>
+          !r.existing_report_id &&
+          (r.status === 'pending' || r.status === 'syncing' || r.status === 'failed')
       );
       setQueuedReports(active);
     } catch {

@@ -563,8 +563,11 @@ export default function ReportDetailPage() {
   const reportLabel = `#${report.serial_number ?? report.id.slice(0, 8).toUpperCase()}`;
 
   // ── Extract Q values from question_answers ─────────────────────────────────
-  // The reporter app stores all answers in question_answers (structured format).
-  // Top-level DB columns (electricity_condition etc.) are null for new submissions.
+  // Web/PWA submissions store structured answers in question_answers[].
+  // Android (mobile) submissions store Q6/Q7/Q8 as top-level fields
+  // (electricity_condition, health_services_condition, pressing_needs) and
+  // leave question_answers empty — so we fall back to those fields when
+  // the structured entry is absent.
   const getQ = (order: number): QuestionAnswer | undefined =>
     (report.question_answers ?? []).find((qa) => qa.question_order === order);
 
@@ -574,16 +577,23 @@ export default function ReportDetailPage() {
   const q7 = getQ(7);  // Health services condition
   const q8 = getQ(8);  // Pressing needs (multi-select)
 
-  const infrastructureNameFromQA = q3?.free_text ?? null;
-  const debrisBlockingFromQA = q5?.option_text ?? (q5?.option_value === "yes" ? "Yes" : q5?.option_value === "no" ? "No" : null);
-  const electricityValue = q6?.option_text ?? q6?.option_value ?? null;
-  const healthValue = q7?.option_text ?? q7?.option_value ?? null;
+  const infrastructureNameFromQA = q3?.free_text ?? report.infrastructure_name ?? null;
+  const debrisBlockingFromQA = q5?.option_text ?? (q5?.option_value === "yes" ? "Yes" : q5?.option_value === "no" ? "No" : null) ?? report.debris_blocking ?? null;
+  const electricityValue = q6?.option_text ?? q6?.option_value ?? report.electricity_condition ?? null;
+  const healthValue = q7?.option_text ?? q7?.option_value ?? report.health_services_condition ?? null;
   const pressingNeedsValue = (() => {
-    if (!q8) return null;
-    const parts: string[] = [];
-    if (q8.option_texts && q8.option_texts.length > 0) parts.push(...q8.option_texts);
-    else if (q8.option_values && q8.option_values.length > 0) parts.push(...q8.option_values);
-    if (q8.other_text) parts.push(q8.other_text);
+    if (q8) {
+      const parts: string[] = [];
+      if (q8.option_texts && q8.option_texts.length > 0) parts.push(...q8.option_texts);
+      else if (q8.option_values && q8.option_values.length > 0) parts.push(...q8.option_values);
+      if (q8.other_text) parts.push(q8.other_text);
+      return parts.length > 0 ? parts.join(", ") : null;
+    }
+    // Android fallback — top-level columns
+    const pn = report.pressing_needs;
+    if (!pn) return null;
+    const parts: string[] = Array.isArray(pn) ? [...pn] : typeof pn === "string" ? [pn] : [];
+    if (report.pressing_needs_other) parts.push(report.pressing_needs_other);
     return parts.length > 0 ? parts.join(", ") : null;
   })();
 

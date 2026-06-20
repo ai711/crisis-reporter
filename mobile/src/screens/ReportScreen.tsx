@@ -342,6 +342,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
   const [additionalAnswers, setAdditionalAnswers] = useState<Record<string, string | string[]>>({});
   const [additionalQuestion, setAdditionalQuestion] = useState(0);
   const [photos, setPhotos] = useState<ProcessedPhoto[]>([]);
+  const [isPhotoProcessing, setIsPhotoProcessing] = useState(false);
 
   // Location
   const [gpsCoords, setGpsCoords] = useState<{ lat: number; lng: number } | null>(null);
@@ -629,6 +630,26 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
       searchAbortController.current?.abort();
     };
   }, []);
+
+  // When showing the offline-queue confirmation screen, immediately attempt
+  // a sync if we have connectivity — and subscribe to future connectivity
+  // changes so the screen auto-transitions to success without user action.
+  useEffect(() => {
+    if (!submitted || !wasQueued) return;
+    const trySync = async () => {
+      const netState = await NetInfo.fetch();
+      if (netState.isConnected === true && netState.isInternetReachable !== false) {
+        syncQueue(API_BASE).catch(() => {});
+      }
+    };
+    trySync();
+    const unsub = NetInfo.addEventListener((state) => {
+      if (state.isConnected === true && state.isInternetReachable !== false) {
+        syncQueue(API_BASE).catch(() => {});
+      }
+    });
+    return () => unsub();
+  }, [submitted, wasQueued]);
 
   // Scenario detection — runs each time the reporter arrives at the location step
   useEffect(() => {
@@ -1278,11 +1299,11 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
       const permission = await ImagePicker.requestCameraPermissionsAsync();
       if (permission.status !== "granted") {
         Alert.alert(
-          "Camera Access Needed",
-          "Camera access is not available. You can enable it in your phone settings, or upload a photo from your gallery instead.",
+          t('photoScreen.cameraAccessTitle'),
+          t('photoScreen.cameraAccessMsg'),
           [
-            { text: "Open Settings", onPress: () => Linking.openSettings() },
-            { text: "OK", style: "cancel" },
+            { text: t('photoScreen.openSettings'), onPress: () => Linking.openSettings() },
+            { text: t('tandc.declineAlertButton'), style: "cancel" },
           ]
         );
         return;
@@ -1290,15 +1311,20 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
       const result = await ImagePicker.launchCameraAsync({ mediaTypes: ["images"], allowsEditing: false, quality: 1 });
       if (!result.canceled && result.assets?.[0]) {
         const asset = result.assets[0];
-        const processed = await processPhoto(asset.uri, asset.mimeType ?? '');
-        if (processed) {
-          setPhotos((prev) => [...prev, processed]);
-          void (async () => {
-            try {
-              const { status } = await MediaLibrary.requestPermissionsAsync();
-              if (status === 'granted') await MediaLibrary.saveToLibraryAsync(asset.uri);
-            } catch { /* non-critical */ }
-          })();
+        setIsPhotoProcessing(true);
+        try {
+          const processed = await processPhoto(asset.uri, asset.mimeType ?? '');
+          if (processed) {
+            setPhotos((prev) => [...prev, processed]);
+            void (async () => {
+              try {
+                const { status } = await MediaLibrary.requestPermissionsAsync();
+                if (status === 'granted') await MediaLibrary.saveToLibraryAsync(asset.uri);
+              } catch { /* non-critical */ }
+            })();
+          }
+        } finally {
+          setIsPhotoProcessing(false);
         }
       }
     } catch (e) {
@@ -1311,11 +1337,11 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (permission.status !== "granted") {
         Alert.alert(
-          "Gallery Access Needed",
-          "Gallery access is not available. You can enable it in your phone settings, or take a new photo using your camera instead.",
+          t('photoScreen.galleryAccessTitle'),
+          t('photoScreen.galleryAccessMsg'),
           [
-            { text: "Open Settings", onPress: () => Linking.openSettings() },
-            { text: "OK", style: "cancel" },
+            { text: t('photoScreen.openSettings'), onPress: () => Linking.openSettings() },
+            { text: t('tandc.declineAlertButton'), style: "cancel" },
           ]
         );
         return;
@@ -1323,9 +1349,14 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
       const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], allowsEditing: false, quality: 1 });
       if (!result.canceled && result.assets?.[0]) {
         const asset = result.assets[0];
-        const processed = await processPhoto(asset.uri, asset.mimeType ?? '');
-        if (processed) {
-          setPhotos((prev) => [...prev, processed]);
+        setIsPhotoProcessing(true);
+        try {
+          const processed = await processPhoto(asset.uri, asset.mimeType ?? '');
+          if (processed) {
+            setPhotos((prev) => [...prev, processed]);
+          }
+        } finally {
+          setIsPhotoProcessing(false);
         }
       }
     } catch (e) {
@@ -1385,19 +1416,24 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
             });
             if (!result.canceled && result.assets?.[0]) {
               const capturedUri = result.assets[0].uri;
-              const processed = await processPhoto(capturedUri, result.assets[0].mimeType ?? '');
-              if (processed) {
-                setPhotos((prev) => {
-                  const updated = [...prev];
-                  updated[index] = processed;
-                  return updated;
-                });
-                void (async () => {
-                  try {
-                    const { status } = await MediaLibrary.requestPermissionsAsync();
-                    if (status === 'granted') await MediaLibrary.saveToLibraryAsync(capturedUri);
-                  } catch { /* non-critical */ }
-                })();
+              setIsPhotoProcessing(true);
+              try {
+                const processed = await processPhoto(capturedUri, result.assets[0].mimeType ?? '');
+                if (processed) {
+                  setPhotos((prev) => {
+                    const updated = [...prev];
+                    updated[index] = processed;
+                    return updated;
+                  });
+                  void (async () => {
+                    try {
+                      const { status } = await MediaLibrary.requestPermissionsAsync();
+                      if (status === 'granted') await MediaLibrary.saveToLibraryAsync(capturedUri);
+                    } catch { /* non-critical */ }
+                  })();
+                }
+              } finally {
+                setIsPhotoProcessing(false);
               }
             }
           },
@@ -1423,13 +1459,18 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
               quality: 1,
             });
             if (!result.canceled && result.assets?.[0]) {
-              const processed = await processPhoto(result.assets[0].uri, result.assets[0].mimeType ?? '');
-              if (processed) {
-                setPhotos((prev) => {
-                  const updated = [...prev];
-                  updated[index] = processed;
-                  return updated;
-                });
+              setIsPhotoProcessing(true);
+              try {
+                const processed = await processPhoto(result.assets[0].uri, result.assets[0].mimeType ?? '');
+                if (processed) {
+                  setPhotos((prev) => {
+                    const updated = [...prev];
+                    updated[index] = processed;
+                    return updated;
+                  });
+                }
+              } finally {
+                setIsPhotoProcessing(false);
               }
             }
           },
@@ -1815,7 +1856,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
     const otherInfraEmpty = infrastructureTypes.includes("other") && infrastructureOther.trim().length === 0;
     const otherNeedsEmpty = pressingNeeds.includes("other") && pressingNeedsOther.trim().length === 0;
     if (!damageLevel || infrastructureTypes.length === 0 || otherInfraEmpty || !infrastructureName.trim() || !disasterType || !debrisBlocking || !electricityCondition || !healthServicesCondition || pressingNeeds.length === 0 || otherNeedsEmpty || photos.length === 0) {
-      Alert.alert("Required Fields", "Please complete all required fields.");
+      Alert.alert(t('report.required_fields_title'), t('report.required_fields_body'));
       return;
     }
 
@@ -1942,7 +1983,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
 
           <TouchableOpacity
             style={styles.confirmSecondaryBtn}
-            onPress={() => { resetForm(); navigation.navigate("Home"); }}
+            onPress={() => { resetForm(); navigation.replace("Home"); }}
           >
             <Text style={styles.confirmSecondaryBtnText}>
               {t('review.confirmationGoHome')}
@@ -2052,7 +2093,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
 
           <TouchableOpacity
             style={styles.confirmSecondaryBtn}
-            onPress={() => { resetForm(); navigation.navigate("Home"); }}
+            onPress={() => { resetForm(); navigation.replace("Home"); }}
           >
             <Text style={styles.confirmSecondaryBtnText}>{t('review.queueGoHome')}</Text>
           </TouchableOpacity>
@@ -2075,7 +2116,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                         queuedLocalIdRef.current = null;
                       }
                       resetForm();
-                      navigation.navigate('Home');
+                      navigation.replace('Home');
                     },
                   },
                 ]
@@ -2150,6 +2191,14 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                   <Text style={styles.gpsUnavailableNoteText}>
                     {t('locationScreen.gpsUnavailableOnline')}
                   </Text>
+                </View>
+              )}
+
+              {/* GPS captured banner — appears in Scenario 1 once background GPS resolves */}
+              {locationScenario === 'online_gps' && locationGpsCoords && !selectedBuilding && !pinCoords && (
+                <View style={styles.gpsCapturedBanner}>
+                  <MaterialIcons name="my-location" size={scale(14)} color="#276749" />
+                  <Text style={styles.gpsCapturedText}>{t('locationScreen.gpsCaptured')}</Text>
                 </View>
               )}
 
@@ -2933,11 +2982,13 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                               <Image source={{ uri: photo.uri }} style={styles.photoGridImage} />
                               <TouchableOpacity
                                 style={styles.photoDeleteBadge}
-                                onPress={() => handleRemovePhoto(slotIndex)}
+                                onPress={() => !isPhotoProcessing && handleRemovePhoto(slotIndex)}
                               >
                                 <Text style={styles.photoDeleteBadgeText}>✕</Text>
                               </TouchableOpacity>
                             </>
+                          ) : isPhotoProcessing && isActiveNextSlot ? (
+                            <ActivityIndicator size="small" color="#0468B1" />
                           ) : (
                             <Text style={[
                               styles.photoGridPlus,
@@ -4147,6 +4198,17 @@ const styles = StyleSheet.create({
     borderBottomColor: '#FFE082',
   },
   gpsUnavailableNoteText: { fontSize: scale(13), color: '#F57F17', lineHeight: 18 },
+  gpsCapturedBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#F0FFF4',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#C6F6D5',
+  },
+  gpsCapturedText: { fontSize: scale(13), color: '#276749' },
 
   // Map wrapper
   mapWrapper: { flex: 1, position: 'relative' },

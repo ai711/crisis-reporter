@@ -518,9 +518,12 @@ export async function syncQueue(apiBaseUrl: string): Promise<void> {
         await updateItemStatus(item.local_id, nextStatus, nextRetry);
         await notifyQueueChange();
         if (nextStatus === "failed") {
+          const isPhotoOnlyRetry = !!item.existing_report_id;
           void showSyncNotification(
-            "Upload failed — tap to retry",
-            "A report could not be uploaded after multiple attempts. Open the app to retry."
+            isPhotoOnlyRetry ? "Photo upload failed — tap to retry" : "Upload failed — tap to retry",
+            isPhotoOnlyRetry
+              ? "Report was submitted but photos could not be uploaded. Open the app to retry."
+              : "A report could not be uploaded after multiple attempts. Open the app to retry."
           );
         }
         // Auth expired — no point trying other items; let app refresh the token

@@ -260,6 +260,12 @@ export default function MapScreen() {
     }
   };
 
+  // Request location permission on mount so the UserLocation dot appears
+  // without requiring the user to tap the re-centre button first.
+  useEffect(() => {
+    Location.requestForegroundPermissionsAsync().catch(() => {});
+  }, []);
+
   useEffect(() => {
     NetInfo.fetch().then((state) => {
       setIsOnline(!!state.isConnected);

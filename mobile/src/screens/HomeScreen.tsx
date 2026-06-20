@@ -409,7 +409,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
           activeOpacity={1}
           onPress={() => setShowCrisisModal(false)}
         >
-          <TouchableOpacity activeOpacity={1} style={styles.modalCard}>
+          <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{t("whatCanIReport.title")}</Text>
               <TouchableOpacity
@@ -419,7 +419,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
                 <Text style={styles.modalClose}>✕</Text>
               </TouchableOpacity>
             </View>
-            <ScrollView showsVerticalScrollIndicator={false}>
+            <ScrollView showsVerticalScrollIndicator={true}>
               {Object.values(
                 t("whatCanIReport.types", { returnObjects: true }) as Record<
                   string,
@@ -435,7 +435,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
                 </View>
               ))}
             </ScrollView>
-          </TouchableOpacity>
+          </View>
         </TouchableOpacity>
       </Modal>
 

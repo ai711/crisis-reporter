@@ -26,8 +26,17 @@ from app.models.language_package import Language, StringKey, Translation
 
 log = logging.getLogger(__name__)
 
-# Non-English UN languages to auto-translate into
-_TARGET_LANGUAGES = ["ar", "zh", "fr", "ru", "es"]
+# Fallback used only when the DB cannot be reached
+_FALLBACK_LANGUAGES = ["ar", "zh", "fr", "ru", "es"]
+
+
+async def _active_target_languages(db) -> list[str]:
+    """Return all active non-English language codes from the DB."""
+    result = await db.execute(
+        select(Language.code).where(Language.status == "active", Language.code != "en")
+    )
+    codes = [row[0] for row in result.all()]
+    return codes if codes else _FALLBACK_LANGUAGES
 
 
 async def _translate_text(client: httpx.AsyncClient, text: str, target: str) -> str:
@@ -67,9 +76,10 @@ async def auto_translate_question_package(package_version: str) -> None:
 
         translate_url = settings.LIBRETRANSLATE_URL.rstrip("/") + "/translate"
         translated_total = 0
+        target_languages = await _active_target_languages(db)
 
         async with httpx.AsyncClient(timeout=30.0) as client:
-            for lang_code in _TARGET_LANGUAGES:
+            for lang_code in target_languages:
                 # Skip keys that already have a usable (non-missing) translation.
                 # status='missing' means the English source changed — must re-translate.
                 existing_result = await db.execute(
@@ -145,7 +155,7 @@ async def auto_translate_question_package(package_version: str) -> None:
             await fire_notification(
                 "translation_auto_translation_complete",
                 f"Auto-translation complete for question package '{package_version}' — "
-                f"{translated_total} string(s) translated into {len(_TARGET_LANGUAGES)} languages.",
+                f"{translated_total} string(s) translated into {len(target_languages)} languages.",
             )
         except Exception:
             log.warning("auto_translate_question_package: notification fire failed")
@@ -200,9 +210,10 @@ async def auto_translate_content(content_type: str) -> None:
 
         translate_url = settings.LIBRETRANSLATE_URL.rstrip("/") + "/translate"
         translated_total = 0
+        target_languages = await _active_target_languages(db)
 
         async with httpx.AsyncClient(timeout=30.0) as client:
-            for lang_code in _TARGET_LANGUAGES:
+            for lang_code in target_languages:
                 # Skip keys that already have a usable (non-missing) translation.
                 # status='missing' means the English source changed — must re-translate.
                 existing_result = await db.execute(
@@ -278,7 +289,7 @@ async def auto_translate_content(content_type: str) -> None:
             await fire_notification(
                 "translation_auto_translation_complete",
                 f"Auto-translation complete for '{content_type}' — "
-                f"{translated_total} string(s) translated into {len(_TARGET_LANGUAGES)} languages.",
+                f"{translated_total} string(s) translated into {len(target_languages)} languages.",
             )
         except Exception:
             log.warning("auto_translate_content: notification fire failed")

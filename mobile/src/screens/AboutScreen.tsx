@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet, Dimensions, Linking,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet, Dimensions, Linking, Modal,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -15,6 +15,7 @@ export default function AboutScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const { t } = useTranslation();
+  const [showPrivacyModal, setShowPrivacyModal] = useState(false);
 
   return (
     <View style={styles.container}>
@@ -53,7 +54,7 @@ export default function AboutScreen() {
           <Text style={styles.sectionLabel}>{t('about.section_resources')}</Text>
           <TouchableOpacity
             style={styles.linkRow}
-            onPress={() => Linking.openURL('https://www.undp.org/privacy-policy')}
+            onPress={() => setShowPrivacyModal(true)}
             activeOpacity={0.7}
           >
             <MaterialIcons name="policy" size={scale(20)} color="#0468B1" />
@@ -71,6 +72,44 @@ export default function AboutScreen() {
             <MaterialIcons name="chevron-right" size={scale(18)} color="#C1C7D2" />
           </TouchableOpacity>
         </View>
+
+        {/* Privacy Policy coming-soon modal */}
+        <Modal
+          visible={showPrivacyModal}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setShowPrivacyModal(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalSheet}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>{t('settings.privacy_policy')}</Text>
+                <TouchableOpacity onPress={() => setShowPrivacyModal(false)} style={styles.modalCloseBtn}>
+                  <Text style={styles.modalClose}>✕</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={styles.privacyBody}>
+                <View style={styles.privacyIconCircle}>
+                  <MaterialIcons name="security" size={scale(28)} color="#0468B1" />
+                </View>
+                <Text style={styles.privacyHeading}>Coming Soon</Text>
+                <Text style={styles.privacyText}>
+                  Our Privacy Policy is being finalized and will be available here shortly.
+                </Text>
+                <Text style={styles.privacySubText}>
+                  Crisis Reporter is operated by UNDP. Data collected is used solely for humanitarian response and is never shared with third parties without your consent.
+                </Text>
+                <TouchableOpacity
+                  style={styles.privacyCloseBtn}
+                  onPress={() => setShowPrivacyModal(false)}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.privacyCloseBtnText}>Got it</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
 
         {/* Card 4 — Version */}
         <View style={styles.card}>
@@ -161,4 +200,37 @@ const styles = StyleSheet.create({
     paddingHorizontal: screenWidth * 0.1,
     marginTop: 8,
   },
+
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
+  modalSheet: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 32,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  modalTitle: { fontSize: scale(16), fontWeight: '700', color: '#1B1C1C' },
+  modalCloseBtn: { padding: 4 },
+  modalClose: { fontSize: scale(18), color: '#9CA3AF' },
+  privacyBody: { alignItems: 'center', paddingHorizontal: 24, paddingTop: 20, gap: 12 },
+  privacyIconCircle: {
+    width: 64, height: 64, borderRadius: 32,
+    backgroundColor: '#EBF5FB', justifyContent: 'center', alignItems: 'center', marginBottom: 4,
+  },
+  privacyHeading: { fontSize: scale(18), fontWeight: '700', color: '#1A2B4A', textAlign: 'center' },
+  privacyText: { fontSize: scale(14), color: '#718096', lineHeight: scale(14) * 1.65, textAlign: 'center' },
+  privacySubText: { fontSize: scale(13), color: '#A0AEC0', lineHeight: scale(13) * 1.6, textAlign: 'center' },
+  privacyCloseBtn: {
+    marginTop: 8, width: '100%', height: 48, borderRadius: 24,
+    backgroundColor: '#0468B1', justifyContent: 'center', alignItems: 'center',
+  },
+  privacyCloseBtnText: { color: '#FFFFFF', fontSize: scale(15), fontWeight: '600' },
 });

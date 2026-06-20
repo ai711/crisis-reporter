@@ -2246,9 +2246,16 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
     ("stepper.step_review",    "ui_stepper", "Review"),
     ("stepper.step_submit",    "ui_stepper", "Submit"),
 
-    # side menu
-    ("menu.safety_tips", "ui_menu", "Safety Tips"),
-    ("menu.profile",     "ui_menu", "Reporter Profile"),
+    # side menu — all nine items + version footer
+    ("menu.report_incident", "ui_menu", "Report an Incident"),
+    ("menu.map",             "ui_menu", "View Map"),
+    ("menu.my_reports",      "ui_menu", "My Reports"),
+    ("menu.safety_tips",     "ui_menu", "Safety Tips"),
+    ("menu.profile",         "ui_menu", "Reporter Profile"),
+    ("menu.badges",          "ui_menu", "My Badges"),
+    ("menu.faq",             "ui_menu", "FAQ"),
+    ("menu.about",           "ui_menu", "About"),
+    ("menu.settings",        "ui_menu", "Settings"),
 
     # faq / about
     ("faq.title",   "ui_about", "FAQ"),
@@ -2868,6 +2875,8 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
     ("report.duplicate_inline_warning", "ui_report", "A report for this location may already exist from this device. You can still submit if this is a different incident."),
     ("report.location_outside_crisis_area", "ui_report", "Your selected location appears to be outside the primary crisis area. You can still submit if this is correct."),
     ("report.validation_incomplete",    "ui_report", "Please complete all required fields"),
+    ("report.required_fields_title",    "ui_report", "Required Fields"),
+    ("report.required_fields_body",     "ui_report", "Please complete all required fields before submitting."),
     ("report.error_no_connection",      "ui_report", "No Connection"),
     ("report.error_no_internet",        "ui_report", "No internet connection. Please check your connection and try again."),
     ("report.error_no_internet_warning","ui_report", "Do not close this tab — your report data will be lost."),
@@ -3038,6 +3047,7 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
     ("locationScreen.gpsRecorded",                "ui_location", "Your GPS location has been recorded and will be attached to this report."),
     ("locationScreen.gpsUnavailable",             "ui_location", "GPS signal not available. Your manual location details will be used."),
     ("locationScreen.gpsUnavailableOnline",       "ui_location", "Your GPS location is not available. You can still select a building on the map or use the search bar to find your location."),
+    ("locationScreen.gpsCaptured",                "ui_location", "GPS location captured — you can proceed or also select a building for precision."),
     ("locationScreen.offlineBanner",              "ui_location", "You are offline. Please enter your location details below."),
     ("locationScreen.duplicateWarningTitle",      "ui_location", "Possible duplicate report"),
     ("locationScreen.duplicateWarningBody",       "ui_location", "A report for this location was recently submitted. Do you want to continue with a new report?"),

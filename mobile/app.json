@@ -24,6 +24,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#1A2B4A"
       },
+      "softwareKeyboardLayoutMode": "pan",
       "package": "org.undp.crisisreporter",
       "permissions": [
         "android.permission.ACCESS_FINE_LOCATION",
