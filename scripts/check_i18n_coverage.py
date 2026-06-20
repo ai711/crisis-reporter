@@ -73,6 +73,7 @@ DYNAMIC_PREFIXES = [
     "Q8_KEY_MAP",         # used as dict key, not direct t() argument
     "whatCanIReport.types", # t("whatCanIReport.types", { returnObjects: true }) — fetches whole subtree
     "stepper.step_",      # t(I18N_KEYS[step]) dict lookup in SubmissionStepper.tsx
+    "menu.",              # t(item.labelKey) variable access in SideMenu.tsx — all menu.* keys are dynamic
 ]
 
 # ── helpers ────────────────────────────────────────────────────────────────────
