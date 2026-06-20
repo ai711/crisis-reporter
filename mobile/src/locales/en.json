@@ -233,6 +233,7 @@
     "validationTooSmall": "This image is too small to use. Please take a new photo.",
     "validationDuplicate": "This photo is already added to your report.",
     "validationBlank": "This photo appears to be blank. Please take a new photo.",
+    "validationTitle": "Cannot Use This Photo",
     "replaceTitle": "Replace Photo",
     "replaceSource": "Choose a source",
     "replaceButton": "Replace",

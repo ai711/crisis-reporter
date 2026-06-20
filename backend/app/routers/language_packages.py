@@ -3009,6 +3009,7 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
     ("photoScreen.guidelines.g4",        "ui_report", "Include the full structure in the frame where possible"),
     ("photoScreen.maxPhotos",            "ui_report", "Maximum 3 photos reached"),
     ("photoScreen.validationBlank",      "ui_report", "This photo appears to be blank. Please take a new photo."),
+    ("photoScreen.validationTitle",      "ui_report", "Cannot Use This Photo"),
     ("photoScreen.validationDuplicate",  "ui_report", "This photo is already added to your report."),
     ("photoScreen.validationEmpty",      "ui_report", "No photo was selected. Please try again."),
     ("photoScreen.validationFormat",     "ui_report", "This file type cannot be used. Please take a new photo or select a JPG, PNG, or similar image from your gallery."),

@@ -1131,7 +1131,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
       uriLower.endsWith('.gif') ||
       detectedType.includes('gif')
     ) {
-      Alert.alert('Cannot Use This Photo', t('photoScreen.validationGif'));
+      Alert.alert(t('photoScreen.validationTitle'), t('photoScreen.validationGif'));
       return null;
     }
 
@@ -1144,7 +1144,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
       detectedType.includes('raw') ||
       detectedType.includes('x-adobe-dng')
     ) {
-      Alert.alert('Cannot Use This Photo', t('photoScreen.validationFormat'));
+      Alert.alert(t('photoScreen.validationTitle'), t('photoScreen.validationFormat'));
       return null;
     }
 
@@ -1166,7 +1166,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
     try {
       const fileInfo = await FileSystem.getInfoAsync(uri);
       if (!fileInfo.exists) {
-        Alert.alert('Cannot Use This Photo', t('photoScreen.validationEmpty'));
+        Alert.alert(t('photoScreen.validationTitle'), t('photoScreen.validationEmpty'));
         return null;
       }
       originalSize = (fileInfo as any).size ?? 0;
@@ -1193,7 +1193,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
         height = converted.height;
         formatConverted = true;
       } catch {
-        Alert.alert('Cannot Use This Photo', t('photoScreen.validationFormat'));
+        Alert.alert(t('photoScreen.validationTitle'), t('photoScreen.validationFormat'));
         return null;
       }
     }
@@ -1210,14 +1210,14 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
     }
 
     if (width > 0 && height > 0 && (width < 100 || height < 100)) {
-      Alert.alert('Cannot Use This Photo', t('photoScreen.validationTooSmall'));
+      Alert.alert(t('photoScreen.validationTitle'), t('photoScreen.validationTooSmall'));
       return null;
     }
 
     // --- STEP 5: Blank image check ---
     // A genuinely blank capture is typically under 5 KB
     if (originalSize > 0 && originalSize < 5 * 1024) {
-      Alert.alert('Cannot Use This Photo', t('photoScreen.validationBlank'));
+      Alert.alert(t('photoScreen.validationTitle'), t('photoScreen.validationBlank'));
       return null;
     }
 
