@@ -42,6 +42,9 @@ const MAPTILER_KEY = process.env.EXPO_PUBLIC_MAPTILER_KEY ?? "";
 const MAP_STYLE_URL = `https://api.maptiler.com/maps/dataviz-light/style.json?key=${MAPTILER_KEY}`;
 const ANSWERS_KEY = 'cr_draft_answers';
 const DRAFT_PHOTO_DIR = `${FileSystem.Paths.document.uri}cr_draft_photos/`;
+// Stable session photo dir — copies from Expo cache here immediately so addToQueue
+// always has a documentDirectory source that survives Android cache clearing or OTA updates.
+const PHOTO_SESSION_DIR = `${FileSystem.Paths.document.uri}cr_session_photos/`;
 
 const OFFLINE_COUNTRY_FALLBACK = [
   { code: "AF", name: "Afghanistan" }, { code: "BD", name: "Bangladesh" },
@@ -633,6 +636,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
       if (debounceTimer.current) clearTimeout(debounceTimer.current);
       if (searchDebounceTimer.current) clearTimeout(searchDebounceTimer.current);
       searchAbortController.current?.abort();
+      FileSystem.deleteAsync(PHOTO_SESSION_DIR, { idempotent: true }).catch(() => {});
     };
   }, []);
 
@@ -784,6 +788,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
               onPress: async () => {
                 await AsyncStorage.removeItem(ANSWERS_KEY);
                 FileSystem.deleteAsync(DRAFT_PHOTO_DIR, { idempotent: true }).catch(() => {});
+                FileSystem.deleteAsync(PHOTO_SESSION_DIR, { idempotent: true }).catch(() => {});
               },
             },
             {
@@ -957,11 +962,24 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
       const { status } = await Location.getForegroundPermissionsAsync();
       if (status !== "granted") return;
       const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const lng = loc.coords.longitude;
+      const lat = loc.coords.latitude;
       cameraRef.current?.flyTo({
-        center: [loc.coords.longitude, loc.coords.latitude],
+        center: [lng, lat],
         zoom: 15,
         duration: 1000,
       });
+      // Programmatic flyTo may not fire onRegionDidChange with valid bounds.
+      // Wait for animation then explicitly fetch footprints.
+      await new Promise<void>((resolve) => setTimeout(resolve, 1200));
+      if (!isMountedRef.current) return;
+      const delta = 0.01;
+      if (isMountedRef.current) setBuildingsLoading(true);
+      const fc = await fetchBuildingsForBounds(lng - delta, lat - delta, lng + delta, lat + delta);
+      if (isMountedRef.current) {
+        if (fc) setBuildingsFC(fc);
+        setBuildingsLoading(false);
+      }
     } catch {
       // Silent — map remains at world view
     }
@@ -1136,6 +1154,20 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
   };
 
   // ── Photo handlers ────────────────────────────────────────────────────────────
+
+  const stagePhotoFile = async (uri: string): Promise<string> => {
+    try {
+      const dirInfo = await FileSystem.getInfoAsync(PHOTO_SESSION_DIR);
+      if (!dirInfo.exists) {
+        await FileSystem.makeDirectoryAsync(PHOTO_SESSION_DIR, { intermediates: true });
+      }
+      const dest = `${PHOTO_SESSION_DIR}${Date.now()}_${Math.random().toString(36).slice(2)}.jpg`;
+      await FileSystem.copyAsync({ from: uri, to: dest });
+      return dest;
+    } catch {
+      return uri;
+    }
+  };
 
   const processPhoto = async (uri: string, mimeType?: string): Promise<ProcessedPhoto | null> => {
 
@@ -1331,7 +1363,8 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
         try {
           const processed = await processPhoto(asset.uri, asset.mimeType ?? '');
           if (processed) {
-            setPhotos((prev) => [...prev, processed]);
+            const stableUri = await stagePhotoFile(processed.uri);
+            setPhotos((prev) => [...prev, { ...processed, uri: stableUri }]);
             void (async () => {
               try {
                 const { status } = await MediaLibrary.requestPermissionsAsync();
@@ -1369,7 +1402,8 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
         try {
           const processed = await processPhoto(asset.uri, asset.mimeType ?? '');
           if (processed) {
-            setPhotos((prev) => [...prev, processed]);
+            const stableUri = await stagePhotoFile(processed.uri);
+            setPhotos((prev) => [...prev, { ...processed, uri: stableUri }]);
           }
         } finally {
           setIsPhotoProcessing(false);
@@ -1436,9 +1470,10 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
               try {
                 const processed = await processPhoto(capturedUri, result.assets[0].mimeType ?? '');
                 if (processed) {
+                  const stableUri = await stagePhotoFile(processed.uri);
                   setPhotos((prev) => {
                     const updated = [...prev];
-                    updated[index] = processed;
+                    updated[index] = { ...processed, uri: stableUri };
                     return updated;
                   });
                   void (async () => {
@@ -1479,9 +1514,10 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
               try {
                 const processed = await processPhoto(result.assets[0].uri, result.assets[0].mimeType ?? '');
                 if (processed) {
+                  const stableUri = await stagePhotoFile(processed.uri);
                   setPhotos((prev) => {
                     const updated = [...prev];
-                    updated[index] = processed;
+                    updated[index] = { ...processed, uri: stableUri };
                     return updated;
                   });
                 }
@@ -1626,6 +1662,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
     setAdditionalQuestion(0);
     AsyncStorage.removeItem(ANSWERS_KEY).catch(() => {});
     FileSystem.deleteAsync(DRAFT_PHOTO_DIR, { idempotent: true }).catch(() => {});
+    FileSystem.deleteAsync(PHOTO_SESSION_DIR, { idempotent: true }).catch(() => {});
     setPhotos([]);
     setGpsCoords(null);
     setSelectedBuilding(null);
@@ -3057,7 +3094,13 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                           ]}
                           onPress={() => {
                             if (photo) { handlePhotoTap(slotIndex); }
-                            else if (photos.length === slotIndex) { setShowPhotoOptions(true); }
+                            else if (photos.length === slotIndex) {
+                              Alert.alert('', undefined, [
+                                { text: t('report.takePhoto'), onPress: handleTakePhoto },
+                                { text: t('report.uploadPhoto'), onPress: handlePickPhoto },
+                                { text: t('common.cancel'), style: 'cancel' },
+                              ]);
+                            }
                           }}
                           activeOpacity={photo ? 0.85 : 0.6}
                           disabled={!photo && photos.length !== slotIndex}
