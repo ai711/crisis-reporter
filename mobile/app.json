@@ -83,7 +83,8 @@
       ],
       "expo-task-manager",
       "expo-background-fetch",
-      "expo-cellular"
+      "expo-cellular",
+      "expo-media-library"
     ],
     "extra": {
       "eas": {
