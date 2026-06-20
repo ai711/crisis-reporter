@@ -217,6 +217,7 @@ async def auto_translate_content(content_type: str) -> None:
             return
 
         translated_total = 0
+        translated_langs: set[str] = set()
         target_languages = await _active_target_languages(db)
 
         async with httpx.AsyncClient(timeout=30.0) as client:
@@ -265,6 +266,7 @@ async def auto_translate_content(content_type: str) -> None:
                                 translated_by="auto",
                             ))
                         translated_total += 1
+                        translated_langs.add(lang_code)
                         await asyncio.sleep(_INTER_REQUEST_DELAY)
                     except Exception as exc:
                         log.warning(
@@ -274,6 +276,38 @@ async def auto_translate_content(content_type: str) -> None:
 
         if translated_total > 0:
             await db.commit()
+
+    # Bump language package versions so clients detect and re-download the
+    # updated translations. Without this bump, clients whose cached version
+    # matches the server version will never re-fetch and will keep showing
+    # English fallbacks for the newly translated keys.
+    if translated_langs:
+        try:
+            from app.models.language_package import LanguagePackage
+            async with AsyncSessionLocal() as pkg_db:
+                bump_result = await pkg_db.execute(
+                    select(LanguagePackage).where(
+                        LanguagePackage.status == "published",
+                        LanguagePackage.language_code.in_(list(translated_langs)),
+                    )
+                )
+                bumped = 0
+                for pkg in bump_result.scalars().all():
+                    try:
+                        parts = pkg.version.split(".")
+                        patch = int(parts[-1]) + 1 if parts[-1].isdigit() else 1
+                        pkg.version = ".".join(parts[:-1] + [str(patch)])
+                    except Exception:
+                        pkg.version = pkg.version + ".1"
+                    bumped += 1
+                if bumped:
+                    await pkg_db.commit()
+                    log.info(
+                        "auto_translate_content: bumped %d package version(s) for langs: %s",
+                        bumped, sorted(translated_langs),
+                    )
+        except Exception as exc:
+            log.warning("auto_translate_content: failed to bump package versions: %s", exc)
 
     log.info(
         "auto_translate_content: done for content_type=%s — %d strings translated",
