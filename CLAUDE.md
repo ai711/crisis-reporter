@@ -188,6 +188,11 @@ git push origin main
 | `language_package.py` | `languages`, `string_keys`, `translations` | Full translation governance system |
 | `report_project.py` | `report_projects` | Many-to-many join: reports ↔ crises |
 | `project_user.py` | `project_users` | Dashboard user access per crisis/project |
+| `question_package.py` | `question_packages`, `questions`, `question_options` | Versioned question packages; draft/publish workflow; active package is fetched by reporter apps on startup |
+| `app_setting.py` | `app_settings` | Key/value store for runtime-configurable system settings |
+| `report_edit.py` | `report_edits` | Audit trail for dashboard edits to submitted reports |
+| `health_incident.py` | `health_incidents` | (reserved for future use) |
+| `safety_progress.py` | `safety_progress` | Per-reporter progress through safety tips module |
 
 ### Services (backend/app/services/)
 - `encryption.py` — `encrypt_field(str)→bytes`, `decrypt_field(bytes)→str`, `hash_field(str)→str` (SHA-256). All PII stored as `*_encrypted` + `*_hash` column pairs.
@@ -199,13 +204,15 @@ git push origin main
 ### Routers (backend/app/routers/)
 All routers are prefixed with `/api`. Key ones:
 - `reports.py` — `POST /api/reports` (submit), `GET /api/reports/{id}`
-- `reporter_auth.py` — Anonymous register, verified register/login, token refresh
-- `dashboard_auth.py` — Staff login/logout, token refresh, password change
-- `dashboard_sse.py` — `GET /api/dashboard/stream` SSE endpoint; uses Redis pub/sub per `crisis_id`
+- `reporter_auth.py` — Anonymous register, verified register/login, token refresh; sets/clears HttpOnly cookies on login/logout
+- `dashboard_auth.py` — Staff login/logout, token refresh, password change; sets/clears HttpOnly cookies on login/logout; login rate-limiting via Redis
+- `dashboard_sse.py` — `GET /api/dashboard/stream` SSE endpoint; uses Redis pub/sub per `crisis_id`; authenticates via HttpOnly cookie (`withCredentials`)
 - `exports.py` — Export jobs (CSV, GeoJSON, Shapefile, GeoPackage, RAPIDA); signed download URLs
 - `flag_rules.py` — `PATCH /api/flag-rules` to update auto-flagging thresholds at runtime
 - `language_packages.py` — Translation management (4 sub-routers: languages, packages, keys, translations)
 - `review_queue.py` — Redis-backed soft-lock system (15-min claim window per reviewer)
+- `content.py` — `/api/content` — CMS for T&C, onboarding slides, reporting guidelines, first aid, FAQ, safety tips, disaster types, crisis types, error/system messages; all content types feed the translation pipeline
+- `question_packages.py` — `/api/question-packages` — versioned question packages; draft → publish workflow; `GET /api/question-packages/active` is public (reporter apps call on startup)
 
 ### Background Loops (started in lifespan)
 Four `asyncio.create_task` loops run perpetually:
@@ -220,13 +227,14 @@ Every startup (idempotent): `seed_initial_package()`, `seed_string_keys()`, `see
 ## Architecture — Web/PWA (reporter app)
 
 ### Key Files
-- `web/src/services/api.ts` — Axios instance with silent JWT refresh interceptor. Token stored in `localStorage` under keys `cr_access_token`, `cr_refresh_token`, `cr_reporter_id`. **Token refresh is at the HTTP layer, never the UI layer.**
+- `web/src/services/api.ts` — Axios instance with `withCredentials: true`. JWT tokens are stored as **HttpOnly cookies** (XSS-safe); `localStorage` only stores `cr_reporter_id` as a session presence indicator. **Token refresh is at the HTTP layer, never the UI layer.**
 - `web/src/utils/offlineQueue.ts` — IndexedDB store `crisis_reporter/report_queue`. Reports written here when offline; synced when online. Each entry has a `local_id` that is echoed to the backend to prevent duplicates on retry.
-- `web/src/App.tsx` — Route guard checks `cr_country`, `cr_language` (onboarding), `cr_tc_accepted` (T&C). Incomplete onboarding redirects to `/onboarding` with `?next=` for post-completion redirect.
+- `web/src/services/auth.ts` — `flushPendingAnonRegistration()` retries a failed offline anonymous registration. Runs on startup and on every `online` event so queued reports always have a real `reporter_id` before they sync.
+- `web/src/App.tsx` — Route guard checks `cr_country`, `cr_language` (onboarding), `cr_tc_accepted` (T&C). Incomplete onboarding redirects to `/onboarding` with `?next=` for post-completion redirect. Arabic sets `document.documentElement.dir="rtl"` automatically; all other UN languages use `ltr`.
 - `web/src/i18n.ts` — i18next config. Language packs are fetched from the API and cached. `loadLanguagePackageFromCache()` is called on every route change to prevent drift back to English.
 
 ### localStorage Keys
-`cr_access_token`, `cr_refresh_token`, `cr_reporter_id`, `cr_country`, `cr_language`, `cr_tc_accepted`, `cr_tc_version`
+`cr_reporter_id` (session presence indicator only — tokens are in HttpOnly cookies), `cr_country`, `cr_language`, `cr_tc_accepted`, `cr_tc_version`
 
 ### VITE_API_URL
 Set this env var to point to the backend. Defaults to `http://127.0.0.1:8000`.
@@ -234,17 +242,21 @@ Set this env var to point to the backend. Defaults to `http://127.0.0.1:8000`.
 ## Architecture — Dashboard (UNDP staff app)
 
 ### Key Files
-- `dashboard/src/services/api.ts` — Axios instance; same silent-refresh pattern as web.
-- `dashboard/src/hooks/useSSE.ts` — Connects to `GET /api/dashboard/stream?crisis_id=…&token=…`. Auto-reconnects after 5s on error. Token passed as query param because `EventSource` doesn't support custom headers.
+- `dashboard/src/services/api.ts` — Axios instance with `withCredentials: true`. Same HttpOnly cookie auth as web; `tokenStorage` is kept as a thin interface for `isAuthenticated()` calls but stores no raw tokens.
+- `dashboard/src/hooks/useSSE.ts` — Connects to `GET /api/dashboard/stream?crisis_id=…` with `withCredentials: true` (HttpOnly cookie authenticates the EventSource). Auto-reconnects after 5s on error.
 - `dashboard/src/stores/authStore.ts` — Zustand store; persists user profile including `role_permissions` (JSONB from `roles` table).
-- `dashboard/src/App.tsx` — `ProtectedRoute` checks `isAuthenticated()` + optional `requiredRole` or `requiredSection`. Section keys: `main_map_view`, `reports_page`, `location_page`, `review_queue`, `analytics_and_statistics`, `reporter_profiles`, `export`, `projects`, `manage_users`, `manage_roles`, `app_configuration`.
+- `dashboard/src/App.tsx` — `ProtectedRoute` checks `isAuthenticated()` + optional `requiredRole` or `requiredSection`. Section keys: `main_map_view`, `reports_page`, `location_page`, `review_queue`, `analytics_and_statistics`, `reporter_profiles`, `export`, `projects`, `manage_users`, `manage_roles`, `app_configuration`, `content_management`.
 
 ### Dashboard Route Map
-`/map` → MainMapPage, `/reports` → ReportsPage, `/locations` → LocationsPage (properties), `/review-queue` → ReviewQueuePage, `/analytics` → AnalyticsPage, `/reporters` → ReportersPage, `/export` → ExportPage, `/projects` → ProjectsPage, `/users` → UserManagementPage, `/roles` → ManageRolesPage, `/settings` → SystemSettingsPage
+`/map` → MainMapPage, `/reports` → ReportsPage, `/locations` → LocationsPage (properties), `/review-queue` → ReviewQueuePage, `/analytics` → AnalyticsPage, `/reporters` → ReportersPage, `/export` → ExportPage, `/projects` → ProjectsPage, `/users` → UserManagementPage, `/roles` → ManageRolesPage, `/settings` → SystemSettingsPage, `/content` → ContentManagementPage
 
 ## Architecture — Mobile (Android)
 
 Built with Expo SDK 56 / React Native 0.81. Managed workflow — no `android/` edits. Map via `@maplibre/maplibre-react-native`. Offline queue uses `expo-file-system`. Push notifications via `expo-notifications` (FCM). Build APK with `eas build --platform android`.
+
+**Offline queue reliability:** `syncQueue` uses exponential backoff between retries (2, 4, 8, 16, 30 min) so a temporarily unreachable server doesn't burn all retries rapidly. When `FileSystem.copyAsync` fails for a queued photo, `copy_failed` is flagged on that `QueuedPhoto` entry and the confirmation screen shows an amber warning prompting the user to sync while the app is open. Notification taps deep-link to the specific queued report via `local_id`.
+
+**Bearer-header auth:** Android uses `Authorization: Bearer <token>` with tokens in `SecureStore`. The backend refresh endpoint accepts both cookie (web) and request-body token (mobile) so mobile auth is unaffected by the HttpOnly cookie migration.
 
 ## Locked Technical Decisions — Never Re-Open These
 
@@ -257,7 +269,16 @@ Built with Expo SDK 56 / React Native 0.81. Managed workflow — no `android/` e
 - Dashboard staff: email + password, JWT; `ctx="dashboard"` claim
 - Reporter verified: email + password, JWT; `ctx="reporter"` claim
 - Reporter anonymous: device UUID only, no JWT
-- Access token TTL: 15 minutes | Refresh token TTL: 7 days
+- Access token TTL: 60 minutes | Refresh token TTL: 30 days
+
+**Token transport — two modes, one backend:**
+- **Web PWA + Dashboard** → HttpOnly cookies (`cr_access_token`, `cr_refresh_token`). Set by the server on login/refresh; cleared on logout. `axios` uses `withCredentials: true`. `localStorage` never holds raw tokens. This is the XSS-safe path.
+- **Android (React Native)** → `Authorization: Bearer <token>` header, tokens stored in `SecureStore`. Refresh endpoint accepts both cookie and request-body token, so mobile clients are unaffected by the cookie migration.
+- `_extract_token()` in `dependencies.py` reads the cookie first, then falls back to the `Authorization` header — both paths reach the same JWT validation logic.
+
+**Login security (dashboard only):** Redis-backed rate limiting — `LOGIN_RATE_LIMIT_ATTEMPTS` failed attempts within `LOGIN_RATE_LIMIT_WINDOW_MINUTES` triggers a `LOGIN_LOCKOUT_MINUTES` lockout for that IP. Configurable at runtime via System Settings.
+
+**Inactivity timeout:** `INACTIVITY_TIMEOUT_MINUTES` (default 30) — dashboard frontend tracks last activity and forces re-login if exceeded.
 
 ### CRITICAL — Silent JWT Refresh
 Token refresh MUST happen silently at the HTTP client layer (axios interceptor). It must NEVER interrupt an active form flow or report submission. This applies to both the PWA and the Android app.
@@ -296,7 +317,7 @@ Runs in `backend/app/services/auto_flagging.py` as a FastAPI `BackgroundTask` (n
 1. **Blocked device ID** — Two sub-rules both evaluated:
    - **1a** `reporter_blocked`: reporter's own profile is directly marked `is_blocked=True`
    - **1b** `blocked_device`: reporter's `device_id_hash` matches another manually-blocked profile; also auto-blocks the submitting reporter with a pending confirmation window (side effect always fires)
-2. **IP blocked reporter match** `blocked_ip` — submission IP hash matches a blocked reporter's stored IP hash; fully active (`Reporter.ip_address_hash` column exists and is migrated)
+2. **IP blocked reporter match** `blocked_ip` — submission IP hash (`report.ip_address_hash`) matches a blocked reporter's `ip_address_hash`; fully active
 3. **No photo** `no_photos` — report has zero photos (with a 20-second grace window for slow uploads on non-queued reports)
 4. **No location** `no_location` — report has neither GPS coordinates nor a text address
 5. **Coordinated GPS duplicate** `coordinated_gps_duplicate` — **DISABLED by default** (`gps_duplicate_enabled: false` in `_thresholds`). When enabled: a *different* reporter submitted from within ~100 m (configurable via `duplicate_radius_degrees`) in the last 24 h. Disabled because legitimate reporters often report the same damaged building. Enable via `PATCH /api/flag-rules {"gps_duplicate_enabled": true}` if needed.
@@ -348,13 +369,14 @@ Every `t('key')` call added to any `.tsx`/`.ts` file in `web/src` or `mobile/src
 
 **What the CI script is:** `scripts/check_i18n_coverage.py` is a local quality-gate script that scans every `t('key')` call in the entire frontend codebase (web + mobile) and cross-checks them against `_SEED_KEYS` and `en.json`. Run it before committing any i18n change. "CI" stands for Continuous Integration — on a build server this would run automatically on every pull request; for now it is a manual pre-commit check.
 
-**Three checks performed:**
+**Four checks performed:**
 
 | Check | Severity | Meaning | Action |
 |-------|----------|---------|--------|
 | **CHECK B** | 🔴 Always blocking | Key used in code, absent from both `en.json` AND `_SEED_KEYS`. Even English sees a broken/empty string. | Add key to both `en.json` and `_SEED_KEYS`. |
 | **CHECK A** | 🟡 Warning (`--strict` makes it fail) | Key in `en.json` (English fine) but absent from `_SEED_KEYS`. Non-English users always see English — silent bug. | Add key to `_SEED_KEYS`. |
 | **CHECK C** | ℹ️ Info only, never blocks | Key in `_SEED_KEYS` but no literal `t()` call found. May be a dead key OR a dynamic/template-literal key the grep can't see. | Review — if truly dead, retire it; if dynamic, add prefix to `DYNAMIC_PREFIXES`. |
+| **CHECK D** | 🟡 Warning (non-blocking) | Key used on one platform and in `_SEED_KEYS`, but absent from the OTHER platform's `en.json`. Offline static fallback fails on that platform. | Add the key to the missing platform's `en.json`. Suppress with `--no-platform-gap`. |
 
 **CI enforcement:**
 ```bash
@@ -366,6 +388,9 @@ python scripts/check_i18n_coverage.py --strict
 
 # Suppress the dead-key info list (CHECK C) to reduce noise
 python scripts/check_i18n_coverage.py --no-dead
+
+# Suppress cross-platform locale gap warnings (CHECK D)
+python scripts/check_i18n_coverage.py --no-platform-gap
 ```
 Exit codes: 0 = pass, 1 = pipeline gap (strict only), 2 = English broken, 3 = both.
 
@@ -373,7 +398,7 @@ Exit codes: 0 = pass, 1 = pipeline gap (strict only), 2 = English broken, 3 = bo
 
 **Dynamic keys — what `DYNAMIC_PREFIXES` is for:** some keys are built at runtime via template literals, e.g. `` t(`Q${n}_LABEL`) `` or `` t(`disaster_types.${v}`) ``. The script can never find these via static grep. They are listed in `DYNAMIC_PREFIXES` inside the script so CHECK B/C skip them rather than reporting them as broken or dead. If you add a new template-literal key pattern, add its prefix to `DYNAMIC_PREFIXES`.
 
-Current dynamic prefixes: `SAFETY_DISASTER_`, `SAFETY_TIP_`, `disaster_types.`, `faq.q`, `faq_m.q`, `map.damage_`, `my_reports.damage_`, `Q1–Q8 _OPT_/*_LABEL`, `Q8_KEY_MAP`, `whatCanIReport.types` (returnObjects call), `stepper.step_` (dict lookup in SubmissionStepper).
+Current dynamic prefixes: `SAFETY_DISASTER_`, `SAFETY_TIP_`, `disaster_types.`, `crisis_types.`, `faq.q`, `faq_m.q`, `map.damage_`, `my_reports.damage_`, `Q1–Q8 _OPT_/*_LABEL`, `Q8_KEY_MAP`, `whatCanIReport.types` (returnObjects call), `stepper.step_` (dict lookup in SubmissionStepper), `menu.` (variable key access in SideMenu).
 
 **Checklist — run mentally before committing any frontend i18n change:**
 1. Added a new `t('some.key')` call? → Add `("some.key", "category", "English text")` to `_SEED_KEYS`.
@@ -446,7 +471,27 @@ GOOGLE_TRANSLATE_API_KEY
 TRANSLATION_PRIMARY google | libretranslate
 FIRST_ADMIN_EMAIL, FIRST_ADMIN_PASSWORD
 EXPORT_URL_SIGN_SECRET
+IPAPI_KEY           Optional — unlocks 15k req/min on ip-api.com (Rule 7)
 ALLOWED_ORIGINS     JSON array of allowed CORS origins
+
+# Auth cookies
+COOKIE_SECURE       true in prod (Railway HTTPS); false in local dev (plain HTTP)
+COOKIE_SAMESITE     none in prod (cross-origin Railway domains); lax in local dev
+
+# Login rate limiting (dashboard)
+LOGIN_RATE_LIMIT_ATTEMPTS        default 5
+LOGIN_RATE_LIMIT_WINDOW_MINUTES  default 10
+LOGIN_LOCKOUT_MINUTES            default 15
+
+# Session / inactivity (dashboard)
+INACTIVITY_TIMEOUT_MINUTES       default 30
+
+# Property grouping
+CONFLICT_WARNING_THRESHOLD       default 0.25 (minority share ≥ 25% triggers warning)
+GPS_GROUPING_RADIUS_DEGREES      default 0.001 (~100 m at equator)
+
+# Reporting radius
+REPORTING_RADIUS_DEFAULT_MILES   default 50
 ```
 
 ## Hosting
@@ -460,11 +505,9 @@ These are confirmed gaps between the Chapter 3 design document and the current i
 
 1. **`question_answers` — no required/appendix distinction**: The `question_answers` JSON column on `Report` is a flat list of `{question, answer}` pairs. There is no `is_required` or `is_appendix` field on each entry. Chapter 3 specifies that required Q1–Q4 answers and optional appendix answers should be shown in separate UI sections. This split is not currently possible without a data model change — either a schema change to the JSON column or a separate `appendix_answers` column. Skip this until the question model is extended.
 
-2. **Rule 2 (IP blocked reporter match) — disabled**: `auto_flagging.py` has a TODO comment at Rule 2. It requires `Reporter.ip_address_hash` which does not yet exist on the `reporters` table. When this column is added (requires migration), Rule 2 can be re-enabled.
+2. **Reporter-level IP history**: `Reporter` now has `ip_address_hash` (the most recent submission IP hash, used by Rule 2 and Rule 8). Full per-reporter IP *history* (multiple IPs over time) is still not stored — there is no IP log table. If IP history is ever needed, a separate `reporter_ip_log` table must be designed.
 
-3. **Reporter-level IP address**: The `Reporter` model stores no IP. Submission IP is stored on the `Report` record (`ip_address_encrypted`, base64 Fernet-encoded). Displayed in the dashboard report detail view via decryption at read time. If per-reporter IP history is ever needed, a separate encrypted column must be added to `reporters`.
-
-4. **Photo EXIF fields**: `Photo` model stores `exif_timestamp`, `exif_latitude`, `exif_longitude`, `exif_device_make`, `exif_device_model`. These are extracted from photo EXIF at upload time. `exif_timestamp` is exposed in the dashboard report detail API (`PhotoSummary.exif_timestamp`). The others are stored but not currently surfaced in any API response.
+3. **Photo EXIF fields**: `Photo` model stores `exif_timestamp`, `exif_latitude`, `exif_longitude`, `exif_device_make`, `exif_device_model`. These are extracted from photo EXIF at upload time. `exif_timestamp` is exposed in the dashboard report detail API (`PhotoSummary.exif_timestamp`). The others are stored but not currently surfaced in any API response.
 
 ## Documented Prototype Exceptions
 1. iOS native app: NOT built — Xcode requires macOS
