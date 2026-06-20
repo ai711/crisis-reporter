@@ -91,7 +91,7 @@ export default function SettingsPage() {
   const { t } = useTranslation(); // keeps i18next react context active for language switching
   const { setCountry, setLanguage, logout } = useAuthStore();
 
-  const [modal, setModal] = useState<"country" | "language" | null>(null);
+  const [modal, setModal] = useState<"country" | "language" | "privacy" | null>(null);
 
   // Read current values from localStorage as source of truth
   const [currentCountryCode, setCurrentCountryCode] = useState(
@@ -124,9 +124,22 @@ export default function SettingsPage() {
     api
       .get<{ code: string; name: string }[]>("/api/language-packages/available")
       .then((res) => {
-        if (res.data && res.data.length > 0) setAvailableLanguages(res.data);
+        if (res.data && res.data.length > 0) {
+          setAvailableLanguages(res.data);
+          // Cache for offline use so previously-downloaded non-UN languages remain visible
+          try { localStorage.setItem("cr_available_languages", JSON.stringify(res.data)); } catch { /* ignore */ }
+        }
       })
-      .catch(() => { /* silent — keep UN_LANGUAGES fallback */ })
+      .catch(() => {
+        // Offline: try the cached list before falling back to the 6 UN languages
+        try {
+          const cached = localStorage.getItem("cr_available_languages");
+          if (cached) {
+            const parsed = JSON.parse(cached) as { code: string; name: string }[];
+            if (parsed.length > 0) setAvailableLanguages(parsed);
+          }
+        } catch { /* keep UN_LANGUAGES fallback */ }
+      })
       .finally(() => setAvailableLangsLoaded(true));
   }, [modal, availableLangsLoaded]);
 
@@ -209,9 +222,16 @@ export default function SettingsPage() {
       return; // Keep modal open for retry.
     }
 
-    // Remove the old language package from localStorage to free up space.
-    try { localStorage.removeItem(`cr_language_package_${prevLangCodeRef.current}`); } catch { /* ignore */ }
+    // Only remove the old non-UN package when switching to a different non-UN language
+    // (the one case where we genuinely need to free space). Switching to a UN language
+    // must never evict a cached non-UN package — the user may want to switch back while
+    // offline, and UN languages use bundled files so no cache space is needed.
+    const UN_CODES = new Set(["ar", "zh", "en", "fr", "ru", "es"]);
+    const prevCode = prevLangCodeRef.current;
     prevLangCodeRef.current = code;
+    if (!UN_CODES.has(prevCode) && !UN_CODES.has(code) && prevCode !== code) {
+      try { localStorage.removeItem(`cr_language_package_${prevCode}`); } catch { /* ignore */ }
+    }
 
     try { localStorage.setItem("cr_language", code); } catch { /* ignore */ }
     setLanguage(code);
@@ -296,7 +316,7 @@ export default function SettingsPage() {
             <div style={s.divider} />
             <button
               style={s.row}
-              onClick={() => window.open('https://www.undp.org/privacy-policy', '_blank', 'noopener,noreferrer')}
+              onClick={() => setModal("privacy")}
             >
               <span style={s.rowLabel}>{t('settings.privacy_policy')}</span>
               <IconChevron />
@@ -428,6 +448,67 @@ export default function SettingsPage() {
                   );
                 })}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* ── Privacy Policy modal ── */}
+      {modal === "privacy" && (
+        <div style={s.overlay} onClick={closeModal}>
+          <div style={s.sheet} onClick={(e) => e.stopPropagation()}>
+            <div style={s.sheetHandle} />
+            <div style={s.sheetHeader}>
+              <span style={s.sheetTitle}>{t('settings.privacy_policy')}</span>
+              <button style={s.closeBtn} onClick={closeModal} aria-label="Close">
+                <IconClose />
+              </button>
+            </div>
+            <div style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              padding: "24px 28px 40px",
+              gap: 16,
+            }}>
+              <div style={{
+                width: 64,
+                height: 64,
+                borderRadius: 32,
+                background: "#EBF5FB",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}>
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#0468B1" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                </svg>
+              </div>
+              <p style={{ fontSize: 18, fontWeight: 700, color: "#1A2B4A", margin: 0, textAlign: "center" }}>
+                Coming Soon
+              </p>
+              <p style={{ fontSize: 14, color: "#718096", lineHeight: 1.65, margin: 0, textAlign: "center" }}>
+                Our Privacy Policy is being finalized and will be available here shortly.
+              </p>
+              <p style={{ fontSize: 13, color: "#A0AEC0", lineHeight: 1.6, margin: 0, textAlign: "center" }}>
+                Crisis Reporter is operated by UNDP. Data collected is used solely for humanitarian response and is never shared with third parties without your consent.
+              </p>
+              <button
+                style={{
+                  marginTop: 8,
+                  width: "100%",
+                  height: 48,
+                  borderRadius: 24,
+                  background: "#0468B1",
+                  color: "#fff",
+                  border: "none",
+                  fontSize: 15,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+                onClick={closeModal}
+              >
+                Got it
+              </button>
             </div>
           </div>
         </div>

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView,
-  Modal, FlatList, TextInput, Alert, Dimensions, Linking, I18nManager,
+  Modal, FlatList, TextInput, Alert, Dimensions, I18nManager,
 } from "react-native";
 import * as Updates from "expo-updates";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -32,6 +32,7 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
 
   const [showCountryPicker, setShowCountryPicker] = useState(false);
   const [showLanguagePicker, setShowLanguagePicker] = useState(false);
+  const [showPrivacyModal, setShowPrivacyModal] = useState(false);
   const [countries, setCountries] = useState<Country[]>([]);
   const [countrySearch, setCountrySearch] = useState("");
   const [currentCountry, setCurrentCountry] = useState("");
@@ -55,8 +56,23 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
 
   useEffect(() => {
     api.get("/api/language-packages/available")
-      .then((r) => setAvailableLangs(r.data))
-      .catch(() =>
+      .then((r) => {
+        setAvailableLangs(r.data);
+        // Cache for offline use so previously-downloaded non-UN languages remain visible
+        AsyncStorage.setItem("cr_available_languages", JSON.stringify(r.data)).catch(() => {});
+      })
+      .catch(async () => {
+        // Offline: try the cached list before falling back to the 6 UN languages
+        try {
+          const cached = await AsyncStorage.getItem("cr_available_languages");
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              setAvailableLangs(parsed);
+              return;
+            }
+          }
+        } catch { /* ignore */ }
         setAvailableLangs([
           { code: "en", name: "English" },
           { code: "fr", name: "Français" },
@@ -64,8 +80,8 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
           { code: "zh", name: "中文" },
           { code: "ru", name: "Русский" },
           { code: "es", name: "Español" },
-        ])
-      );
+        ]);
+      });
   }, []);
 
   const filteredCountries = countries.filter((c) =>
@@ -99,30 +115,40 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
     if (!UN_LANG_CODES.includes(langCode)) {
       const netState = await NetInfo.fetch();
       if (!netState.isConnected) {
-        Alert.alert(
-          "No Internet",
-          "This language requires a download to set up. Please connect to the internet to continue with this language, or choose from the available languages below."
-        );
-        return;
-      }
-      try {
-        const pkgResponse = await api.get(`/api/language-packages/active/${langCode}`);
-        const translationMap: Record<string, string> = pkgResponse.data?.strings ?? pkgResponse.data;
-        if (translationMap && Object.keys(translationMap).length > 0) {
-          await AsyncStorage.setItem(
-            `cr_lang_package_${langCode}`,
-            JSON.stringify(translationMap)
+        // Before blocking with an alert, check if the package is already cached.
+        // The user may have downloaded this language previously and just wants to switch back.
+        const cached = await AsyncStorage.getItem(`cr_lang_package_${langCode}`);
+        if (!cached) {
+          Alert.alert(
+            "No Internet",
+            "This language requires a download to set up. Please connect to the internet to continue with this language, or choose from the available languages below."
           );
+          return;
         }
-      } catch {
-        Alert.alert(
-          "Download failed",
-          "Could not download this language package. Please try again."
-        );
-        return;
+        // Package is cached — load from cache and fall through to the language switch.
+        const { loadDynamicLanguagePackage } = await import("../i18n");
+        await loadDynamicLanguagePackage(langCode);
+      } else {
+        // Online — download fresh package from backend.
+        try {
+          const pkgResponse = await api.get(`/api/language-packages/active/${langCode}`);
+          const translationMap: Record<string, string> = pkgResponse.data?.strings ?? pkgResponse.data;
+          if (translationMap && Object.keys(translationMap).length > 0) {
+            await AsyncStorage.setItem(
+              `cr_lang_package_${langCode}`,
+              JSON.stringify(translationMap)
+            );
+          }
+        } catch {
+          Alert.alert(
+            "Download failed",
+            "Could not download this language package. Please try again."
+          );
+          return;
+        }
+        const { loadDynamicLanguagePackage } = await import("../i18n");
+        await loadDynamicLanguagePackage(langCode);
       }
-      const { loadDynamicLanguagePackage } = await import("../i18n");
-      await loadDynamicLanguagePackage(langCode);
     } else {
       // UN language: load cached backend package (full pipeline strings) before switching.
       // Fall back silently — bundled static file is used if no cache exists yet.
@@ -272,7 +298,7 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
           {/* Privacy Policy */}
           <TouchableOpacity
             style={styles.settingRow}
-            onPress={() => Linking.openURL('https://www.undp.org/privacy-policy')}
+            onPress={() => setShowPrivacyModal(true)}
           >
             <View style={styles.iconContainerGray}>
               <MaterialIcons name="security" size={scale(20)} color="#717782" />
@@ -378,6 +404,46 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
                 );
               }}
             />
+          </View>
+        </View>
+      </Modal>
+      {/* Privacy Policy coming-soon modal */}
+      <Modal
+        visible={showPrivacyModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowPrivacyModal(false)}
+      >
+        <View style={styles.pickerOverlay}>
+          <View style={[styles.pickerSheet, { paddingBottom: insets.bottom + 24 }]}>
+            <View style={styles.pickerHeader}>
+              <Text style={styles.pickerTitle}>{t("settings.privacy_policy")}</Text>
+              <TouchableOpacity
+                onPress={() => setShowPrivacyModal(false)}
+                style={styles.pickerCloseBtn}
+              >
+                <Text style={styles.pickerClose}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.privacyBody}>
+              <View style={styles.privacyIconCircle}>
+                <MaterialIcons name="security" size={scale(28)} color="#0468B1" />
+              </View>
+              <Text style={styles.privacyHeading}>Coming Soon</Text>
+              <Text style={styles.privacyText}>
+                Our Privacy Policy is being finalized and will be available here shortly.
+              </Text>
+              <Text style={styles.privacySubText}>
+                Crisis Reporter is operated by UNDP. Data collected is used solely for humanitarian response and is never shared with third parties without your consent.
+              </Text>
+              <TouchableOpacity
+                style={styles.privacyCloseBtn}
+                onPress={() => setShowPrivacyModal(false)}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.privacyCloseBtnText}>Got it</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -527,4 +593,53 @@ const styles = StyleSheet.create({
   pickerItemSelected: { backgroundColor: "#0468B1", borderColor: "#0468B1" },
   pickerItemText: { fontSize: scale(15), fontWeight: "500", color: "#1B1C1C" },
   pickerItemTextSelected: { color: "#FFFFFF" },
+
+  // Privacy Policy coming-soon modal
+  privacyBody: {
+    alignItems: "center",
+    paddingHorizontal: 24,
+    paddingTop: 8,
+    gap: 12,
+  },
+  privacyIconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: "#EBF5FB",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 4,
+  },
+  privacyHeading: {
+    fontSize: scale(18),
+    fontWeight: "700",
+    color: "#1A2B4A",
+    textAlign: "center",
+  },
+  privacyText: {
+    fontSize: scale(14),
+    color: "#718096",
+    lineHeight: scale(14) * 1.65,
+    textAlign: "center",
+  },
+  privacySubText: {
+    fontSize: scale(13),
+    color: "#A0AEC0",
+    lineHeight: scale(13) * 1.6,
+    textAlign: "center",
+  },
+  privacyCloseBtn: {
+    marginTop: 8,
+    width: "100%",
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: "#0468B1",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  privacyCloseBtnText: {
+    color: "#FFFFFF",
+    fontSize: scale(15),
+    fontWeight: "600",
+  },
 });

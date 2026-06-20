@@ -175,4 +175,23 @@ export async function loadLanguagePackageFromCache(langCode: string): Promise<bo
   return false;
 }
 
+// ── Startup background pipeline fetch ─────────────────────────────────────────
+// Mirrors mobile/src/i18n.ts behaviour: on app load, if the user has a non-English
+// language saved, apply the cached bundle instantly (Phase 1) then fire a background
+// version check + conditional re-download (Phase 2).
+// This ensures the sparse bundled locale files get replaced with full pipeline strings
+// the first time the user goes online after choosing a non-English language.
+(async () => {
+  try {
+    const savedLanguage = localStorage.getItem("cr_language");
+    if (!savedLanguage || savedLanguage === "en") return;
+
+    // Phase 1: apply cached bundle immediately so the first render uses the right language
+    await loadLanguagePackageFromCache(savedLanguage);
+
+    // Phase 2: background version check + conditional re-download (fire-and-forget)
+    loadLanguagePackage(savedLanguage).catch(() => {});
+  } catch { /* ignore — localStorage may be unavailable (private browsing) */ }
+})();
+
 export default i18n;
