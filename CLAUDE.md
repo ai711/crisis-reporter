@@ -131,6 +131,36 @@ npx expo start         # Start Expo dev server
 npx expo run:android   # Run on connected Android device/emulator
 ```
 
+## Git Workflow — Rules
+
+### CRITICAL — Never amend a pushed commit
+`git commit --amend` rewrites the current HEAD commit in place. If that commit has already been pushed to `origin/main`, the rewritten commit gets a new SHA and local history diverges from remote. This requires a force-push (destructive) or a rebase to reconcile.
+
+**Rule:** use `--amend` only on commits that have NOT been pushed yet.
+
+**If you need to fix something already pushed:** create a new commit on top instead.
+```bash
+# Wrong — rewrites pushed history:
+git commit --amend
+
+# Right — adds a fixup on top:
+git add <file>
+git commit -m "fix: correct <whatever>"
+git push origin main
+```
+
+**If divergence already happened** (push rejected with "non-fast-forward"):
+```bash
+git fetch origin
+git rebase origin/main   # replays your local-only commits on top of remote HEAD
+git push origin main
+```
+
+### EAS Build — eas.json schema rules
+- `env` belongs **inside each build profile** (`build.development.env`, etc.), not at the top level of `eas.json`. A top-level `env` key is not valid and will fail schema validation with `eas.json is not valid`.
+- `cli.appVersionSource` must be `"local"` — required by EAS CLI and consistent with `runtimeVersion.policy: "appVersion"` in `app.json`.
+- All three profiles (`development`, `preview`, `production`) must have a `channel` set for `expo-updates` to work.
+
 ## Architecture — Backend
 
 ### Request Flow
