@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
 import api from "../services/api";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
@@ -89,6 +90,7 @@ interface PushNotificationSheetProps {
 export default function PushNotificationSheet({
   reporterId,
 }: PushNotificationSheetProps) {
+  const { t } = useTranslation();
   const [visible, setVisible] = useState(false);
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -194,7 +196,7 @@ export default function PushNotificationSheet({
             <BellIcon />
           </div>
 
-          <h2 style={s.title}>Stay informed during crises</h2>
+          <h2 style={s.title}>{t('pushNotification.title')}</h2>
 
           <p style={s.body}>
             Allow Crisis Reporter to notify you when a new crisis is activated

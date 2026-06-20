@@ -537,7 +537,7 @@ export default function OnboardingPage() {
 
           {countriesError === "nocache" ? (
             <div style={s.blockingError}>
-              <p style={{ fontWeight: 600, marginBottom: 6 }}>No internet connection</p>
+              <p style={{ fontWeight: 600, marginBottom: 6 }}>{t('onboarding.no_internet_title')}</p>
               <p style={{ fontSize: 13, lineHeight: 1.5 }}>
                 An internet connection is required. Please check your connection and refresh.
               </p>
@@ -714,7 +714,7 @@ export default function OnboardingPage() {
         </button>
         <div style={s.footerNote}>
           <LockIcon />
-          <span>Your data is secured by UNDP Privacy Protocols</span>
+          <span>{t('onboarding.data_secured')}</span>
         </div>
       </div>
 

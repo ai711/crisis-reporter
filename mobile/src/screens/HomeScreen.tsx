@@ -294,7 +294,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
           </View>
           <View style={styles.whatCardText}>
             <Text style={styles.whatCardTitle}>{t("whatCanIReport.link")}</Text>
-            <Text style={styles.whatCardSubtitle}>Tap to see what types of damage you can report</Text>
+            <Text style={styles.whatCardSubtitle}>{t('home.what_card_subtitle')}</Text>
           </View>
           <MaterialIcons name="chevron-right" size={scale(20)} color="#C1C7D2" />
         </TouchableOpacity>

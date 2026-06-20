@@ -17,7 +17,8 @@
     "see_all": "See all",
     "nav_home": "HOME",
     "nav_map": "MAP",
-    "nav_reports": "REPORTS"
+    "nav_reports": "REPORTS",
+    "what_card_subtitle": "Tap to see what types of damage you can report"
   },
   "report": {
     "title": "Report Damage",
@@ -42,7 +43,16 @@
     "loading_buildings": "Loading footprints…",
     "dupe_title": "Possible duplicate report",
     "dupe_body": "It looks like you may have already submitted a report for this building. Submitting again could create a duplicate. Are you sure you want to continue?",
-    "dupe_submit_anyway": "Submit anyway"
+    "dupe_submit_anyway": "Submit anyway",
+    "gps_error_title": "GPS Error",
+    "gps_error_body": "Could not get location.",
+    "camera_error_title": "Camera Error",
+    "gallery_error_title": "Gallery Error",
+    "zoom_hint_buildings": "Zoom in to see and select buildings",
+    "map_instruction": "Tap a building or drop a pin to select location",
+    "pin_location_label": "Pin location",
+    "no_photo_yet": "No photo added yet",
+    "answer_placeholder": "Enter your answer..."
   },
   "map": {
     "loading": "Loading map...",
@@ -51,7 +61,10 @@
     "one_report_received": "1 verified report",
     "offline_title": "Map Unavailable",
     "offline_gps_note": "GPS still works — your location is recorded in the background",
-    "gps_chip_unavailable": "GPS not available"
+    "gps_chip_unavailable": "GPS not available",
+    "working_offline": "Working Offline",
+    "check_connection": "Check Connection",
+    "zoom_hint": "Zoom in to see building outlines"
   },
   "settings": {
     "title": "Settings",
@@ -103,13 +116,16 @@
     "section_info": "APP INFO",
     "version_label": "Version",
     "version_value": "1.0.0",
-    "version_note": "Crisis Reporter is built for UNDP's InnoCentive Crisis Mapping Challenge"
+    "version_note": "Crisis Reporter is built for UNDP's InnoCentive Crisis Mapping Challenge",
+    "privacy_coming_soon": "Coming Soon",
+    "privacy_got_it": "Got it"
   },
   "common": {
     "back": "← Back",
     "cancel": "Cancel",
     "show": "Show",
-    "hide": "Hide"
+    "hide": "Hide",
+    "try_again": "Try Again"
   },
   "register": {
     "title": "Create Account",
@@ -165,7 +181,22 @@
     "reporterIdLabel": "Your Reporter ID",
     "validationMessage": "Please fill in at least one field to continue.",
     "anon_gate_heading": "Create a free account to save your profile and earn badges.",
-    "anon_gate_subtext": "You can still submit reports anonymously without an account."
+    "anon_gate_subtext": "You can still submit reports anonymously without an account.",
+    "completion_heading": "Profile Completion",
+    "first_name_placeholder": "Enter your first name",
+    "last_name_placeholder": "Enter your last name",
+    "email_hint": "Links all your reports",
+    "phone_placeholder": "Enter mobile number",
+    "save_success": "Profile saved successfully",
+    "footer_hint": "Your profile is saved locally and synced when online",
+    "save_btn": "Save Profile",
+    "pick_photo_title": "Profile Photo",
+    "pick_photo_take": "Take a Photo",
+    "pick_photo_upload": "Upload from Gallery",
+    "camera_permission_title": "Camera needed",
+    "camera_permission_body": "Please allow camera access in settings.",
+    "gallery_permission_title": "Gallery needed",
+    "gallery_permission_body": "Please allow gallery access in settings."
   },
   "welcomeCard": {
     "body": "Crisis Reporter helps you document damage to buildings and infrastructure after a disaster. You can report earthquakes, floods, conflicts, and other crises. Your reports help UNDP get help to the right places faster.",
@@ -502,7 +533,13 @@
     "load_more": "Load more",
     "login_prompt": "Log in to see all your reports across sessions and devices.",
     "damage_label": "Damage Level:",
-    "status_submitted": "✓ Submitted"
+    "status_submitted": "✓ Submitted",
+    "delete_error_title": "Error",
+    "delete_error_body": "Could not delete report. Please try again.",
+    "retry_failed_title": "Retry failed",
+    "retry_failed_body": "Could not send report. It will retry automatically when internet returns.",
+    "login_prompt_title": "Log in to see your full history",
+    "login_prompt_subtitle": "Log in or create a free account to view all your reports across devices."
   },
   "safety": {
     "title": "Safety Tips",
@@ -557,5 +594,13 @@
     "q10_answer": "Yes. All data is transmitted over encrypted connections and stored securely. Photos are anonymised before storage. Your personal details are never shared with third parties.",
     "q11_question": "How do I contact UNDP about a report?",
     "q11_answer": "Crisis Reporter is for damage documentation only. For emergency assistance, contact your local emergency services. For questions about UNDP operations in your area, visit undp.org."
+  },
+  "onboarding": {
+    "country_modal_title": "Select Country",
+    "all_languages_title": "All Languages"
+  },
+  "reportDetail": {
+    "header_title": "Report",
+    "photo_hint": "Tap a photo to view full size"
   }
 }

@@ -19,7 +19,9 @@
     "lang_load_error": "Could not load language. Check your connection and try again.",
     "subtitle": "Helping UNDP respond faster to crises around the world",
     "unavailable": "Unavailable",
-    "welcome_message": "Welcome to Crisis Reporter. This app helps you document and report damage to buildings and infrastructure during and after a crisis. Your reports help UNDP and partner organisations coordinate emergency response."
+    "welcome_message": "Welcome to Crisis Reporter. This app helps you document and report damage to buildings and infrastructure during and after a crisis. Your reports help UNDP and partner organisations coordinate emergency response.",
+    "no_internet_title": "No internet connection",
+    "data_secured": "Your data is secured by UNDP Privacy Protocols"
   },
   "home": {
     "reportButton": "Report an Incident",
@@ -161,7 +163,8 @@
     "location_tap_hint": "Tap a building or drop a pin",
     "review_intro": "Please review your report before submitting. Tap any section to edit.",
     "review_privacy_note": "Your report will be reviewed by UNDP and used to coordinate crisis response",
-    "complete": "Completely Damaged"
+    "complete": "Completely Damaged",
+    "capture_btn": "Capture"
   },
   "map": {
     "loading": "Loading map...",
@@ -510,5 +513,8 @@
     "queueSummaryDamage": "Damage level",
     "queueSummaryLocation": "Location",
     "gps_captured_note": "GPS location captured and attached to this report"
+  },
+  "pushNotification": {
+    "title": "Stay informed during crises"
   }
 }

@@ -1098,7 +1098,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
       setSelectedBuildingFC(null);
       cameraRef.current?.flyTo({ center: [lng, lat], zoom: 16, duration: 800 });
     } catch {
-      Alert.alert("GPS Error", "Could not get location.");
+      Alert.alert(t('report.gps_error_title'), t('report.gps_error_body'));
     } finally {
       setGpsCapturing(false);
     }
@@ -1331,7 +1331,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
         }
       }
     } catch (e) {
-      Alert.alert("Camera Error", String(e));
+      Alert.alert(t('report.camera_error_title'), String(e));
     }
   };
 
@@ -1363,7 +1363,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
         }
       }
     } catch (e) {
-      Alert.alert("Gallery Error", String(e));
+      Alert.alert(t('report.gallery_error_title'), String(e));
     }
   };
 
@@ -2080,7 +2080,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
           Alert.alert(t('review.still_offline_title'), t('review.still_offline_body'));
         }
       } else {
-        Alert.alert('Still offline', 'Internet is not available yet. Your report is saved and will send automatically.');
+        Alert.alert(t('review.still_offline_title'), t('review.still_offline_body'));
       }
     };
 
@@ -2376,7 +2376,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                 {/* Zoom hint overlay */}
                 {mapZoom < 14 && (
                   <View style={styles.zoomHint} pointerEvents="none">
-                    <Text style={styles.zoomHintText}>Zoom in to see and select buildings</Text>
+                    <Text style={styles.zoomHintText}>{t('report.zoom_hint_buildings')}</Text>
                   </View>
                 )}
 
@@ -2393,7 +2393,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                 {!selectedBuilding && !pinDropActive && (
                   <View style={styles.mapInstructionPill} pointerEvents="none">
                     <MaterialIcons name="info-outline" size={scale(14)} color="#0468B1" />
-                    <Text style={styles.mapInstructionText}>Tap a building or drop a pin to select location</Text>
+                    <Text style={styles.mapInstructionText}>{t('report.map_instruction')}</Text>
                   </View>
                 )}
 
@@ -2428,7 +2428,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                   <ScrollView keyboardShouldPersistTaps="handled" style={{ maxHeight: 200 }}>
                     {pinDropActive && !selectedBuilding && (
                       <View style={styles.pinInfoRow}>
-                        <Text style={styles.pinInfoLabel}>Pin location</Text>
+                        <Text style={styles.pinInfoLabel}>{t('report.pin_location_label')}</Text>
                         <Text style={styles.pinInfoCoords}>
                           {pinCoords?.lat.toFixed(5)}, {pinCoords?.lng.toFixed(5)}
                         </Text>
@@ -2834,14 +2834,14 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
               }}
             >
               <MaterialIcons name="delete-outline" size={scale(22)} color="#E53E3E" style={styles.optionIconView} />
-              <Text style={[styles.optionLabel, styles.optionLabelDanger]}>Remove</Text>
+              <Text style={[styles.optionLabel, styles.optionLabelDanger]}>{t('photoScreen.removeConfirm')}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={[styles.optionRow, styles.optionCancel]}
               onPress={() => setShowPhotoOptions(false)}
             >
-              <Text style={styles.optionLabelCancel}>Cancel</Text>
+              <Text style={styles.optionLabelCancel}>{t('common.cancel')}</Text>
             </TouchableOpacity>
           </TouchableOpacity>
         </TouchableOpacity>
@@ -3013,7 +3013,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                     <View style={styles.photoEmptyIconCircle}>
                       <MaterialIcons name="add-a-photo" size={scale(28)} color="#717782" />
                     </View>
-                    <Text style={styles.photoEmptyText}>No photo added yet</Text>
+                    <Text style={styles.photoEmptyText}>{t('report.no_photo_yet')}</Text>
                   </View>
                 )}
 
@@ -3441,7 +3441,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                           }}
                           multiline
                           maxLength={aq.max_length ?? 200}
-                          placeholder="Enter your answer..."
+                          placeholder={t('report.answer_placeholder')}
                           placeholderTextColor="#999999"
                         />
                       )}

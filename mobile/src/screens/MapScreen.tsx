@@ -335,7 +335,7 @@ export default function MapScreen() {
         {/* Offline banner — full-width strip below header */}
         <View style={styles.offlineBanner}>
           <MaterialIcons name="cloud-off" size={scale(16)} color="#FFFFFF" />
-          <Text style={styles.offlineBannerText}>Working Offline</Text>
+          <Text style={styles.offlineBannerText}>{t('map.working_offline')}</Text>
         </View>
 
         {/* Content area — fills space between banner and bottom nav */}
@@ -351,7 +351,7 @@ export default function MapScreen() {
               <MaterialIcons name="wifi-off" size={scale(36)} color="#717782" />
             </Animated.View>
 
-            <Text style={styles.offlineTitle}>Map unavailable</Text>
+            <Text style={styles.offlineTitle}>{t('map.offline_title')}</Text>
             <Text style={styles.offlineSubtitle}>
               Connect to the internet to view the map and reported incidents near
               you
@@ -399,7 +399,7 @@ export default function MapScreen() {
                 }}
               >
                 <MaterialIcons name="refresh" size={scale(18)} color="#FFFFFF" />
-                <Text style={styles.checkBtnText}>Check Connection</Text>
+                <Text style={styles.checkBtnText}>{t('map.check_connection')}</Text>
               </TouchableOpacity>
             </Animated.View>
           </View>
@@ -514,7 +514,7 @@ export default function MapScreen() {
       {/* "Zoom in to see buildings" hint — shown at zoom 10–13 */}
       {showZoomHint && (
         <View style={[styles.zoomHintPill, { top: insets.top + 100 }]}>
-          <Text style={styles.zoomHintText}>Zoom in to see building outlines</Text>
+          <Text style={styles.zoomHintText}>{t('map.zoom_hint')}</Text>
         </View>
       )}
 

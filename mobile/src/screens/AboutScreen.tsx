@@ -92,7 +92,7 @@ export default function AboutScreen() {
                 <View style={styles.privacyIconCircle}>
                   <MaterialIcons name="security" size={scale(28)} color="#0468B1" />
                 </View>
-                <Text style={styles.privacyHeading}>Coming Soon</Text>
+                <Text style={styles.privacyHeading}>{t('about.privacy_coming_soon')}</Text>
                 <Text style={styles.privacyText}>
                   Our Privacy Policy is being finalized and will be available here shortly.
                 </Text>
@@ -104,7 +104,7 @@ export default function AboutScreen() {
                   onPress={() => setShowPrivacyModal(false)}
                   activeOpacity={0.85}
                 >
-                  <Text style={styles.privacyCloseBtnText}>Got it</Text>
+                  <Text style={styles.privacyCloseBtnText}>{t('about.privacy_got_it')}</Text>
                 </TouchableOpacity>
               </View>
             </View>

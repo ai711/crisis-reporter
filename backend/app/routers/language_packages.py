@@ -3192,6 +3192,65 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
     ("common.show", "ui_common", "Show"),
     ("common.hide", "ui_common", "Hide"),
 
+    # common — generic action labels
+    ("common.try_again", "ui_common", "Try Again"),
+
+    # about — privacy policy modal (shown before policy is published)
+    ("about.privacy_coming_soon", "ui_about", "Coming Soon"),
+    ("about.privacy_got_it",      "ui_about", "Got it"),
+
+    # home — "what can I report" card subtitle
+    ("home.what_card_subtitle", "ui_home", "Tap to see what types of damage you can report"),
+
+    # map — offline state and overlay hints
+    ("map.working_offline",  "ui_map", "Working Offline"),
+    ("map.check_connection", "ui_map", "Check Connection"),
+
+    # my_reports — delete/retry error alerts and anonymous login prompt
+    ("my_reports.delete_error_title",    "ui_my_reports", "Error"),
+    ("my_reports.delete_error_body",     "ui_my_reports", "Could not delete report. Please try again."),
+    ("my_reports.retry_failed_title",    "ui_my_reports", "Retry failed"),
+    ("my_reports.retry_failed_body",     "ui_my_reports", "Could not send report. It will retry automatically when internet returns."),
+    ("my_reports.login_prompt_title",    "ui_my_reports", "Log in to see your full history"),
+    ("my_reports.login_prompt_subtitle", "ui_my_reports", "Log in or create a free account to view all your reports across devices."),
+
+    # onboarding — country/language picker modals and offline/privacy notes
+    ("onboarding.country_modal_title",          "ui_onboarding", "Select Country"),
+    ("onboarding.search_countries_placeholder", "ui_onboarding", "Search countries..."),
+    ("onboarding.all_languages_title",          "ui_onboarding", "All Languages"),
+    ("onboarding.no_internet_title",            "ui_onboarding", "No internet connection"),
+    ("onboarding.data_secured",                 "ui_onboarding", "Your data is secured by UNDP Privacy Protocols"),
+
+    # reportDetail — report detail screen header and photo hint
+    ("reportDetail.header_title", "ui_report", "Report"),
+    ("reportDetail.photo_hint",   "ui_report", "Tap a photo to view full size"),
+
+    # profile — photo picker sheet, permission alerts, form placeholders and hints
+    ("profile.pick_photo_title",         "ui_profile", "Profile Photo"),
+    ("profile.pick_photo_take",          "ui_profile", "Take a Photo"),
+    ("profile.pick_photo_upload",        "ui_profile", "Upload from Gallery"),
+    ("profile.camera_permission_title",  "ui_profile", "Camera needed"),
+    ("profile.camera_permission_body",   "ui_profile", "Please allow camera access in settings."),
+    ("profile.gallery_permission_title", "ui_profile", "Gallery needed"),
+    ("profile.gallery_permission_body",  "ui_profile", "Please allow gallery access in settings."),
+
+    # report — GPS/camera/gallery error alerts, map overlay hints, photo empty state
+    ("report.gps_error_title",     "ui_report", "GPS Error"),
+    ("report.gps_error_body",      "ui_report", "Could not get location."),
+    ("report.camera_error_title",  "ui_report", "Camera Error"),
+    ("report.gallery_error_title", "ui_report", "Gallery Error"),
+    ("report.zoom_hint_buildings", "ui_report", "Zoom in to see and select buildings"),
+    ("report.map_instruction",     "ui_report", "Tap a building or drop a pin to select location"),
+    ("report.pin_location_label",  "ui_report", "Pin location"),
+    ("report.no_photo_yet",        "ui_report", "No photo added yet"),
+    ("report.answer_placeholder",  "ui_report", "Enter your answer..."),
+
+    # report — camera capture overlay buttons (web)
+    ("report.capture_btn", "ui_report", "Capture"),
+
+    # pushNotification — web push permission sheet
+    ("pushNotification.title", "ui_pwa", "Stay informed during crises"),
+
 ]
 
 

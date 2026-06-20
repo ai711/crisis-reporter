@@ -148,13 +148,13 @@ export default function ReporterProfileScreen() {
   };
 
   const handlePickPhoto = () => {
-    Alert.alert("Profile Photo", "Choose a source", [
+    Alert.alert(t('profile.pick_photo_title'), t('profile.pick_photo_take') + ' / ' + t('profile.pick_photo_upload'), [
       {
-        text: "Take a Photo",
+        text: t('profile.pick_photo_take'),
         onPress: async () => {
           const { status } = await ImagePicker.requestCameraPermissionsAsync();
           if (status !== "granted") {
-            Alert.alert("Camera needed", "Please allow camera access in settings.");
+            Alert.alert(t('profile.camera_permission_title'), t('profile.camera_permission_body'));
             return;
           }
           const result = await ImagePicker.launchCameraAsync({
@@ -170,11 +170,11 @@ export default function ReporterProfileScreen() {
         },
       },
       {
-        text: "Upload from Gallery",
+        text: t('profile.pick_photo_upload'),
         onPress: async () => {
           const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
           if (status !== "granted") {
-            Alert.alert("Gallery needed", "Please allow gallery access in settings.");
+            Alert.alert(t('profile.gallery_permission_title'), t('profile.gallery_permission_body'));
             return;
           }
           const result = await ImagePicker.launchImageLibraryAsync({
@@ -328,7 +328,7 @@ export default function ReporterProfileScreen() {
         {/* ── Completion bar ── */}
         <View style={styles.completionCard}>
           <View style={styles.completionRow}>
-            <Text style={styles.completionLabel}>Profile Completion</Text>
+            <Text style={styles.completionLabel}>{t('profile.completion_heading')}</Text>
             <Text style={styles.completionPct}>{completion}%</Text>
           </View>
           <View style={styles.progressTrack}>
@@ -358,7 +358,7 @@ export default function ReporterProfileScreen() {
             <Text style={styles.fieldLabel}>FIRST NAME (OPTIONAL)</Text>
             <TextInput
               style={inputStyle("firstName", !!firstName)}
-              placeholder="Enter your first name"
+              placeholder={t('profile.first_name_placeholder')}
               placeholderTextColor="#9CA3AF"
               value={firstName}
               onChangeText={(v) => { setFirstName(v); mark(); }}
@@ -372,7 +372,7 @@ export default function ReporterProfileScreen() {
             <Text style={styles.fieldLabel}>LAST NAME (OPTIONAL)</Text>
             <TextInput
               style={inputStyle("lastName", !!lastName)}
-              placeholder="Enter your last name"
+              placeholder={t('profile.last_name_placeholder')}
               placeholderTextColor="#9CA3AF"
               value={lastName}
               onChangeText={(v) => { setLastName(v); mark(); }}
@@ -385,7 +385,7 @@ export default function ReporterProfileScreen() {
           <View style={styles.fieldGroup}>
             <View style={styles.fieldLabelRow}>
               <Text style={[styles.fieldLabel, { marginBottom: 0 }]}>EMAIL ADDRESS (OPTIONAL)</Text>
-              <Text style={styles.fieldHint}>Links all your reports</Text>
+              <Text style={styles.fieldHint}>{t('profile.email_hint')}</Text>
             </View>
             <View style={{ height: 6 }} />
             <TextInput
@@ -416,7 +416,7 @@ export default function ReporterProfileScreen() {
               />
               <TextInput
                 style={[inputStyle("phone", !!phone), styles.phoneNumberInput]}
-                placeholder="Enter mobile number"
+                placeholder={t('profile.phone_placeholder')}
                 placeholderTextColor="#9CA3AF"
                 keyboardType="phone-pad"
                 value={phone}
@@ -432,7 +432,7 @@ export default function ReporterProfileScreen() {
         {saveSuccess && (
           <View style={styles.successBanner}>
             <MaterialIcons name="check-circle" size={scale(16)} color="#276749" />
-            <Text style={styles.successBannerText}>Profile saved successfully</Text>
+            <Text style={styles.successBannerText}>{t('profile.save_success')}</Text>
           </View>
         )}
       </ScrollView>
@@ -454,12 +454,12 @@ export default function ReporterProfileScreen() {
               <ActivityIndicator color={canSave ? "#FFFFFF" : "#9CA3AF"} />
             ) : (
               <Text style={[styles.saveBtnText, !canSave && styles.saveBtnTextDisabled]}>
-                Save Profile
+                {t('profile.save_btn')}
               </Text>
             )}
           </LinearGradient>
         </TouchableOpacity>
-        <Text style={styles.footerHint}>Your profile is saved locally and synced when online</Text>
+        <Text style={styles.footerHint}>{t('profile.footer_hint')}</Text>
       </View>
     </View>
   );

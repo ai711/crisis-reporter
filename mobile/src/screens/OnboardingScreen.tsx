@@ -334,7 +334,7 @@ export default function OnboardingScreen() {
     >
       <SafeAreaView style={styles.modalSafeArea} edges={["top", "bottom"]}>
         <View style={styles.modalHeader}>
-          <Text style={styles.modalTitle}>Select Country</Text>
+          <Text style={styles.modalTitle}>{t('onboarding.country_modal_title')}</Text>
           <TouchableOpacity
             onPress={() => setCountryDropdownOpen(false)}
             style={styles.modalCloseBtn}
@@ -348,7 +348,7 @@ export default function OnboardingScreen() {
         >
           <TextInput
             style={styles.searchInput}
-            placeholder="Search countries..."
+            placeholder={t('settings.search_countries')}
             placeholderTextColor="#717782"
             value={search}
             onChangeText={setSearch}
@@ -628,7 +628,7 @@ export default function OnboardingScreen() {
           <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center", paddingHorizontal: H_PAD }}>
             <View style={{ backgroundColor: "#FFFFFF", borderRadius: 16, padding: 20, maxHeight: screenHeight * 0.7, width: "100%" }}>
               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-                <Text style={{ fontSize: scale(17), fontWeight: "700", color: "#1B1C1C" }}>All Languages</Text>
+                <Text style={{ fontSize: scale(17), fontWeight: "700", color: "#1B1C1C" }}>{t('onboarding.all_languages_title')}</Text>
                 <TouchableOpacity onPress={() => setShowLangModal(false)} hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}>
                   <MaterialIcons name="close" size={24} color="#1B1C1C" />
                 </TouchableOpacity>

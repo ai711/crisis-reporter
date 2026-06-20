@@ -3629,8 +3629,8 @@ export default function ReportPage() {
           <video ref={videoRef} autoPlay playsInline muted style={styles.cameraVideo} />
           <canvas ref={canvasRef} style={{ display: "none" }} />
           <div style={styles.cameraControls}>
-            <button style={styles.cameraCaptureBtn} onClick={handleCapturePhoto}>Capture</button>
-            <button style={styles.cameraCancelBtn} onClick={handleCameraCancel}>Cancel</button>
+            <button style={styles.cameraCaptureBtn} onClick={handleCapturePhoto}>{t('report.capture_btn')}</button>
+            <button style={styles.cameraCancelBtn} onClick={handleCameraCancel}>{t('common.cancel')}</button>
           </div>
         </div>
       )}

@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
+import { useTranslation } from 'react-i18next';
 import api, { API_BASE } from '../services/api';
 
 // ── Types ─────────────────────────────────────────────────────────────────
@@ -97,6 +98,7 @@ function Row({
 export default function ReportDetailScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
+  const { t } = useTranslation();
   const route = useRoute<any>();
   const reportId: string = route.params?.reportId ?? '';
 
@@ -148,7 +150,7 @@ export default function ReportDetailScreen() {
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
             <Text style={styles.backText}>← Back</Text>
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Report</Text>
+          <Text style={styles.headerTitle}>{t('reportDetail.header_title')}</Text>
           <View style={styles.backBtn} />
         </View>
         <View style={styles.centred}>
@@ -168,13 +170,13 @@ export default function ReportDetailScreen() {
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
             <Text style={styles.backText}>← Back</Text>
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Report</Text>
+          <Text style={styles.headerTitle}>{t('reportDetail.header_title')}</Text>
           <View style={styles.backBtn} />
         </View>
         <View style={styles.centred}>
           <Text style={styles.errorText}>{error ?? 'Report not found.'}</Text>
           <TouchableOpacity style={styles.retryBtn} onPress={fetchReport}>
-            <Text style={styles.retryBtnText}>Try Again</Text>
+            <Text style={styles.retryBtnText}>{t('common.try_again')}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -234,7 +236,7 @@ export default function ReportDetailScreen() {
                 );
               })}
             </ScrollView>
-            <Text style={styles.photoHint}>Tap a photo to view full size</Text>
+            <Text style={styles.photoHint}>{t('reportDetail.photo_hint')}</Text>
           </Section>
         )}
 

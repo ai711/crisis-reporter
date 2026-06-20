@@ -295,27 +295,27 @@ export default function MyReportsScreen() {
       }
     } catch {
       Alert.alert(
-        'Retry failed',
-        'Could not send report. It will retry automatically when internet returns.'
+        t('my_reports.retry_failed_title'),
+        t('my_reports.retry_failed_body')
       );
     }
   };
 
   const handleDelete = (report: QueuedReport) => {
     Alert.alert(
-      'Delete this report?',
-      'This cannot be undone.',
+      t('review.delete_report_title'),
+      t('review.delete_report_body'),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Delete',
+          text: t('review.delete_confirm'),
           style: 'destructive',
           onPress: async () => {
             try {
               await removeFromQueue(report.local_id);
               await loadQueue();
             } catch {
-              Alert.alert('Error', 'Could not delete report. Please try again.');
+              Alert.alert(t('my_reports.delete_error_title'), t('my_reports.delete_error_body'));
             }
           },
         },
@@ -406,22 +406,22 @@ export default function MyReportsScreen() {
         {isAnonymousReporter(reporterId, hasToken) && (
           <View style={styles.loginPromptCard}>
             <MaterialIcons name="info" color="#0468B1" size={scale(24)} style={styles.loginPromptIcon} />
-            <Text style={styles.loginPromptTitle}>Log in to see your full history</Text>
+            <Text style={styles.loginPromptTitle}>{t('my_reports.login_prompt_title')}</Text>
             <Text style={styles.loginPromptSubtitle}>
-              Log in or create a free account to view all your reports across devices.
+              {t('my_reports.login_prompt_subtitle')}
             </Text>
             <View style={styles.loginPromptButtons}>
               <TouchableOpacity
                 style={styles.loginBtn}
                 onPress={() => navigation.navigate('LoginScreen')}
               >
-                <Text style={styles.loginBtnText}>Log In</Text>
+                <Text style={styles.loginBtnText}>{t('settings.login')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.createBtn}
                 onPress={() => navigation.navigate('ReporterProfileScreen')}
               >
-                <Text style={styles.createBtnText}>Create Account</Text>
+                <Text style={styles.createBtnText}>{t('settings.register')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -501,7 +501,7 @@ export default function MyReportsScreen() {
                       onPress={(e) => { e.stopPropagation?.(); handleDelete(report); }}
                     >
                       <MaterialIcons name="delete" color="#E53E3E" size={scale(15)} />
-                      <Text style={styles.deleteBtnText}>Delete</Text>
+                      <Text style={styles.deleteBtnText}>{t('review.delete_confirm')}</Text>
                     </TouchableOpacity>
                   </View>
                 </TouchableOpacity>
@@ -576,7 +576,7 @@ export default function MyReportsScreen() {
                     loadSubmitted();
                   }}
                 >
-                  <Text style={styles.tryAgainBtnText}>Try Again</Text>
+                  <Text style={styles.tryAgainBtnText}>{t('common.try_again')}</Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -584,7 +584,7 @@ export default function MyReportsScreen() {
             {!error && submittedReports.length === 0 && (
               <View style={styles.emptyState}>
                 <MaterialIcons name="assignment" color="#C1C7D2" size={scale(56)} />
-                <Text style={styles.emptyTitle}>No reports yet</Text>
+                <Text style={styles.emptyTitle}>{t('my_reports.empty_title')}</Text>
                 <Text style={styles.emptySubtitle}>Your submitted reports will appear here.</Text>
               </View>
             )}
@@ -649,7 +649,7 @@ export default function MyReportsScreen() {
               >
                 {loadingMore
                   ? <ActivityIndicator color="#0468B1" size="small" />
-                  : <Text style={styles.loadMoreText}>Load more</Text>
+                  : <Text style={styles.loadMoreText}>{t('my_reports.load_more')}</Text>
                 }
               </TouchableOpacity>
             )}
