@@ -3054,6 +3054,7 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
     ("locationScreen.duplicateWarningBody",       "ui_location", "A report for this location was recently submitted. Do you want to continue with a new report?"),
     ("locationScreen.duplicateWarningContinue",   "ui_location", "Continue"),
     ("locationScreen.duplicateWarningGoBack",     "ui_location", "Go Back"),
+    ("locationScreen.mapLoading",                 "ui_location", "Loading map…"),
     ("locationScreen.cancelButton",               "ui_location", "Cancel"),
     ("locationScreen.manualAddressRequired",      "ui_location", "* Address is required to continue when offline"),
 

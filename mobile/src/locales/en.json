@@ -314,7 +314,8 @@
     "duplicateWarningTitle": "Possible duplicate report",
     "duplicateWarningBody": "A report for this location was recently submitted. Do you want to continue with a new report?",
     "duplicateWarningContinue": "Continue",
-    "duplicateWarningGoBack": "Go Back"
+    "duplicateWarningGoBack": "Go Back",
+    "mapLoading": "Loading map…"
   },
   "questions": {
     "progressLabel": "Question {{current}} of {{total}}",

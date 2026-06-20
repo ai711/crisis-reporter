@@ -9,7 +9,9 @@
       "distribution": "internal",
       "channel": "development",
       "env": {
-        "EAS_BUILD_NO_EXPO_GO_WARNING": "true"
+        "EAS_BUILD_NO_EXPO_GO_WARNING": "true",
+        "EXPO_PUBLIC_API_URL": "https://crisis-reporter-production.up.railway.app",
+        "EXPO_PUBLIC_MAPTILER_KEY": "ksgUbNBeuHesq4gO5SqH"
       },
       "android": {
         "buildType": "apk"
@@ -19,7 +21,9 @@
       "distribution": "internal",
       "channel": "preview",
       "env": {
-        "EAS_BUILD_NO_EXPO_GO_WARNING": "true"
+        "EAS_BUILD_NO_EXPO_GO_WARNING": "true",
+        "EXPO_PUBLIC_API_URL": "https://crisis-reporter-production.up.railway.app",
+        "EXPO_PUBLIC_MAPTILER_KEY": "ksgUbNBeuHesq4gO5SqH"
       },
       "android": {
         "buildType": "apk"
@@ -28,7 +32,9 @@
     "production": {
       "channel": "production",
       "env": {
-        "EAS_BUILD_NO_EXPO_GO_WARNING": "true"
+        "EAS_BUILD_NO_EXPO_GO_WARNING": "true",
+        "EXPO_PUBLIC_API_URL": "https://crisis-reporter-production.up.railway.app",
+        "EXPO_PUBLIC_MAPTILER_KEY": "ksgUbNBeuHesq4gO5SqH"
       },
       "android": {
         "buildType": "apk"

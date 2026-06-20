@@ -419,7 +419,10 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
                 <Text style={styles.modalClose}>✕</Text>
               </TouchableOpacity>
             </View>
-            <ScrollView showsVerticalScrollIndicator={true}>
+            <ScrollView
+              showsVerticalScrollIndicator={true}
+              contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}
+            >
               {Object.values(
                 t("whatCanIReport.types", { returnObjects: true }) as Record<
                   string,

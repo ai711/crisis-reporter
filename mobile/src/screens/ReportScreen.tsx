@@ -343,6 +343,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
   const [additionalQuestion, setAdditionalQuestion] = useState(0);
   const [photos, setPhotos] = useState<ProcessedPhoto[]>([]);
   const [isPhotoProcessing, setIsPhotoProcessing] = useState(false);
+  const [mapTilesLoading, setMapTilesLoading] = useState(false);
 
   // Location
   const [gpsCoords, setGpsCoords] = useState<{ lat: number; lng: number } | null>(null);
@@ -654,6 +655,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
   // Scenario detection — runs each time the reporter arrives at the location step
   useEffect(() => {
     if (step !== 'location') return;
+    setMapTilesLoading(true);
 
     const detectScenario = async () => {
       setLocationScenario('loading');
@@ -937,6 +939,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
   // ── Map handlers ─────────────────────────────────────────────────────────────
 
   const handleMapLoaded = async () => {
+    setMapTilesLoading(false);
     try {
       const { status } = await Location.getForegroundPermissionsAsync();
       if (status !== "granted") return;
@@ -2259,6 +2262,12 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
 
               {/* Map fills most of the screen */}
               <View style={styles.mapWrapper}>
+                {mapTilesLoading && (
+                  <View style={styles.mapLoadingOverlay}>
+                    <ActivityIndicator color="#0468B1" size="large" />
+                    <Text style={styles.mapLoadingText}>{t('locationScreen.mapLoading')}</Text>
+                  </View>
+                )}
                 <MLMap
                   mapStyle={MAP_STYLE_URL}
                   style={{ flex: 1 }}
@@ -4279,6 +4288,19 @@ const styles = StyleSheet.create({
 
   // Map wrapper
   mapWrapper: { flex: 1, position: 'relative' },
+  mapLoadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    backgroundColor: '#F7FAFC',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 20,
+    gap: 12,
+  },
+  mapLoadingText: { fontSize: scale(14), color: '#718096' },
 
   // Search overlay
   searchContainer: { position: 'absolute', top: 12, left: 12, right: 12, zIndex: 10 },

@@ -325,9 +325,9 @@ export default function SafetyTipsScreen() {
   }, [viewState, lang]);
 
   const syncPartComplete = useCallback((partCompleted: string) => {
-    const reporterId = useAuthStore.getState().reporterId;
-    if (!reporterId) return;
-    // enqueueProgress posts immediately; queues to AsyncStorage if offline
+    const { reporterId, isVerified } = useAuthStore.getState();
+    // Anonymous reporters (CR-PENDING-*) have no JWT — skip server sync
+    if (!reporterId || !isVerified) return;
     enqueueProgress(reporterId, partCompleted);
   }, []);
 

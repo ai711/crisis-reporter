@@ -117,6 +117,7 @@ export function addToQueue(
     queue.push(queuedReport);
     await saveQueue(queue);
     await notifyQueueChange();
+    void scheduleQueuedReminder(local_id);
     return local_id;
   });
 }
@@ -192,6 +193,11 @@ export function removeFromQueue(local_id: string): Promise<void> {
     const item = queue.find((i) => i.local_id === local_id);
     const filtered = queue.filter((i) => i.local_id !== local_id);
     await saveQueue(filtered);
+
+    // Cancel the queued-reminder notification now that the item is resolved
+    try {
+      await Notifications.cancelScheduledNotificationAsync(`offline_reminder_${local_id}`);
+    } catch { /* non-critical */ }
 
     // Clean up persistent photo copies to free documentDirectory space
     if (item) {
@@ -305,7 +311,29 @@ export async function saveDirectSubmittedRecord(
   }
 }
 
-// ── Notification helper ───────────────────────────────────────────────────────
+// ── Notification helpers ──────────────────────────────────────────────────────
+
+// Schedules a 5-minute reminder if background sync doesn't auto-upload the report.
+// Cancelled in removeFromQueue when the item is resolved (success or failure).
+async function scheduleQueuedReminder(local_id: string): Promise<void> {
+  try {
+    const { status } = await Notifications.getPermissionsAsync();
+    if (status !== "granted") return;
+    await Notifications.scheduleNotificationAsync({
+      identifier: `offline_reminder_${local_id}`,
+      content: {
+        title: "Pending offline report",
+        body: "Open Crisis Reporter to submit your saved report when you have a connection.",
+        sound: true,
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+        seconds: 300,
+        repeats: false,
+      } as any,
+    });
+  } catch { /* non-critical */ }
+}
 
 async function showSyncNotification(title: string, body: string): Promise<void> {
   try {
@@ -456,6 +484,8 @@ export async function syncQueue(apiBaseUrl: string): Promise<void> {
         }
 
         // Upload photos
+        let photosUploaded = 0;
+        let photosSkipped = 0;
         for (const photo of item.photos) {
           // Prefer persistent_uri (documentDirectory) over the original cache URI
           // which Android may have cleared under low-storage pressure.
@@ -463,7 +493,7 @@ export async function syncQueue(apiBaseUrl: string): Promise<void> {
 
           // Pre-flight: skip if the file was lost.
           const fileInfo = await FileSystem.getInfoAsync(uploadUri);
-          if (!fileInfo.exists) continue;
+          if (!fileInfo.exists) { photosSkipped++; continue; }
 
           const formData = new FormData();
           formData.append("report_id", reportId);
@@ -497,6 +527,9 @@ export async function syncQueue(apiBaseUrl: string): Promise<void> {
               // 4xx non-401: permanent client error (bad format, too large, etc.)
               // Log it and skip this photo — retrying won't help.
               console.warn(`[syncQueue] Photo upload skipped (HTTP ${photoResponse.status})`);
+              photosSkipped++;
+            } else {
+              photosUploaded++;
             }
           } catch (photoErr) {
             clearTimeout(photoTimeoutId);
@@ -506,10 +539,22 @@ export async function syncQueue(apiBaseUrl: string): Promise<void> {
 
         await removeFromQueue(item.local_id);
         await notifyQueueChange();
-        void showSyncNotification(
-          "Report uploaded",
-          "Your offline report has been successfully submitted."
-        );
+        if (photosSkipped > 0 && photosUploaded === 0 && item.photos.length > 0) {
+          void showSyncNotification(
+            "Report submitted — photos missing",
+            "Your report was submitted but photos could not be attached (files were lost). Open the app to view your report."
+          );
+        } else if (photosSkipped > 0) {
+          void showSyncNotification(
+            "Report uploaded",
+            `Report submitted. ${photosUploaded} photo(s) uploaded; ${photosSkipped} could not be found and were skipped.`
+          );
+        } else {
+          void showSyncNotification(
+            "Report uploaded",
+            "Your offline report has been successfully submitted."
+          );
+        }
       } catch (syncErr) {
         const isAuthExpired =
           syncErr instanceof Error && syncErr.message === "auth_expired";
