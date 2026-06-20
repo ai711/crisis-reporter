@@ -111,15 +111,17 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
 
       const langCode = (await AsyncStorage.getItem("cr_language")) ?? "en";
 
-      // Question package: version-gate on content_version
+      // Question package: version-gate on content_version (language-aware cache keys)
       try {
+        const pkgCacheKey = `cr_question_package_${langCode}`;
+        const versionCacheKey = `cr_question_content_version_${langCode}`;
         const versionRes = await api.get("/api/question-packages/version");
         const latestContent = String(versionRes.data.content_version ?? versionRes.data.version ?? "");
-        const cachedContent = await AsyncStorage.getItem("cr_question_content_version");
+        const cachedContent = await AsyncStorage.getItem(versionCacheKey);
         if (latestContent && latestContent !== cachedContent) {
           const pkgRes = await api.get(`/api/question-packages/active?lang=${langCode}`);
-          await AsyncStorage.setItem("cr_question_package", JSON.stringify(pkgRes.data));
-          await AsyncStorage.setItem("cr_question_content_version", latestContent);
+          await AsyncStorage.setItem(pkgCacheKey, JSON.stringify(pkgRes.data));
+          await AsyncStorage.setItem(versionCacheKey, latestContent);
         }
       } catch {
         // Non-blocking — cached package will be used

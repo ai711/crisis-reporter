@@ -99,13 +99,13 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
     setCountry(country.code);
     setShowCountryPicker(false);
 
-    // Trigger question package version check for new country
+    // Trigger question package version check for new country (language-aware cache key)
     try {
       const langCode = (await AsyncStorage.getItem("cr_language")) ?? "en";
       const response = await api.get(
         `/api/question-packages/active?lang=${langCode}&country=${country.code}`
       );
-      await AsyncStorage.setItem("cr_question_package", JSON.stringify(response.data));
+      await AsyncStorage.setItem(`cr_question_package_${langCode}`, JSON.stringify(response.data));
     } catch {
       // Non-blocking
     }
