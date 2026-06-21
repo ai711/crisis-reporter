@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Pencil, Lock, X, ChevronLeft, ChevronRight, Filter, FolderOpen } from "lucide-react";
@@ -24,16 +24,22 @@ import {
 
 // ── Country list fetcher ──────────────────────────────────────────────────────
 
-async function fetchCountries(): Promise<string[]> {
+interface CountryOption {
+  code: string; // ISO 3166-1 alpha-2, e.g. "KE"
+  name: string; // display name, e.g. "Kenya"
+}
+
+async function fetchCountries(): Promise<CountryOption[]> {
   const res = await fetch(
     (import.meta.env.VITE_API_URL || "http://127.0.0.1:8000") + "/api/countries"
   );
   if (!res.ok) return [];
-  const data = await res.json();
-  // Accept array of strings or array of {name, code} objects
-  if (Array.isArray(data) && data.length > 0) {
-    if (typeof data[0] === "string") return data as string[];
-    if (typeof data[0] === "object" && data[0].name) return data.map((d: { name: string }) => d.name);
+  const data = await res.json() as unknown[];
+  if (Array.isArray(data) && data.length > 0 && typeof data[0] === "object" && data[0] !== null && "code" in data[0]) {
+    return (data as { code: string; name: string }[]).map(d => ({
+      code: d.code.toUpperCase(),
+      name: d.name,
+    }));
   }
   return [];
 }
@@ -71,9 +77,11 @@ function Toast({ message, onClose }: { message: string; onClose: () => void }) {
 // ── Country multi-select dropdown ─────────────────────────────────────────────
 
 interface CountrySelectProps {
+  // selected holds ISO 3166-1 alpha-2 codes (e.g. ["KE", "IN"])
   selected: string[];
   onChange: (v: string[]) => void;
-  countries: string[];
+  // countries is the full list with codes + display names
+  countries: CountryOption[];
   placeholder?: string;
   readOnly?: boolean;
 }
@@ -91,20 +99,29 @@ function CountrySelect({ selected, onChange, countries, placeholder = "Select co
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  const filtered = countries.filter((c) => c.toLowerCase().includes(search.toLowerCase()));
+  // code → display name lookup for rendering chips
+  const codeToName = useMemo(
+    () => Object.fromEntries(countries.map(c => [c.code, c.name])),
+    [countries]
+  );
 
-  const toggle = (c: string) => {
-    onChange(selected.includes(c) ? selected.filter((x) => x !== c) : [...selected, c]);
+  const filtered = countries.filter(c =>
+    c.name.toLowerCase().includes(search.toLowerCase()) ||
+    c.code.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const toggle = (code: string) => {
+    onChange(selected.includes(code) ? selected.filter(x => x !== code) : [...selected, code]);
   };
 
   if (readOnly) {
     return (
       <div style={{ display: "flex", flexWrap: "wrap", gap: 4, padding: "8px 10px", border: "1px solid #ddd", borderRadius: 6, background: "#f9f9f9" }}>
         {selected.length === 0 && <span style={{ color: "#aaa" }}>None</span>}
-        {selected.map((c) => (
-          <span key={c} style={{ display: "flex", alignItems: "center", gap: 3, background: "#eee", borderRadius: 4, padding: "2px 8px", fontSize: 12 }}>
+        {selected.map((code) => (
+          <span key={code} style={{ display: "flex", alignItems: "center", gap: 3, background: "#eee", borderRadius: 4, padding: "2px 8px", fontSize: 12 }}>
             <Lock size={10} color="#999" />
-            {c}
+            {codeToName[code] ?? code}
           </span>
         ))}
       </div>
@@ -122,11 +139,11 @@ function CountrySelect({ selected, onChange, countries, placeholder = "Select co
         }}
       >
         {selected.length === 0 && <span style={{ color: "#aaa", fontSize: 13 }}>{placeholder}</span>}
-        {selected.map((c) => (
-          <span key={c} style={{ display: "flex", alignItems: "center", gap: 3, background: "#E3F2FD", borderRadius: 4, padding: "2px 7px", fontSize: 12 }}>
-            {c}
+        {selected.map((code) => (
+          <span key={code} style={{ display: "flex", alignItems: "center", gap: 3, background: "#E3F2FD", borderRadius: 4, padding: "2px 7px", fontSize: 12 }}>
+            {codeToName[code] ?? code}
             <button
-              onClick={(e) => { e.stopPropagation(); toggle(c); }}
+              onClick={(e) => { e.stopPropagation(); toggle(code); }}
               style={{ background: "none", border: "none", cursor: "pointer", padding: 0, lineHeight: 1, color: "#555" }}
             >×</button>
           </span>
@@ -142,15 +159,16 @@ function CountrySelect({ selected, onChange, countries, placeholder = "Select co
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search…"
+              placeholder="Search by country name or code…"
               style={{ width: "100%", border: "1px solid #ddd", borderRadius: 4, padding: "4px 8px", fontSize: 13, boxSizing: "border-box" }}
               onClick={(e) => e.stopPropagation()}
             />
           </div>
           {filtered.map((c) => (
-            <label key={c} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 12px", cursor: "pointer", fontSize: 13 }}>
-              <input type="checkbox" checked={selected.includes(c)} onChange={() => toggle(c)} />
-              {c}
+            <label key={c.code} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 12px", cursor: "pointer", fontSize: 13 }}>
+              <input type="checkbox" checked={selected.includes(c.code)} onChange={() => toggle(c.code)} />
+              {c.name}
+              <span style={{ marginLeft: "auto", fontSize: 10, color: "#9aa5b4", fontWeight: 600 }}>{c.code}</span>
             </label>
           ))}
           {filtered.length === 0 && <div style={{ padding: "8px 12px", color: "#aaa", fontSize: 13 }}>No results</div>}
@@ -164,7 +182,7 @@ function CountrySelect({ selected, onChange, countries, placeholder = "Select co
 
 interface CreateProjectModalProps {
   onClose: () => void;
-  countries: string[];
+  countries: CountryOption[];
 }
 
 function CreateProjectModal({ onClose, countries }: CreateProjectModalProps) {
@@ -335,9 +353,10 @@ interface EditProjectModalProps {
   project: ProjectListRow;
   onClose: () => void;
   onSuccess: () => void;
+  countries: CountryOption[];
 }
 
-function EditProjectModal({ project, onClose, onSuccess }: EditProjectModalProps) {
+function EditProjectModal({ project, onClose, onSuccess, countries }: EditProjectModalProps) {
   const queryClient = useQueryClient();
 
   const [name, setName] = useState(project.name);
@@ -405,7 +424,7 @@ function EditProjectModal({ project, onClose, onSuccess }: EditProjectModalProps
             <CountrySelect
               selected={project.countries}
               onChange={() => {}}
-              countries={[]}
+              countries={countries}
               readOnly
             />
           </div>
@@ -514,7 +533,7 @@ interface FilterPanelProps {
   filters: FilterState;
   onChange: (f: FilterState) => void;
   onClose: () => void;
-  countries: string[];
+  countries: CountryOption[];
 }
 
 function FilterPanel({ filters, onChange, onClose, countries }: FilterPanelProps) {
@@ -555,7 +574,7 @@ function FilterPanel({ filters, onChange, onClose, countries }: FilterPanelProps
           style={{ ...inputStyle, fontSize: 13 }}
         >
           <option value="">All countries</option>
-          {countries.map((c) => <option key={c} value={c}>{c}</option>)}
+          {countries.map((c) => <option key={c.code} value={c.code}>{c.name}</option>)}
         </select>
       </div>
 
@@ -601,8 +620,14 @@ export default function ProjectsPage() {
   const [editProject, setEditProject] = useState<ProjectListRow | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
-  const [countries, setCountries] = useState<string[]>([]);
+  const [countries, setCountries] = useState<CountryOption[]>([]);
   useEffect(() => { fetchCountries().then(setCountries); }, []);
+
+  // Build a code → display name lookup for table row rendering
+  const codeToName = useMemo(
+    () => Object.fromEntries(countries.map(c => [c.code, c.name])),
+    [countries]
+  );
 
   const isGuest = user?.role === "guest";
 
@@ -830,7 +855,7 @@ export default function ProjectsPage() {
                       <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                         <span className="material-symbols-outlined" style={{ fontSize: 14, color: "#718096", fontVariationSettings: "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20" }}>flag</span>
                         <span style={{ fontSize: 13, color: "#1A2B4A", fontWeight: 500 }}>
-                          {row.countries.slice(0, 2).join(", ")}
+                          {row.countries.slice(0, 2).map(c => codeToName[c] ?? c).join(", ")}
                           {row.countries.length > 2 && (
                             <span style={{ color: "#9aa5b4", fontSize: 11 }}> +{row.countries.length - 2} more</span>
                           )}
@@ -949,6 +974,7 @@ export default function ProjectsPage() {
           project={editProject}
           onClose={() => setEditProject(null)}
           onSuccess={() => setToast("Project updated successfully.")}
+          countries={countries}
         />
       )}
       {toast && <Toast message={toast} onClose={() => setToast(null)} />}

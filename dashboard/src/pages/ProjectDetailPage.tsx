@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, useCallback, useMemo } from "react";
 import { Toast } from "../components/Toast";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -261,6 +261,20 @@ export default function ProjectDetailPage() {
     enabled: !!serialId,
     retry: 1,
   });
+
+  // ── Country code → name lookup (for displaying country chips) ─────────
+  const { data: countriesData } = useQuery<{ code: string; name: string }[]>({
+    queryKey: ["countries"],
+    queryFn: async () => {
+      const res = await api.get("/api/countries");
+      return res.data as { code: string; name: string }[];
+    },
+    staleTime: 24 * 60 * 60 * 1000,
+  });
+  const codeToName = useMemo(
+    () => Object.fromEntries((countriesData ?? []).map(c => [c.code.toUpperCase(), c.name])),
+    [countriesData]
+  );
 
   // ── Import status polling ──────────────────────────────────────────────
   const { data: importStatus } = useQuery<ImportStatusResponse>({
@@ -754,7 +768,7 @@ export default function ProjectDetailPage() {
                     </div>
                     <div style={ss.countriesRow}>
                       {(project.countries ?? []).slice(0, 5).map((c) => (
-                        <span key={c} style={ss.countryChip}>{c}</span>
+                        <span key={c} style={ss.countryChip}>{codeToName[c.toUpperCase()] ?? c}</span>
                       ))}
                       {(project.countries ?? []).length > 5 && (
                         <span style={ss.countryChip}>+{project.countries.length - 5} more</span>

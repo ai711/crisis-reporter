@@ -52,7 +52,17 @@ class ProjectCreate(BaseModel):
     def countries_not_empty(cls, v):
         if not v:
             raise ValueError("At least one country must be selected.")
-        return v
+        normalized = []
+        for raw in v:
+            code = raw.strip().upper()
+            if len(code) != 2 or not code.isalpha():
+                raise ValueError(
+                    f"'{raw}' is not a valid ISO 3166-1 alpha-2 country code. "
+                    f"Send the 2-letter code (e.g. 'KE' for Kenya, 'IN' for India), "
+                    f"not the full country name."
+                )
+            normalized.append(code)
+        return normalized
 
     @validator("start_date")
     def start_not_future(cls, v):
