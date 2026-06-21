@@ -1121,9 +1121,18 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
     const f = features[0];
     const props = f.properties as { osm_id: number; name: string; building: string };
     const geom = f.geometry as GeoJSON.Geometry;
-    // Only handle Polygon geometry — MultiPolygon buildings from Overpass are skipped
-    if (!geom || geom.type !== 'Polygon') return;
-    const ring = (geom as GeoJSON.Polygon).coordinates[0];
+    if (!geom) return;
+    // MapLibre RN can return MultiPolygon for complex buildings even when the
+    // source data is Polygon (internal tile decomposition). Handle both.
+    let ring: GeoJSON.Position[];
+    if (geom.type === 'Polygon') {
+      ring = (geom as GeoJSON.Polygon).coordinates[0];
+    } else if (geom.type === 'MultiPolygon') {
+      const allRings = (geom as GeoJSON.MultiPolygon).coordinates;
+      ring = allRings.reduce((a, b) => (b[0].length > a[0].length ? b : a))[0];
+    } else {
+      return;
+    }
     if (!ring || ring.length < 3) return;
     const [centLng, centLat] = computeCentroid(ring);
 
@@ -1138,6 +1147,15 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
   };
 
   const handleMapPress = (event: any) => {
+    // Primary guard: Map.onPress includes rendered features at the tap point.
+    // If any feature has osm_id this is a building tap — GeoJSONSource.onPress
+    // (handleBuildingPress) will handle it; avoid dropping a pin here.
+    const nativeFeatures = event.nativeEvent?.features as GeoJSON.Feature[] | undefined;
+    if (nativeFeatures?.some(f => f.properties?.osm_id != null)) {
+      return;
+    }
+    // Fallback ref guard for MapLibre RN versions that omit features in Map.onPress.
+    // handleBuildingPress sets this synchronously when a building is tapped.
     if (buildingTappedRef.current) {
       buildingTappedRef.current = false;
       return;
@@ -1950,12 +1968,17 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
       // Architecture) can mis-report offline even on a working connection.
       // The existing catch block queues the report if the HTTP attempt fails.
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000);
+      // 60 s matches the per-request timeout below. The Axios global timeout is
+      // 20 s which fires before the AbortController on slow 2G/EDGE networks and
+      // silently queues reports that would otherwise succeed. The override here
+      // prevents that: Axios fires at 60 s, AbortController also at 60 s.
+      const timeoutId = setTimeout(() => controller.abort(), 60000);
 
       let onlineReportId: string | null = null;
       try {
         const response = await api.post("/api/reports", reportPayload, {
           signal: controller.signal,
+          timeout: 60000, // Override global 20 s — report payload can be large on 2G/EDGE
         });
         clearTimeout(timeoutId);
         onlineReportId = response.data.report_id;

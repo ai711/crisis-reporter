@@ -531,9 +531,15 @@ export async function syncQueue(apiBaseUrl: string): Promise<void> {
           // which Android may have cleared under low-storage pressure.
           const uploadUri = photo.persistent_uri ?? photo.uri;
 
-          // Pre-flight: skip if the file was lost.
-          const fileInfo = await FileSystem.getInfoAsync(uploadUri);
-          if (!fileInfo.exists) { photosSkipped++; continue; }
+          // Pre-flight existence check for file:// URIs only. content:// URIs go
+          // through Android's ContentResolver which FileSystem.getInfoAsync does not
+          // support — getInfoAsync always returns exists:false for them even when the
+          // content is accessible via fetch/FormData. Skip the check and let the
+          // upload attempt propagate any real access error.
+          if (!uploadUri.startsWith('content://')) {
+            const fileInfo = await FileSystem.getInfoAsync(uploadUri);
+            if (!fileInfo.exists) { photosSkipped++; continue; }
+          }
 
           const formData = new FormData();
           formData.append("report_id", reportId);
