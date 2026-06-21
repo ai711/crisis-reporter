@@ -1192,7 +1192,17 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
         await FileSystem.makeDirectoryAsync(PHOTO_SESSION_DIR, { intermediates: true });
       }
       const dest = `${PHOTO_SESSION_DIR}${Date.now()}_${Math.random().toString(36).slice(2)}.jpg`;
-      await FileSystem.copyAsync({ from: uri, to: dest });
+      try {
+        await FileSystem.copyAsync({ from: uri, to: dest });
+      } catch {
+        // Android content:// URIs (e.g. gallery photos from the system photo picker)
+        // cannot be read by expo-file-system's copyAsync. Use ImageManipulator which
+        // goes through Android's ContentResolver and writes to a file:// temp URI.
+        const resolved = await ImageManipulator.manipulateAsync(
+          uri, [], { format: ImageManipulator.SaveFormat.JPEG, compress: 1 }
+        );
+        await FileSystem.copyAsync({ from: resolved.uri, to: dest });
+      }
       return dest;
     } catch {
       return uri;
