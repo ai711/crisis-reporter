@@ -1,6 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as FileSystem from "expo-file-system";
-import { documentDirectory } from "expo-file-system/legacy";
 import * as Notifications from "expo-notifications";
 import * as SecureStore from "expo-secure-store";
 import type { QueuedReport, QueuedPhoto, ReportSubmitRequest } from "../types";
@@ -8,10 +7,11 @@ import { tokenStorage } from "../services/api";
 import { syncRegistrationQueue } from "../services/auth";
 
 // Persistent photo storage — survives Android low-storage cache clears.
-// documentDirectory must be imported from the legacy subpath because
-// expo-file-system v19+ moved it out of the default namespace export.
-const PHOTO_STORE_DIR: string | null = documentDirectory != null
-  ? `${documentDirectory}cr_queued_photos/`
+// Uses FileSystem.Paths.document.uri (expo-file-system v19+ API) to match the
+// path base used by ReportScreen's PHOTO_SESSION_DIR, ensuring FileSystem.copyAsync
+// receives a consistent file:// URI format on both ends.
+const PHOTO_STORE_DIR: string | null = FileSystem.Paths?.document?.uri
+  ? `${FileSystem.Paths.document.uri}cr_queued_photos/`
   : null;
 
 async function ensurePhotoDir(): Promise<void> {

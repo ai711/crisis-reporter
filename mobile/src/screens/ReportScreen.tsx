@@ -23,6 +23,7 @@ import {
   UserLocation,
   Marker,
   type CameraRef,
+  type MapRef,
   type ViewStateChangeEvent,
   type PressEventWithFeatures,
 } from "@maplibre/maplibre-react-native";
@@ -32,7 +33,7 @@ import * as Device from 'expo-device';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as FileSystem from 'expo-file-system';
 import * as MediaLibrary from 'expo-media-library';
-import { addToQueue, syncQueue, getQueue, removeFromQueue, queuePhotosForReport, saveDirectSubmittedRecord } from "../utils/offlineQueue";
+import { addToQueue, syncQueue, getQueue, removeFromQueue, queuePhotosForReport, saveDirectSubmittedRecord, resetItemForRetry } from "../utils/offlineQueue";
 import { haversineKm, milesToKm, saveCrisisMeta, loadCrisisMeta, saveFenceRadiusMeta, loadFenceRadiusMeta, getGpsFenceRadius, type FenceRadiusMeta } from "../utils/geo";
 import NetInfo from "@react-native-community/netinfo";
 import StepIndicator from "../components/StepIndicator";
@@ -44,9 +45,11 @@ const ANSWERS_KEY = 'cr_draft_answers';
 
 // React Native New Architecture (Expo SDK 56+) can return isConnected=null even
 // when the device is online. Check network type as a reliable fallback.
-function isNetOnline(state: { isConnected: boolean | null; type?: string; isInternetReachable: boolean | null }): boolean {
-  return (state.isConnected === true || state.type === 'wifi' || state.type === 'cellular')
-    && state.isInternetReachable !== false;
+// isInternetReachable is intentionally excluded — it returns false on restricted
+// WiFi hotspots and VPN scenarios even when HTTP requests succeed, causing
+// online reports to fall through to the offline queue incorrectly.
+function isNetOnline(state: { isConnected: boolean | null; type?: string }): boolean {
+  return state.isConnected === true || state.type === 'wifi' || state.type === 'cellular';
 }
 const DRAFT_PHOTO_DIR = `${FileSystem.Paths.document.uri}cr_draft_photos/`;
 // Stable session photo dir — copies from Expo cache here immediately so addToQueue
@@ -462,6 +465,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
 
   // Map refs
   const cameraRef = useRef<CameraRef | null>(null);
+  const mapRef = useRef<MapRef | null>(null);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchDebounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchAbortController = useRef<AbortController | null>(null);
@@ -1030,22 +1034,28 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
     }
   };
 
-  const handleRegionChange = (event: NativeSyntheticEvent<ViewStateChangeEvent>) => {
-    const { zoom, bounds } = event.nativeEvent;
+  const handleRegionChange = async (event: NativeSyntheticEvent<ViewStateChangeEvent>) => {
+    const zoom = event.nativeEvent.zoom;
     setMapZoom(zoom);
     if (zoom < 14) return;
-    if (!bounds || bounds.length < 4) return;
-
-    const [west, south, east, north] = bounds;
-    if (debounceTimer.current) clearTimeout(debounceTimer.current);
-    debounceTimer.current = setTimeout(async () => {
-      if (isMountedRef.current) setBuildingsLoading(true);
-      const fc = await fetchBuildingsForBounds(west, south, east, north);
-      if (isMountedRef.current) {
-        if (fc) setBuildingsFC(fc);
-        setBuildingsLoading(false);
-      }
-    }, 1000);
+    try {
+      // onRegionDidChange does not populate bounds in the event payload on Android —
+      // query the map imperatively instead.
+      const bounds = await mapRef.current?.getBounds();
+      if (!bounds || bounds.length < 4) return;
+      const [west, south, east, north] = bounds;
+      if (debounceTimer.current) clearTimeout(debounceTimer.current);
+      debounceTimer.current = setTimeout(async () => {
+        if (isMountedRef.current) setBuildingsLoading(true);
+        const fc = await fetchBuildingsForBounds(west, south, east, north);
+        if (isMountedRef.current) {
+          if (fc) setBuildingsFC(fc);
+          setBuildingsLoading(false);
+        }
+      }, 1000);
+    } catch {
+      // camera ref not ready — silent
+    }
   };
 
   const handleSearch = (query: string) => {
@@ -1135,11 +1145,11 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
       return;
     }
 
-    const coords = event.geometry?.coordinates ??
-      event.nativeEvent?.geometry?.coordinates;
-    if (!coords || coords.length < 2) return;
+    // MapLibre RN PressEvent shape: event.nativeEvent.lngLat = [longitude, latitude]
+    const lngLat = event.nativeEvent?.lngLat;
+    if (!lngLat || lngLat.length < 2) return;
 
-    const [lng, lat] = coords;
+    const [lng, lat] = lngLat;
     setPinCoords({ lat, lng });
     setPinDropActive(true);
     setLocationMethod('pin_drop');
@@ -2174,6 +2184,11 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
   if (submitted && wasQueued) {
     const retryUpload = async () => {
       try {
+        // Reset backoff so syncQueue doesn't skip this item due to exponential
+        // backoff — the user explicitly requested a retry.
+        if (queuedLocalIdRef.current) {
+          await resetItemForRetry(queuedLocalIdRef.current);
+        }
         await syncQueue(API_BASE);
         // syncQueue swallows errors internally — verify the item is actually gone
         // before transitioning to the success screen
@@ -2386,6 +2401,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                   </View>
                 )}
                 <MLMap
+                  ref={mapRef}
                   mapStyle={MAP_STYLE_URL}
                   style={{ flex: 1 }}
                   androidView="texture"
