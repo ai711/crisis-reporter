@@ -790,6 +790,10 @@ class EditReportRequest(BaseModel):
     electricity_condition: Optional[str] = None
     health_services_condition: Optional[str] = None
     pressing_needs: Optional[List[str]] = None
+    # Coordinate override — used when admin manually looks up a building's position
+    # for text-only reports that have no GPS or building-tap coordinates.
+    location_lat: Optional[float] = None
+    location_lng: Optional[float] = None
     edit_reason: Optional[str] = None
 
 
@@ -826,6 +830,26 @@ async def edit_report(
         if new_val != current_val:
             fields_changed[field] = {"from": current_val, "to": new_val}
             setattr(report, field, new_val)
+
+    # Coordinate override — handled separately because we also set location_source.
+    # Both lat and lng must be provided together; partial updates are rejected.
+    if (request.location_lat is None) != (request.location_lng is None):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="location_lat and location_lng must be provided together.",
+        )
+    if request.location_lat is not None:
+        if not (-90 <= request.location_lat <= 90):
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="location_lat must be between -90 and 90.")
+        if not (-180 <= request.location_lng <= 180):
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="location_lng must be between -180 and 180.")
+        if request.location_lat != report.location_lat or request.location_lng != report.location_lng:
+            fields_changed["location_lat"] = {"from": report.location_lat, "to": request.location_lat}
+            fields_changed["location_lng"] = {"from": report.location_lng, "to": request.location_lng}
+            fields_changed["location_source"] = {"from": report.location_source, "to": "manual"}
+            report.location_lat = request.location_lat
+            report.location_lng = request.location_lng
+            report.location_source = "manual"
 
     if not fields_changed:
         return {"edited": False, "reason": "no_changes"}

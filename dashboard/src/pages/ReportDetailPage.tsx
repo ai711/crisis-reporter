@@ -1399,6 +1399,28 @@ export default function ReportDetailPage() {
                 <option value="no">No</option>
               </select>
             </div>
+            {report.location_lat == null && (
+              <div style={{ marginBottom: 16, padding: "12px 14px", background: "var(--c-surface-low)", borderRadius: 8, border: "1px solid var(--c-border)" }}>
+                <label className="input-label" style={{ marginBottom: 4 }}>Add Building Coordinates</label>
+                <p style={{ fontSize: 11, color: "var(--c-text-muted)", margin: "0 0 10px" }}>
+                  No coordinates recorded. Enter the building's latitude and longitude (look up via Google Maps or a local reference).
+                </p>
+                <div style={{ display: "flex", gap: 10 }}>
+                  <div style={{ flex: 1 }}>
+                    <label className="input-label" style={{ fontSize: 11 }}>Latitude</label>
+                    <input className="input" type="number" step="any" placeholder="e.g. 33.8869"
+                      value={editForm.location_lat ?? ""}
+                      onChange={e => setEditForm({ ...editForm, location_lat: e.target.value })} />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label className="input-label" style={{ fontSize: 11 }}>Longitude</label>
+                    <input className="input" type="number" step="any" placeholder="e.g. 9.5375"
+                      value={editForm.location_lng ?? ""}
+                      onChange={e => setEditForm({ ...editForm, location_lng: e.target.value })} />
+                  </div>
+                </div>
+              </div>
+            )}
             <div style={{ marginBottom: 20 }}>
               <label className="input-label">Edit Reason (required)</label>
               <textarea className="input" rows={3} style={{ resize: "vertical", minHeight: 80 }}
@@ -1413,7 +1435,15 @@ export default function ReportDetailPage() {
                   if (!editReason.trim()) return;
                   setEditSaving(true);
                   try {
-                    await api.patch(`/api/reports/${report.id}`, { ...editForm, edit_reason: editReason });
+                    const payload: Record<string, unknown> = { ...editForm, edit_reason: editReason };
+                    if (editForm.location_lat && editForm.location_lng) {
+                      payload.location_lat = parseFloat(editForm.location_lat as string);
+                      payload.location_lng = parseFloat(editForm.location_lng as string);
+                    } else {
+                      delete payload.location_lat;
+                      delete payload.location_lng;
+                    }
+                    await api.patch(`/api/reports/${report.id}`, payload);
                     setShowEditModal(false); setEditForm({}); setEditReason("");
                     window.location.reload();
                   } catch (err) { alert((err as { response?: { data?: { detail?: string } } })?.response?.data?.detail || "Edit failed"); }
