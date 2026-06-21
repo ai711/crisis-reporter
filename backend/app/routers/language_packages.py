@@ -3205,8 +3205,12 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
     ("home.what_card_subtitle", "ui_home", "Tap to see what types of damage you can report"),
 
     # map — offline state and overlay hints
-    ("map.working_offline",  "ui_map", "Working Offline"),
-    ("map.check_connection", "ui_map", "Check Connection"),
+    ("map.working_offline",   "ui_map", "Working Offline"),
+    ("map.check_connection",  "ui_map", "Check Connection"),
+    ("map.offline_subtitle",  "ui_map", "Connect to the internet to view the map and reported incidents near you"),
+    ("map.near_you_radius",   "ui_map", "Near you — {{crisisRadius}} radius"),
+    ("map.view_details",      "ui_map", "View Details ›"),
+    ("map.tiles_unavailable", "ui_map", "Map tiles unavailable — check connection"),
 
     # my_reports — delete/retry error alerts and anonymous login prompt
     ("my_reports.delete_error_title",    "ui_my_reports", "Error"),
@@ -3215,6 +3219,11 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
     ("my_reports.retry_failed_body",     "ui_my_reports", "Could not send report. It will retry automatically when internet returns."),
     ("my_reports.login_prompt_title",    "ui_my_reports", "Log in to see your full history"),
     ("my_reports.login_prompt_subtitle", "ui_my_reports", "Log in or create a free account to view all your reports across devices."),
+    ("my_reports.section_pending",       "ui_my_reports", "PENDING"),
+    ("my_reports.status_failed",         "ui_my_reports", "Failed"),
+    ("my_reports.status_pending",        "ui_my_reports", "Pending Sync"),
+    ("my_reports.submitted_local_device","ui_my_reports", "SUBMITTED (THIS DEVICE)"),
+    ("my_reports.section_submitted",     "ui_my_reports", "SUBMITTED"),
 
     # onboarding — country/language picker modals and offline/privacy notes
     ("onboarding.country_modal_title",          "ui_onboarding", "Select Country"),
@@ -3224,8 +3233,14 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
     ("onboarding.data_secured",                 "ui_onboarding", "Your data is secured by UNDP Privacy Protocols"),
 
     # reportDetail — report detail screen header and photo hint
-    ("reportDetail.header_title", "ui_report", "Report"),
-    ("reportDetail.photo_hint",   "ui_report", "Tap a photo to view full size"),
+    ("reportDetail.header_title",         "ui_report", "Report"),
+    ("reportDetail.photo_hint",           "ui_report", "Tap a photo to view full size"),
+    ("reportDetail.loading",              "ui_report", "Loading report…"),
+    ("reportDetail.fallback_title",       "ui_report", "Report Detail"),
+    ("reportDetail.section_photos",       "ui_report", "📷  PHOTOS"),
+    ("reportDetail.section_location",     "ui_report", "📍  LOCATION"),
+    ("reportDetail.section_damage_assessment", "ui_report", "📊  DAMAGE ASSESSMENT"),
+    ("reportDetail.section_description",  "ui_report", "📝  DESCRIPTION"),
 
     # profile — photo picker sheet, permission alerts, form placeholders and hints
     ("profile.pick_photo_title",         "ui_profile", "Profile Photo"),

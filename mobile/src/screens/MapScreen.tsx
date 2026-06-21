@@ -381,10 +381,7 @@ export default function MapScreen() {
             </Animated.View>
 
             <Text style={styles.offlineTitle}>{t('map.offline_title')}</Text>
-            <Text style={styles.offlineSubtitle}>
-              Connect to the internet to view the map and reported incidents near
-              you
-            </Text>
+            <Text style={styles.offlineSubtitle}>{t('map.offline_subtitle')}</Text>
 
             {/* GPS note row */}
             <View style={styles.gpsNoteRow}>
@@ -441,12 +438,12 @@ export default function MapScreen() {
             onPress={() => navigation.navigate('Home')}
           >
             <MaterialIcons name="home" size={scale(22)} color="#9CA3AF" />
-            <Text style={styles.navLabelInactive}>HOME</Text>
+            <Text style={styles.navLabelInactive}>{t('home.nav_home')}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.navItem}>
             <View style={styles.activeNavPill}>
               <MaterialIcons name="map" size={scale(22)} color="#0468B1" />
-              <Text style={styles.navLabelActive}>MAP</Text>
+              <Text style={styles.navLabelActive}>{t('home.nav_map')}</Text>
             </View>
           </TouchableOpacity>
           <TouchableOpacity
@@ -454,7 +451,7 @@ export default function MapScreen() {
             onPress={() => navigation.navigate('MyReports')}
           >
             <MaterialIcons name="list-alt" size={scale(22)} color="#9CA3AF" />
-            <Text style={styles.navLabelInactive}>REPORTS</Text>
+            <Text style={styles.navLabelInactive}>{t('home.nav_reports')}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -534,7 +531,7 @@ export default function MapScreen() {
       {mapLoadError && (
         <View style={styles.mapErrorBanner} pointerEvents="none">
           <MaterialIcons name="warning" size={14} color="#fff" />
-          <Text style={styles.mapErrorText}>Map tiles unavailable — check connection</Text>
+          <Text style={styles.mapErrorText}>{t('map.tiles_unavailable')}</Text>
         </View>
       )}
 
@@ -547,7 +544,7 @@ export default function MapScreen() {
       <View style={[styles.locationPillWrap, { top: insets.top + 64 }]}>
         <View style={styles.locationPill}>
           <MaterialIcons name="my-location" size={scale(14)} color="#FFFFFF" />
-          <Text style={styles.locationPillText}>Near you — {crisisRadius} radius</Text>
+          <Text style={styles.locationPillText}>{t('map.near_you_radius', { crisisRadius })}</Text>
         </View>
       </View>
 
@@ -623,7 +620,7 @@ export default function MapScreen() {
                     navigation.navigate('ReportDetailScreen', { reportId: id });
                   }}
                 >
-                  <Text style={styles.popupViewDetails}>View Details ›</Text>
+                  <Text style={styles.popupViewDetails}>{t('map.view_details')}</Text>
                 </TouchableOpacity>
               </>
             )}
@@ -647,12 +644,12 @@ export default function MapScreen() {
           onPress={() => navigation.navigate('Home')}
         >
           <MaterialIcons name="home" size={scale(22)} color="#9CA3AF" />
-          <Text style={styles.navLabelInactive}>HOME</Text>
+          <Text style={styles.navLabelInactive}>{t('home.nav_home')}</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.navItem}>
           <View style={styles.activeNavPill}>
             <MaterialIcons name="map" size={scale(22)} color="#0468B1" />
-            <Text style={styles.navLabelActive}>MAP</Text>
+            <Text style={styles.navLabelActive}>{t('home.nav_map')}</Text>
           </View>
         </TouchableOpacity>
         <TouchableOpacity
@@ -660,7 +657,7 @@ export default function MapScreen() {
           onPress={() => navigation.navigate('MyReports')}
         >
           <MaterialIcons name="list-alt" size={scale(22)} color="#9CA3AF" />
-          <Text style={styles.navLabelInactive}>REPORTS</Text>
+          <Text style={styles.navLabelInactive}>{t('home.nav_reports')}</Text>
         </TouchableOpacity>
       </View>
     </View>

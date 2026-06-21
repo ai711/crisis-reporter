@@ -156,7 +156,7 @@ export default function ReportDetailScreen() {
         </View>
         <View style={styles.centred}>
           <ActivityIndicator color="#0468B1" size="large" />
-          <Text style={styles.loadingText}>Loading report…</Text>
+          <Text style={styles.loadingText}>{t('reportDetail.loading')}</Text>
         </View>
       </View>
     );
@@ -196,7 +196,7 @@ export default function ReportDetailScreen() {
           <Text style={styles.backText}>{t('common.back')}</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>
-          {report.serial_number ? `Report #${report.serial_number}` : 'Report Detail'}
+          {report.serial_number ? `Report #${report.serial_number}` : t('reportDetail.fallback_title')}
         </Text>
         <View style={styles.backBtn} />
       </View>
@@ -213,7 +213,7 @@ export default function ReportDetailScreen() {
 
         {/* ── PHOTOS ── */}
         {photos.length > 0 && (
-          <Section title="📷  PHOTOS">
+          <Section title={t('reportDetail.section_photos')}>
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -243,25 +243,25 @@ export default function ReportDetailScreen() {
 
         {/* ── LOCATION ── */}
         {hasLocation && (
-          <Section title="📍  LOCATION">
+          <Section title={t('reportDetail.section_location')}>
             {buildingName ? (
-              <Row label="Building" value={buildingName} />
+              <Row label={t('review.locationBuilding')} value={buildingName} />
             ) : null}
             {report.location_address ? (
-              <Row label="Address" value={report.location_address} />
+              <Row label={t('review.locationAddress')} value={report.location_address} />
             ) : null}
             {report.location_landmark ? (
-              <Row label="Landmark" value={report.location_landmark} />
+              <Row label={t('review.locationLandmark')} value={report.location_landmark} />
             ) : null}
             {report.location_note ? (
-              <Row label="Location note" value={report.location_note} />
+              <Row label={t('review.locationNote')} value={report.location_note} />
             ) : null}
             <Row
-              label="GPS"
+              label={t('review.locationGPS')}
               value={
                 report.gps_latitude != null
                   ? `${report.gps_latitude.toFixed(5)}, ${(report.gps_longitude ?? 0).toFixed(5)}`
-                  : 'Not captured'
+                  : t('review.locationGPSUnavailable')
               }
               last
             />
@@ -269,7 +269,7 @@ export default function ReportDetailScreen() {
         )}
 
         {/* ── DAMAGE ASSESSMENT (Q1-Q8) ── */}
-        <Section title="📊  DAMAGE ASSESSMENT">
+        <Section title={t('reportDetail.section_damage_assessment')}>
           {([
             { label: 'Q1 — Damage level',         value: fmtVal(report.damage_level) },
             { label: 'Q2 — Infrastructure type',   value: fmtList(report.infrastructure_types, report.infrastructure_other) },
@@ -293,7 +293,7 @@ export default function ReportDetailScreen() {
 
         {/* ── DESCRIPTION ── */}
         {report.description ? (
-          <Section title="📝  DESCRIPTION">
+          <Section title={t('reportDetail.section_description')}>
             <Text style={styles.description}>{report.description}</Text>
           </Section>
         ) : null}

@@ -430,7 +430,7 @@ export default function MyReportsScreen() {
         {/* ── SECTION 2: QUEUED / PENDING REPORTS (all reporter states) ── */}
         {queuedReports.length > 0 && (
           <View>
-            <Text style={styles.sectionHeader}>PENDING</Text>
+            <Text style={styles.sectionHeader}>{t('my_reports.section_pending')}</Text>
             {queuedReports.map((report) => {
               const failed = isFailed(report);
               const damagePill = getDamagePill(report.report.damage_level);
@@ -451,7 +451,7 @@ export default function MyReportsScreen() {
                       { backgroundColor: failed ? 'rgba(229,62,62,0.12)' : 'rgba(245,166,35,0.12)' },
                     ]}>
                       <Text style={[styles.statusPillText, { color: failed ? '#E53E3E' : '#F5A623' }]}>
-                        {failed ? 'Failed' : 'Pending Sync'}
+                        {failed ? t('my_reports.status_failed') : t('my_reports.status_pending')}
                       </Text>
                     </View>
                     <Text style={styles.cardDate}>{formatTime(report.created_at)}</Text>
@@ -480,7 +480,7 @@ export default function MyReportsScreen() {
                   {/* Failed attempts note */}
                   {failed && report.retry_count > 0 && (
                     <Text style={styles.retryCountText}>
-                      Failed after {report.retry_count} attempt{report.retry_count !== 1 ? 's' : ''}
+                      {t('my_reports.failed_attempts', { count: report.retry_count })}
                     </Text>
                   )}
 
@@ -494,7 +494,7 @@ export default function MyReportsScreen() {
                       onPress={(e) => { e.stopPropagation?.(); handleRetry(report); }}
                     >
                       <MaterialIcons name="refresh" color="#0468B1" size={scale(15)} />
-                      <Text style={styles.retryBtnText}>Retry</Text>
+                      <Text style={styles.retryBtnText}>{t('my_reports.action_retry')}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={styles.deleteBtn}
@@ -513,7 +513,7 @@ export default function MyReportsScreen() {
         {/* Anonymous: locally-saved submitted report history */}
         {isAnonymousReporter(reporterId, hasToken) && localSubmittedReports.length > 0 && (
           <View>
-            <Text style={styles.sectionHeader}>SUBMITTED (THIS DEVICE)</Text>
+            <Text style={styles.sectionHeader}>{t('my_reports.submitted_local_device')}</Text>
             {localSubmittedReports.map((report) => {
               const damagePill = getDamagePill(report.damage_level);
               const locationLabel =
@@ -564,7 +564,7 @@ export default function MyReportsScreen() {
         {/* ── SECTION 3: SUBMITTED REPORTS (logged-in reporters only) ── */}
         {!isAnonymousReporter(reporterId, hasToken) && (
           <View>
-            <Text style={styles.sectionHeader}>SUBMITTED</Text>
+            <Text style={styles.sectionHeader}>{t('my_reports.section_submitted')}</Text>
 
             {error && (
               <View style={styles.errorBox}>

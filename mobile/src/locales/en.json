@@ -64,11 +64,15 @@
     "searchPlaceholder": "Search for a location...",
     "one_report_received": "1 verified report",
     "offline_title": "Map Unavailable",
+    "offline_subtitle": "Connect to the internet to view the map and reported incidents near you",
     "offline_gps_note": "GPS still works — your location is recorded in the background",
     "gps_chip_unavailable": "GPS not available",
     "working_offline": "Working Offline",
     "check_connection": "Check Connection",
-    "zoom_hint": "Zoom in to see building outlines"
+    "zoom_hint": "Zoom in to see building outlines",
+    "near_you_radius": "Near you — {{crisisRadius}} radius",
+    "view_details": "View Details ›",
+    "tiles_unavailable": "Map tiles unavailable — check connection"
   },
   "settings": {
     "title": "Settings",
@@ -529,6 +533,11 @@
     "label_infrastructure": "Infrastructure",
     "label_photos": "Photos",
     "photos_tap_to_view": "Saved locally — not yet uploaded",
+    "section_pending": "PENDING",
+    "status_failed": "Failed",
+    "status_pending": "Pending Sync",
+    "submitted_local_device": "SUBMITTED (THIS DEVICE)",
+    "section_submitted": "SUBMITTED",
     "action_retry": "Retry Upload",
     "action_delete": "Delete Report",
     "failed_attempts": "Failed after {{count}} attempt(s). Check connection.",
@@ -607,6 +616,12 @@
   },
   "reportDetail": {
     "header_title": "Report",
-    "photo_hint": "Tap a photo to view full size"
+    "photo_hint": "Tap a photo to view full size",
+    "loading": "Loading report…",
+    "fallback_title": "Report Detail",
+    "section_photos": "📷  PHOTOS",
+    "section_location": "📍  LOCATION",
+    "section_damage_assessment": "📊  DAMAGE ASSESSMENT",
+    "section_description": "📝  DESCRIPTION"
   }
 }
