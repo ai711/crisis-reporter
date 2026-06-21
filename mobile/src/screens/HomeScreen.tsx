@@ -15,7 +15,6 @@ import * as SecureStore from "expo-secure-store";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import SideMenu from "../components/SideMenu";
 import { fetchLanguagePackageFromBackend } from "../i18n";
-
 const { width: _screenWidthRaw } = Dimensions.get("window");
 const screenWidth = _screenWidthRaw || 375;
 const scale = (size: number) => Math.round((screenWidth / 375) * size);
@@ -40,7 +39,6 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
   const [showCrisisModal, setShowCrisisModal] = useState(false);
   const [showWelcomeCard, setShowWelcomeCard] = useState(false);
   const [recentReports, setRecentReports] = useState<any[]>([]);
-
   const reportBtnScale = useRef(new Animated.Value(1)).current;
 
   // Login popup — show once until reporter_id exists; also fetch recent reports.
