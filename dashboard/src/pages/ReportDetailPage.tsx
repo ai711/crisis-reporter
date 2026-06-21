@@ -433,6 +433,8 @@ export default function ReportDetailPage() {
   const [mergeReason, setMergeReason] = useState('');
   const [mergeSaving, setMergeSaving] = useState(false);
   const [activeHistoryTab, setActiveHistoryTab] = useState<"version" | "review">("version");
+  const [editInfraTypes, setEditInfraTypes] = useState<string[]>([]);
+  const [editPressNeeds, setEditPressNeeds] = useState<string[]>([]);
 
   const { data: report, isLoading } = useQuery<ReportDetail>({
     queryKey: ["report", reportId],
@@ -648,7 +650,12 @@ export default function ReportDetailPage() {
               </button>
             )}
             {canEditReports && (
-              <button style={styles.editBtn} onClick={() => setShowEditModal(true)}>
+              <button style={styles.editBtn} onClick={() => {
+                setEditInfraTypes(report.infrastructure_types ?? []);
+                const pn = report.pressing_needs;
+                setEditPressNeeds(Array.isArray(pn) ? pn : []);
+                setShowEditModal(true);
+              }}>
                 ✏ Edit Report
               </button>
             )}
@@ -1360,7 +1367,7 @@ export default function ReportDetailPage() {
           <div className="card card-padded" style={{ width: 520, maxHeight: "80vh", overflowY: "auto", borderRadius: "var(--radius-xl)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
               <div style={{ fontSize: "var(--text-xl)", fontWeight: 700 }}>Edit Report</div>
-              <button className="btn btn-ghost" onClick={() => setShowEditModal(false)}>✕</button>
+              <button className="btn btn-ghost" onClick={() => { setShowEditModal(false); setEditForm({}); setEditReason(""); setEditInfraTypes([]); setEditPressNeeds([]); }}>✕</button>
             </div>
             <div style={{ marginBottom: 16 }}>
               <label className="input-label">Damage Level</label>
@@ -1395,9 +1402,89 @@ export default function ReportDetailPage() {
               <label className="input-label">Debris Present</label>
               <select className="input" value={editForm.debris_blocking ?? report.debris_blocking ?? ""}
                 onChange={e => setEditForm({ ...editForm, debris_blocking: e.target.value })}>
+                <option value="">— Not recorded —</option>
                 <option value="yes">Yes</option>
                 <option value="no">No</option>
               </select>
+            </div>
+            <div style={{ marginBottom: 16 }}>
+              <label className="input-label">Electricity Condition</label>
+              <select className="input" value={editForm.electricity_condition ?? q6?.option_value ?? report.electricity_condition ?? ""}
+                onChange={e => setEditForm({ ...editForm, electricity_condition: e.target.value })}>
+                <option value="">— Not recorded —</option>
+                <option value="no_damage">No damage observed</option>
+                <option value="minor">Minor damage</option>
+                <option value="moderate">Moderate damage</option>
+                <option value="severe">Severe damage</option>
+                <option value="destroyed">Completely destroyed</option>
+                <option value="unknown">Unknown</option>
+              </select>
+            </div>
+            <div style={{ marginBottom: 16 }}>
+              <label className="input-label">Health Services Condition</label>
+              <select className="input" value={editForm.health_services_condition ?? q7?.option_value ?? report.health_services_condition ?? ""}
+                onChange={e => setEditForm({ ...editForm, health_services_condition: e.target.value })}>
+                <option value="">— Not recorded —</option>
+                <option value="functional">Fully functional</option>
+                <option value="partial">Partially functional</option>
+                <option value="disrupted">Largely disrupted</option>
+                <option value="not_functioning">Not functioning at all</option>
+                <option value="unknown">Unknown</option>
+              </select>
+            </div>
+            <div style={{ marginBottom: 16 }}>
+              <label className="input-label">Infrastructure Types</label>
+              <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 6 }}>
+                {([
+                  { value: "residential",    label: "Residential" },
+                  { value: "commercial",     label: "Commercial" },
+                  { value: "government",     label: "Government Building" },
+                  { value: "utility",        label: "Utility Infrastructure" },
+                  { value: "transport_comm", label: "Transport & Communication" },
+                  { value: "community",      label: "Community Infrastructure" },
+                  { value: "public_spaces",  label: "Public Spaces / Recreation" },
+                  { value: "other",          label: "Other" },
+                ] as const).map(opt => (
+                  <label key={opt.value} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#191c1e", cursor: "pointer" }}>
+                    <input type="checkbox"
+                      checked={editInfraTypes.includes(opt.value)}
+                      onChange={e => {
+                        if (e.target.checked) setEditInfraTypes([...editInfraTypes, opt.value]);
+                        else setEditInfraTypes(editInfraTypes.filter(v => v !== opt.value));
+                      }}
+                    />
+                    {opt.label}
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div style={{ marginBottom: 16 }}>
+              <label className="input-label">Pressing Needs</label>
+              <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 6 }}>
+                {([
+                  { value: "food_water",    label: "Food assistance and safe drinking water" },
+                  { value: "cash",          label: "Cash or financial assistance" },
+                  { value: "healthcare",    label: "Access to healthcare and essential medicines" },
+                  { value: "shelter",       label: "Shelter, housing repair, or temporary accommodation" },
+                  { value: "livelihoods",   label: "Restoration of livelihoods or income sources" },
+                  { value: "wash",          label: "Water, sanitation, and hygiene" },
+                  { value: "basic_services",label: "Restoration of basic services and infrastructure" },
+                  { value: "protection",    label: "Protection services and psychosocial support" },
+                  { value: "local_support", label: "Support from local authorities and community organizations" },
+                  { value: "other",         label: "Other" },
+                ] as const).map(opt => (
+                  <label key={opt.value} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#191c1e", cursor: "pointer" }}>
+                    <input type="checkbox"
+                      checked={editPressNeeds.includes(opt.value)}
+                      onChange={e => {
+                        if (e.target.checked) setEditPressNeeds([...editPressNeeds, opt.value]);
+                        else setEditPressNeeds(editPressNeeds.filter(v => v !== opt.value));
+                      }}
+                    />
+                    {opt.label}
+                  </label>
+                ))}
+              </div>
             </div>
             {report.location_lat == null && (() => {
               const hasLat = Boolean(editForm.location_lat?.trim());
@@ -1438,7 +1525,7 @@ export default function ReportDetailPage() {
                 value={editReason} onChange={e => setEditReason(e.target.value)} />
             </div>
             <div style={{ display: "flex", gap: 10 }}>
-              <button className="btn btn-secondary btn-lg" style={{ flex: 1 }} onClick={() => setShowEditModal(false)}>Cancel</button>
+              <button className="btn btn-secondary btn-lg" style={{ flex: 1 }} onClick={() => { setShowEditModal(false); setEditForm({}); setEditReason(""); setEditInfraTypes([]); setEditPressNeeds([]); }}>Cancel</button>
               <button className="btn btn-primary btn-lg" style={{ flex: 1 }}
                 disabled={!editReason.trim() || editSaving || (
                   report.location_lat == null &&
@@ -1448,16 +1535,21 @@ export default function ReportDetailPage() {
                   if (!editReason.trim()) return;
                   setEditSaving(true);
                   try {
-                    const payload: Record<string, unknown> = { ...editForm, edit_reason: editReason };
+                    const payload: Record<string, unknown> = {};
+                    for (const [k, v] of Object.entries(editForm)) {
+                      if (v !== "" && v !== undefined && k !== "location_lat" && k !== "location_lng") {
+                        payload[k] = v;
+                      }
+                    }
+                    payload.edit_reason = editReason;
+                    payload.infrastructure_types = editInfraTypes;
+                    payload.pressing_needs = editPressNeeds;
                     if (editForm.location_lat && editForm.location_lng) {
                       payload.location_lat = parseFloat(editForm.location_lat as string);
                       payload.location_lng = parseFloat(editForm.location_lng as string);
-                    } else {
-                      delete payload.location_lat;
-                      delete payload.location_lng;
                     }
                     await api.patch(`/api/reports/${report.id}`, payload);
-                    setShowEditModal(false); setEditForm({}); setEditReason("");
+                    setShowEditModal(false); setEditForm({}); setEditReason(""); setEditInfraTypes([]); setEditPressNeeds([]);
                     window.location.reload();
                   } catch (err) { alert((err as { response?: { data?: { detail?: string } } })?.response?.data?.detail || "Edit failed"); }
                   finally { setEditSaving(false); }
