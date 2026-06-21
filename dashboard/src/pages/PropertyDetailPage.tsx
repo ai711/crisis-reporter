@@ -771,7 +771,12 @@ export default function PropertyDetailPage() {
                     </div>
                   </div>
                   <div style={s.statChip}>
-                    <div style={s.statChipLabel}>GPS Coordinates</div>
+                    <div style={s.statChipLabel}>
+                      Location Coordinates
+                      {property.override_lat != null && (
+                        <span style={{ marginLeft: 4, fontSize: 9, fontWeight: 700, padding: "1px 4px", borderRadius: 3, background: "#eef0f3", color: "#4b5563", border: "1px solid #d1d5db" }}>OVERRIDE</span>
+                      )}
+                    </div>
                     <div style={{ ...s.statChipVal, fontSize: 11, fontFamily: "monospace", marginTop: 4 }}>
                       {displayLat != null ? `${displayLat.toFixed(4)}° N` : "—"}<br />{displayLng != null ? `${displayLng.toFixed(4)}° E` : "—"}
                     </div>

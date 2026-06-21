@@ -333,9 +333,11 @@ async def auto_flag_report(report_id: str, delay: int = 10) -> None:
                 })
 
             # ── Rule 4: No location ───────────────────────────────────────────
-            has_gps = report.gps_latitude is not None and report.gps_longitude is not None
+            # Use location_lat (canonical coord) so pin-drop reports with GPS denied
+            # are not incorrectly flagged as having no location.
+            has_coords = report.location_lat is not None and report.location_lng is not None
             has_address = bool(report.location_address and report.location_address.strip())
-            if not has_gps and not has_address:
+            if not has_coords and not has_address:
                 triggered_rules.append({
                     "rule_id": "4",
                     "reason": "no_location",

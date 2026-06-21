@@ -31,6 +31,9 @@ interface QueueReport {
   first_photo_url?: string | null;
   gps_latitude?: number | null;
   gps_longitude?: number | null;
+  location_lat?: number | null;
+  location_lng?: number | null;
+  location_source?: string | null;
   location_address?: string | null;
 }
 
@@ -56,6 +59,8 @@ function timeAgo(iso: string): string {
 
 function locationLabel(r: QueueReport): string {
   if (r.location_address) return r.location_address;
+  if (r.location_lat != null && r.location_lng != null)
+    return `${r.location_lat.toFixed(4)}, ${r.location_lng.toFixed(4)}`;
   if (r.gps_latitude != null && r.gps_longitude != null)
     return `${r.gps_latitude.toFixed(4)}, ${r.gps_longitude.toFixed(4)}`;
   return "No location recorded";

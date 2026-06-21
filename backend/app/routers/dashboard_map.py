@@ -28,6 +28,7 @@ class MapPin(BaseModel):
     report_count: int
     flag_status: str
     property_id: Optional[str] = None
+    location_source: Optional[str] = None
 
 
 class MapPinsResponse(BaseModel):
@@ -91,20 +92,21 @@ async def get_map_pins(
             )
             project_report_ids = {row[0] for row in rp_res.all()}
 
-    # Property grouping key: building_id if set, otherwise "lat_lng" string
+    # Property grouping key: building_id if set, otherwise "lat_lng" string from
+    # the canonical location coordinate (not raw GPS) so pin-drop reports group correctly.
     property_key = func.coalesce(
         Report.building_id,
         func.concat(
-            cast(Report.gps_latitude, String),
+            cast(Report.location_lat, String),
             "_",
-            cast(Report.gps_longitude, String),
+            cast(Report.location_lng, String),
         ),
     )
 
     base_conditions = [
         Report.flag_status.in_(allowed_flags),
-        Report.gps_latitude.isnot(None),
-        Report.gps_longitude.isnot(None),
+        Report.location_lat.isnot(None),
+        Report.location_lng.isnot(None),
     ]
     # Scope by project junction table when project_serial_id is provided — this is
     # the authoritative scope for the project detail map, covering all reports linked
@@ -167,8 +169,9 @@ async def get_map_pins(
     subq = (
         select(
             Report.building_id,
-            Report.gps_latitude,
-            Report.gps_longitude,
+            Report.location_lat,
+            Report.location_lng,
+            Report.location_source,
             Report.damage_level,
             Report.flag_status,
             func.row_number()
@@ -203,8 +206,9 @@ async def get_map_pins(
     pins = [
         MapPin(
             building_id=row.building_id,
-            latitude=row.gps_latitude,
-            longitude=row.gps_longitude,
+            latitude=row.location_lat,
+            longitude=row.location_lng,
+            location_source=row.location_source,
             damage_level=row.damage_level,
             report_count=row.report_count,
             flag_status=row.flag_status,

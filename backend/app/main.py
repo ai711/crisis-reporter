@@ -1269,6 +1269,28 @@ WHERE code IN (
     # reporters.email_hash — DB-level unique constraint prevents duplicate emails under concurrent
     # registrations. Partial (WHERE NOT NULL) so anonymous reporters (no email) remain unaffected.
     "CREATE UNIQUE INDEX IF NOT EXISTS uq_reporters_email_hash ON reporters(email_hash) WHERE email_hash IS NOT NULL",
+
+    # GPS coordinate fix — canonical "where is this building" fields on reports.
+    # pin_drop_lat/lng: previously silently discarded (no DB column existed).
+    # location_lat/lng/source: computed canonical coord, priority = building_centroid > pin_drop > gps.
+    "ALTER TABLE reports ADD COLUMN IF NOT EXISTS pin_drop_lat FLOAT",
+    "ALTER TABLE reports ADD COLUMN IF NOT EXISTS pin_drop_lng FLOAT",
+    "ALTER TABLE reports ADD COLUMN IF NOT EXISTS location_lat FLOAT",
+    "ALTER TABLE reports ADD COLUMN IF NOT EXISTS location_lng FLOAT",
+    "ALTER TABLE reports ADD COLUMN IF NOT EXISTS location_source VARCHAR(30)",
+    # Backfill existing rows using the same priority rule.
+    # pin_drop was never stored, so historical rows can only be building_centroid or gps.
+    """UPDATE reports SET
+        location_lat = COALESCE(building_centroid_lat, gps_latitude),
+        location_lng = COALESCE(building_centroid_lng, gps_longitude),
+        location_source = CASE
+            WHEN building_centroid_lat IS NOT NULL AND building_centroid_lng IS NOT NULL
+                THEN 'building_centroid'
+            WHEN gps_latitude IS NOT NULL AND gps_longitude IS NOT NULL
+                THEN 'gps'
+            ELSE NULL
+        END
+    WHERE location_lat IS NULL""",
 ]
 
 

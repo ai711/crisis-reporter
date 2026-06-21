@@ -147,11 +147,11 @@ export default function MapScreen() {
 
       if (reportsRes.status === 'fulfilled') {
         const pins: ReportPin[] = (reportsRes.value.data.reports ?? [])
-          .filter((r: any) => r.gps_latitude && r.gps_longitude)
+          .filter((r: any) => r.location_lat && r.location_lng)
           .map((r: any) => ({
             id: r.id,
-            latitude: parseFloat(r.gps_latitude),
-            longitude: parseFloat(r.gps_longitude),
+            latitude: parseFloat(r.location_lat),
+            longitude: parseFloat(r.location_lng),
             damage_level: normaliseDamageLevel(r.damage_level),
             infrastructure_type:
               r.infrastructure_types?.[0] ?? r.infrastructure_type ?? 'Unknown',

@@ -101,6 +101,11 @@ class ReportDetail(BaseModel):
     building_name_reporter: Optional[str] = None
     building_centroid_lat: Optional[float] = None
     building_centroid_lng: Optional[float] = None
+    pin_drop_lat: Optional[float] = None
+    pin_drop_lng: Optional[float] = None
+    location_lat: Optional[float] = None
+    location_lng: Optional[float] = None
+    location_source: Optional[str] = None
     was_queued: bool
     queued_at: Optional[datetime] = None
     synced_at: Optional[datetime] = None
@@ -141,6 +146,9 @@ class ReportListItem(BaseModel):
     platform: str
     gps_latitude: Optional[float]
     gps_longitude: Optional[float]
+    location_lat: Optional[float] = None
+    location_lng: Optional[float] = None
+    location_source: Optional[str] = None
     submitted_at: datetime
     created_at: datetime
     photo_count: int
@@ -310,6 +318,9 @@ async def list_reports(
             platform=report.platform,
             gps_latitude=report.gps_latitude,
             gps_longitude=report.gps_longitude,
+            location_lat=report.location_lat,
+            location_lng=report.location_lng,
+            location_source=report.location_source,
             submitted_at=report.submitted_at,
             created_at=report.created_at,
             photo_count=photo_count,
@@ -373,11 +384,11 @@ async def get_report_detail(
         ]
         if report.building_id:
             version_conditions.append(Report.building_id == report.building_id)
-        elif report.gps_latitude and report.gps_longitude:
+        elif report.location_lat and report.location_lng:
             radius = 0.001
             version_conditions += [
-                Report.gps_latitude.between(report.gps_latitude - radius, report.gps_latitude + radius),
-                Report.gps_longitude.between(report.gps_longitude - radius, report.gps_longitude + radius),
+                Report.location_lat.between(report.location_lat - radius, report.location_lat + radius),
+                Report.location_lng.between(report.location_lng - radius, report.location_lng + radius),
             ]
         v_result = await db.execute(
             select(Report)
@@ -494,6 +505,11 @@ async def get_report_detail(
         building_name_reporter=report.building_name_reporter,
         building_centroid_lat=report.building_centroid_lat,
         building_centroid_lng=report.building_centroid_lng,
+        pin_drop_lat=report.pin_drop_lat,
+        pin_drop_lng=report.pin_drop_lng,
+        location_lat=report.location_lat,
+        location_lng=report.location_lng,
+        location_source=report.location_source,
         was_queued=report.was_queued,
         queued_at=report.queued_at,
         synced_at=report.synced_at,

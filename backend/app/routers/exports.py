@@ -4,8 +4,8 @@ with RAPIDA field mapping applied at export time.
 
 RAPIDA field mappings:
   damage_level        → damage_classification (Complete / Partial / Minimal)
-  gps_latitude        → latitude              (decimal degrees)
-  gps_longitude       → longitude             (decimal degrees)
+  location_lat        → latitude              (decimal degrees — building centroid > pin drop > device GPS)
+  location_lng        → longitude             (decimal degrees)
   created_at          → timestamp             (ISO 8601 UTC)
   infrastructure_name → infrastructure_type   (single value)
   infrastructure_types → infrastructure_type  (pipe-delimited multi-select)
@@ -320,8 +320,8 @@ async def _gen_standard_damage_csv(file_path: pathlib.Path, job: dict) -> None:
     rows = [
         [
             _fmt_dt(r.created_at),
-            _fmt(r.gps_latitude),
-            _fmt(r.gps_longitude),
+            _fmt(r.location_lat),
+            _fmt(r.location_lng),
             DAMAGE_MAP.get(r.damage_level, r.damage_level),
             _pipe(r.infrastructure_types, r.infrastructure_name),
             _fmt(r.disaster_type),
@@ -339,8 +339,8 @@ async def _gen_standard_damage_csv(file_path: pathlib.Path, job: dict) -> None:
 async def _gen_standard_damage_geojson(file_path: pathlib.Path, job: dict) -> None:
     async with AsyncSessionLocal() as session:
         stmt = select(Report).where(
-            Report.gps_latitude.isnot(None),
-            Report.gps_longitude.isnot(None),
+            Report.location_lat.isnot(None),
+            Report.location_lng.isnot(None),
         )
         for clause in _build_where_clauses(job, ["green", "orange"]):
             stmt = stmt.where(clause)
@@ -353,7 +353,7 @@ async def _gen_standard_damage_geojson(file_path: pathlib.Path, job: dict) -> No
             "type": "Feature",
             "geometry": {
                 "type": "Point",
-                "coordinates": [r.gps_longitude, r.gps_latitude],
+                "coordinates": [r.location_lng, r.location_lat],
             },
             "properties": {
                 "timestamp": _fmt_dt(r.created_at),
@@ -381,8 +381,8 @@ async def _gen_shapefile(file_path: pathlib.Path, job: dict) -> None:
         )
     async with AsyncSessionLocal() as session:
         stmt = select(Report).where(
-            Report.gps_latitude.isnot(None),
-            Report.gps_longitude.isnot(None),
+            Report.location_lat.isnot(None),
+            Report.location_lng.isnot(None),
         )
         for clause in _build_where_clauses(job, ["green", "orange"]):
             stmt = stmt.where(clause)
@@ -391,7 +391,7 @@ async def _gen_shapefile(file_path: pathlib.Path, job: dict) -> None:
         reports = result.scalars().all()
 
     if not reports:
-        raise RuntimeError("No records with valid GPS coordinates to export as Shapefile.")
+        raise RuntimeError("No records with valid location coordinates to export as Shapefile.")
 
     # Shapefile column names are capped at 10 chars by the ESRI format spec
     records = [
@@ -403,7 +403,7 @@ async def _gen_shapefile(file_path: pathlib.Path, job: dict) -> None:
             "dsastr_tp": _fmt(r.disaster_type)[:40],
             "flag_stat": r.flag_status,
             "rptr_id": str(r.reporter_id)[:36] if r.reporter_id else "",
-            "geometry": Point(r.gps_longitude, r.gps_latitude),
+            "geometry": Point(r.location_lng, r.location_lat),
         }
         for r in reports
     ]
@@ -429,8 +429,8 @@ async def _gen_geopackage(file_path: pathlib.Path, job: dict) -> None:
         )
     async with AsyncSessionLocal() as session:
         stmt = select(Report).where(
-            Report.gps_latitude.isnot(None),
-            Report.gps_longitude.isnot(None),
+            Report.location_lat.isnot(None),
+            Report.location_lng.isnot(None),
         )
         for clause in _build_where_clauses(job, ["green", "orange"]):
             stmt = stmt.where(clause)
@@ -439,7 +439,7 @@ async def _gen_geopackage(file_path: pathlib.Path, job: dict) -> None:
         reports = result.scalars().all()
 
     if not reports:
-        raise RuntimeError("No records with valid GPS coordinates to export as GeoPackage.")
+        raise RuntimeError("No records with valid location coordinates to export as GeoPackage.")
 
     records = [
         {
@@ -450,7 +450,7 @@ async def _gen_geopackage(file_path: pathlib.Path, job: dict) -> None:
             "disaster_type": _fmt(r.disaster_type),
             "flag_status": r.flag_status,
             "reporter_id": str(r.reporter_id) if r.reporter_id else "",
-            "geometry": Point(r.gps_longitude, r.gps_latitude),
+            "geometry": Point(r.location_lng, r.location_lat),
         }
         for r in reports
     ]
@@ -499,8 +499,8 @@ async def _gen_full_data_csv(file_path: pathlib.Path, job: dict) -> None:
         [
             str(r.serial_number) if r.serial_number is not None else str(r.id),
             _fmt_dt(r.created_at),
-            _fmt(r.gps_latitude),
-            _fmt(r.gps_longitude),
+            _fmt(r.location_lat),
+            _fmt(r.location_lng),
             DAMAGE_MAP.get(r.damage_level, r.damage_level),
             _pipe(r.infrastructure_types, r.infrastructure_name),
             _fmt(r.infrastructure_other),
@@ -539,8 +539,8 @@ async def _gen_full_data_json(file_path: pathlib.Path, job: dict) -> None:
         {
             "report_id": r.serial_number if r.serial_number is not None else str(r.id),
             "timestamp": _fmt_dt(r.created_at),
-            "latitude": r.gps_latitude,
-            "longitude": r.gps_longitude,
+            "latitude": r.location_lat,
+            "longitude": r.location_lng,
             "damage_classification": DAMAGE_MAP.get(r.damage_level, r.damage_level),
             "infrastructure_type": _pipe(r.infrastructure_types, r.infrastructure_name),
             "infrastructure_other": r.infrastructure_other,
@@ -660,8 +660,8 @@ async def _gen_flagged_reports_csv(file_path: pathlib.Path, job: dict) -> None:
         rows.append(
             [
                 _fmt_dt(r.created_at),
-                _fmt(r.gps_latitude),
-                _fmt(r.gps_longitude),
+                _fmt(r.location_lat),
+                _fmt(r.location_lng),
                 DAMAGE_MAP.get(r.damage_level, r.damage_level),
                 _pipe(r.infrastructure_types, r.infrastructure_name),
                 _fmt(r.disaster_type),
@@ -695,8 +695,8 @@ async def _gen_flagged_reports_json(file_path: pathlib.Path, job: dict) -> None:
         records.append(
             {
                 "timestamp": _fmt_dt(r.created_at),
-                "latitude": r.gps_latitude,
-                "longitude": r.gps_longitude,
+                "latitude": r.location_lat,
+                "longitude": r.location_lng,
                 "damage_classification": DAMAGE_MAP.get(r.damage_level, r.damage_level),
                 "infrastructure_type": _pipe(r.infrastructure_types, r.infrastructure_name),
                 "disaster_type": _fmt(r.disaster_type),
@@ -739,8 +739,8 @@ async def _gen_project_summary_csv(file_path: pathlib.Path, job: dict) -> None:
 async def _gen_project_summary_geojson(file_path: pathlib.Path, job: dict) -> None:
     async with AsyncSessionLocal() as session:
         stmt = select(Report).where(
-            Report.gps_latitude.isnot(None),
-            Report.gps_longitude.isnot(None),
+            Report.location_lat.isnot(None),
+            Report.location_lng.isnot(None),
         )
         for clause in _build_where_clauses(job, ["green", "orange"]):
             stmt = stmt.where(clause)
@@ -753,7 +753,7 @@ async def _gen_project_summary_geojson(file_path: pathlib.Path, job: dict) -> No
             "type": "Feature",
             "geometry": {
                 "type": "Point",
-                "coordinates": [r.gps_longitude, r.gps_latitude],
+                "coordinates": [r.location_lng, r.location_lat],
             },
             "properties": {
                 "timestamp": _fmt_dt(r.created_at),

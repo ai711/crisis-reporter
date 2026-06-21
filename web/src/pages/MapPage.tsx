@@ -94,8 +94,8 @@ interface ReportMapItem {
   id: string;
   damage_level: string;
   created_at: string;
-  gps_latitude: number;
-  gps_longitude: number;
+  location_lat: number;
+  location_lng: number;
 }
 
 interface ReportsListResponse {
@@ -155,8 +155,8 @@ function reportsGeoJSON(reports: ReportMapItem[]): Parameters<maplibregl.GeoJSON
   }> = [];
 
   for (const r of reports) {
-    const lat = r.gps_latitude;
-    const lng = r.gps_longitude;
+    const lat = r.location_lat;
+    const lng = r.location_lng;
     if (!lat || !lng) continue;
     features.push({
       type: "Feature",

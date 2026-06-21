@@ -99,6 +99,9 @@ export interface ReportListItem {
   platform: Platform;
   gps_latitude: number | null;
   gps_longitude: number | null;
+  location_lat?: number | null;
+  location_lng?: number | null;
+  location_source?: string | null;
   submitted_at: string;
   created_at: string;
   photo_count: number;
@@ -178,6 +181,8 @@ export interface ReportDetail extends ReportListItem {
   building_name_reporter?: string | null;
   building_centroid_lat?: number | null;
   building_centroid_lng?: number | null;
+  pin_drop_lat?: number | null;
+  pin_drop_lng?: number | null;
   infrastructure_types?: string[] | null;
   infrastructure_other?: string | null;
   infrastructure_name?: string | null;
@@ -319,6 +324,7 @@ export interface MapPin {
   building_id: string | null;
   latitude: number;
   longitude: number;
+  location_source?: string | null;
   damage_level: DamageLevel;
   report_count: number;
   flag_status: FlagStatus;

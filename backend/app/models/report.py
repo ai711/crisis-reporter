@@ -68,6 +68,18 @@ class Report(Base):
     location_internet_available: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     gps_denied: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
 
+    # Pin-drop coordinates — manual map placement when no building was selected
+    pin_drop_lat: Mapped[float | None] = mapped_column(Float, nullable=True)
+    pin_drop_lng: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    # Canonical "where is this building" coordinate — computed at submission time.
+    # Priority: building_centroid > pin_drop > gps (device position).
+    # location_source records which input was used so the dashboard can display it.
+    location_lat: Mapped[float | None] = mapped_column(Float, nullable=True)
+    location_lng: Mapped[float | None] = mapped_column(Float, nullable=True)
+    location_source: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    # Values: "building_centroid" | "pin_drop" | "gps" | None (text-only, no coords)
+
     # Damage assessment
     damage_level: Mapped[str] = mapped_column(
         String(20), nullable=False

@@ -725,10 +725,10 @@ export default function ReportDetailPage() {
                 <section style={styles.primarySection}>
                   <SectionTitle>Geospatial Intelligence</SectionTitle>
                   <div style={styles.mapArea}>
-                    {report.gps_latitude && report.gps_longitude && MAPTILER_KEY ? (
+                    {report.location_lat && report.location_lng && MAPTILER_KEY ? (
                       <>
                         <img
-                          src={`https://api.maptiler.com/maps/streets/static/${report.gps_longitude.toFixed(5)},${report.gps_latitude.toFixed(5)},15/680x220.png?key=${MAPTILER_KEY}`}
+                          src={`https://api.maptiler.com/maps/streets/static/${report.location_lng.toFixed(5)},${report.location_lat.toFixed(5)},15/680x220.png?key=${MAPTILER_KEY}`}
                           alt="Location map"
                           style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
                         />
@@ -748,8 +748,15 @@ export default function ReportDetailPage() {
                                 </p>
                               )}
                               <p style={{ fontSize: 10, fontFamily: "monospace", color: "var(--c-primary)", fontWeight: 700, margin: 0 }}>
-                                {report.gps_latitude.toFixed(5)}°, {report.gps_longitude.toFixed(5)}°
+                                {report.location_lat.toFixed(5)}°, {report.location_lng.toFixed(5)}°
                               </p>
+                              {report.location_source && (
+                                <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.05em", padding: "1px 6px", borderRadius: 4, marginTop: 4, display: "inline-block",
+                                  background: "#eef0f3", color: "#4b5563", border: "1px solid #d1d5db",
+                                }}>
+                                  {report.location_source === "building_centroid" ? "BUILDING CENTROID" : report.location_source === "pin_drop" ? "PIN DROP" : "DEVICE GPS"}
+                                </span>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -758,15 +765,15 @@ export default function ReportDetailPage() {
                       <div style={styles.mapPlaceholder}>
                         <MapPin size={36} color="#c1c7d2" />
                         <span style={{ fontSize: 11, color: "#9ca3af", marginTop: 6 }}>
-                          {report.gps_latitude ? "Location recorded" : "No GPS coordinates"}
+                          {report.gps_latitude ? "Device GPS recorded (no building)" : "No GPS coordinates"}
                         </span>
                       </div>
                     )}
                   </div>
-                  {report.gps_latitude && report.gps_longitude ? (
+                  {report.location_lat && report.location_lng ? (
                     <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 16 }}>
                       <a
-                        href={`https://www.google.com/maps?q=${report.building_centroid_lat ?? report.gps_latitude},${report.building_centroid_lng ?? report.gps_longitude}`}
+                        href={`https://www.google.com/maps?q=${report.location_lat},${report.location_lng}`}
                         target="_blank" rel="noopener noreferrer"
                         style={styles.mapsLink}
                       >
@@ -784,10 +791,15 @@ export default function ReportDetailPage() {
                       )}
                     </div>
                   ) : (
-                    <p style={styles.emptyText}>No GPS coordinates recorded.</p>
+                    <p style={styles.emptyText}>No coordinates recorded.</p>
+                  )}
+                  {report.gps_latitude && report.gps_longitude && (
+                    <p style={{ fontSize: 11, color: "#9ca3af", marginTop: 6, margin: "6px 0 0", fontFamily: "monospace" }}>
+                      Device GPS: {report.gps_latitude.toFixed(6)}°, {report.gps_longitude.toFixed(6)}°
+                    </p>
                   )}
                   {report.building_centroid_lat && report.building_centroid_lng && (
-                    <p style={{ fontSize: 11, color: "#9ca3af", marginTop: 6, margin: "6px 0 0", fontFamily: "monospace" }}>
+                    <p style={{ fontSize: 11, color: "#9ca3af", marginTop: 4, margin: "4px 0 0", fontFamily: "monospace" }}>
                       Centroid: {report.building_centroid_lat.toFixed(6)}° N, {report.building_centroid_lng.toFixed(6)}° E
                     </p>
                   )}

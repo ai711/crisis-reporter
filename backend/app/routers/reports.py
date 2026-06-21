@@ -203,8 +203,8 @@ class ReporterReportsResponse(BaseModel):
 class MapReportItem(BaseModel):
     id: str
     damage_level: Optional[str]
-    gps_latitude: float
-    gps_longitude: float
+    location_lat: float
+    location_lng: float
     created_at: Optional[datetime]
 
     class Config:
@@ -214,6 +214,35 @@ class MapReportItem(BaseModel):
 class MapReportsResponse(BaseModel):
     reports: List[MapReportItem]
     total_count: int
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _compute_location_fields(loc: "LocationData") -> dict:
+    """Return location_lat, location_lng, location_source using the canonical priority rule.
+
+    Priority: building_centroid > pin_drop > gps (raw device position).
+    location_source records which input won so the dashboard can show it.
+    """
+    if loc.building_centroid_lat is not None and loc.building_centroid_lng is not None:
+        return {
+            "location_lat": loc.building_centroid_lat,
+            "location_lng": loc.building_centroid_lng,
+            "location_source": "building_centroid",
+        }
+    if loc.pin_drop_lat is not None and loc.pin_drop_lng is not None:
+        return {
+            "location_lat": loc.pin_drop_lat,
+            "location_lng": loc.pin_drop_lng,
+            "location_source": "pin_drop",
+        }
+    if loc.gps_latitude is not None and loc.gps_longitude is not None:
+        return {
+            "location_lat": loc.gps_latitude,
+            "location_lng": loc.gps_longitude,
+            "location_source": "gps",
+        }
+    return {"location_lat": None, "location_lng": None, "location_source": None}
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
@@ -403,7 +432,10 @@ async def submit_report(
         location_note=request.location.location_note,
         location_entry_method=request.location.location_entry_method,
         location_internet_available=request.location.location_internet_available,
-        # TODO: map building_type, pin_drop_lat, pin_drop_lng when Report model columns exist
+        pin_drop_lat=request.location.pin_drop_lat,
+        pin_drop_lng=request.location.pin_drop_lng,
+        # Canonical building coordinate — priority: building_centroid > pin_drop > gps
+        **_compute_location_fields(request.location),
         # Damage
         damage_level=request.damage_level,
         infrastructure_type=request.infrastructure_types[0] if request.infrastructure_types else "",
@@ -498,8 +530,8 @@ async def submit_report(
             "report_id": str(report.id),
             "flag_status": "grey",
             "damage_level": report.damage_level,
-            "latitude": report.gps_latitude,
-            "longitude": report.gps_longitude,
+            "latitude": report.location_lat,
+            "longitude": report.location_lng,
             "platform": report.platform,
         },
     )
@@ -636,11 +668,12 @@ async def get_map_reports(
     """Returns geolocated, verified reports for map display. No authentication required.
 
     When crisis_id is provided and the crisis has a configured center + radius, only
-    reports whose GPS coordinates fall within that radius are returned (haversine distance).
+    reports whose location coordinates fall within that radius are returned (haversine distance).
+    Uses location_lat/lng (canonical building coordinate) rather than raw device GPS.
     """
     conditions = [
-        Report.gps_latitude.isnot(None),
-        Report.gps_longitude.isnot(None),
+        Report.location_lat.isnot(None),
+        Report.location_lng.isnot(None),
         Report.flag_status.in_(["green", "orange"]),
     ]
     if crisis_id:
@@ -661,17 +694,14 @@ async def get_map_reports(
             radius_km = float(crisis.map_default_radius_miles or 50) * 1.60934
             clat = float(crisis.map_center_lat)
             clng = float(crisis.map_center_lng)
-            # Haversine distance (km) using PostgreSQL trig functions.
-            # LEAST(1.0, …) guards against floating-point values marginally above 1
-            # that would make acos return NaN for near-identical coordinates.
             dist_km = 6371.0 * func.acos(
                 func.least(
                     1.0,
                     func.cos(func.radians(clat))
-                    * func.cos(func.radians(Report.gps_latitude))
-                    * func.cos(func.radians(Report.gps_longitude) - func.radians(clng))
+                    * func.cos(func.radians(Report.location_lat))
+                    * func.cos(func.radians(Report.location_lng) - func.radians(clng))
                     + func.sin(func.radians(clat))
-                    * func.sin(func.radians(Report.gps_latitude)),
+                    * func.sin(func.radians(Report.location_lat)),
                 )
             )
             conditions.append(dist_km <= radius_km)
@@ -689,8 +719,8 @@ async def get_map_reports(
         MapReportItem(
             id=str(r.id),
             damage_level=r.damage_level,
-            gps_latitude=r.gps_latitude,
-            gps_longitude=r.gps_longitude,
+            location_lat=r.location_lat,
+            location_lng=r.location_lng,
             created_at=r.created_at,
         )
         for r in reports_list
@@ -728,14 +758,16 @@ async def check_duplicate_report(
         if result.scalar_one_or_none():
             return {"is_duplicate": True}
 
-    # Check by GPS proximity (~10 metres ≈ 0.0001 degrees)
+    # Check by canonical location proximity (~10 m ≈ 0.0001 degrees).
+    # Uses location_lat/lng (building centroid > pin drop > GPS) so reporters
+    # standing at different spots but reporting the same building are caught.
     if lat is not None and lng is not None:
         result = await db.execute(
             select(Report).where(
                 Report.reporter_id == current_reporter.id,
                 Report.created_at >= cutoff,
-                func.abs(Report.gps_latitude - lat) < 0.0001,
-                func.abs(Report.gps_longitude - lng) < 0.0001,
+                func.abs(Report.location_lat - lat) < 0.0001,
+                func.abs(Report.location_lng - lng) < 0.0001,
             )
         )
         if result.scalar_one_or_none():

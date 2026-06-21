@@ -35,13 +35,13 @@ async def get_or_create_property(db: AsyncSession, report: Report) -> Property:
         if prop:
             return prop
 
-        # No existing property for this building_id — create one.
-        # Prefer building centroid over raw device GPS for the canonical property location.
+        # No existing property for this building_id — create one using the canonical
+        # building coordinate (location_lat/lng already has the correct priority).
         prop = Property(
             id=generate_property_id(),
             building_id=report.building_id,
-            latitude=report.building_centroid_lat or report.gps_latitude or 0.0,
-            longitude=report.building_centroid_lng or report.gps_longitude or 0.0,
+            latitude=report.location_lat or 0.0,
+            longitude=report.location_lng or 0.0,
             confirmed_status=None,
             is_recovered=False,
             has_conflict_warning=False,
@@ -51,10 +51,10 @@ async def get_or_create_property(db: AsyncSession, report: Report) -> Property:
         log.info("property_service: created %s for building_id=%s", prop.id, report.building_id)
         return prop
 
-    # ── Path 2: no building_id — GPS proximity match ──────────────────────────
-    # Use building centroid when available (more accurate), fall back to device GPS.
-    ref_lat = report.building_centroid_lat or report.gps_latitude
-    ref_lng = report.building_centroid_lng or report.gps_longitude
+    # ── Path 2: no building_id — location proximity match ────────────────────
+    # location_lat/lng already encodes the best available coordinate (centroid > pin > gps).
+    ref_lat = report.location_lat
+    ref_lng = report.location_lng
     if ref_lat is not None and ref_lng is not None:
         result = await db.execute(
             select(Property).where(
@@ -73,9 +73,8 @@ async def get_or_create_property(db: AsyncSession, report: Report) -> Property:
             return prop
 
     # ── Path 3: create new property ───────────────────────────────────────────
-    # Prefer building centroid (more accurate) over raw device GPS.
-    lat = report.building_centroid_lat or report.gps_latitude or 0.0
-    lng = report.building_centroid_lng or report.gps_longitude or 0.0
+    lat = report.location_lat or 0.0
+    lng = report.location_lng or 0.0
     prop = Property(
         id=generate_property_id(),
         building_id=None,

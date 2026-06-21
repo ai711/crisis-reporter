@@ -1743,14 +1743,12 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
       submitted_at: submitTappedAt,
       building_id: selectedBuilding ? String(selectedBuilding.id) : null,
       location: {
-        gps_latitude: selectedBuilding
-          ? (gpsCoords?.lat ?? null)
-          : (pinCoords?.lat ?? gpsCoords?.lat ?? locationGpsCoords?.lat ?? null),
-        gps_longitude: selectedBuilding
-          ? (gpsCoords?.lng ?? null)
-          : (pinCoords?.lng ?? gpsCoords?.lng ?? locationGpsCoords?.lng ?? null),
+        gps_latitude: locationGpsCoords?.lat ?? gpsCoords?.lat ?? null,
+        gps_longitude: locationGpsCoords?.lng ?? gpsCoords?.lng ?? null,
+        pin_drop_lat: (!selectedBuilding && pinCoords) ? pinCoords.lat : null,
+        pin_drop_lng: (!selectedBuilding && pinCoords) ? pinCoords.lng : null,
         gps_accuracy_meters: locationGpsCoords?.accuracy ?? null,
-        gps_available: !!gpsCoords || !!locationGpsCoords || !!pinCoords,
+        gps_available: !!gpsCoords || !!locationGpsCoords,
         location_address: buildLocationAddress(),
         location_landmark: locationLandmark || null,
         location_building_name: locationBuildingName || null,
