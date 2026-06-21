@@ -3278,9 +3278,19 @@ async def seed_string_keys() -> None:
     On every startup:
     - Keys in _SEED_KEYS that do not yet exist → INSERT (is_active=True).
     - Keys in _SEED_KEYS that were previously retired → re-activate.
-    - Keys that exist in the DB but are no longer in _SEED_KEYS → set
-      is_active=False (retired). Translations are preserved for audit.
+    - Keys that exist in the DB but are no longer in _SEED_KEYS AND belong to
+      a category managed by _SEED_KEYS → set is_active=False (retired).
+
+    Retirement is scoped to _SEED_CATEGORIES only. Dynamically-managed content
+    keys (SAFETY_TIP_A/B/C_*, category "safety"/"content") are created by
+    _sync_safety_tips_to_translation and _sync_slideshow_to_translation — they
+    are never in _SEED_KEYS by design and must not be retired here or they will
+    churn through retired→missing→published on every startup.
     """
+    # Categories that _SEED_KEYS owns — derived at call time so it stays in
+    # sync automatically if new categories are added to _SEED_KEYS in the future.
+    _SEED_CATEGORIES = {c for _, c, _ in _SEED_KEYS}
+
     async with AsyncSessionLocal() as session:
         # Load all existing StringKey rows (need the ORM objects to mutate is_active)
         existing_result = await session.execute(select(StringKey))
@@ -3301,11 +3311,12 @@ async def seed_string_keys() -> None:
                 added += 1
 
         # Retire keys that have been removed from _SEED_KEYS.
-        # Sets is_active=False so they are excluded from language packages and
-        # the dashboard key catalogue, but all translation records are kept.
+        # Only touches categories that _SEED_KEYS manages — content-managed keys
+        # (category "safety", "content") are intentionally excluded so they are
+        # not incorrectly retired on every deploy.
         retired = 0
         for key, row in existing_map.items():
-            if key not in seed_key_set and row.is_active:
+            if key not in seed_key_set and row.is_active and row.category in _SEED_CATEGORIES:
                 row.is_active = False
                 retired += 1
 

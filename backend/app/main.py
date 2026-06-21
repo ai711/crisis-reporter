@@ -559,24 +559,23 @@ async def _seed_safety_tips_content() -> None:
                 _sync_safety_tips_to_translation,
                 _sync_slideshow_to_translation,
             )
-            async with AsyncSessionLocal() as db:
-                for dt in seeded_disasters:
-                    try:
-                        await _sync_safety_tips_to_translation(dt, _DISASTER_SLIDES[dt], db)
-                    except Exception as exc:
-                        logger.warning("Translation sync skipped for %s: %s", dt, exc)
+            # Both sync functions create their own DB sessions internally —
+            # do NOT pass a db arg (the old code did, causing a silent TypeError).
+            for dt in seeded_disasters:
+                try:
+                    await _sync_safety_tips_to_translation(dt, _DISASTER_SLIDES[dt])
+                except Exception as exc:
+                    logger.warning("Translation sync skipped for %s: %s", dt, exc)
             if seeded_b:
-                async with AsyncSessionLocal() as db:
-                    try:
-                        await _sync_slideshow_to_translation("B", _PART_B_SLIDES, db)
-                    except Exception as exc:
-                        logger.warning("Translation sync skipped for Part B: %s", exc)
+                try:
+                    await _sync_slideshow_to_translation("B", _PART_B_SLIDES)
+                except Exception as exc:
+                    logger.warning("Translation sync skipped for Part B: %s", exc)
             if seeded_c:
-                async with AsyncSessionLocal() as db:
-                    try:
-                        await _sync_slideshow_to_translation("C", _PART_C_SLIDES, db)
-                    except Exception as exc:
-                        logger.warning("Translation sync skipped for Part C: %s", exc)
+                try:
+                    await _sync_slideshow_to_translation("C", _PART_C_SLIDES)
+                except Exception as exc:
+                    logger.warning("Translation sync skipped for Part C: %s", exc)
 
         asyncio.create_task(_run_translation_sync())
 
