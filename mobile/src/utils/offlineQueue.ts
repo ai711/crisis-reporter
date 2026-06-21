@@ -1,19 +1,14 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import * as FileSystem from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
 import * as Notifications from "expo-notifications";
 import * as SecureStore from "expo-secure-store";
 import type { QueuedReport, QueuedPhoto, ReportSubmitRequest } from "../types";
 import { tokenStorage } from "../services/api";
 import { syncRegistrationQueue } from "../services/auth";
 
-// Persistent photo storage — survives Android low-storage cache clears.
-// FileSystem.Paths (SDK 52+) may be undefined on certain builds/devices — fall
-// back to FileSystem.documentDirectory which works on every Expo version.
-const _rawDocUri =
-  FileSystem.Paths?.document?.uri ??
-  FileSystem.documentDirectory ??
-  '';
-const _docBase = _rawDocUri && !_rawDocUri.endsWith('/') ? `${_rawDocUri}/` : _rawDocUri;
+// Persistent photo storage — documentDirectory from expo-file-system/legacy is
+// always an absolute file:// URI with a trailing slash on Android.
+const _docBase = FileSystem.documentDirectory ?? '';
 const PHOTO_STORE_DIR: string | null = _docBase ? `${_docBase}cr_queued_photos/` : null;
 
 async function ensurePhotoDir(): Promise<void> {

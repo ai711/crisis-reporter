@@ -30,7 +30,7 @@ import { useAuthStore } from "../stores/authStore";
 import api, { API_BASE } from "../services/api";
 import * as Device from 'expo-device';
 import * as ImageManipulator from 'expo-image-manipulator';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as MediaLibrary from 'expo-media-library';
 import { addToQueue, syncQueue, getQueue, removeFromQueue, queuePhotosForReport, saveDirectSubmittedRecord, resetItemForRetry } from "../utils/offlineQueue";
 import { haversineKm, milesToKm, saveCrisisMeta, loadCrisisMeta, saveFenceRadiusMeta, loadFenceRadiusMeta, getGpsFenceRadius, type FenceRadiusMeta } from "../utils/geo";
@@ -50,14 +50,9 @@ const ANSWERS_KEY = 'cr_draft_answers';
 function isNetOnline(state: { isConnected: boolean | null; type?: string }): boolean {
   return state.isConnected === true || state.type === 'wifi' || state.type === 'cellular';
 }
-// FileSystem.Paths (SDK 52+) may return undefined on certain builds/devices.
-// Fall back to FileSystem.documentDirectory (works on every Expo version) so
-// PHOTO_SESSION_DIR is always an absolute file:// URI with a trailing slash.
-const _docUri =
-  FileSystem.Paths?.document?.uri ??
-  FileSystem.documentDirectory ??
-  '';
-const _baseUri = _docUri && !_docUri.endsWith('/') ? `${_docUri}/` : _docUri;
+// documentDirectory from expo-file-system/legacy is an absolute file:// URI
+// with a trailing slash on Android — safe to use as photo storage base.
+const _baseUri = FileSystem.documentDirectory ?? '';
 const DRAFT_PHOTO_DIR = `${_baseUri}cr_draft_photos/`;
 // Stable session photo dir — copies from Expo cache here immediately so addToQueue
 // always has a documentDirectory source that survives Android cache clearing or OTA updates.
