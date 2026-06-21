@@ -148,34 +148,50 @@ async function fetchBuildingsForBounds(
     `[out:json][timeout:25][bbox:${south.toFixed(6)},${west.toFixed(6)},${north.toFixed(6)},${east.toFixed(6)}];` +
     `(way["building"];relation["building"]["type"="multipolygon"];);out body;>;out skel qt;`;
 
-  // Try two Overpass endpoints — primary can be throttled on mobile networks
+  // Try two Overpass endpoints — primary can be throttled on mobile networks.
+  // Use explicit Content-Type + string body instead of URLSearchParams —
+  // React Native's fetch polyfill on Android does not automatically set
+  // Content-Type: application/x-www-form-urlencoded when the body is a
+  // URLSearchParams object, causing Overpass to reject the request.
   const endpoints = [
     "https://overpass-api.de/api/interpreter",
     "https://overpass.kumi.systems/api/interpreter",
   ];
 
+  let lastDiag = 'no attempt';
   for (const endpoint of endpoints) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 20000);
     try {
       const res = await fetch(endpoint, {
         method: "POST",
-        body: new URLSearchParams({ data: query }),
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: `data=${encodeURIComponent(query)}`,
         signal: controller.signal,
       });
       clearTimeout(timeoutId);
-      if (!res.ok) continue;
-      const data: OverpassResponse = await res.json();
-      // Overpass returns {"error":"..."} on timeout/overload — elements will be missing
-      if (!data.elements || !Array.isArray(data.elements) || data.elements.length === 0) continue;
+      if (!res.ok) { lastDiag = `HTTP ${res.status} from ${endpoint}`; continue; }
+      const text = await res.text();
+      let data: OverpassResponse;
+      try { data = JSON.parse(text); }
+      catch { lastDiag = `JSON parse fail: ${text.slice(0, 120)}`; continue; }
+      if (!data.elements || !Array.isArray(data.elements) || data.elements.length === 0) {
+        lastDiag = `elements empty/missing (remark: ${(data as any).remark ?? 'none'})`;
+        continue;
+      }
       const fc = buildBuildingsFC(data);
-      if (fc.features.length === 0) continue;
+      if (fc.features.length === 0) {
+        lastDiag = `${data.elements.length} elements but 0 way features`;
+        continue;
+      }
       return fc;
-    } catch {
+    } catch (e) {
       clearTimeout(timeoutId);
-      // Try next endpoint
+      lastDiag = `fetch threw: ${e instanceof Error ? e.message : String(e)}`;
     }
   }
+  // Temporary diagnostic — remove once building loading is confirmed working
+  Alert.alert('Buildings debug', lastDiag);
   return null;
 }
 
