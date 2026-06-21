@@ -7,9 +7,12 @@ import { tokenStorage } from "../services/api";
 import { syncRegistrationQueue } from "../services/auth";
 
 // Persistent photo storage — survives Android low-storage cache clears.
-// Matches the _baseUri logic in ReportScreen so both modules share the same
-// document-directory root with a guaranteed trailing slash.
-const _rawDocUri = FileSystem.Paths?.document?.uri ?? '';
+// FileSystem.Paths (SDK 52+) may be undefined on certain builds/devices — fall
+// back to FileSystem.documentDirectory which works on every Expo version.
+const _rawDocUri =
+  FileSystem.Paths?.document?.uri ??
+  FileSystem.documentDirectory ??
+  '';
 const _docBase = _rawDocUri && !_rawDocUri.endsWith('/') ? `${_rawDocUri}/` : _rawDocUri;
 const PHOTO_STORE_DIR: string | null = _docBase ? `${_docBase}cr_queued_photos/` : null;
 

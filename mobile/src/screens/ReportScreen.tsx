@@ -50,9 +50,13 @@ const ANSWERS_KEY = 'cr_draft_answers';
 function isNetOnline(state: { isConnected: boolean | null; type?: string }): boolean {
   return state.isConnected === true || state.type === 'wifi' || state.type === 'cellular';
 }
-// Guarantee a trailing slash regardless of what Paths.document.uri returns,
-// so path concatenation always produces a valid file:// URI.
-const _docUri = FileSystem.Paths.document.uri ?? '';
+// FileSystem.Paths (SDK 52+) may return undefined on certain builds/devices.
+// Fall back to FileSystem.documentDirectory (works on every Expo version) so
+// PHOTO_SESSION_DIR is always an absolute file:// URI with a trailing slash.
+const _docUri =
+  FileSystem.Paths?.document?.uri ??
+  FileSystem.documentDirectory ??
+  '';
 const _baseUri = _docUri && !_docUri.endsWith('/') ? `${_docUri}/` : _docUri;
 const DRAFT_PHOTO_DIR = `${_baseUri}cr_draft_photos/`;
 // Stable session photo dir — copies from Expo cache here immediately so addToQueue
@@ -1028,7 +1032,16 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
       if (isMountedRef.current) setBuildingsLoading(true);
       const fc = await fetchBuildingsForBounds(lng - delta, lat - delta, lng + delta, lat + delta);
       if (isMountedRef.current) {
-        if (fc) setBuildingsFC(fc);
+        if (fc) {
+          setBuildingsFC(fc);
+        } else {
+          // Overpass returned no buildings for this area (sparse OSM coverage).
+          // Auto-drop a pin at the GPS location so the reporter is not stuck —
+          // they can reposition it by tapping the map, or proceed as-is.
+          setPinCoords({ lat, lng });
+          setPinDropActive(true);
+          setLocationMethod('pin_drop');
+        }
         setBuildingsLoading(false);
       }
     } catch {
@@ -1210,7 +1223,9 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
     // Hard GPS fence: if a specific building/pin is selected and it's > 50 mi from reporter's GPS, block
     if (gpsGeofenceBlocked) return false;
     if (locationScenario === 'online_gps') {
-      return !!(selectedBuilding || pinCoords || locationAddress?.trim());
+      // GPS coords alone are sufficient — covers areas with no OSM building data
+      // where the auto-placed pin may not have fired yet.
+      return !!(selectedBuilding || pinCoords || locationAddress?.trim() || locationGpsCoords);
     }
     if (locationScenario === 'online_no_gps') {
       return !!(selectedBuilding || pinCoords || locationAddress?.trim());
@@ -2011,8 +2026,16 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
           setWasQueued(false);
           setSubmitted(true);
         }
-      } catch {
+      } catch (submitErr) {
         clearTimeout(timeoutId);
+        // Temporarily surface the exact error so we can diagnose why online
+        // submissions are failing. Remove this alert once Issue 3 is resolved.
+        if (!onlineReportId) {
+          const errMsg = submitErr instanceof Error
+            ? `${submitErr.message}\n\nURL: ${API_BASE}/api/reports`
+            : String(submitErr);
+          Alert.alert('Submit Error (debug)', errMsg);
+        }
         if (onlineReportId) {
           // Report reached the server; only photo uploads failed.
           // Queue photos only — re-submitting the full report would create a duplicate.
