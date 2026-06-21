@@ -7,12 +7,11 @@ import { tokenStorage } from "../services/api";
 import { syncRegistrationQueue } from "../services/auth";
 
 // Persistent photo storage — survives Android low-storage cache clears.
-// Uses FileSystem.Paths.document.uri (expo-file-system v19+ API) to match the
-// path base used by ReportScreen's PHOTO_SESSION_DIR, ensuring FileSystem.copyAsync
-// receives a consistent file:// URI format on both ends.
-const PHOTO_STORE_DIR: string | null = FileSystem.Paths?.document?.uri
-  ? `${FileSystem.Paths.document.uri}cr_queued_photos/`
-  : null;
+// Matches the _baseUri logic in ReportScreen so both modules share the same
+// document-directory root with a guaranteed trailing slash.
+const _rawDocUri = FileSystem.Paths?.document?.uri ?? '';
+const _docBase = _rawDocUri && !_rawDocUri.endsWith('/') ? `${_rawDocUri}/` : _rawDocUri;
+const PHOTO_STORE_DIR: string | null = _docBase ? `${_docBase}cr_queued_photos/` : null;
 
 async function ensurePhotoDir(): Promise<void> {
   if (PHOTO_STORE_DIR == null) throw new Error("documentDirectory unavailable");

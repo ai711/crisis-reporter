@@ -23,7 +23,6 @@ import {
   UserLocation,
   Marker,
   type CameraRef,
-  type MapRef,
   type ViewStateChangeEvent,
   type PressEventWithFeatures,
 } from "@maplibre/maplibre-react-native";
@@ -51,10 +50,14 @@ const ANSWERS_KEY = 'cr_draft_answers';
 function isNetOnline(state: { isConnected: boolean | null; type?: string }): boolean {
   return state.isConnected === true || state.type === 'wifi' || state.type === 'cellular';
 }
-const DRAFT_PHOTO_DIR = `${FileSystem.Paths.document.uri}cr_draft_photos/`;
+// Guarantee a trailing slash regardless of what Paths.document.uri returns,
+// so path concatenation always produces a valid file:// URI.
+const _docUri = FileSystem.Paths.document.uri ?? '';
+const _baseUri = _docUri && !_docUri.endsWith('/') ? `${_docUri}/` : _docUri;
+const DRAFT_PHOTO_DIR = `${_baseUri}cr_draft_photos/`;
 // Stable session photo dir — copies from Expo cache here immediately so addToQueue
 // always has a documentDirectory source that survives Android cache clearing or OTA updates.
-const PHOTO_SESSION_DIR = `${FileSystem.Paths.document.uri}cr_session_photos/`;
+const PHOTO_SESSION_DIR = `${_baseUri}cr_session_photos/`;
 
 const OFFLINE_COUNTRY_FALLBACK = [
   { code: "AF", name: "Afghanistan" }, { code: "BD", name: "Bangladesh" },
@@ -465,7 +468,6 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
 
   // Map refs
   const cameraRef = useRef<CameraRef | null>(null);
-  const mapRef = useRef<MapRef | null>(null);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchDebounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchAbortController = useRef<AbortController | null>(null);
@@ -1034,28 +1036,24 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
     }
   };
 
-  const handleRegionChange = async (event: NativeSyntheticEvent<ViewStateChangeEvent>) => {
-    const zoom = event.nativeEvent.zoom;
+  const handleRegionChange = (event: NativeSyntheticEvent<ViewStateChangeEvent>) => {
+    const { zoom, center } = event.nativeEvent;
     setMapZoom(zoom);
-    if (zoom < 14) return;
-    try {
-      // onRegionDidChange does not populate bounds in the event payload on Android —
-      // query the map imperatively instead.
-      const bounds = await mapRef.current?.getBounds();
-      if (!bounds || bounds.length < 4) return;
-      const [west, south, east, north] = bounds;
-      if (debounceTimer.current) clearTimeout(debounceTimer.current);
-      debounceTimer.current = setTimeout(async () => {
-        if (isMountedRef.current) setBuildingsLoading(true);
-        const fc = await fetchBuildingsForBounds(west, south, east, north);
-        if (isMountedRef.current) {
-          if (fc) setBuildingsFC(fc);
-          setBuildingsLoading(false);
-        }
-      }, 1000);
-    } catch {
-      // camera ref not ready — silent
-    }
+    // center = [longitude, latitude] — always populated on Android unlike bounds.
+    if (zoom < 14 || !center) return;
+    const [lng, lat] = center as [number, number];
+    // Use a zoom-scaled bounding box rather than getBounds() which can be null
+    // on Android when the MapRef imperative handle isn't fully initialised yet.
+    const delta = zoom >= 16 ? 0.004 : zoom >= 15 ? 0.006 : 0.010;
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    debounceTimer.current = setTimeout(async () => {
+      if (isMountedRef.current) setBuildingsLoading(true);
+      const fc = await fetchBuildingsForBounds(lng - delta, lat - delta, lng + delta, lat + delta);
+      if (isMountedRef.current) {
+        if (fc) setBuildingsFC(fc);
+        setBuildingsLoading(false);
+      }
+    }, 1000);
   };
 
   const handleSearch = (query: string) => {
@@ -1948,11 +1946,9 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
     };
 
     try {
-      if (!isCurrentlyOnline) {
-        await queueReport();
-        return;
-      }
-
+      // Always attempt the HTTP path first — NetInfo readings on Android (New
+      // Architecture) can mis-report offline even on a working connection.
+      // The existing catch block queues the report if the HTTP attempt fails.
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 30000);
 
@@ -2197,7 +2193,18 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
         if (!stillQueued) {
           setWasQueued(false);
         } else {
-          Alert.alert(t('review.still_offline_title'), t('review.still_offline_body'));
+          // Distinguish "device offline" from "server/request error" so the user
+          // can take the right action (fix connectivity vs contact support).
+          const netState = await NetInfo.fetch().catch(() => null);
+          const hasNetwork = netState ? isNetOnline(netState) : false;
+          if (!hasNetwork) {
+            Alert.alert(t('review.still_offline_title'), t('review.still_offline_body'));
+          } else {
+            Alert.alert(
+              t('review.still_offline_title'),
+              'Your device is connected but the report could not be sent. It will retry automatically. If this persists, please check that the app is up to date.'
+            );
+          }
         }
       } catch {
         Alert.alert(t('review.still_offline_title'), t('review.still_offline_body'));
@@ -2401,7 +2408,6 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                   </View>
                 )}
                 <MLMap
-                  ref={mapRef}
                   mapStyle={MAP_STYLE_URL}
                   style={{ flex: 1 }}
                   androidView="texture"
