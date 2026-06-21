@@ -130,22 +130,34 @@ async function fetchBuildingsForBounds(
   const query =
     `[out:json][timeout:25][bbox:${south.toFixed(6)},${west.toFixed(6)},${north.toFixed(6)},${east.toFixed(6)}];` +
     `(way["building"];relation["building"]["type"="multipolygon"];);out body;>;out skel qt;`;
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 30000);
-  try {
-    const res = await fetch("https://overpass-api.de/api/interpreter", {
-      method: "POST",
-      body: new URLSearchParams({ data: query }),
-      signal: controller.signal,
-    });
-    clearTimeout(timeoutId);
-    if (!res.ok) return null;
-    const data: OverpassResponse = await res.json();
-    return buildBuildingsFC(data);
-  } catch {
-    clearTimeout(timeoutId);
-    return null;
+
+  // Try two Overpass endpoints — primary can be throttled on mobile networks
+  const endpoints = [
+    "https://overpass-api.de/api/interpreter",
+    "https://overpass.kumi.systems/api/interpreter",
+  ];
+
+  for (const endpoint of endpoints) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 20000);
+    try {
+      const res = await fetch(endpoint, {
+        method: "POST",
+        body: new URLSearchParams({ data: query }),
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      if (!res.ok) continue;
+      const data: OverpassResponse = await res.json();
+      // Overpass returns {"error":"..."} on timeout/overload — elements will be missing
+      if (!data.elements || !Array.isArray(data.elements)) continue;
+      return buildBuildingsFC(data);
+    } catch {
+      clearTimeout(timeoutId);
+      // Try next endpoint
+    }
   }
+  return null;
 }
 
 // ── Question package types ────────────────────────────────────────────────────
@@ -965,11 +977,23 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
   const handleMapLoaded = async () => {
     setMapTilesLoading(false);
     try {
-      const { status } = await Location.getForegroundPermissionsAsync();
-      if (status !== "granted") return;
-      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      const lng = loc.coords.longitude;
-      const lat = loc.coords.latitude;
+      let lng: number;
+      let lat: number;
+      if (locationGpsCoords) {
+        // Already have GPS from the scenario-detection useEffect — use it directly
+        lng = locationGpsCoords.lng;
+        lat = locationGpsCoords.lat;
+      } else {
+        const { status } = await Location.getForegroundPermissionsAsync();
+        if (status !== "granted") return;
+        const loc = await Promise.race([
+          Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+          new Promise<null>((resolve) => setTimeout(() => resolve(null), 8000)),
+        ]);
+        if (!loc) return;
+        lng = loc.coords.longitude;
+        lat = loc.coords.latitude;
+      }
       cameraRef.current?.flyTo({
         center: [lng, lat],
         zoom: 15,
@@ -987,7 +1011,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
         setBuildingsLoading(false);
       }
     } catch {
-      // Silent — map remains at world view
+      if (isMountedRef.current) setBuildingsLoading(false);
     }
   };
 
@@ -2458,8 +2482,8 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                   </View>
                 )}
 
-                {/* Instruction pill overlay */}
-                {!selectedBuilding && !pinDropActive && (
+                {/* Instruction pill — replaced by loading pill while footprints are fetching */}
+                {!selectedBuilding && !pinDropActive && !buildingsLoading && (
                   <View style={styles.mapInstructionPill} pointerEvents="none">
                     <MaterialIcons name="info-outline" size={scale(14)} color="#0468B1" />
                     <Text style={styles.mapInstructionText}>{t('report.map_instruction')}</Text>
@@ -4468,7 +4492,7 @@ const styles = StyleSheet.create({
   // Instruction pill
   mapInstructionPill: {
     position: 'absolute',
-    top: 12,
+    top: 64,
     alignSelf: 'center' as const,
     zIndex: 15,
     flexDirection: 'row' as const,
@@ -4491,7 +4515,7 @@ const styles = StyleSheet.create({
   },
   buildingsLoadingPill: {
     position: 'absolute',
-    top: 52,
+    top: 64,
     alignSelf: 'center' as const,
     zIndex: 15,
     flexDirection: 'row' as const,
