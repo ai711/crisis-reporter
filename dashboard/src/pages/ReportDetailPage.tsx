@@ -936,8 +936,7 @@ export default function ReportDetailPage() {
                           value={debris === "yes" ? "Yes (Hazardous)" : "No"}
                         />
                       );
-                    })()
-                    )}
+                    })()}
                     {report.language_code && (
                       <DamageField label="Report Language" value={report.language_code.toUpperCase()} />
                     )}
