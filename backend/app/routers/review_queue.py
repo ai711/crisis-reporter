@@ -889,16 +889,17 @@ async def force_resolution(
 
     # Publish SSE
     try:
-        from app.routers.dashboard_sse import publish_event
-        await publish_event(
-            crisis_id=str(report.crisis_id),
-            event_type="flag_changed",
-            data={
-                "report_id": report_id,
-                "flag_from": previous_flag,
-                "flag_to": body.target_status,
-            },
-        )
+        if report.crisis_id is not None:
+            from app.routers.dashboard_sse import publish_event
+            await publish_event(
+                crisis_id=str(report.crisis_id),
+                event_type="flag_changed",
+                data={
+                    "report_id": report_id,
+                    "flag_from": previous_flag,
+                    "flag_to": body.target_status,
+                },
+            )
     except Exception:
         pass
 
@@ -1201,21 +1202,22 @@ async def submit_review_decision(
 
     # Publish SSE events
     try:
-        from app.routers.dashboard_sse import publish_event
-        await publish_event(
-            crisis_id=str(report.crisis_id),
-            event_type="flag_changed",
-            data={
-                "report_id": report_id,
-                "flag_from": previous_flag,
-                "flag_to": target_status,
-            },
-        )
-        await publish_event(
-            crisis_id=str(report.crisis_id),
-            event_type="review_queue_updated",
-            data={"report_id": report_id},
-        )
+        if report.crisis_id is not None:
+            from app.routers.dashboard_sse import publish_event
+            await publish_event(
+                crisis_id=str(report.crisis_id),
+                event_type="flag_changed",
+                data={
+                    "report_id": report_id,
+                    "flag_from": previous_flag,
+                    "flag_to": target_status,
+                },
+            )
+            await publish_event(
+                crisis_id=str(report.crisis_id),
+                event_type="review_queue_updated",
+                data={"report_id": report_id},
+            )
     except Exception:
         pass
 

@@ -609,18 +609,19 @@ async def auto_flag_report(report_id: str, delay: int = 10) -> None:
                 )
 
                 try:
-                    from app.routers.dashboard_sse import publish_event
-                    await publish_event(
-                        crisis_id=str(report.crisis_id),
-                        event_type="flag_changed",
-                        data={
-                            "report_id": report_id,
-                            "flag_from": old_flag,
-                            "flag_to": new_flag,
-                            "reason": flag_reason,
-                            "rule_count": len(triggered_rules),
-                        },
-                    )
+                    if report.crisis_id is not None:
+                        from app.routers.dashboard_sse import publish_event
+                        await publish_event(
+                            crisis_id=str(report.crisis_id),
+                            event_type="flag_changed",
+                            data={
+                                "report_id": report_id,
+                                "flag_from": old_flag,
+                                "flag_to": new_flag,
+                                "reason": flag_reason,
+                                "rule_count": len(triggered_rules),
+                            },
+                        )
                 except Exception:
                     log.exception(
                         "auto_flag_report: SSE publish failed for %s", report_id
@@ -741,16 +742,17 @@ async def monitor_stuck_grey_reports() -> None:
                 )
                 asyncio.create_task(auto_flag_report(str(report.id), delay=0))
                 try:
-                    from app.routers.dashboard_sse import publish_event
-                    await publish_event(
-                        crisis_id=str(report.crisis_id),
-                        event_type="stuck_report",
-                        data={
-                            "report_id": str(report.id),
-                            "minutes_stuck": minutes_stuck,
-                            "flag_status": "grey",
-                        },
-                    )
+                    if report.crisis_id is not None:
+                        from app.routers.dashboard_sse import publish_event
+                        await publish_event(
+                            crisis_id=str(report.crisis_id),
+                            event_type="stuck_report",
+                            data={
+                                "report_id": str(report.id),
+                                "minutes_stuck": minutes_stuck,
+                                "flag_status": "grey",
+                            },
+                        )
                 except Exception:
                     log.debug(
                         "monitor_stuck_grey_reports: SSE publish failed for %s", report.id

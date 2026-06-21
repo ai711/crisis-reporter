@@ -266,27 +266,22 @@ async def submit_report(
     Accepts both online submissions and offline queue syncs.
     """
 
-    # Resolve crisis — use provided crisis_id or fall back to first active crisis
+    # Resolve crisis — crisis association is optional; reports can be submitted
+    # without any active project configured and linked retroactively.
+    crisis = None
     if request.crisis_id:
         result = await db.execute(
-            select(Crisis).where(
-                Crisis.id == request.crisis_id,
-                Crisis.is_active == True,
-            )
+            select(Crisis).where(Crisis.id == request.crisis_id)
         )
         crisis = result.scalar_one_or_none()
-    else:
+    if crisis is None:
+        # No valid crisis_id provided — try to find the most recent active one
         result = await db.execute(
-            select(Crisis).where(Crisis.is_active == True).order_by(Crisis.created_at.desc()).limit(1)
+            select(Crisis).where(Crisis.status == "active")
+            .order_by(Crisis.created_at.desc()).limit(1)
         )
         crisis = result.scalar_one_or_none()
-
-    if not crisis:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Crisis not found or no longer active",
-        )
-    resolved_crisis_id = crisis.id
+    resolved_crisis_id = crisis.id if crisis else None
 
     # Deduplicate offline-queue retries — return the existing report instead of
     # inserting a duplicate. The client then proceeds to upload photos against
@@ -521,20 +516,22 @@ async def submit_report(
     await db.commit()
     await db.refresh(report)
 
-    # Notify dashboard that a new report arrived (flag still grey)
-    from app.routers.dashboard_sse import publish_event
-    await publish_event(
-        crisis_id=str(resolved_crisis_id),
-        event_type="report_confirmed",
-        data={
-            "report_id": str(report.id),
-            "flag_status": "grey",
-            "damage_level": report.damage_level,
-            "latitude": report.location_lat,
-            "longitude": report.location_lng,
-            "platform": report.platform,
-        },
-    )
+    # Notify dashboard that a new report arrived (flag still grey).
+    # Skip publish when no crisis is associated — no SSE channel to target.
+    if resolved_crisis_id is not None:
+        from app.routers.dashboard_sse import publish_event
+        await publish_event(
+            crisis_id=str(resolved_crisis_id),
+            event_type="report_confirmed",
+            data={
+                "report_id": str(report.id),
+                "flag_status": "grey",
+                "damage_level": report.damage_level,
+                "latitude": report.location_lat,
+                "longitude": report.location_lng,
+                "platform": report.platform,
+            },
+        )
 
     # Auto-flagging runs after the response is sent to the reporter
     background_tasks.add_task(auto_flag_report, str(report.id))

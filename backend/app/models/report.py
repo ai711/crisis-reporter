@@ -28,9 +28,10 @@ class Report(Base):
         String(100), nullable=True, index=True
     )
 
-    # Foreign keys
-    crisis_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("crises.id"), nullable=False, index=True
+    # Foreign keys — crisis_id is optional; reports can be submitted when no
+    # active crisis is configured and linked to a project retroactively.
+    crisis_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("crises.id"), nullable=True, index=True
     )
     reporter_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("reporters.id"), nullable=True, index=True

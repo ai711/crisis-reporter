@@ -1329,6 +1329,10 @@ WHERE code IN (
             ELSE NULL
         END
     WHERE location_lat IS NULL""",
+    # reports.crisis_id — made nullable so reports can be submitted without an
+    # active crisis configured. The NOT NULL constraint is dropped; existing rows
+    # are unaffected (they already have a non-null value).
+    "ALTER TABLE reports ALTER COLUMN crisis_id DROP NOT NULL",
 ]
 
 

@@ -67,7 +67,7 @@ class VersionHistoryItem(BaseModel):
 class ReportDetail(BaseModel):
     id: str
     serial_number: Optional[int] = None
-    crisis_id: str
+    crisis_id: Optional[str] = None
     reporter_id: Optional[str]
     reporter_display_id: Optional[int]
     reporter_platform: Optional[str]
@@ -134,7 +134,7 @@ class ReportDetail(BaseModel):
 class ReportListItem(BaseModel):
     id: str
     serial_number: Optional[int] = None
-    crisis_id: str
+    crisis_id: Optional[str] = None
     reporter_id: Optional[str]
     reporter_display_id: Optional[int]
     country: Optional[str]
@@ -306,7 +306,7 @@ async def list_reports(
         items.append(ReportListItem(
             id=str(report.id),
             serial_number=report.serial_number,
-            crisis_id=str(report.crisis_id),
+            crisis_id=str(report.crisis_id) if report.crisis_id else None,
             reporter_id=str(report.reporter_id) if report.reporter_id else None,
             reporter_display_id=reporter.display_id if reporter else None,
             country=country_code,
@@ -471,7 +471,7 @@ async def get_report_detail(
     return ReportDetail(
         id=str(report.id),
         serial_number=report.serial_number,
-        crisis_id=str(report.crisis_id),
+        crisis_id=str(report.crisis_id) if report.crisis_id else None,
         reporter_id=str(report.reporter_id) if report.reporter_id else None,
         reporter_display_id=reporter.display_id if reporter else None,
         reporter_platform=reporter.platform if reporter else None,
@@ -683,12 +683,13 @@ async def update_report_flag(
         except Exception:
             log.exception("update_report_flag: property/project linking failed for %s", report_id)
 
-    from app.routers.dashboard_sse import publish_event
-    await publish_event(
-        crisis_id=str(report.crisis_id),
-        event_type="flag_changed",
-        data={"report_id": report_id, "flag_from": current_status, "flag_to": requested_status},
-    )
+    if report.crisis_id is not None:
+        from app.routers.dashboard_sse import publish_event
+        await publish_event(
+            crisis_id=str(report.crisis_id),
+            event_type="flag_changed",
+            data={"report_id": report_id, "flag_from": current_status, "flag_to": requested_status},
+        )
 
     return {
         "report_id": report_id,
@@ -761,12 +762,13 @@ async def emergency_override_flag(
         except Exception:
             log.exception("emergency_override_flag: property/project linking failed for %s", report_id)
 
-    from app.routers.dashboard_sse import publish_event
-    await publish_event(
-        crisis_id=str(report.crisis_id),
-        event_type="flag_changed",
-        data={"report_id": report_id, "flag_from": previous_flag, "flag_to": request.target_status},
-    )
+    if report.crisis_id is not None:
+        from app.routers.dashboard_sse import publish_event
+        await publish_event(
+            crisis_id=str(report.crisis_id),
+            event_type="flag_changed",
+            data={"report_id": report_id, "flag_from": previous_flag, "flag_to": request.target_status},
+        )
 
     return {
         "report_id": report_id,
