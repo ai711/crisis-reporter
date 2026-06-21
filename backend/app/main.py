@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import secrets
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta, date
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -922,6 +922,45 @@ async def _pause_expiry_loop() -> None:
             logger.error("Pause expiry loop error: %s", e)
 
 
+async def _project_status_sync_loop() -> None:
+    """Daily: auto-close any active project whose end_date has already passed.
+
+    Projects are not automatically re-opened — status can only advance from
+    active → closed → archived. Runs once immediately on startup so any
+    projects that expired during a downtime window are fixed right away.
+    """
+    from app.models.crisis import Crisis
+
+    async def _close_expired() -> None:
+        today = date.today()
+        try:
+            async with AsyncSessionLocal() as db:
+                result = await db.execute(
+                    select(Crisis).where(
+                        Crisis.status == "active",
+                        Crisis.end_date < today,
+                    )
+                )
+                expired = result.scalars().all()
+                for crisis in expired:
+                    crisis.status = "closed"
+                    crisis.is_active = False
+                if expired:
+                    await db.commit()
+                    for crisis in expired:
+                        logger.info(
+                            "Auto-closed project %s (end_date=%s passed)",
+                            crisis.serial_id, crisis.end_date,
+                        )
+        except Exception as e:
+            logger.error("_project_status_sync_loop error: %s", e)
+
+    await _close_expired()
+    while True:
+        await asyncio.sleep(24 * 60 * 60)
+        await _close_expired()
+
+
 _MIGRATIONS = [
     # Report serial number — simple sequential human-readable ID
     "CREATE SEQUENCE IF NOT EXISTS reports_serial_seq START WITH 1 INCREMENT BY 1",
@@ -1517,6 +1556,7 @@ async def lifespan(app: FastAPI):
     task_lang_cleanup = asyncio.create_task(_remove_expired_deprecated_languages_loop())
     task_rq_threshold = asyncio.create_task(_review_queue_threshold_loop())
     task_notif_flush = asyncio.create_task(_notification_batch_flush_loop())
+    task_project_close = asyncio.create_task(_project_status_sync_loop())
     yield
     task_stuck.cancel()
     task_autoblock.cancel()
@@ -1524,6 +1564,7 @@ async def lifespan(app: FastAPI):
     task_lang_cleanup.cancel()
     task_rq_threshold.cancel()
     task_notif_flush.cancel()
+    task_project_close.cancel()
     await app.state.redis.aclose()
     await engine.dispose()
 

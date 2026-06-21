@@ -128,16 +128,29 @@ async def _geolocate_ip_cached(ip: str, ip_hash: str) -> str | None:
 # ── Real-time project linking ────────────────────────────────────────────────
 
 async def _link_report_to_projects(db, report) -> None:
-    """Link a newly approved report to all matching active/closed projects."""
+    """Link a newly approved report to all matching active/closed projects.
+
+    Matching criteria:
+      - project.status in (active, closed) — archived projects don't receive new reports
+      - project.start_date <= report.created_at.date() <= project.end_date
+      - report.reporter_country in project.countries (both are ISO 3166-1 alpha-2 codes)
+
+    reporter_country is the 2-letter code set at submission time from GPS reverse-geocoding
+    (MapTiler) or, as a fallback, the reporter's onboarding country selection. It reflects
+    where the damage is located, NOT the reporter's profile country or IP geolocation.
+    project.countries must therefore also store 2-letter codes — full country names will
+    never match. The backend ProjectCreate validator enforces this on project creation.
+    """
     from app.models.crisis import Crisis
     from app.models.report_project import ReportProject
 
-    # Use the country captured at submission time (reverse-geocoded from GPS on
-    # web/Android). This reflects where the damage is, not the reporter's profile
-    # country. Falls back to the reporter's onboarding country when GPS is absent.
     report_country: str | None = getattr(report, "reporter_country", None)
 
     if not report_country or not report.created_at:
+        log.debug(
+            "_link_report_to_projects: skipping report %s — reporter_country=%r created_at=%r",
+            report.id, report_country, report.created_at,
+        )
         return
 
     report_date = report.created_at.date()
@@ -151,7 +164,15 @@ async def _link_report_to_projects(db, report) -> None:
         )
     )
 
-    for crisis in matching.scalars().all():
+    matched = matching.scalars().all()
+    if not matched:
+        log.debug(
+            "_link_report_to_projects: no project found for reporter_country=%s "
+            "date=%s report=%s — report will not be auto-linked",
+            report_country, report_date, report.id,
+        )
+
+    for crisis in matched:
         existing = await db.execute(
             select(ReportProject).where(
                 ReportProject.report_id == report.id,
@@ -164,6 +185,10 @@ async def _link_report_to_projects(db, report) -> None:
                 crisis_id=crisis.id,
                 linked_by="realtime",
             ))
+            log.debug(
+                "_link_report_to_projects: linked report %s → project %s (country=%s)",
+                report.id, crisis.serial_id, report_country,
+            )
 
     await db.flush()
 

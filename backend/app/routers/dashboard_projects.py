@@ -12,7 +12,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, text, and_, or_
+from sqlalchemy import select, func, text, and_, or_, delete
 from sqlalchemy.orm import joinedload
 from pydantic import BaseModel, validator
 
@@ -24,7 +24,8 @@ from app.models.report import Report
 from app.models.reporter import Reporter
 from app.models.property import Property
 from app.models.dashboard_user import DashboardUser
-from app.services.dependencies import get_current_dashboard_user, require_section_access
+from app.models.country import Country
+from app.services.dependencies import get_current_dashboard_user, require_section_access, require_superadmin
 
 log = logging.getLogger(__name__)
 
@@ -32,6 +33,23 @@ router = APIRouter(prefix="/dashboard/projects", tags=["Dashboard Projects"])
 
 
 # ── Schemas ────────────────────────────────────────────────────────────────────
+
+def _validate_country_codes(raw_list: list[str]) -> list[str]:
+    """Normalise and format-check country codes.  DB existence is verified in the endpoint."""
+    if not raw_list:
+        raise ValueError("At least one country must be selected.")
+    normalized = []
+    for raw in raw_list:
+        code = raw.strip().upper()
+        if len(code) != 2 or not code.isalpha():
+            raise ValueError(
+                f"'{raw}' is not a valid ISO 3166-1 alpha-2 country code. "
+                f"Send the 2-letter code (e.g. 'KE' for Kenya, 'IN' for India), "
+                f"not the full country name."
+            )
+        normalized.append(code)
+    return normalized
+
 
 class ProjectCreate(BaseModel):
     name: str
@@ -49,20 +67,8 @@ class ProjectCreate(BaseModel):
         return v.strip()
 
     @validator("countries")
-    def countries_not_empty(cls, v):
-        if not v:
-            raise ValueError("At least one country must be selected.")
-        normalized = []
-        for raw in v:
-            code = raw.strip().upper()
-            if len(code) != 2 or not code.isalpha():
-                raise ValueError(
-                    f"'{raw}' is not a valid ISO 3166-1 alpha-2 country code. "
-                    f"Send the 2-letter code (e.g. 'KE' for Kenya, 'IN' for India), "
-                    f"not the full country name."
-                )
-            normalized.append(code)
-        return normalized
+    def countries_valid(cls, v):
+        return _validate_country_codes(v)
 
     @validator("start_date")
     def start_not_future(cls, v):
@@ -75,6 +81,14 @@ class ProjectCreate(BaseModel):
         if "start_date" in values and v < values["start_date"]:
             raise ValueError("End date cannot be before start date.")
         return v
+
+
+class CountryReconfigRequest(BaseModel):
+    countries: list[str]
+
+    @validator("countries")
+    def countries_valid(cls, v):
+        return _validate_country_codes(v)
 
 
 class ProjectUpdate(BaseModel):
@@ -309,6 +323,22 @@ async def create_project(
             detail="A project with this name already exists.",
         )
 
+    # Verify country codes exist in the countries table (catches typos like "KY" instead of "KE")
+    valid_result = await db.execute(
+        select(Country.code).where(Country.code.in_(body.countries))
+    )
+    valid_codes = {row[0] for row in valid_result.fetchall()}
+    unknown = [c for c in body.countries if c not in valid_codes]
+    if unknown:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"Unknown country code(s): {', '.join(unknown)}. "
+                f"Use a valid ISO 3166-1 alpha-2 code from the countries list "
+                f"(e.g. 'KE' for Kenya, 'IN' for India)."
+            ),
+        )
+
     # Allocate serial number
     serial_num_res = await db.execute(text("SELECT nextval('crisis_serial_seq')"))
     serial_num = serial_num_res.scalar()
@@ -485,6 +515,76 @@ async def update_project(
             created_by_name = u.full_name
 
     return _project_row(crisis, total_reports, created_by_name)
+
+
+# ── POST /api/dashboard/projects/{serial_id}/reconfigure-countries (superadmin) ─
+
+@router.post("/{serial_id}/reconfigure-countries", status_code=200)
+async def reconfigure_countries(
+    serial_id: str,
+    body: CountryReconfigRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: DashboardUser = Depends(require_superadmin),
+):
+    """Superadmin only: correct a project's countries array and re-run the import.
+
+    Removes all automatically-linked report_projects rows (linked_by auto/realtime)
+    and re-imports from scratch using the corrected countries list.
+    Manually-linked reports are preserved.
+    """
+    crisis = await _resolve_serial(serial_id, db)
+
+    # Validate codes exist in the countries table
+    valid_result = await db.execute(
+        select(Country.code).where(Country.code.in_(body.countries))
+    )
+    valid_codes = {row[0] for row in valid_result.fetchall()}
+    unknown = [c for c in body.countries if c not in valid_codes]
+    if unknown:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"Unknown country code(s): {', '.join(unknown)}. "
+                f"Use a valid ISO 3166-1 alpha-2 code from the countries list."
+            ),
+        )
+
+    old_countries = crisis.countries or []
+
+    # Remove all automatically-linked reports — preserve manually-linked ones
+    await db.execute(
+        delete(ReportProject).where(
+            ReportProject.crisis_id == crisis.id,
+            ReportProject.linked_by.in_(["auto", "realtime"]),
+        )
+    )
+
+    # Update project metadata
+    crisis.countries = body.countries
+    crisis.country_code = body.countries[0] if body.countries else None
+    crisis.import_status = "pending"
+    crisis.import_progress = 0
+    crisis.import_total = 0
+    await db.commit()
+
+    log.info(
+        "reconfigure_countries: %s updated by superadmin %s — %s → %s, re-importing",
+        serial_id, current_user.email, old_countries, body.countries,
+    )
+
+    # Re-trigger import with corrected countries
+    asyncio.create_task(
+        _run_import(serial_id, crisis.id, body.countries, crisis.start_date, crisis.end_date)
+    )
+
+    return {
+        "message": (
+            f"Countries updated from {old_countries} to {body.countries}. "
+            f"Re-import started — check import status for progress."
+        ),
+        "serial_id": serial_id,
+        "countries": body.countries,
+    }
 
 
 # ── GET /api/dashboard/projects/{serial_id}/reports ──────────────────────────
