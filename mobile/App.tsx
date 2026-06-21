@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { I18nManager, AppState } from "react-native";
+import { TransformRequestManager } from "@maplibre/maplibre-react-native";
 import type { AppStateStatus } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 // Background sync — must be imported before any React component so the task
@@ -157,6 +158,18 @@ function Navigation() {
 
 export default function App() {
   const [rtlReady, setRtlReady] = useState(false);
+
+  useEffect(() => {
+    // Inject Referer header into every MapLibre OkHttp request so MapTiler
+    // API key domain restrictions (if set) accept Android native requests the
+    // same way they accept browser requests from the web app.
+    TransformRequestManager.addHeader({
+      id: "maptiler-referer",
+      name: "Referer",
+      value: "https://crisis-reporter-production.up.railway.app/",
+      match: "api\\.maptiler\\.com",
+    });
+  }, []);
 
   useEffect(() => {
     // Apply RTL direction before the first screen renders so Arabic users
