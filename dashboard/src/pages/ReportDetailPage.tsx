@@ -50,6 +50,36 @@ const DAMAGE_LEVEL_COLORS: Record<string, string> = {
   minimal: "#005a2c",
 };
 
+const ELECTRICITY_LABELS: Record<string, string> = {
+  no_damage:  "No damage observed",
+  minor:      "Minor damage",
+  moderate:   "Moderate damage",
+  severe:     "Severe damage",
+  destroyed:  "Completely destroyed",
+  unknown:    "Unknown",
+};
+
+const HEALTH_LABELS: Record<string, string> = {
+  functional:      "Fully functional",
+  partial:         "Partially functional",
+  disrupted:       "Largely disrupted",
+  not_functioning: "Not functioning at all",
+  unknown:         "Unknown",
+};
+
+const PRESSING_NEEDS_LABELS: Record<string, string> = {
+  food_water:    "Food assistance and safe drinking water",
+  cash:          "Cash or financial assistance",
+  healthcare:    "Access to healthcare and essential medicines",
+  shelter:       "Shelter, housing repair, or temporary accommodation",
+  livelihoods:   "Restoration of livelihoods or income sources",
+  wash:          "Water, sanitation, and hygiene",
+  basic_services:"Restoration of basic services and infrastructure",
+  protection:    "Protection services and psychosocial support",
+  local_support: "Support from local authorities and community organizations",
+  other:         "Other",
+};
+
 // ── Local types ───────────────────────────────────────────────────────────────
 
 interface ReportEdit {
@@ -581,22 +611,31 @@ export default function ReportDetailPage() {
 
   const infrastructureNameFromQA = q3?.free_text ?? report.infrastructure_name ?? null;
   const debrisBlockingFromQA = q5?.option_text ?? (q5?.option_value === "yes" ? "Yes" : q5?.option_value === "no" ? "No" : null) ?? report.debris_blocking ?? null;
-  const electricityValue = q6?.option_text ?? q6?.option_value ?? report.electricity_condition ?? null;
-  const healthValue = q7?.option_text ?? q7?.option_value ?? report.health_services_condition ?? null;
+  // Top-level columns take priority over question_answers — they reflect admin edits
+  // and are also the only source for Android (which never populates question_answers).
+  const electricityValue = report.electricity_condition
+    ? (ELECTRICITY_LABELS[report.electricity_condition] ?? report.electricity_condition)
+    : (q6?.option_text ?? q6?.option_value ?? null);
+  const healthValue = report.health_services_condition
+    ? (HEALTH_LABELS[report.health_services_condition] ?? report.health_services_condition)
+    : (q7?.option_text ?? q7?.option_value ?? null);
   const pressingNeedsValue = (() => {
+    // Top-level column wins: set by Android at submission, or by admin edit
+    const pn = report.pressing_needs;
+    if (pn && Array.isArray(pn) && pn.length > 0) {
+      const parts = pn.map(v => PRESSING_NEEDS_LABELS[v] ?? v);
+      if (report.pressing_needs_other) parts.push(report.pressing_needs_other);
+      return parts.join(", ");
+    }
+    // PWA fallback — structured question_answers Q8
     if (q8) {
       const parts: string[] = [];
       if (q8.option_texts && q8.option_texts.length > 0) parts.push(...q8.option_texts);
-      else if (q8.option_values && q8.option_values.length > 0) parts.push(...q8.option_values);
+      else if (q8.option_values && q8.option_values.length > 0) parts.push(...q8.option_values.map(v => PRESSING_NEEDS_LABELS[v] ?? v));
       if (q8.other_text) parts.push(q8.other_text);
       return parts.length > 0 ? parts.join(", ") : null;
     }
-    // Android fallback — top-level columns
-    const pn = report.pressing_needs;
-    if (!pn) return null;
-    const parts: string[] = Array.isArray(pn) ? [...pn] : typeof pn === "string" ? [pn] : [];
-    if (report.pressing_needs_other) parts.push(report.pressing_needs_other);
-    return parts.length > 0 ? parts.join(", ") : null;
+    return null;
   })();
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -886,15 +925,18 @@ export default function ReportDetailPage() {
                       <DamageField label="Entity Name" value={report.infrastructure_name ?? infrastructureNameFromQA} />
                     )}
                     <DamageField label="Disaster Category" value={report.disaster_type ? toTitleCase(report.disaster_type) : undefined} />
-                    {(report.debris_blocking || debrisBlockingFromQA) && (
-                      <DamageField
-                        label={<>Debris Presence <InfoTip tip="Derived from Q5 in the question_answers JSON — reporter's assessment of debris blocking access." /></>}
-                        value={
-                          (report.debris_blocking === "yes" || debrisBlockingFromQA === "Yes")
-                            ? "Yes (Hazardous)"
-                            : "No"
-                        }
-                      />
+                    {(() => {
+                      // report.debris_blocking is authoritative (reflects admin edits).
+                      // Fall back to Q5 from question_answers only when the column is null.
+                      const debris = report.debris_blocking ?? (q5?.option_value ?? null);
+                      if (!debris) return null;
+                      return (
+                        <DamageField
+                          label={<>Debris Presence <InfoTip tip="Reporter's assessment of whether debris is blocking access near this location." /></>}
+                          value={debris === "yes" ? "Yes (Hazardous)" : "No"}
+                        />
+                      );
+                    })()
                     )}
                     {report.language_code && (
                       <DamageField label="Report Language" value={report.language_code.toUpperCase()} />
@@ -1382,6 +1424,7 @@ export default function ReportDetailPage() {
               <label className="input-label">Disaster Type</label>
               <select className="input" value={editForm.disaster_type ?? report.disaster_type ?? ""}
                 onChange={e => setEditForm({ ...editForm, disaster_type: e.target.value })}>
+                <option value="">— Not recorded —</option>
                 <option value="earthquake">Earthquake</option>
                 <option value="flood">Flood</option>
                 <option value="tsunami">Tsunami</option>
@@ -1409,7 +1452,7 @@ export default function ReportDetailPage() {
             </div>
             <div style={{ marginBottom: 16 }}>
               <label className="input-label">Electricity Condition</label>
-              <select className="input" value={editForm.electricity_condition ?? q6?.option_value ?? report.electricity_condition ?? ""}
+              <select className="input" value={editForm.electricity_condition ?? report.electricity_condition ?? q6?.option_value ?? ""}
                 onChange={e => setEditForm({ ...editForm, electricity_condition: e.target.value })}>
                 <option value="">— Not recorded —</option>
                 <option value="no_damage">No damage observed</option>
@@ -1422,7 +1465,7 @@ export default function ReportDetailPage() {
             </div>
             <div style={{ marginBottom: 16 }}>
               <label className="input-label">Health Services Condition</label>
-              <select className="input" value={editForm.health_services_condition ?? q7?.option_value ?? report.health_services_condition ?? ""}
+              <select className="input" value={editForm.health_services_condition ?? report.health_services_condition ?? q7?.option_value ?? ""}
                 onChange={e => setEditForm({ ...editForm, health_services_condition: e.target.value })}>
                 <option value="">— Not recorded —</option>
                 <option value="functional">Fully functional</option>
