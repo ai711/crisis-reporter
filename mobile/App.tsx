@@ -98,7 +98,8 @@ function Navigation() {
     // Sync queued reports whenever connectivity is restored while the app
     // is in the foreground.
     const unsubscribeNet = NetInfo.addEventListener((state) => {
-      if (state.isConnected === true && state.isInternetReachable !== false) {
+      // isConnected can be null on New Architecture builds even when online — check type too
+      if (state.isConnected === true || state.type === 'wifi' || state.type === 'cellular') {
         syncRegistrationQueue();
         flushProgressQueue();
         syncQueue(API_BASE).catch(() => {});
@@ -112,7 +113,7 @@ function Navigation() {
       (nextState: AppStateStatus) => {
         if (nextState === "active") {
           NetInfo.fetch().then((state) => {
-            if (state.isConnected && state.isInternetReachable !== false) {
+            if (state.isConnected === true || state.type === 'wifi' || state.type === 'cellular') {
               syncQueue(API_BASE).catch(() => {});
             }
           });
@@ -134,7 +135,7 @@ function Navigation() {
         ) : (
           <>
             <Stack.Screen name="Home" component={HomeScreen} />
-            <Stack.Screen name="Report" component={ReportScreen} />
+            <Stack.Screen name="Report" component={ReportScreen} options={{ headerShown: false }} />
             <Stack.Screen name="Map" component={MapScreen} />
             <Stack.Screen name="SettingsScreen" component={SettingsScreen} options={{ headerShown: false }} />
             <Stack.Screen name="MyReports" component={MyReportsScreen} />

@@ -41,6 +41,13 @@ import type { DamageLevel, QueuedPhoto, ProcessedPhoto } from "../types";
 const MAPTILER_KEY = process.env.EXPO_PUBLIC_MAPTILER_KEY ?? "";
 const MAP_STYLE_URL = `https://api.maptiler.com/maps/streets/style.json?key=${MAPTILER_KEY}`;
 const ANSWERS_KEY = 'cr_draft_answers';
+
+// React Native New Architecture (Expo SDK 56+) can return isConnected=null even
+// when the device is online. Check network type as a reliable fallback.
+function isNetOnline(state: { isConnected: boolean | null; type?: string; isInternetReachable: boolean | null }): boolean {
+  return (state.isConnected === true || state.type === 'wifi' || state.type === 'cellular')
+    && state.isInternetReachable !== false;
+}
 const DRAFT_PHOTO_DIR = `${FileSystem.Paths.document.uri}cr_draft_photos/`;
 // Stable session photo dir — copies from Expo cache here immediately so addToQueue
 // always has a documentDirectory source that survives Android cache clearing or OTA updates.
@@ -150,8 +157,10 @@ async function fetchBuildingsForBounds(
       if (!res.ok) continue;
       const data: OverpassResponse = await res.json();
       // Overpass returns {"error":"..."} on timeout/overload — elements will be missing
-      if (!data.elements || !Array.isArray(data.elements)) continue;
-      return buildBuildingsFC(data);
+      if (!data.elements || !Array.isArray(data.elements) || data.elements.length === 0) continue;
+      const fc = buildBuildingsFC(data);
+      if (fc.features.length === 0) continue;
+      return fc;
     } catch {
       clearTimeout(timeoutId);
       // Try next endpoint
@@ -659,13 +668,13 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
     if (!submitted || !wasQueued) return;
     const trySync = async () => {
       const netState = await NetInfo.fetch();
-      if (netState.isConnected === true && netState.isInternetReachable !== false) {
+      if (isNetOnline(netState)) {
         syncQueue(API_BASE).catch(() => {});
       }
     };
     trySync();
     const unsub = NetInfo.addEventListener((state) => {
-      if (state.isConnected === true && state.isInternetReachable !== false) {
+      if (isNetOnline(state)) {
         syncQueue(API_BASE).catch(() => {});
       }
     });
@@ -689,7 +698,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
       let online = false;
       try {
         const netState = await NetInfo.fetch();
-        online = netState.isConnected === true && netState.isInternetReachable !== false;
+        online = isNetOnline(netState);
       } catch {
         online = false;
       }
@@ -740,7 +749,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
     if (step !== 'location') return;
 
     const unsubscribe = NetInfo.addEventListener((state) => {
-      const nowOnline = state.isConnected === true && state.isInternetReachable !== false;
+      const nowOnline = isNetOnline(state);
 
       if (!nowOnline && (locationScenario === 'online_gps' || locationScenario === 'online_no_gps')) {
         setLocationScenario('loading');
@@ -1298,6 +1307,13 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
         const imageInfo = await ImageManipulator.manipulateAsync(workingUri, []);
         width = imageInfo.width;
         height = imageInfo.height;
+        // Android gallery photos arrive as content:// URIs that FileSystem cannot
+        // copy directly.  ImageManipulator reads them via ContentResolver and writes
+        // a stable file:// temp path.  Switch workingUri now so all subsequent
+        // steps (size check, compression, staging) operate on the file:// path.
+        if (workingUri.startsWith('content://') && imageInfo.uri) {
+          workingUri = imageInfo.uri;
+        }
       } catch {
         // Cannot get dimensions — continue with 0,0
       }
@@ -2016,7 +2032,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
     let isCurrentlyOnline = false;
     try {
       const netState = await NetInfo.fetch();
-      isCurrentlyOnline = netState.isConnected === true && netState.isInternetReachable !== false;
+      isCurrentlyOnline = isNetOnline(netState);
     } catch {
       isCurrentlyOnline = false;
     }
@@ -2157,24 +2173,18 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
   // Tier 2 — Offline queue confirmation
   if (submitted && wasQueued) {
     const retryUpload = async () => {
-      const netState = await NetInfo.fetch();
-      if (netState.isConnected === true && netState.isInternetReachable !== false) {
-        try {
-          await syncQueue(API_BASE);
-          // syncQueue swallows errors internally — verify the item is actually gone
-          // before transitioning to the success screen
-          const queue = await getQueue();
-          const stillQueued = queue.some(item => item.local_id === queuedLocalIdRef.current);
-          if (!stillQueued) {
-            // Item was removed from queue → sync succeeded
-            setWasQueued(false);
-          } else {
-            Alert.alert(t('review.still_offline_title'), t('review.still_offline_body'));
-          }
-        } catch {
+      try {
+        await syncQueue(API_BASE);
+        // syncQueue swallows errors internally — verify the item is actually gone
+        // before transitioning to the success screen
+        const queue = await getQueue();
+        const stillQueued = queue.some(item => item.local_id === queuedLocalIdRef.current);
+        if (!stillQueued) {
+          setWasQueued(false);
+        } else {
           Alert.alert(t('review.still_offline_title'), t('review.still_offline_body'));
         }
-      } else {
+      } catch {
         Alert.alert(t('review.still_offline_title'), t('review.still_offline_body'));
       }
     };
@@ -2393,7 +2403,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                   )}
 
                   {/* Default building footprints */}
-                  {buildingsFC && (
+                  {buildingsFC && buildingsFC.features.length > 0 && (
                     <GeoJSONSource id="buildings" data={buildingsFC} onPress={handleBuildingPress}>
                       <Layer
                         id="buildings-fill"
@@ -2880,7 +2890,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                   let online = false;
                   try {
                     const netState = await NetInfo.fetch();
-                    online = netState.isConnected === true && netState.isInternetReachable !== false;
+                    online = isNetOnline(netState);
                   } catch { online = false; }
                   await doSubmit(t2, online);
                 }}
