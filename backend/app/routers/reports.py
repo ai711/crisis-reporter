@@ -5,7 +5,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status, 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, update
 from pydantic import BaseModel, ConfigDict
-from typing import Optional, List
+from typing import Optional, List, Literal
 
 from app.database import get_db
 from app.models.report import Report
@@ -782,13 +782,21 @@ class MergeReportRequest(BaseModel):
 
 
 class EditReportRequest(BaseModel):
-    damage_level: Optional[str] = None
+    # Values must match the option_value fields in the active question package.
+    damage_level: Optional[Literal["minimal", "partial", "complete"]] = None
     infrastructure_types: Optional[List[str]] = None
     infrastructure_name: Optional[str] = None
-    disaster_type: Optional[str] = None
-    debris_blocking: Optional[str] = None
-    electricity_condition: Optional[str] = None
-    health_services_condition: Optional[str] = None
+    disaster_type: Optional[Literal[
+        "earthquake", "flood", "tsunami", "hurricane_cyclone",
+        "wildfire", "explosion", "chemical_incident", "conflict", "civil_unrest",
+    ]] = None
+    debris_blocking: Optional[Literal["yes", "no"]] = None
+    electricity_condition: Optional[Literal[
+        "no_damage", "minor", "moderate", "severe", "destroyed", "unknown",
+    ]] = None
+    health_services_condition: Optional[Literal[
+        "functional", "partial", "disrupted", "not_functioning", "unknown",
+    ]] = None
     pressing_needs: Optional[List[str]] = None
     # Coordinate override — used when admin manually looks up a building's position
     # for text-only reports that have no GPS or building-tap coordinates.
