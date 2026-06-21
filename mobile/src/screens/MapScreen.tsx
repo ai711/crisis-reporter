@@ -35,7 +35,7 @@ const scale = (size: number) => Math.round((screenWidth / 375) * size);
 
 // Light grey streets style — matches web and report submission map
 const MAPTILER_KEY = process.env.EXPO_PUBLIC_MAPTILER_KEY ?? '';
-const MAP_STYLE_URL = `https://api.maptiler.com/maps/streets-v2/style.json?key=${MAPTILER_KEY}`;
+const MAP_STYLE_URL = `https://api.maptiler.com/maps/streets/style.json?key=${MAPTILER_KEY}`;
 
 type DamageLevel = 'minimal' | 'partial' | 'complete';
 
