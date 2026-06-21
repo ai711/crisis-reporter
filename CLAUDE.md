@@ -250,6 +250,66 @@ Set this env var to point to the backend. Defaults to `http://127.0.0.1:8000`.
 ### Dashboard Route Map
 `/map` → MainMapPage, `/reports` → ReportsPage, `/locations` → LocationsPage (properties), `/review-queue` → ReviewQueuePage, `/analytics` → AnalyticsPage, `/reporters` → ReportersPage, `/export` → ExportPage, `/projects` → ProjectsPage, `/users` → UserManagementPage, `/roles` → ManageRolesPage, `/settings` → SystemSettingsPage, `/content` → ContentManagementPage
 
+### Edit Report Feature
+
+**File:** `dashboard/src/pages/ReportDetailPage.tsx` — Edit Report modal + display logic  
+**Endpoint:** `PATCH /api/reports/{report_id}` — `backend/app/routers/reports.py` — `EditReportRequest`  
+**Audit trail:** every successful edit writes a `ReportEdit` row (`backend/app/models/report_edit.py`), readable at `GET /api/reports/{id}/edits`
+
+#### Editable fields (all optional — backend only records changed values)
+
+| Field | Type | Backend Literal validation |
+|-------|------|---------------------------|
+| `damage_level` | single-select | `minimal` \| `partial` \| `complete` |
+| `disaster_type` | single-select | 9 values matching Q4 option_values |
+| `infrastructure_types` | multi-select (array) | none — free list |
+| `infrastructure_name` | text | none |
+| `debris_blocking` | single-select | `yes` \| `no` |
+| `electricity_condition` | single-select | `no_damage` \| `minor` \| `moderate` \| `severe` \| `destroyed` \| `unknown` |
+| `health_services_condition` | single-select | `functional` \| `partial` \| `disrupted` \| `not_functioning` \| `unknown` |
+| `pressing_needs` | multi-select (array) | none — free list |
+| `location_lat` + `location_lng` | coordinate pair | must be provided together; sets `location_source = "manual"` |
+| `edit_reason` | text | required |
+
+Empty string values are filtered from the payload on the frontend — selecting `— Not recorded —` in a dropdown is a no-op (field not sent, backend ignores it).
+
+**Known limitation:** text fields (`infrastructure_name`) cannot be cleared to null via the edit modal — an empty string is filtered out. Set to a placeholder value (e.g., "N/A") if clearing is needed.
+
+#### CRITICAL — Display priority rule (Q6/Q7/Q8)
+
+PWA submissions store Q6 (electricity), Q7 (health), Q8 (pressing needs) in the `question_answers` JSONB array with human-readable `option_text` values. The top-level columns (`report.electricity_condition`, `report.health_services_condition`, `report.pressing_needs`) are also stored at submission time for Android, but may be null for older PWA reports.
+
+**The rule:** top-level DB columns ALWAYS take priority over `question_answers` in both the display logic and the edit modal pre-population. Reasons:
+1. Admin edits update only the top-level columns — if `question_answers` were given priority, edits would be invisible immediately after save.
+2. Android reports (no `question_answers`) must render correctly using the top-level columns.
+3. Raw option_values (`"no_damage"`, `"food_water"`) are formatted via label maps (`ELECTRICITY_LABELS`, `HEALTH_LABELS`, `PRESSING_NEEDS_LABELS`) defined at the top of `ReportDetailPage.tsx`.
+
+**Correct display pattern:**
+```tsx
+// electricity — top-level column wins, formatted; falls back to Q6 text
+const electricityValue = report.electricity_condition
+  ? (ELECTRICITY_LABELS[report.electricity_condition] ?? report.electricity_condition)
+  : (q6?.option_text ?? q6?.option_value ?? null);
+```
+
+**Do NOT regress this to:** `q6?.option_text ?? q6?.option_value ?? report.electricity_condition` — that was the original bug.
+
+Same rule applies to `debris_blocking` in the Damage Assessment Matrix: use `report.debris_blocking` as authoritative and only fall back to `q5?.option_value` when the column is null.
+
+#### GPS coordinate workflow for text-only reports (no location)
+
+Reports with no GPS and no building tap are auto-flagged Red by Rule 4 (`no_location`). The correct admin workflow is:
+
+1. Report arrives Red.
+2. Admin discards it: Red → Discarded.
+3. Admin opens Edit Report modal — a "Add Building Coordinates" section appears (only shown when `report.location_lat == null`).
+4. Admin looks up the building in Google Maps, enters lat/lng.
+5. Backend sets `location_lat`, `location_lng`, `location_source = "manual"`.
+6. Admin reinstates: Discarded → Orange.
+7. `get_or_create_property` fires on reinstate and creates the property record using the now-set coordinates.
+
+The coordinate section in the modal is gated on `report.location_lat == null` — it does not appear for reports that already have coordinates (building centroid, pin drop, or device GPS).
+
 ## Architecture — Mobile (Android)
 
 Built with Expo SDK 56 / React Native 0.81. Managed workflow — no `android/` edits. Map via `@maplibre/maplibre-react-native`. Offline queue uses `expo-file-system`. Push notifications via `expo-notifications` (FCM). Build APK with `eas build --platform android`.
