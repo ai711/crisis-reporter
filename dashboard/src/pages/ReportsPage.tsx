@@ -22,17 +22,17 @@ const FLAG_COLORS: Record<FlagStatus, string> = {
 };
 
 const DAMAGE_PILL: Record<string, { bg: string; color: string; label: string }> = {
-  completely_destroyed: { bg: "rgba(186,26,26,0.1)", color: "#ba1a1a", label: "Destroyed" },
-  partially_damaged:    { bg: "#ffedd5", color: "#ea580c", label: "Partial" },
-  minimal_or_no_damage: { bg: "#c7d7ff", color: "#4d5d7f", label: "Minimal" },
+  complete: { bg: "rgba(186,26,26,0.1)", color: "#ba1a1a", label: "Destroyed" },
+  partial:  { bg: "#ffedd5", color: "#ea580c", label: "Partial" },
+  minimal:  { bg: "#c7d7ff", color: "#4d5d7f", label: "Minimal" },
 };
 
 const PAGE_SIZE_OPTIONS = [100, 200, 300, 400, 500];
 
 const DAMAGE_LEVEL_OPTIONS = [
-  { label: "Completely Destroyed", value: "completely_destroyed" },
-  { label: "Partially Damaged",    value: "partially_damaged" },
-  { label: "Minimal or No Damage", value: "minimal_or_no_damage" },
+  { label: "Completely Destroyed", value: "complete" },
+  { label: "Partially Damaged",    value: "partial" },
+  { label: "Minimal or No Damage", value: "minimal" },
 ];
 
 const INFRASTRUCTURE_TYPE_OPTIONS = [
