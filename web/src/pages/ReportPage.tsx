@@ -1484,12 +1484,13 @@ export default function ReportPage() {
     setDraftPrompt("dismissed");
   };
 
-  // G5 — Valid if any usable coordinate or text field is filled.
-  // When offline (no map available), address is always required regardless of GPS.
+  // G5 — Valid if location is sufficiently specified.
+  // When map is available (online), building footprint or pin drop is required — GPS alone is not sufficient.
+  // When offline, address text is required.
   const isLocationValid = (): boolean => {
     if (gpsGeofenceBlocked) return false;
     if (locationOffline && !connectionLostMidSession) return locationAddress.trim().length > 0;
-    if ((gpsLatitude !== null && gpsLongitude !== null) || buildingCentroidLat !== null || pinDropCoords !== null) return true;
+    if (buildingCentroidLat !== null || pinDropCoords !== null) return true;
     return locationAddress.trim().length > 0 || locationLandmark.trim().length > 0 || locationBuildingName.trim().length > 0;
   };
 
@@ -2344,9 +2345,9 @@ export default function ReportPage() {
             <div style={{ flex: 1, position: "relative", minHeight: 260 }}>
               <div ref={mapContainerRef} style={{ position: "absolute", inset: 0 }} />
 
-              {/* Instruction pill */}
+              {/* Instruction pill — sits below geocoding search bar (top-left, ~44px tall) */}
               <div style={{
-                position: "absolute", top: 14, left: "50%", transform: "translateX(-50%)",
+                position: "absolute", top: 60, left: "50%", transform: "translateX(-50%)",
                 zIndex: 10, background: "rgba(255,255,255,0.92)", backdropFilter: "blur(8px)",
                 borderRadius: 9999, padding: "8px 16px",
                 boxShadow: "0 2px 8px rgba(0,0,0,0.10)",
@@ -2610,6 +2611,9 @@ export default function ReportPage() {
                     <span className="material-symbols-outlined" style={{ fontSize: 13, color: "#0468B1" }}>satellite_alt</span>
                     {gpsLatitude.toFixed(6)}, {gpsLongitude.toFixed(6)}
                   </div>
+                  <p style={{ fontSize: 12, color: "#E07B00", margin: "8px 0 0", lineHeight: 1.4 }}>
+                    {t('report.gps_captured_select_hint')}
+                  </p>
                 </div>
               )}
 

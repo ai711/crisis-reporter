@@ -79,6 +79,7 @@
     "building_type_label": "Type:",
     "pin_dropped": "Pin Dropped",
     "gps_captured": "GPS Location Captured",
+    "gps_captured_select_hint": "Please also tap a building or drop a pin on the map to precisely identify the damaged structure.",
     "duplicate_inline_warning": "A report for this location may already exist from this device. You can still submit if this is a different incident.",
     "location_outside_crisis_area": "Your selected location appears to be outside the primary crisis area. You can still submit if this is correct.",
     "building_name_label": "BUILDING NAME",

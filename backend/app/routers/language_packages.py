@@ -2853,6 +2853,7 @@ _SEED_KEYS: list[tuple[str, str, str]] = [
     ("report.unnamed_building",         "ui_report", "Unnamed Building"),
     ("report.pin_dropped",              "ui_report", "Pin Dropped"),
     ("report.gps_captured",             "ui_report", "GPS Location Captured"),
+    ("report.gps_captured_select_hint", "ui_report", "Please also tap a building or drop a pin on the map to precisely identify the damaged structure."),
     ("report.location_zoom_hint",       "ui_report", "Zoom in to see and select buildings"),
     ("report.loading_buildings",        "ui_report", "Loading footprints…"),
     ("report.msft_footprints_note",     "ui_report", "Microsoft Building Footprints active — building selection uses ML-detected footprints."),

@@ -1145,7 +1145,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
     // Hard GPS fence: if a specific building/pin is selected and it's > 50 mi from reporter's GPS, block
     if (gpsGeofenceBlocked) return false;
     if (locationScenario === 'online_gps') {
-      return !!(gpsCoords || locationGpsCoords || selectedBuilding || pinCoords);
+      return !!(selectedBuilding || pinCoords || locationAddress?.trim());
     }
     if (locationScenario === 'online_no_gps') {
       return !!(selectedBuilding || pinCoords || locationAddress?.trim());
@@ -2600,7 +2600,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                 >
                   {!gpsCapturing && <MaterialIcons name="location-on" size={scale(18)} color="#0468B1" />}
                   <Text style={styles.gpsButtonText}>
-                    {gpsCapturing ? "Getting location…" : "Use My GPS Location"}
+                    {gpsCapturing ? t('report.gps_getting') : t('report.gps_button')}
                   </Text>
                 </TouchableOpacity>
 
