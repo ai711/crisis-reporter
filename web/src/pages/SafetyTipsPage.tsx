@@ -18,6 +18,7 @@ const SLIDE_FETCH_TIMEOUT = 8_000;
 
 // Part A: each slide has separate DO and DON'T bullet arrays (backend schema)
 interface SlideA {
+  slide_id?: string;
   title: string;
   dos: string[];
   donts: string[];
@@ -25,8 +26,29 @@ interface SlideA {
 
 // Parts B/C: bullet list slides
 interface SlideBC {
+  slide_id?: string;
   title: string;
   bullets: string[];
+}
+
+// Translates slide content via the language package pipeline (_SEED_KEYS has all keys).
+// Falls back to the raw string when the language package has no entry yet.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function makeTip(t: (key: string, opts?: any) => string) {
+  return function tip(
+    part: "A" | "B" | "C",
+    disaster: string,
+    slideIdx: number,          // 1-based; used only when slideId is absent
+    field: "TITLE" | "DO" | "DONT" | "BULLET",
+    bulletIdx: number,         // 1-based; 0 = no suffix (for TITLE)
+    slideId: string | null | undefined,
+    fallback: string,
+  ): string {
+    const d = disaster ? `_${disaster.toUpperCase().replace(/-/g, "_")}` : "";
+    const b = bulletIdx > 0 ? `_${bulletIdx}` : "";
+    const slideKey = slideId ? slideId : `SLIDE_${slideIdx}`;
+    return t(`SAFETY_TIP_${part}${d}_${slideKey}_${field}${b}`, { defaultValue: fallback });
+  };
 }
 
 interface DisasterType {
@@ -355,7 +377,7 @@ function SlideNavFooter({
 
 function SlideViewerA({
   slides,
-  disasterId: _disasterId,
+  disasterId,
   completionKey,
   onComplete,
 }: {
@@ -365,6 +387,7 @@ function SlideViewerA({
   onComplete: () => void;
 }) {
   const { t } = useTranslation();
+  const tip = makeTip(t);
   const [current, setCurrent] = useState(0);
   const [done, setDone] = useState(() => isComplete(completionKey.part, completionKey.id));
   const [isPending, setIsPending] = useState(false);
@@ -404,10 +427,10 @@ function SlideViewerA({
         </div>
       </div>
 
-      {/* Slide content — title and bullet text come pre-translated from the backend */}
+      {/* Slide content */}
       <div style={{ flex: 1, overflowY: "auto", padding: "24px", minHeight: 0 }}>
         <h3 style={{ margin: "0 0 16px", fontSize: 17, fontWeight: 700, color: "#1B1C1C", lineHeight: 1.4 }}>
-          {slide.title}
+          {tip("A", disasterId, current + 1, "TITLE", 0, slide.slide_id, slide.title)}
         </h3>
 
         {hasDos && (
@@ -418,7 +441,7 @@ function SlideViewerA({
             <ul style={{ margin: 0, paddingLeft: 20 }}>
               {slide.dos.map((d, i) => (
                 <li key={i} style={{ color: "#414751", fontSize: 14, lineHeight: 1.7, marginBottom: i < slide.dos.length - 1 ? 6 : 0 }}>
-                  {d}
+                  {tip("A", disasterId, current + 1, "DO", i + 1, slide.slide_id, d)}
                 </li>
               ))}
             </ul>
@@ -433,7 +456,7 @@ function SlideViewerA({
             <ul style={{ margin: 0, paddingLeft: 20 }}>
               {slide.donts.map((d, i) => (
                 <li key={i} style={{ color: "#414751", fontSize: 14, lineHeight: 1.7, marginBottom: i < slide.donts.length - 1 ? 6 : 0 }}>
-                  {d}
+                  {tip("A", disasterId, current + 1, "DONT", i + 1, slide.slide_id, d)}
                 </li>
               ))}
             </ul>
@@ -463,7 +486,7 @@ function SlideViewerA({
 
 function SlideViewerBC({
   slides,
-  part: _part,
+  part,
   completionKey,
   onComplete,
 }: {
@@ -473,6 +496,7 @@ function SlideViewerBC({
   onComplete: () => void;
 }) {
   const { t } = useTranslation();
+  const tip = makeTip(t);
   const [current, setCurrent] = useState(0);
   const [done, setDone] = useState(() => isComplete(completionKey.part, completionKey.id));
   const [isPending, setIsPending] = useState(false);
@@ -513,12 +537,12 @@ function SlideViewerBC({
       <div style={{ flex: 1, overflowY: "auto", padding: "24px", minHeight: 0 }}>
         <div style={{ background: "#F6F3F2", border: "1.5px solid #E4E2E1", borderRadius: 16, padding: "20px" }}>
           <h3 style={{ margin: "0 0 14px", fontSize: 17, fontWeight: 700, color: "#1B1C1C", lineHeight: 1.4 }}>
-            {slide.title}
+            {tip(part, "", current + 1, "TITLE", 0, slide.slide_id, slide.title)}
           </h3>
           <ul style={{ margin: 0, paddingLeft: 20 }}>
             {slide.bullets.map((b, i) => (
               <li key={i} style={{ color: "#414751", fontSize: 14, lineHeight: 1.7, marginBottom: i < slide.bullets.length - 1 ? 8 : 0 }}>
-                {b}
+                {tip(part, "", current + 1, "BULLET", i + 1, slide.slide_id, b)}
               </li>
             ))}
           </ul>
