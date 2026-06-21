@@ -610,7 +610,6 @@ export default function ReportDetailPage() {
   const q8 = getQ(8);  // Pressing needs (multi-select)
 
   const infrastructureNameFromQA = q3?.free_text ?? report.infrastructure_name ?? null;
-  const debrisBlockingFromQA = q5?.option_text ?? (q5?.option_value === "yes" ? "Yes" : q5?.option_value === "no" ? "No" : null) ?? report.debris_blocking ?? null;
   // Top-level columns take priority over question_answers — they reflect admin edits
   // and are also the only source for Android (which never populates question_answers).
   const electricityValue = report.electricity_condition
