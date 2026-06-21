@@ -201,9 +201,12 @@ export function removeFromQueue(local_id: string): Promise<void> {
     const filtered = queue.filter((i) => i.local_id !== local_id);
     await saveQueue(filtered);
 
-    // Cancel the queued-reminder notification now that the item is resolved
+    // Cancel both the one-time and recurring notifications now that the item is resolved
     try {
       await Notifications.cancelScheduledNotificationAsync(`offline_reminder_${local_id}`);
+    } catch { /* non-critical */ }
+    try {
+      await Notifications.cancelScheduledNotificationAsync(`offline_recurring_${local_id}`);
     } catch { /* non-critical */ }
 
     // Clean up persistent photo copies to free documentDirectory space
@@ -320,17 +323,22 @@ export async function saveDirectSubmittedRecord(
 
 // ── Notification helpers ──────────────────────────────────────────────────────
 
-// Schedules a 5-minute reminder if background sync doesn't auto-upload the report.
-// Cancelled in removeFromQueue when the item is resolved (success or failure).
+// Schedules two notifications when a report is saved offline:
+//   1. A one-time alert after 5 minutes — immediate feedback that the report is queued.
+//   2. A repeating reminder every 12 hours — fires even when the app is fully killed,
+//      because Android's AlarmManager owns the scheduling, not JavaScript.
+// Both are cancelled in removeFromQueue when the report uploads successfully.
 async function scheduleQueuedReminder(local_id: string): Promise<void> {
   try {
     const { status } = await Notifications.getPermissionsAsync();
     if (status !== "granted") return;
+
+    // One-time alert after 5 minutes
     await Notifications.scheduleNotificationAsync({
       identifier: `offline_reminder_${local_id}`,
       content: {
-        title: "Pending offline report",
-        body: "Open Crisis Reporter to submit your saved report when you have a connection.",
+        title: "Report saved offline",
+        body: "Open Crisis Reporter while connected to submit your pending report.",
         sound: true,
         data: { local_id },
       },
@@ -338,6 +346,22 @@ async function scheduleQueuedReminder(local_id: string): Promise<void> {
         type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
         seconds: 300,
         repeats: false,
+      } as any,
+    });
+
+    // Repeating reminder every 12 hours until the report uploads
+    await Notifications.scheduleNotificationAsync({
+      identifier: `offline_recurring_${local_id}`,
+      content: {
+        title: "Pending report not yet submitted",
+        body: "You have an unsent damage report. Open Crisis Reporter while connected to upload it.",
+        sound: true,
+        data: { local_id },
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+        seconds: 43200, // 12 hours
+        repeats: true,
       } as any,
     });
   } catch { /* non-critical */ }
