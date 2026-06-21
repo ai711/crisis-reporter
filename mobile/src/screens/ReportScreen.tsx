@@ -2317,8 +2317,13 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
               {/* GPS captured banner — appears in Scenario 1 once background GPS resolves */}
               {locationScenario === 'online_gps' && locationGpsCoords && !selectedBuilding && !pinCoords && (
                 <View style={styles.gpsCapturedBanner}>
-                  <MaterialIcons name="my-location" size={scale(14)} color="#276749" />
-                  <Text style={styles.gpsCapturedText}>{t('locationScreen.gpsCaptured')}</Text>
+                  <View style={styles.gpsCapturedRow}>
+                    <MaterialIcons name="my-location" size={scale(14)} color="#276749" />
+                    <Text style={styles.gpsCapturedText}>
+                      {locationGpsCoords.lat.toFixed(5)}, {locationGpsCoords.lng.toFixed(5)}
+                    </Text>
+                  </View>
+                  <Text style={styles.gpsCapturedHint}>{t('report.gps_captured_select_hint')}</Text>
                 </View>
               )}
 
@@ -4345,16 +4350,18 @@ const styles = StyleSheet.create({
   },
   gpsUnavailableNoteText: { fontSize: scale(13), color: '#F57F17', lineHeight: 18 },
   gpsCapturedBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: 4,
     backgroundColor: '#F0FFF4',
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderBottomWidth: 1,
     borderBottomColor: '#C6F6D5',
   },
+  gpsCapturedRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   gpsCapturedText: { fontSize: scale(13), color: '#276749' },
+  gpsCapturedHint: { fontSize: scale(11), color: '#E07B00', lineHeight: scale(16) },
 
   // Map wrapper
   mapWrapper: { flex: 1, position: 'relative' },
