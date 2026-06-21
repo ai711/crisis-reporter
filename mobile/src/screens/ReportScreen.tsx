@@ -988,11 +988,17 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
         if (status !== "granted") return;
         const loc = await Promise.race([
           Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
-          new Promise<null>((resolve) => setTimeout(() => resolve(null), 8000)),
+          new Promise<null>((resolve) => setTimeout(() => resolve(null), 12000)),
         ]);
         if (!loc) return;
         lng = loc.coords.longitude;
         lat = loc.coords.latitude;
+        // GPS acquired in the map-loaded fallback — update state so the banner
+        // reflects actual availability instead of the earlier 8-second timeout miss.
+        if (isMountedRef.current) {
+          setLocationGpsCoords({ lat, lng, accuracy: loc.coords.accuracy ?? 0 });
+          setLocationScenario('online_gps');
+        }
       }
       cameraRef.current?.flyTo({
         center: [lng, lat],
