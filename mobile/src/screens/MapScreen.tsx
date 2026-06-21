@@ -21,6 +21,7 @@ import {
   Layer,
   UserLocation,
   type PressEventWithFeatures,
+  type ViewStateChangeEvent,
 } from '@maplibre/maplibre-react-native';
 import NetInfo from '@react-native-community/netinfo';
 import * as Location from 'expo-location';
@@ -104,6 +105,7 @@ export default function MapScreen() {
   const [buildingsFC, setBuildingsFC] = useState<GeoJSON.FeatureCollection>(EMPTY_FC);
   const [showZoomHint, setShowZoomHint] = useState(false);
   const [gpsUnavailable, setGpsUnavailable] = useState(false);
+  const [mapLoadError, setMapLoadError] = useState(false);
   const cameraRef = useRef<CameraRef | null>(null);
   const buildingsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const initialFetchDone = useRef(false);
@@ -213,25 +215,24 @@ export default function MapScreen() {
   };
 
   /** Called when the map camera settles. Triggers building fetch at zoom ≥ 14. */
-  const handleRegionChange = (event: any) => {
-    const zoom: number = event?.properties?.zoomLevel ?? 0;
-    const bounds: [[number, number], [number, number]] | undefined =
-      event?.properties?.visibleBounds;
+  const handleRegionChange = (event: NativeSyntheticEvent<ViewStateChangeEvent>) => {
+    const { zoom, bounds } = event.nativeEvent;
 
     if (zoom < BUILDINGS_MIN_ZOOM) {
-      setShowZoomHint(zoom > 10); // hint only when user has started zooming in
+      setShowZoomHint(zoom > 10);
       setBuildingsFC(EMPTY_FC);
       return;
     }
 
     setShowZoomHint(false);
 
-    if (!bounds) return;
-    const [[neLng, neLat], [swLng, swLat]] = bounds;
+    if (!bounds || bounds.length < 4) return;
+    // v11: bounds = [west, south, east, north]
+    const [w, s, e, n] = bounds;
 
     if (buildingsTimer.current) clearTimeout(buildingsTimer.current);
     buildingsTimer.current = setTimeout(() => {
-      fetchBuildings(swLat, swLng, neLat, neLng);
+      fetchBuildings(s, w, n, e);
     }, 800);
   };
 
@@ -469,9 +470,11 @@ export default function MapScreen() {
         mapStyle={MAP_STYLE_URL}
         logo={false}
         attribution={false}
+        androidView="texture"
         onPress={() => setSelectedReport(null)}
         onRegionDidChange={handleRegionChange}
         onDidFinishLoadingMap={handleMapLoaded}
+        onDidFailLoadingMap={() => setMapLoadError(true)}
       >
         <Camera
           ref={cameraRef}
@@ -524,6 +527,14 @@ export default function MapScreen() {
       {loading && (
         <View style={styles.loadingOverlay}>
           <ActivityIndicator color="#0468B1" size="large" />
+        </View>
+      )}
+
+      {/* Map style failed to load */}
+      {mapLoadError && (
+        <View style={styles.mapErrorBanner} pointerEvents="none">
+          <MaterialIcons name="warning" size={14} color="#fff" />
+          <Text style={styles.mapErrorText}>Map tiles unavailable — check connection</Text>
         </View>
       )}
 
@@ -810,6 +821,26 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 15,
+  },
+  mapErrorBanner: {
+    position: 'absolute',
+    bottom: 140,
+    left: 16,
+    right: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(211,47,47,0.9)',
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    zIndex: 10,
+  },
+  mapErrorText: {
+    color: '#fff',
+    fontSize: scale(12),
+    fontWeight: '600',
+    flex: 1,
   },
   locationPillWrap: {
     position: 'absolute',

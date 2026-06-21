@@ -665,6 +665,11 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
     if (step !== 'location') return;
     setMapTilesLoading(true);
 
+    // Safety net: if onDidFinishLoadingMap / onDidFailLoadingMap never fires
+    // (e.g. style fetch hangs), clear the overlay after 12 s so the map isn't
+    // permanently blocked.
+    const mapLoadTimeout = setTimeout(() => setMapTilesLoading(false), 12000);
+
     const detectScenario = async () => {
       setLocationScenario('loading');
 
@@ -715,6 +720,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
     };
 
     detectScenario();
+    return () => clearTimeout(mapLoadTimeout);
   }, [step]);
 
   // Connectivity transition listener — scoped to location step only
@@ -2329,8 +2335,10 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                 <MLMap
                   mapStyle={MAP_STYLE_URL}
                   style={{ flex: 1 }}
+                  androidView="texture"
                   onRegionDidChange={handleRegionChange}
                   onDidFinishLoadingMap={handleMapLoaded}
+                  onDidFailLoadingMap={() => setMapTilesLoading(false)}
                   onPress={handleMapPress}
                 >
                   <Camera
