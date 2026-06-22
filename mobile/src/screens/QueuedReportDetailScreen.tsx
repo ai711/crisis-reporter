@@ -3,7 +3,6 @@ import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   Image, Alert, ActivityIndicator,
 } from 'react-native';
-import { File as FSFile } from 'expo-file-system';
 import * as LegacyFS from 'expo-file-system/legacy';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -33,27 +32,12 @@ export default function QueuedReportDetailScreen() {
 
   const [retrying, setRetrying] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [imgErrors, setImgErrors] = useState<string[]>([]);
   // Data URIs loaded from persistent_uri via legacy readAsStringAsync.
   // React Native Image (New Architecture) can't load file:// URIs from
   // documentDirectory, but handles data: URIs reliably.
   const [photoDataUris, setPhotoDataUris] = useState<(string | null)[]>([]);
 
-  // ── Photo diagnostic ───────────────────────────────────────────────────────
-  useEffect(() => {
-    if (!qr || qr.photos.length === 0) return;
-    const lines = qr.photos.map((p, i) => {
-      const uri = p.persistent_uri ?? p.uri;
-      let exists = '?';
-      try { exists = new FSFile(uri).exists ? 'yes' : 'NO'; } catch { exists = 'err'; }
-      return `P${i}:\npersistent_uri:${p.persistent_uri ? '✓' : 'NOT SET'}\ncopy_failed:${p.copy_failed ?? false}\nexists:${exists}\nuri:...${uri.slice(-55)}`;
-    });
-    Alert.alert('QueuedDetail photo debug', lines.join('\n\n'));
-  }, []);
-
   // ── Load photos as base64 data URIs ───────────────────────────────────────
-  // On Android New Architecture, Image cannot render file:// URIs from
-  // documentDirectory. Reading as base64 and using data: URIs works reliably.
   useEffect(() => {
     if (!qr || qr.photos.length === 0) return;
     let cancelled = false;
@@ -213,17 +197,10 @@ export default function QueuedReportDetailScreen() {
                   source={{ uri: displayUri }}
                   style={styles.photoThumb}
                   resizeMode="cover"
-                  onError={(e) => setImgErrors(prev => [...prev, `P${i} err(${displayUri.slice(0,10)}): ${e.nativeEvent.error ?? 'unknown'}`])}
-                  onLoad={() => setImgErrors(prev => [...prev, `P${i}: loaded ✓`])}
                 />
               );
             })}
           </View>
-          {imgErrors.length > 0 && (
-            <Text style={{ fontSize: 10, color: 'red', marginTop: 4 }}>
-              {imgErrors.join('\n')}
-            </Text>
-          )}
           <Text style={styles.photoNote}>{t('my_reports.photos_tap_to_view')}</Text>
         </View>
       )}

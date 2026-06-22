@@ -422,7 +422,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
             <ScrollView
               style={{ flex: 1 }}
               showsVerticalScrollIndicator={true}
-              contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: insets.bottom + 20 }}
+              contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 8, paddingBottom: insets.bottom + 20 }}
             >
               {Object.values(
                 t("whatCanIReport.types", { returnObjects: true }) as Record<
@@ -841,8 +841,6 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     maxHeight: "82%",
-    // No global padding — each child handles its own padding so the ScrollView
-    // can fill the remaining height and items at the bottom are reachable.
   },
   modalHeader: {
     flexDirection: "row",
@@ -850,7 +848,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 24,
     paddingTop: 20,
-    paddingBottom: 14,
+    paddingBottom: 16,
     borderBottomWidth: 1,
     borderBottomColor: "#F0F4F8",
   },
