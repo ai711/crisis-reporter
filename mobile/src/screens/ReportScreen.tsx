@@ -140,14 +140,13 @@ function computeCentroid(ring: number[][]): [number, number] {
 async function fetchBuildingsForBounds(
   west: number, south: number, east: number, north: number
 ): Promise<GeoJSON.FeatureCollection | null> {
+  // DIAG — confirm function is called and show bbox
+  Alert.alert('⬛ Overpass query', `W=${west.toFixed(4)} S=${south.toFixed(4)}\nE=${east.toFixed(4)} N=${north.toFixed(4)}`);
+
   const query =
     `[out:json][timeout:18][bbox:${south.toFixed(6)},${west.toFixed(6)},${north.toFixed(6)},${east.toFixed(6)}];` +
     `(way["building"];relation["building"]["type"="multipolygon"];);out body;>;out skel qt;`;
 
-  // Fire both Overpass mirrors in parallel — take whichever responds first.
-  // Sequential fallback was too slow (45 s × 2 = 90 s worst case on throttled primary).
-  // Use explicit Content-Type + string body — React Native's fetch polyfill on Android
-  // does not auto-set application/x-www-form-urlencoded for URLSearchParams bodies.
   const endpoints = [
     "https://overpass-api.de/api/interpreter",
     "https://overpass.kumi.systems/api/interpreter",
@@ -156,28 +155,41 @@ async function fetchBuildingsForBounds(
   const globalTimeout = setTimeout(() => controllers.forEach((c) => c.abort()), 20000);
 
   const tryEndpoint = async (url: string, ctrl: AbortController): Promise<GeoJSON.FeatureCollection> => {
+    const label = url.includes('kumi') ? 'kumi' : 'de';
     const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: `data=${encodeURIComponent(query)}`,
       signal: ctrl.signal,
     });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    if (!res.ok) throw new Error(`[${label}] HTTP ${res.status}`);
     const text = await res.text();
     const data: OverpassResponse = JSON.parse(text);
-    if (!data.elements?.length) throw new Error('empty');
+    if (!data.elements?.length) throw new Error(`[${label}] 0 elements in response`);
     const fc = buildBuildingsFC(data);
-    if (fc.features.length === 0) throw new Error('no way features');
+    if (fc.features.length === 0) throw new Error(`[${label}] parsed ${data.elements.length} elements but 0 polygon features`);
     return fc;
   };
 
+  // Attach .catch to each promise so the "losing" endpoint's AbortError
+  // does not become an unhandled promise rejection in Hermes.
+  const promises = endpoints.map((url, i) => tryEndpoint(url, controllers[i]));
+  promises.forEach((p) => p.catch(() => {}));
+
   try {
-    const fc = await Promise.any(endpoints.map((url, i) => tryEndpoint(url, controllers[i])));
+    const fc = await Promise.any(promises);
     clearTimeout(globalTimeout);
-    controllers.forEach((c) => c.abort()); // cancel any still-in-flight sibling
+    controllers.forEach((c) => c.abort());
+    // DIAG — success
+    Alert.alert('✅ Footprints', `${fc.features.length} buildings loaded`);
     return fc;
-  } catch {
+  } catch (e: any) {
     clearTimeout(globalTimeout);
+    // DIAG — show why both endpoints failed
+    const details: string = e?.errors
+      ? (e.errors as Error[]).map((er: Error) => er.message).join('\n')
+      : String(e);
+    Alert.alert('❌ Footprints failed', details);
     return null;
   }
 }
