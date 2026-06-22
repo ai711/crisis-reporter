@@ -1970,6 +1970,22 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
       }));
       // ReportSubmitRequest type predates multi-type infra fields — cast to bypass
       const { local_id: localId, anyPhotoCopyFailed } = await addToQueue({ ...reportPayload, was_queued: true } as any, queuedPhotos);
+      // ── DIAGNOSTIC (remove after photo bug confirmed fixed) ──────────────────
+      try {
+        const q = await getQueue();
+        const item = q.find(i => i.local_id === localId);
+        if (item && item.photos.length > 0) {
+          const lines = item.photos.map((p, idx) => {
+            const srcTail = p.uri?.slice(-50) ?? 'null';
+            const dstTail = p.persistent_uri?.slice(-50) ?? 'NOT SET';
+            let exists = '?';
+            try { exists = p.persistent_uri ? String(new FSFile(p.persistent_uri).exists) : 'no uri'; } catch { exists = 'err'; }
+            return `P${idx}: failed=${p.copy_failed ?? false}\nsrc:...${srcTail}\ndst:...${dstTail}\nexists:${exists}`;
+          });
+          Alert.alert(`Photo debug (${anyPhotoCopyFailed ? 'COPY FAILED' : 'ok'})`, lines.join('\n\n'));
+        }
+      } catch { /* diagnostic — never break the submit flow */ }
+      // ────────────────────────────────────────────────────────────────────────
       // Store so the delete and retry handlers can reference this specific queue entry
       queuedLocalIdRef.current = localId;
       if (anyPhotoCopyFailed) setPhotoCopyWarning(true);
