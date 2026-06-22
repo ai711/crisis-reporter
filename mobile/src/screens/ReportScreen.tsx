@@ -78,7 +78,84 @@ const { width: _screenWidthRaw } = Dimensions.get('window');
 const screenWidth = _screenWidthRaw || 375;
 const scale = (size: number) => Math.round(screenWidth / 375 * size);
 
+// ── Overpass types ─────────────────────────────────────────────────────────────
+
+interface OverpassNode { type: "node"; id: number; lat: number; lon: number; }
+interface OverpassWay { type: "way"; id: number; nodes: number[]; tags?: Record<string, string>; }
+interface OverpassOther { type: "relation" | "area"; id: number; tags?: Record<string, string>; }
+type OverpassElement = OverpassNode | OverpassWay | OverpassOther;
+interface OverpassResponse { elements: OverpassElement[]; }
+
 // ── GeoJSON helpers ────────────────────────────────────────────────────────────
+
+function buildBuildingsFC(data: OverpassResponse): GeoJSON.FeatureCollection {
+  const nodes = new Map<number, [number, number]>();
+  for (const el of data.elements) {
+    if (el.type === "node") nodes.set(el.id, [el.lon, el.lat]);
+  }
+  const features: GeoJSON.Feature[] = [];
+  for (const el of data.elements) {
+    if (el.type !== "way") continue;
+    const way = el as OverpassWay;
+    if (!way.tags?.building) continue;
+    const ring: [number, number][] = [];
+    for (const nodeId of way.nodes) {
+      const coord = nodes.get(nodeId);
+      if (coord) ring.push(coord);
+    }
+    if (ring.length < 3) continue;
+    const first = ring[0];
+    const last = ring[ring.length - 1];
+    if (first[0] !== last[0] || first[1] !== last[1]) ring.push([first[0], first[1]]);
+    features.push({
+      type: "Feature",
+      properties: { osm_id: way.id, name: way.tags?.name ?? "", building: way.tags?.building ?? "yes" },
+      geometry: { type: "Polygon", coordinates: [ring] },
+    });
+  }
+  return { type: "FeatureCollection", features };
+}
+
+async function fetchBuildingsForBounds(
+  west: number, south: number, east: number, north: number
+): Promise<GeoJSON.FeatureCollection | null> {
+  const query =
+    `[out:json][timeout:25][bbox:${south.toFixed(6)},${west.toFixed(6)},${north.toFixed(6)},${east.toFixed(6)}];` +
+    `(way["building"];relation["building"]["type"="multipolygon"];);out body;>;out skel qt;`;
+
+  // Sequential fallback across mirrors. charset=UTF-8 matches what browsers
+  // send — some Overpass mirrors reject requests without it (HTTP 406).
+  const endpoints = [
+    "https://overpass-api.de/api/interpreter",
+    "https://overpass.kumi.systems/api/interpreter",
+    "https://overpass.private.coffee/api/interpreter",
+    "https://overpass.openstreetmap.ru/api/interpreter",
+  ];
+
+  for (const endpoint of endpoints) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 45000);
+    try {
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8" },
+        body: `data=${encodeURIComponent(query)}`,
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      if (!res.ok) continue;
+      const text = await res.text();
+      let data: OverpassResponse;
+      try { data = JSON.parse(text); } catch { continue; }
+      if (!data.elements?.length) continue;
+      const fc = buildBuildingsFC(data);
+      if (fc.features.length > 0) return fc;
+    } catch {
+      clearTimeout(timeoutId);
+    }
+  }
+  return null;
+}
 
 function computeCentroid(ring: number[][]): [number, number] {
   if (!ring || ring.length === 0) return [0, 0];
@@ -939,25 +1016,16 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
         zoom: 15,
         duration: 1000,
       });
-      // Wait for flyTo animation to finish so tiles are fully rendered before querying.
-      await new Promise<void>((resolve) => setTimeout(resolve, 1200));
+      // Programmatic flyTo may not fire onRegionDidChange with valid bounds.
+      // Wait for animation to settle then explicitly fetch footprints.
+      await new Promise<void>((resolve) => setTimeout(resolve, 800));
       if (!isMountedRef.current) return;
-      if (mapViewRef.current) {
-        if (isMountedRef.current) setBuildingsLoading(true);
-        try {
-          const { width, height } = Dimensions.get('window');
-          const fc: GeoJSON.FeatureCollection = await mapViewRef.current.queryRenderedFeaturesInRect(
-            [0, width, height, 0],
-            null,
-            ['building', 'building-part']
-          );
-          if (isMountedRef.current && fc.features?.length) {
-            setBuildingsFC(fc);
-            setBuildingsKey(k => k + 1);
-          }
-        } catch { /* silent */ } finally {
-          if (isMountedRef.current) setBuildingsLoading(false);
-        }
+      const delta = 0.006;
+      if (isMountedRef.current) setBuildingsLoading(true);
+      const fc = await fetchBuildingsForBounds(lng - delta, lat - delta, lng + delta, lat + delta);
+      if (isMountedRef.current) {
+        if (fc) { setBuildingsFC(fc); setBuildingsKey(k => k + 1); }
+        setBuildingsLoading(false);
       }
     } catch {
       if (isMountedRef.current) setBuildingsLoading(false);
@@ -965,26 +1033,18 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
   };
 
   const handleRegionChange = (event: NativeSyntheticEvent<ViewStateChangeEvent>) => {
-    const { zoom } = event.nativeEvent;
+    const { zoom, center } = event.nativeEvent;
     setMapZoom(zoom);
-    if (zoom < 14) return;
+    if (zoom < 14 || !center) return;
+    const [lng, lat] = center as [number, number];
+    const delta = zoom >= 16 ? 0.004 : zoom >= 15 ? 0.006 : 0.010;
     if (debounceTimer.current) clearTimeout(debounceTimer.current);
     debounceTimer.current = setTimeout(async () => {
-      if (!isMountedRef.current || !mapViewRef.current) return;
-      setBuildingsLoading(true);
-      try {
-        const { width, height } = Dimensions.get('window');
-        const fc: GeoJSON.FeatureCollection = await mapViewRef.current.queryRenderedFeaturesInRect(
-          [0, width, height, 0],
-          null,
-          ['building', 'building-part']
-        );
-        if (isMountedRef.current && fc.features?.length) {
-          setBuildingsFC(fc);
-          setBuildingsKey(k => k + 1);
-        }
-      } catch { /* silent */ } finally {
-        if (isMountedRef.current) setBuildingsLoading(false);
+      if (isMountedRef.current) setBuildingsLoading(true);
+      const fc = await fetchBuildingsForBounds(lng - delta, lat - delta, lng + delta, lat + delta);
+      if (isMountedRef.current) {
+        if (fc) { setBuildingsFC(fc); setBuildingsKey(k => k + 1); }
+        setBuildingsLoading(false);
       }
     }, 600);
   };
