@@ -78,51 +78,26 @@ const { width: _screenWidthRaw } = Dimensions.get('window');
 const screenWidth = _screenWidthRaw || 375;
 const scale = (size: number) => Math.round(screenWidth / 375 * size);
 
-// ── Overpass types ─────────────────────────────────────────────────────────────
-
-interface OverpassNode { type: "node"; id: number; lat: number; lon: number; }
-interface OverpassWay { type: "way"; id: number; nodes: number[]; tags?: Record<string, string>; }
-interface OverpassOther { type: "relation" | "area"; id: number; tags?: Record<string, string>; }
-type OverpassElement = OverpassNode | OverpassWay | OverpassOther;
-interface OverpassResponse { elements: OverpassElement[]; }
-
 // ── GeoJSON helpers ────────────────────────────────────────────────────────────
 
-function buildBuildingsFC(data: OverpassResponse): GeoJSON.FeatureCollection {
-  const nodes = new Map<number, [number, number]>();
-  for (const el of data.elements) {
-    if (el.type === "node") nodes.set(el.id, [el.lon, el.lat]);
-  }
-
-  const features: GeoJSON.Feature[] = [];
-  for (const el of data.elements) {
-    if (el.type !== "way") continue;
-    const way = el as OverpassWay;
-    if (!way.tags?.building) continue;
-
-    const ring: [number, number][] = [];
-    for (const nodeId of way.nodes) {
-      const coord = nodes.get(nodeId);
-      if (coord) ring.push(coord);
-    }
-    if (ring.length < 3) continue;
-
-    const first = ring[0];
-    const last = ring[ring.length - 1];
-    if (first[0] !== last[0] || first[1] !== last[1]) ring.push([first[0], first[1]]);
-
-    features.push({
-      type: "Feature",
-      properties: {
-        osm_id: way.id,
-        name: way.tags?.name ?? "",
-        building: way.tags?.building ?? "yes",
+async function fetchBuildingsForBounds(
+  west: number, south: number, east: number, north: number
+): Promise<GeoJSON.FeatureCollection | null> {
+  try {
+    const res = await api.get('/api/buildings', {
+      params: {
+        south: south.toFixed(6),
+        west: west.toFixed(6),
+        north: north.toFixed(6),
+        east: east.toFixed(6),
       },
-      geometry: { type: "Polygon", coordinates: [ring] },
+      timeout: 30000,
     });
+    const fc = res.data as GeoJSON.FeatureCollection;
+    return fc.features?.length ? fc : null;
+  } catch {
+    return null;
   }
-
-  return { type: "FeatureCollection", features };
 }
 
 function computeCentroid(ring: number[][]): [number, number] {
