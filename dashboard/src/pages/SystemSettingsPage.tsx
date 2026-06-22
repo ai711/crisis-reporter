@@ -966,6 +966,8 @@ function LanguagesTab() {
   const [regeneratingRowId, setRegeneratingRowId] = useState<string | null>(null);
   const [regeneratingAllDraft, setRegeneratingAllDraft] = useState(false);
   const [translateBaseline, setTranslateBaseline] = useState<number>(0);
+  const [translateBaselineFailed, setTranslateBaselineFailed] = useState<number>(0);
+  const [translateFailedCount, setTranslateFailedCount] = useState<number>(0);
   const [showAutoTranslateConfirm, setShowAutoTranslateConfirm] = useState<string | null>(null);
   const [showRemoveLangConfirm, setShowRemoveLangConfirm] = useState<{ code: string; name: string } | null>(null);
   const [showRegenerateAllConfirm, setShowRegenerateAllConfirm] = useState(false);
@@ -1110,13 +1112,15 @@ function LanguagesTab() {
     const entry = queueStatus.by_language.find((l) => l.lang_code === autoTranslatingLang);
     const draftCount = (entry?.draft_count ?? 0);
     const failedCount = (entry?.failed_count ?? 0);
-    // Subtract baseline so the counter reflects only newly-translated strings,
-    // not pre-existing drafts that were already in the queue before the run started.
+    // Subtract baseline so the counter reflects only strings processed in this run.
     const completed = Math.max(0, draftCount + failedCount - translateBaseline);
+    const newFailed = Math.max(0, failedCount - translateBaselineFailed);
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setTranslateProgress((prev) =>
       prev !== null ? { completed, total: prev.total } : null
     );
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setTranslateFailedCount(newFailed);
     // Keep Languages table pills in sync during translation (string-keys is the
     // data source for statusByLang, so refresh it on every queue-status poll).
     queryClient.invalidateQueries({ queryKey: ["string-keys"] });
@@ -1142,6 +1146,8 @@ function LanguagesTab() {
         setTranslateStartTime(null);
         setNearCompleteCount(0);
         setTranslateBaseline(0);
+        setTranslateBaselineFailed(0);
+        setTranslateFailedCount(0);
         await Promise.all([
           queryClient.invalidateQueries({ queryKey: ['languages'] }),
           queryClient.invalidateQueries({ queryKey: ['string-keys'] }),
@@ -1276,6 +1282,8 @@ function LanguagesTab() {
     const queueEntry = queueStatus?.by_language.find((l) => l.lang_code === langCode);
     const baseline = (queueEntry?.draft_count ?? 0) + (queueEntry?.failed_count ?? 0);
     setTranslateBaseline(baseline);
+    setTranslateBaselineFailed(queueEntry?.failed_count ?? 0);
+    setTranslateFailedCount(0);
     setAutoTranslatingLang(langCode);
     setTranslateStartTime(Date.now());
     try {
@@ -1305,6 +1313,8 @@ function LanguagesTab() {
       setTranslateProgress(null);
       setTranslateStartTime(null);
       setTranslateBaseline(0);
+      setTranslateBaselineFailed(0);
+      setTranslateFailedCount(0);
     }
   }
 
@@ -1595,8 +1605,11 @@ function LanguagesTab() {
               <div style={{ marginTop: 8, background: "#e5e7eb", borderRadius: 9999, height: 8, overflow: "hidden" }}>
                 <div style={{ height: "100%", background: "var(--c-primary-container)", borderRadius: 9999, width: `${Math.round((translateProgress.completed / translateProgress.total) * 100)}%`, transition: "width 0.5s ease" }} />
               </div>
-              <div style={{ marginTop: 4, fontSize: 12, color: "#6b7280" }}>
-                {translateProgress.completed} of {translateProgress.total} strings translated
+              <div style={{ marginTop: 4, fontSize: 12, color: "#6b7280", display: "flex", gap: 8, alignItems: "center" }}>
+                <span>{translateProgress.completed} of {translateProgress.total} processed</span>
+                {translateFailedCount > 0 && (
+                  <span style={{ color: "#dc2626", fontWeight: 600 }}>· {translateFailedCount} failed</span>
+                )}
               </div>
             </>
           ) : (

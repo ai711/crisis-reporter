@@ -298,6 +298,13 @@ class LanguageStatusUpdate(BaseModel):
         return v
 
 
+async def _ensure_sync_for_new_lang() -> None:
+    """Create Translation rows for a newly activated language without blocking the HTTP response."""
+    async with AsyncSessionLocal() as db:
+        result = await ensure_string_keys_synced(db)
+        log.info("_ensure_sync_for_new_lang: created=%d rows", result.get("created", 0))
+
+
 @languages_router.patch("/{code}/status", response_model=LanguageOut)
 async def update_language_status(
     code: str,
@@ -342,6 +349,12 @@ async def update_language_status(
     )
     await db.commit()
     await db.refresh(lang)
+
+    # When a language transitions to active, immediately create Translation rows
+    # for all active StringKeys so the Translate button works without waiting
+    # for the next server restart.
+    if lang.status == "active" and old_status != "active":
+        asyncio.create_task(_ensure_sync_for_new_lang())
 
     return LanguageOut(
         id=str(lang.id),
@@ -1393,13 +1406,14 @@ async def _run_auto_translation(language_code: str) -> None:
     try:
         async with AsyncSessionLocal() as db:
             try:
-                # Only translate strings for ACTIVE keys — retired/inactive keys must be excluded
+                # Translate strings that are missing OR previously failed.
+                # "failed" rows are retried so the Translate button doubles as retry.
                 missing_trans_result = await db.execute(
                     select(Translation)
                     .join(StringKey, StringKey.id == Translation.string_key_id)
                     .where(
                         Translation.language_code == language_code,
-                        Translation.status == "missing",
+                        Translation.status.in_(["missing", "failed"]),
                         StringKey.is_active == True,
                     )
                 )
@@ -1484,6 +1498,9 @@ async def _run_auto_translation(language_code: str) -> None:
                             failed += 1
                             errors.append(f"{result['key_name']}: {result['error']}")
                             log.warning("auto_translate failed for key %s: %s", result["key_name"], result["error"])
+                            t_obj = trans_map_batch.get(result["translation_id"])
+                            if t_obj is not None:
+                                t_obj.status = "failed"
                         else:
                             t_obj = trans_map_batch.get(result["translation_id"])
                             if t_obj is not None:
@@ -1552,7 +1569,7 @@ async def auto_translate(
         .join(StringKey, StringKey.id == Translation.string_key_id)
         .where(
             Translation.language_code == body.language_code,
-            Translation.status == "missing",
+            Translation.status.in_(["missing", "failed"]),
             StringKey.is_active == True,
         )
     )

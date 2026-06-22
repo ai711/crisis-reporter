@@ -1471,9 +1471,8 @@ async def lifespan(app: FastAPI):
                     except Exception:
                         pkg.version = pkg.version + ".1"
                 await db.commit()
-        # Background pass to translate any keys still marked "missing"
-        from app.tasks import auto_translate_content as _atc
-        asyncio.create_task(_atc("all"))
+        # No startup auto-translate sweep — translations are triggered on-demand
+        # when content is saved, or explicitly via the dashboard Translate button.
     except Exception as _promo_err:
         logger.warning("Auto-draft promotion skipped: %s", _promo_err)
     # Remove the ZZ placeholder country if it exists

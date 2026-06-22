@@ -10,33 +10,31 @@ auto_translate_question_package — translates all question strings in a draft
 auto_translate_content — translates content strings (TC, onboarding, etc.)
     that don't yet have an approved translation.
 
-Both follow the same LibreTranslate pattern used by
-POST /api/translations/auto-translate in language_packages.py.
+Both use translate_text() from app.utils.translation so that TRANSLATION_PRIMARY
+and GOOGLE_TRANSLATE_API_KEY are respected — Google Translate is used when
+configured, with LibreTranslate as fallback.
+
+Strings that fail translation are marked status="failed" in the DB so they
+don't silently retry on every subsequent run. The user-triggered
+POST /api/translations/auto-translate endpoint picks up both "missing" and
+"failed" rows, making the Translate button act as a retry as well.
 """
 
 import asyncio
 import logging
 from datetime import datetime, timezone
 
-import httpx
 from sqlalchemy import select
 
 from app.config import settings
 from app.database import AsyncSessionLocal
 from app.models.language_package import Language, StringKey, Translation
+from app.utils.translation import translate_text
 
 log = logging.getLogger(__name__)
 
 # Fallback used only when the DB cannot be reached
 _FALLBACK_LANGUAGES = ["ar", "zh", "fr", "ru", "es"]
-
-# Delay between successive translation requests to stay under the public
-# LibreTranslate free-tier rate limit (~1 req/sec). Ignored when using a
-# self-hosted or paid instance, but harmless there.
-_INTER_REQUEST_DELAY = 0.6  # seconds
-
-# How long to back off when a 429 is received before retrying once.
-_RATE_LIMIT_BACKOFF = 65  # seconds
 
 
 async def _active_target_languages(db) -> list[str]:
@@ -48,40 +46,15 @@ async def _active_target_languages(db) -> list[str]:
     return codes if codes else _FALLBACK_LANGUAGES
 
 
-async def _translate_text(client: httpx.AsyncClient, text: str, target: str) -> str:
-    """Call LibreTranslate and return translated text.
-
-    Retries once after backing off if the server returns 429.
-    Raises on any other failure.
-    """
-    url = settings.LIBRETRANSLATE_URL.rstrip("/") + "/translate"
-    payload = {"q": text, "source": "en", "target": target, "format": "text"}
-    for attempt in range(2):
-        resp = await client.post(url, json=payload)
-        if resp.status_code == 429 and attempt == 0:
-            log.warning(
-                "_translate_text: rate-limited for lang=%s — backing off %ds before retry",
-                target, _RATE_LIMIT_BACKOFF,
-            )
-            await asyncio.sleep(_RATE_LIMIT_BACKOFF)
-            continue
-        resp.raise_for_status()
-        result = resp.json().get("translatedText", "")
-        if not result:
-            raise ValueError("Empty translatedText in LibreTranslate response")
-        return result
-    raise RuntimeError(f"Translation failed for lang={target} after rate-limit retry")
-
-
 async def auto_translate_question_package(package_version: str) -> None:
     """
     For every active non-English language, auto-translate all string keys in
     the given package version that don't yet have an approved translation.
     Stores results as Draft translations in the translations table.
+    Failed strings are marked status="failed" so they don't loop forever.
     """
     log.info("auto_translate_question_package: starting for version %s", package_version)
     async with AsyncSessionLocal() as db:
-        # Get all active string keys (question category)
         keys_result = await db.execute(
             select(StringKey).where(
                 StringKey.is_active == True,
@@ -97,60 +70,68 @@ async def auto_translate_question_package(package_version: str) -> None:
         translated_total = 0
         target_languages = await _active_target_languages(db)
 
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            for lang_code in target_languages:
-                # Skip keys that already have a usable (non-missing) translation.
-                # status='missing' means the English source changed — must re-translate.
-                existing_result = await db.execute(
-                    select(Translation.string_key_id).where(
-                        Translation.language_code == lang_code,
-                        Translation.status != "missing",
-                    )
+        for lang_code in target_languages:
+            # Skip keys that already have a usable translation.
+            # "failed" is NOT treated as done — it must be retried.
+            existing_result = await db.execute(
+                select(Translation.string_key_id).where(
+                    Translation.language_code == lang_code,
+                    Translation.status.not_in(["missing", "failed"]),
                 )
-                already_translated = {row[0] for row in existing_result.all()}
+            )
+            already_translated = {row[0] for row in existing_result.all()}
 
-                keys_to_translate = [sk for sk in keys if sk.id not in already_translated]
-                if not keys_to_translate:
-                    continue
+            keys_to_translate = [sk for sk in keys if sk.id not in already_translated]
+            if not keys_to_translate:
+                continue
 
-                # Preload existing 'missing' rows so we UPDATE rather than INSERT.
-                missing_rows_result = await db.execute(
-                    select(Translation).where(
-                        Translation.string_key_id.in_([sk.id for sk in keys_to_translate]),
-                        Translation.language_code == lang_code,
-                        Translation.status == "missing",
-                    )
+            # Preload existing missing/failed rows so we UPDATE rather than INSERT.
+            existing_rows_result = await db.execute(
+                select(Translation).where(
+                    Translation.string_key_id.in_([sk.id for sk in keys_to_translate]),
+                    Translation.language_code == lang_code,
+                    Translation.status.in_(["missing", "failed"]),
                 )
-                missing_by_key = {
-                    r.string_key_id: r
-                    for r in missing_rows_result.scalars().all()
-                }
+            )
+            existing_by_key = {
+                r.string_key_id: r
+                for r in existing_rows_result.scalars().all()
+            }
 
-                for sk in keys_to_translate:
-                    try:
-                        translated_text = await _translate_text(client, sk.english_text, lang_code)
-                        existing_row = missing_by_key.get(sk.id)
-                        if existing_row is not None:
-                            existing_row.translated_text = translated_text
-                            existing_row.status = "draft"
-                            existing_row.translated_by = "auto"
-                        else:
-                            db.add(Translation(
-                                string_key_id=sk.id,
-                                language_code=lang_code,
-                                translated_text=translated_text,
-                                status="draft",
-                                translated_by="auto",
-                            ))
-                        translated_total += 1
-                        await asyncio.sleep(_INTER_REQUEST_DELAY)
-                    except Exception as exc:
-                        log.warning(
-                            "auto_translate_question_package: failed key=%s lang=%s: %s",
-                            sk.key, lang_code, exc,
-                        )
+            for sk in keys_to_translate:
+                existing_row = existing_by_key.get(sk.id)
+                try:
+                    translated_text, service_used = await translate_text(sk.english_text, lang_code)
+                    if existing_row is not None:
+                        existing_row.translated_text = translated_text
+                        existing_row.status = "draft"
+                        existing_row.translated_by = service_used
+                    else:
+                        db.add(Translation(
+                            string_key_id=sk.id,
+                            language_code=lang_code,
+                            translated_text=translated_text,
+                            status="draft",
+                            translated_by=service_used,
+                        ))
+                    translated_total += 1
+                except Exception as exc:
+                    log.warning(
+                        "auto_translate_question_package: failed key=%s lang=%s: %s",
+                        sk.key, lang_code, exc,
+                    )
+                    if existing_row is not None:
+                        existing_row.status = "failed"
+                    else:
+                        db.add(Translation(
+                            string_key_id=sk.id,
+                            language_code=lang_code,
+                            translated_text="",
+                            status="failed",
+                            translated_by="",
+                        ))
 
-        if translated_total > 0:
+        if translated_total > 0 or True:
             await db.commit()
 
     log.info(
@@ -174,15 +155,13 @@ async def auto_translate_content(content_type: str) -> None:
     For every active non-English language, auto-translate all string keys in
     the given content type that don't yet have an approved translation.
     Stores results as Draft translations in the translations table.
+    Failed strings are marked status="failed" so they don't loop forever.
 
     content_type may be one of the named types below, or the special value
     "all" which translates every active StringKey regardless of category.
-    "all" is used at startup to catch any newly-seeded UI keys.
     """
     log.info("auto_translate_content: starting for content_type=%s", content_type)
 
-    # Map content types to string key categories.
-    # "all" is a special sentinel — no category filter applied.
     category_map = {
         "tc": "tc",
         "onboarding": "onboarding",
@@ -220,67 +199,72 @@ async def auto_translate_content(content_type: str) -> None:
         translated_langs: set[str] = set()
         target_languages = await _active_target_languages(db)
 
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            for lang_code in target_languages:
-                # Skip keys that already have a usable (non-missing) translation.
-                # status='missing' means the English source changed — must re-translate.
-                existing_result = await db.execute(
-                    select(Translation.string_key_id).where(
-                        Translation.language_code == lang_code,
-                        Translation.status != "missing",
-                    )
+        for lang_code in target_languages:
+            # Skip keys that already have a usable translation.
+            # "failed" is NOT treated as done — it must be retried.
+            existing_result = await db.execute(
+                select(Translation.string_key_id).where(
+                    Translation.language_code == lang_code,
+                    Translation.status.not_in(["missing", "failed"]),
                 )
-                already_translated = {row[0] for row in existing_result.all()}
+            )
+            already_translated = {row[0] for row in existing_result.all()}
 
-                keys_to_translate = [sk for sk in keys if sk.id not in already_translated]
-                if not keys_to_translate:
-                    continue
+            keys_to_translate = [sk for sk in keys if sk.id not in already_translated]
+            if not keys_to_translate:
+                continue
 
-                # Preload existing 'missing' rows so we UPDATE rather than INSERT.
-                missing_rows_result = await db.execute(
-                    select(Translation).where(
-                        Translation.string_key_id.in_([sk.id for sk in keys_to_translate]),
-                        Translation.language_code == lang_code,
-                        Translation.status == "missing",
-                    )
+            # Preload existing missing/failed rows so we UPDATE rather than INSERT.
+            existing_rows_result = await db.execute(
+                select(Translation).where(
+                    Translation.string_key_id.in_([sk.id for sk in keys_to_translate]),
+                    Translation.language_code == lang_code,
+                    Translation.status.in_(["missing", "failed"]),
                 )
-                missing_by_key = {
-                    r.string_key_id: r
-                    for r in missing_rows_result.scalars().all()
-                }
+            )
+            existing_by_key = {
+                r.string_key_id: r
+                for r in existing_rows_result.scalars().all()
+            }
 
-                for sk in keys_to_translate:
-                    try:
-                        translated_text = await _translate_text(client, sk.english_text, lang_code)
-                        existing_row = missing_by_key.get(sk.id)
-                        if existing_row is not None:
-                            existing_row.translated_text = translated_text
-                            existing_row.status = "published"
-                            existing_row.translated_by = "auto"
-                        else:
-                            db.add(Translation(
-                                string_key_id=sk.id,
-                                language_code=lang_code,
-                                translated_text=translated_text,
-                                status="published",
-                                translated_by="auto",
-                            ))
-                        translated_total += 1
-                        translated_langs.add(lang_code)
-                        await asyncio.sleep(_INTER_REQUEST_DELAY)
-                    except Exception as exc:
-                        log.warning(
-                            "auto_translate_content: failed key=%s lang=%s: %s",
-                            sk.key, lang_code, exc,
-                        )
+            for sk in keys_to_translate:
+                existing_row = existing_by_key.get(sk.id)
+                try:
+                    translated_text, service_used = await translate_text(sk.english_text, lang_code)
+                    if existing_row is not None:
+                        existing_row.translated_text = translated_text
+                        existing_row.status = "published"
+                        existing_row.translated_by = service_used
+                    else:
+                        db.add(Translation(
+                            string_key_id=sk.id,
+                            language_code=lang_code,
+                            translated_text=translated_text,
+                            status="published",
+                            translated_by=service_used,
+                        ))
+                    translated_total += 1
+                    translated_langs.add(lang_code)
+                except Exception as exc:
+                    log.warning(
+                        "auto_translate_content: failed key=%s lang=%s: %s",
+                        sk.key, lang_code, exc,
+                    )
+                    if existing_row is not None:
+                        existing_row.status = "failed"
+                    else:
+                        db.add(Translation(
+                            string_key_id=sk.id,
+                            language_code=lang_code,
+                            translated_text="",
+                            status="failed",
+                            translated_by="",
+                        ))
 
-        if translated_total > 0:
-            await db.commit()
+        await db.commit()
 
     # Bump language package versions so clients detect and re-download the
-    # updated translations. Without this bump, clients whose cached version
-    # matches the server version will never re-fetch and will keep showing
-    # English fallbacks for the newly translated keys.
+    # updated translations.
     if translated_langs:
         try:
             from app.models.language_package import LanguagePackage
