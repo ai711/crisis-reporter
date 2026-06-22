@@ -599,7 +599,7 @@ export default function ProjectDetailPage() {
   }, [fetchProperties]);
 
   // ── Tab state ──────────────────────────────────────────────────────────
-  const [activeTab, setActiveTab] = useState<"overview" | "reports" | "properties">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "reports" | "properties" | "ai_analysis">("overview");
 
   // ── Statistics section ─────────────────────────────────────────────────
   const [statsGranularity, setStatsGranularity] = useState<"daily" | "weekly">("daily");
@@ -736,7 +736,8 @@ export default function ProjectDetailPage() {
               { key: "overview", label: "Overview" },
               { key: "reports", label: reportTotal > 0 ? `Reports (${reportTotal})` : "Reports" },
               { key: "properties", label: propTotal > 0 ? `Properties (${propTotal})` : "Properties" },
-            ] as { key: "overview" | "reports" | "properties"; label: string }[]
+              { key: "ai_analysis", label: "AI Analysis" },
+            ] as { key: "overview" | "reports" | "properties" | "ai_analysis"; label: string }[]
           ).map((tab) => (
             <button
               key={tab.key}
@@ -1311,6 +1312,18 @@ export default function ProjectDetailPage() {
             </SectionCard>
           )}
 
+          {/* ── TAB 4: AI Analysis ── */}
+          {activeTab === "ai_analysis" && (
+            <SectionCard title="AI Analysis">
+              <div style={ss.aiComingSoon}>
+                <div style={ss.aiComingSoonBadge}>Coming Soon</div>
+                <p style={ss.aiComingSoonText}>
+                  AI Analysis will let you configure a set of questions — single-select, multi-select, or free text — and automatically run every report in this project through a chosen AI model (Claude, Gemini, or ChatGPT). You control exactly which report fields and photos are sent, and provide a custom prompt to guide the analysis. Once configured, new reports added to the project are queued automatically. Results are shown here as an aggregated view with filters and counts across all reports.
+                </p>
+              </div>
+            </SectionCard>
+          )}
+
         </div>
     </>
   );
@@ -1641,5 +1654,32 @@ const ss: Record<string, React.CSSProperties> = {
     fontWeight: 700,
     cursor: "pointer",
     flexShrink: 0,
+  },
+  aiComingSoon: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "64px 32px",
+    gap: 16,
+    textAlign: "center",
+  },
+  aiComingSoonBadge: {
+    display: "inline-block",
+    padding: "4px 14px",
+    borderRadius: 20,
+    background: "#e8f0fe",
+    color: BLUE,
+    fontSize: 12,
+    fontWeight: 700,
+    letterSpacing: "0.06em",
+    textTransform: "uppercase" as const,
+  },
+  aiComingSoonText: {
+    maxWidth: 560,
+    fontSize: 15,
+    color: "#4a5568",
+    lineHeight: 1.7,
+    margin: 0,
   },
 };
