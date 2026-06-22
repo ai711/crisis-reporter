@@ -119,16 +119,7 @@ function buildBuildingsFC(data: OverpassResponse): GeoJSON.FeatureCollection {
 async function fetchBuildingsForBounds(
   west: number, south: number, east: number, north: number
 ): Promise<GeoJSON.FeatureCollection | null> {
-  const bbox = `${south.toFixed(6)},${west.toFixed(6)},${north.toFixed(6)},${east.toFixed(6)}`;
-  const query =
-    `[out:json][timeout:10][bbox:${bbox}];` +
-    `(way["building"];relation["building"]["type"="multipolygon"];);out body;>;out skel qt;`;
-
-  const diag: string[] = [`BBOX: ${bbox}`];
-
   // 1. Backend proxy first — avoids Android carrier blocking Overpass directly.
-  //    Backend timeout budget: connect 5s + read 28s = 33s max.
-  //    We give 35s here so mobile never aborts before the backend finishes.
   const apiBase = (process.env.EXPO_PUBLIC_API_URL ?? '').replace(/\/$/, '');
   const backendUrl =
     `${apiBase}/api/buildings?south=${south.toFixed(6)}&west=${west.toFixed(6)}` +
@@ -141,22 +132,18 @@ async function fetchBuildingsForBounds(
       clearTimeout(timeoutId);
       if (res.ok) {
         const fc: GeoJSON.FeatureCollection = await res.json();
-        if (fc.features?.length > 0) {
-          diag.push(`[backend] OK ✓ ${fc.features.length} buildings`);
-          Alert.alert("Footprints DEBUG", diag.join("\n"));
-          return fc;
-        }
-        diag.push(`[backend] OK but 0 features`);
-      } else {
-        diag.push(`[backend] HTTP ${res.status}`);
+        if (fc.features?.length > 0) return fc;
       }
-    } catch (e) {
+    } catch {
       clearTimeout(timeoutId);
-      diag.push(`[backend] ERR: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 
-  // 2. Direct Overpass fallback (blocked on some carriers, but kept for other networks)
+  // 2. Direct Overpass fallback (blocked on some carriers, kept for other networks)
+  const bbox = `${south.toFixed(6)},${west.toFixed(6)},${north.toFixed(6)},${east.toFixed(6)}`;
+  const query =
+    `[out:json][timeout:10][bbox:${bbox}];` +
+    `(way["building"];relation["building"]["type"="multipolygon"];);out body;>;out skel qt;`;
   const endpoints = [
     "https://overpass-api.de/api/interpreter",
     "https://overpass.kumi.systems/api/interpreter",
@@ -165,7 +152,6 @@ async function fetchBuildingsForBounds(
   ];
 
   for (const endpoint of endpoints) {
-    const label = endpoint.replace("https://", "").split("/")[0];
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 15000);
     try {
@@ -174,35 +160,44 @@ async function fetchBuildingsForBounds(
         signal: controller.signal,
       });
       clearTimeout(timeoutId);
-      if (!res.ok) {
-        diag.push(`[${label}] HTTP ${res.status}`);
-        continue;
-      }
-      const text = await res.text();
-      let data: OverpassResponse;
-      try { data = JSON.parse(text); } catch (e) {
-        diag.push(`[${label}] JSON err: ${text.slice(0, 60)}`);
-        continue;
-      }
-      if (!data.elements?.length) {
-        diag.push(`[${label}] OK but 0 elements`);
-        continue;
-      }
+      if (!res.ok) continue;
+      const data: OverpassResponse = await res.json();
+      if (!data.elements?.length) continue;
       const fc = buildBuildingsFC(data);
-      if (fc.features.length > 0) {
-        diag.push(`[${label}] OK ✓ ${fc.features.length} buildings`);
-        Alert.alert("Footprints DEBUG", diag.join("\n"));
-        return fc;
-      }
-      diag.push(`[${label}] OK but 0 way features (${data.elements.length} els)`);
-    } catch (e) {
+      if (fc.features.length > 0) return fc;
+    } catch {
       clearTimeout(timeoutId);
-      diag.push(`[${label}] ERR: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 
-  Alert.alert("Footprints FAILED", diag.join("\n"));
   return null;
+}
+
+// Query building polygons already rendered in the MapLibre tile cache — no network call.
+// MapTiler streets-v2 uses layer IDs "building" (fill) and "building-3d" (fill-extrusion),
+// both sourced from the OpenMapTiles "building" source-layer.
+async function queryMapBuildings(
+  mapRef: { current: any }
+): Promise<GeoJSON.FeatureCollection | null> {
+  if (!mapRef.current) return null;
+  try {
+    const features: GeoJSON.Feature[] = await mapRef.current.queryRenderedFeatures({
+      layers: ['building', 'building-3d'],
+    });
+    if (!features?.length) return null;
+    // Normalise to the shape handleBuildingPress expects: osm_id, name, building
+    const normalized = features.map((f: GeoJSON.Feature, idx: number) => ({
+      ...f,
+      properties: {
+        osm_id: typeof f.id === 'number' ? f.id : idx + 1,
+        name: '',
+        building: 'yes',
+      },
+    }));
+    return { type: 'FeatureCollection' as const, features: normalized };
+  } catch {
+    return null;
+  }
 }
 
 function computeCentroid(ring: number[][]): [number, number] {
@@ -1065,12 +1060,18 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
         duration: 1000,
       });
       // Programmatic flyTo may not fire onRegionDidChange with valid bounds.
-      // Wait for animation to settle then explicitly fetch footprints.
-      await new Promise<void>((resolve) => setTimeout(resolve, 800));
+      // Wait for animation + tile loading to settle, then query rendered features.
+      // flyTo duration is 1000ms; extra 1000ms for tile download on LTE.
+      await new Promise<void>((resolve) => setTimeout(resolve, 2000));
       if (!isMountedRef.current) return;
       const delta = 0.006;
       if (isMountedRef.current) setBuildingsLoading(true);
-      const fc = await fetchBuildingsForBounds(lng - delta, lat - delta, lng + delta, lat + delta);
+      // Primary: query tiles already rendered in the viewport (no network call).
+      // Fallback: backend proxy → Overpass if tiles not yet loaded.
+      let fc = await queryMapBuildings(mapViewRef);
+      if (!fc || fc.features.length === 0) {
+        fc = await fetchBuildingsForBounds(lng - delta, lat - delta, lng + delta, lat + delta);
+      }
       if (isMountedRef.current) {
         if (fc) { setBuildingsFC(fc); setBuildingsKey(k => k + 1); }
         setBuildingsLoading(false);
@@ -1089,7 +1090,12 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
     if (debounceTimer.current) clearTimeout(debounceTimer.current);
     debounceTimer.current = setTimeout(async () => {
       if (isMountedRef.current) setBuildingsLoading(true);
-      const fc = await fetchBuildingsForBounds(lng - delta, lat - delta, lng + delta, lat + delta);
+      // Primary: query tiles already rendered in the viewport (no network call).
+      // Fallback: backend proxy → Overpass if tiles not yet rendered.
+      let fc = await queryMapBuildings(mapViewRef);
+      if (!fc || fc.features.length === 0) {
+        fc = await fetchBuildingsForBounds(lng - delta, lat - delta, lng + delta, lat + delta);
+      }
       if (isMountedRef.current) {
         if (fc) { setBuildingsFC(fc); setBuildingsKey(k => k + 1); }
         setBuildingsLoading(false);
