@@ -119,12 +119,11 @@ function buildBuildingsFC(data: OverpassResponse): GeoJSON.FeatureCollection {
 async function fetchBuildingsForBounds(
   west: number, south: number, east: number, north: number
 ): Promise<GeoJSON.FeatureCollection | null> {
+  const bbox = `${south.toFixed(6)},${west.toFixed(6)},${north.toFixed(6)},${east.toFixed(6)}`;
   const query =
-    `[out:json][timeout:25][bbox:${south.toFixed(6)},${west.toFixed(6)},${north.toFixed(6)},${east.toFixed(6)}];` +
+    `[out:json][timeout:25][bbox:${bbox}];` +
     `(way["building"];relation["building"]["type"="multipolygon"];);out body;>;out skel qt;`;
 
-  // Sequential fallback across mirrors. charset=UTF-8 matches what browsers
-  // send — some Overpass mirrors reject requests without it (HTTP 406).
   const endpoints = [
     "https://overpass-api.de/api/interpreter",
     "https://overpass.kumi.systems/api/interpreter",
@@ -132,9 +131,13 @@ async function fetchBuildingsForBounds(
     "https://overpass.openstreetmap.ru/api/interpreter",
   ];
 
+  const diag: string[] = [`BBOX: ${bbox}`];
+
   for (const endpoint of endpoints) {
+    const label = endpoint.replace("https://", "").split("/")[0];
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 45000);
+    // 15 s per endpoint for diagnostic (was 45 s)
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
     try {
       const res = await fetch(endpoint, {
         method: "POST",
@@ -143,17 +146,34 @@ async function fetchBuildingsForBounds(
         signal: controller.signal,
       });
       clearTimeout(timeoutId);
-      if (!res.ok) continue;
+      if (!res.ok) {
+        diag.push(`[${label}] HTTP ${res.status}`);
+        continue;
+      }
       const text = await res.text();
       let data: OverpassResponse;
-      try { data = JSON.parse(text); } catch { continue; }
-      if (!data.elements?.length) continue;
+      try { data = JSON.parse(text); } catch (e) {
+        diag.push(`[${label}] JSON err: ${text.slice(0, 60)}`);
+        continue;
+      }
+      if (!data.elements?.length) {
+        diag.push(`[${label}] OK but 0 elements`);
+        continue;
+      }
       const fc = buildBuildingsFC(data);
-      if (fc.features.length > 0) return fc;
-    } catch {
+      if (fc.features.length > 0) {
+        diag.push(`[${label}] OK ✓ ${fc.features.length} buildings`);
+        Alert.alert("Footprints DEBUG", diag.join("\n"));
+        return fc;
+      }
+      diag.push(`[${label}] OK but 0 way features (${data.elements.length} els)`);
+    } catch (e) {
       clearTimeout(timeoutId);
+      diag.push(`[${label}] ERR: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
+
+  Alert.alert("Footprints FAILED", diag.join("\n"));
   return null;
 }
 
