@@ -522,6 +522,7 @@ export async function syncQueue(apiBaseUrl: string): Promise<void> {
         // Upload photos
         let photosUploaded = 0;
         let photosSkipped = 0;
+        const skippedStatuses: number[] = [];
         for (const photo of item.photos) {
           // Prefer persistent_uri (documentDirectory) over the original cache URI
           // which Android may have cleared under low-storage pressure.
@@ -566,6 +567,7 @@ export async function syncQueue(apiBaseUrl: string): Promise<void> {
               // 4xx non-401: permanent client error (bad format, too large, etc.)
               // Log it and skip this photo — retrying won't help.
               console.warn(`[syncQueue] Photo upload skipped (HTTP ${photoResponse.status})`);
+              skippedStatuses.push(photoResponse.status);
               photosSkipped++;
             } else {
               photosUploaded++;
@@ -579,9 +581,10 @@ export async function syncQueue(apiBaseUrl: string): Promise<void> {
         await removeFromQueue(item.local_id);
         await notifyQueueChange();
         if (photosSkipped > 0 && photosUploaded === 0 && item.photos.length > 0) {
+          const statusStr = skippedStatuses.length > 0 ? ` (HTTP ${skippedStatuses.join(', ')})` : ' (file missing)';
           void showSyncNotification(
             "Report submitted — photos missing",
-            "Your report was submitted but photos could not be attached (files were lost). Open the app to view your report."
+            `Your report was submitted but photos could not be attached${statusStr}. Open the app to view your report.`
           );
         } else if (photosSkipped > 0) {
           void showSyncNotification(
