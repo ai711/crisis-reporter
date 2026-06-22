@@ -139,10 +139,8 @@ async function fetchBuildingsForBounds(
     // 15 s per endpoint for diagnostic (was 45 s)
     const timeoutId = setTimeout(() => controller.abort(), 15000);
     try {
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8" },
-        body: `data=${encodeURIComponent(query)}`,
+      const res = await fetch(`${endpoint}?data=${encodeURIComponent(query)}`, {
+        method: "GET",
         signal: controller.signal,
       });
       clearTimeout(timeoutId);
