@@ -133,9 +133,13 @@ async function fetchBuildingsForBounds(
       if (res.ok) {
         const fc: GeoJSON.FeatureCollection = await res.json();
         if (fc.features?.length > 0) return fc;
+        console.warn('[buildings] backend proxy returned 0 features');
+      } else {
+        console.warn(`[buildings] backend proxy HTTP ${res.status}`);
       }
-    } catch {
+    } catch (e) {
       clearTimeout(timeoutId);
+      console.warn('[buildings] backend proxy failed:', e);
     }
   }
 
@@ -165,11 +169,13 @@ async function fetchBuildingsForBounds(
       if (!data.elements?.length) continue;
       const fc = buildBuildingsFC(data);
       if (fc.features.length > 0) return fc;
-    } catch {
+    } catch (e) {
       clearTimeout(timeoutId);
+      console.warn(`[buildings] Overpass ${endpoint} failed:`, e);
     }
   }
 
+  console.warn('[buildings] all sources failed — no footprints loaded');
   return null;
 }
 
@@ -184,7 +190,10 @@ async function queryMapBuildings(
     const features: GeoJSON.Feature[] = await mapRef.current.queryRenderedFeatures({
       layers: ['building', 'building-3d'],
     });
-    if (!features?.length) return null;
+    if (!features?.length) {
+      console.warn('[buildings] queryRenderedFeatures returned 0 features');
+      return null;
+    }
     // Normalise to the shape handleBuildingPress expects: osm_id, name, building
     const normalized = features.map((f: GeoJSON.Feature, idx: number) => ({
       ...f,
@@ -194,8 +203,10 @@ async function queryMapBuildings(
         building: 'yes',
       },
     }));
+    console.warn(`[buildings] queryRenderedFeatures OK — ${normalized.length} buildings`);
     return { type: 'FeatureCollection' as const, features: normalized };
-  } catch {
+  } catch (e) {
+    console.warn('[buildings] queryRenderedFeatures threw:', e);
     return null;
   }
 }
@@ -1070,6 +1081,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
       // Fallback: backend proxy → Overpass if tiles not yet loaded.
       let fc = await queryMapBuildings(mapViewRef);
       if (!fc || fc.features.length === 0) {
+        console.warn('[buildings] tile query empty — falling back to network');
         fc = await fetchBuildingsForBounds(lng - delta, lat - delta, lng + delta, lat + delta);
       }
       if (isMountedRef.current) {
