@@ -196,6 +196,13 @@ async function queryMapBuildings(
       console.warn('[buildings] queryRenderedFeatures returned 0 features');
       return null;
     }
+    // DIAG: inspect what tile feature IDs and property keys look like
+    const sample = features.slice(0, 5);
+    console.warn('[buildings] DIAG sample ids:', sample.map(f => f.id));
+    console.warn('[buildings] DIAG sample prop keys:', sample.map(f => Object.keys(f.properties ?? {})));
+    console.warn('[buildings] DIAG geometry types:', sample.map(f => f.geometry?.type));
+    const nullIdCount = features.filter(f => f.id == null).length;
+    console.warn(`[buildings] DIAG id breakdown: ${features.length} total, ${nullIdCount} null-id, ${features.length - nullIdCount} have id`);
     // Deduplicate by tile feature ID (defensive safety net)
     const seen = new Set<number | string>();
     const unique = features.filter((f: GeoJSON.Feature) => {
@@ -1111,6 +1118,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
     const delta = zoom >= 16 ? 0.004 : zoom >= 15 ? 0.006 : 0.010;
     if (debounceTimer.current) clearTimeout(debounceTimer.current);
     debounceTimer.current = setTimeout(async () => {
+      console.warn(`[buildings] querying at zoom ${zoom.toFixed(2)} center ${lat.toFixed(5)},${lng.toFixed(5)}`);
       if (isMountedRef.current) setBuildingsLoading(true);
       // Primary: query tiles already rendered in the viewport (no network call).
       // Fallback: backend proxy → Overpass if tiles not yet rendered.
@@ -1212,6 +1220,23 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
       }
       if (!ring || ring.length < 3) return;
       [centLng, centLat] = computeCentroid(ring);
+    }
+
+    // DIAG: log the raw feature to understand what we actually tapped
+    const allCoords: GeoJSON.Position[] =
+      geom.type === 'Polygon'
+        ? (geom as GeoJSON.Polygon).coordinates[0]
+        : geom.type === 'MultiPolygon'
+          ? (geom as GeoJSON.MultiPolygon).coordinates.flat(2)
+          : [];
+    if (allCoords.length) {
+      const lngs = allCoords.map(c => c[0]);
+      const lats = allCoords.map(c => c[1]);
+      const bboxW = Math.min(...lngs), bboxE = Math.max(...lngs);
+      const bboxS = Math.min(...lats), bboxN = Math.max(...lats);
+      const widthM = (bboxE - bboxW) * 111320 * Math.cos(centLat * Math.PI / 180);
+      const heightM = (bboxN - bboxS) * 111320;
+      console.warn(`[buildings] TAP osm_id=${props.osm_id} geom=${geom.type} vertices=${allCoords.length} size=${widthM.toFixed(0)}m×${heightM.toFixed(0)}m`);
     }
 
     setPendingBuilding({
