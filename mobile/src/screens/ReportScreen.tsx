@@ -140,13 +140,12 @@ function computeCentroid(ring: number[][]): [number, number] {
 async function fetchBuildingsForBounds(
   west: number, south: number, east: number, north: number
 ): Promise<GeoJSON.FeatureCollection | null> {
-  // DIAG — confirm function is called and show bbox
-  Alert.alert('⬛ Overpass query', `W=${west.toFixed(4)} S=${south.toFixed(4)}\nE=${east.toFixed(4)} N=${north.toFixed(4)}`);
-
   const query =
     `[out:json][timeout:18][bbox:${south.toFixed(6)},${west.toFixed(6)},${north.toFixed(6)},${east.toFixed(6)}];` +
     `(way["building"];relation["building"]["type"="multipolygon"];);out body;>;out skel qt;`;
 
+  // Use GET — avoids Content-Type negotiation issues with Android's fetch polyfill
+  // (POST with explicit Content-Type header triggers HTTP 406 on Overpass endpoints).
   const endpoints = [
     "https://overpass-api.de/api/interpreter",
     "https://overpass.kumi.systems/api/interpreter",
@@ -155,24 +154,20 @@ async function fetchBuildingsForBounds(
   const globalTimeout = setTimeout(() => controllers.forEach((c) => c.abort()), 20000);
 
   const tryEndpoint = async (url: string, ctrl: AbortController): Promise<GeoJSON.FeatureCollection> => {
-    const label = url.includes('kumi') ? 'kumi' : 'de';
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: `data=${encodeURIComponent(query)}`,
+    const res = await fetch(`${url}?data=${encodeURIComponent(query)}`, {
+      method: "GET",
       signal: ctrl.signal,
     });
-    if (!res.ok) throw new Error(`[${label}] HTTP ${res.status}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const text = await res.text();
     const data: OverpassResponse = JSON.parse(text);
-    if (!data.elements?.length) throw new Error(`[${label}] 0 elements in response`);
+    if (!data.elements?.length) throw new Error('empty');
     const fc = buildBuildingsFC(data);
-    if (fc.features.length === 0) throw new Error(`[${label}] parsed ${data.elements.length} elements but 0 polygon features`);
+    if (fc.features.length === 0) throw new Error('no way features');
     return fc;
   };
 
-  // Attach .catch to each promise so the "losing" endpoint's AbortError
-  // does not become an unhandled promise rejection in Hermes.
+  // Suppress unhandled rejection on the "losing" endpoint's AbortError.
   const promises = endpoints.map((url, i) => tryEndpoint(url, controllers[i]));
   promises.forEach((p) => p.catch(() => {}));
 
@@ -180,16 +175,9 @@ async function fetchBuildingsForBounds(
     const fc = await Promise.any(promises);
     clearTimeout(globalTimeout);
     controllers.forEach((c) => c.abort());
-    // DIAG — success
-    Alert.alert('✅ Footprints', `${fc.features.length} buildings loaded`);
     return fc;
-  } catch (e: any) {
+  } catch {
     clearTimeout(globalTimeout);
-    // DIAG — show why both endpoints failed
-    const details: string = e?.errors
-      ? (e.errors as Error[]).map((er: Error) => er.message).join('\n')
-      : String(e);
-    Alert.alert('❌ Footprints failed', details);
     return null;
   }
 }
