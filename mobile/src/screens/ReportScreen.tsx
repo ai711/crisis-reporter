@@ -31,6 +31,7 @@ import api, { API_BASE } from "../services/api";
 import * as Device from 'expo-device';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as FileSystem from 'expo-file-system/legacy';
+import { File as FSFile, Directory as FSDirectory } from 'expo-file-system';
 import * as MediaLibrary from 'expo-media-library';
 import { addToQueue, syncQueue, getQueue, removeFromQueue, queuePhotosForReport, saveDirectSubmittedRecord, resetItemForRetry } from "../utils/offlineQueue";
 import { haversineKm, milesToKm, saveCrisisMeta, loadCrisisMeta, saveFenceRadiusMeta, loadFenceRadiusMeta, getGpsFenceRadius, type FenceRadiusMeta } from "../utils/geo";
@@ -156,7 +157,7 @@ async function fetchBuildingsForBounds(
   let lastDiag = 'no attempt';
   for (const endpoint of endpoints) {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 20000);
+    const timeoutId = setTimeout(() => controller.abort(), 45000);
     try {
       const res = await fetch(endpoint, {
         method: "POST",
@@ -185,8 +186,6 @@ async function fetchBuildingsForBounds(
       lastDiag = `fetch threw: ${e instanceof Error ? e.message : String(e)}`;
     }
   }
-  // Temporary diagnostic — remove once building loading is confirmed working
-  Alert.alert('Buildings debug', lastDiag);
   return null;
 }
 
@@ -678,7 +677,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
       if (debounceTimer.current) clearTimeout(debounceTimer.current);
       if (searchDebounceTimer.current) clearTimeout(searchDebounceTimer.current);
       searchAbortController.current?.abort();
-      FileSystem.deleteAsync(PHOTO_SESSION_DIR, { idempotent: true }).catch(() => {});
+      try { new FSDirectory(PHOTO_SESSION_DIR).delete(); } catch { /* may not exist */ }
     };
   }, []);
 
@@ -835,8 +834,8 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
               style: 'destructive',
               onPress: async () => {
                 await AsyncStorage.removeItem(ANSWERS_KEY);
-                FileSystem.deleteAsync(DRAFT_PHOTO_DIR, { idempotent: true }).catch(() => {});
-                FileSystem.deleteAsync(PHOTO_SESSION_DIR, { idempotent: true }).catch(() => {});
+                try { new FSDirectory(DRAFT_PHOTO_DIR).delete(); } catch { /* may not exist */ }
+                try { new FSDirectory(PHOTO_SESSION_DIR).delete(); } catch { /* may not exist */ }
               },
             },
             {
@@ -1254,21 +1253,19 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
 
   const stagePhotoFile = async (uri: string): Promise<string> => {
     try {
-      const dirInfo = await FileSystem.getInfoAsync(PHOTO_SESSION_DIR);
-      if (!dirInfo.exists) {
-        await FileSystem.makeDirectoryAsync(PHOTO_SESSION_DIR, { intermediates: true });
-      }
+      const sessionDir = new FSDirectory(PHOTO_SESSION_DIR);
+      if (!sessionDir.exists) sessionDir.create();
       const dest = `${PHOTO_SESSION_DIR}${Date.now()}_${Math.random().toString(36).slice(2)}.jpg`;
       try {
-        await FileSystem.copyAsync({ from: uri, to: dest });
+        await new FSFile(uri).copy(new FSFile(dest));
       } catch {
-        // Android content:// URIs (e.g. gallery photos from the system photo picker)
-        // cannot be read by expo-file-system's copyAsync. Use ImageManipulator which
-        // goes through Android's ContentResolver and writes to a file:// temp URI.
+        // content:// URIs from the system photo picker may not be readable by the
+        // new File API directly — resolve via ImageManipulator (uses ContentResolver)
+        // to get a file:// temp URI, then copy that.
         const resolved = await ImageManipulator.manipulateAsync(
           uri, [], { format: ImageManipulator.SaveFormat.JPEG, compress: 1 }
         );
-        await FileSystem.copyAsync({ from: resolved.uri, to: dest });
+        await new FSFile(resolved.uri).copy(new FSFile(dest));
       }
       return dest;
     } catch {
@@ -1775,8 +1772,8 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
     setAdditionalAnswers({});
     setAdditionalQuestion(0);
     AsyncStorage.removeItem(ANSWERS_KEY).catch(() => {});
-    FileSystem.deleteAsync(DRAFT_PHOTO_DIR, { idempotent: true }).catch(() => {});
-    FileSystem.deleteAsync(PHOTO_SESSION_DIR, { idempotent: true }).catch(() => {});
+    try { new FSDirectory(DRAFT_PHOTO_DIR).delete(); } catch { /* may not exist */ }
+    try { new FSDirectory(PHOTO_SESSION_DIR).delete(); } catch { /* may not exist */ }
     setPhotos([]);
     setGpsCoords(null);
     setSelectedBuilding(null);
@@ -2040,13 +2037,6 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
       } catch (submitErr) {
         clearTimeout(timeoutId);
         // Temporarily surface the exact error so we can diagnose why online
-        // submissions are failing. Remove this alert once Issue 3 is resolved.
-        if (!onlineReportId) {
-          const errMsg = submitErr instanceof Error
-            ? `${submitErr.message}\n\nURL: ${API_BASE}/api/reports`
-            : String(submitErr);
-          Alert.alert('Submit Error (debug)', errMsg);
-        }
         if (onlineReportId) {
           // Report reached the server; only photo uploads failed.
           // Queue photos only — re-submitting the full report would create a duplicate.

@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as FileSystem from "expo-file-system/legacy";
+import { File as FSFile, Directory as FSDirectory } from "expo-file-system";
 import * as Notifications from "expo-notifications";
 import * as SecureStore from "expo-secure-store";
 import type { QueuedReport, QueuedPhoto, ReportSubmitRequest } from "../types";
@@ -11,12 +12,10 @@ import { syncRegistrationQueue } from "../services/auth";
 const _docBase = FileSystem.documentDirectory ?? '';
 const PHOTO_STORE_DIR: string | null = _docBase ? `${_docBase}cr_queued_photos/` : null;
 
-async function ensurePhotoDir(): Promise<void> {
+function ensurePhotoDir(): void {
   if (PHOTO_STORE_DIR == null) throw new Error("documentDirectory unavailable");
-  const info = await FileSystem.getInfoAsync(PHOTO_STORE_DIR);
-  if (!info.exists) {
-    await FileSystem.makeDirectoryAsync(PHOTO_STORE_DIR, { intermediates: true });
-  }
+  const dir = new FSDirectory(PHOTO_STORE_DIR);
+  if (!dir.exists) dir.create();
 }
 
 const QUEUE_KEY = "cr_report_queue";
@@ -85,12 +84,12 @@ export function addToQueue(
     let persistedPhotos = photos;
     let anyPhotoCopyFailed = false;
     try {
-      await ensurePhotoDir();
+      ensurePhotoDir();
       persistedPhotos = await Promise.all(
         photos.map(async (photo, i) => {
           const dest = `${PHOTO_STORE_DIR!}${local_id}_${i}.jpg`;
           try {
-            await FileSystem.copyAsync({ from: photo.uri, to: dest });
+            await new FSFile(photo.uri).copy(new FSFile(dest));
             return { ...photo, persistent_uri: dest };
           } catch {
             anyPhotoCopyFailed = true;
@@ -130,12 +129,12 @@ export async function queuePhotosForReport(reportId: string, photos: QueuedPhoto
   await withQueueLock(async () => {
     let persistedPhotos = photos;
     try {
-      await ensurePhotoDir();
+      ensurePhotoDir();
       persistedPhotos = await Promise.all(
         photos.map(async (photo, i) => {
           const dest = `${PHOTO_STORE_DIR!}${local_id}_${i}.jpg`;
           try {
-            await FileSystem.copyAsync({ from: photo.uri, to: dest });
+            await new FSFile(photo.uri).copy(new FSFile(dest));
             return { ...photo, persistent_uri: dest };
           } catch {
             return photo;
@@ -210,11 +209,7 @@ export function removeFromQueue(local_id: string): Promise<void> {
     if (item) {
       for (const photo of item.photos) {
         if (photo.persistent_uri) {
-          try {
-            await FileSystem.deleteAsync(photo.persistent_uri, { idempotent: true });
-          } catch {
-            // Non-critical — stale files are small and bounded
-          }
+          try { new FSFile(photo.persistent_uri).delete(); } catch { /* non-critical */ }
         }
       }
     }
@@ -529,14 +524,11 @@ export async function syncQueue(apiBaseUrl: string): Promise<void> {
           // which Android may have cleared under low-storage pressure.
           const uploadUri = photo.persistent_uri ?? photo.uri;
 
-          // Pre-flight existence check for file:// URIs only. content:// URIs go
-          // through Android's ContentResolver which FileSystem.getInfoAsync does not
-          // support — getInfoAsync always returns exists:false for them even when the
-          // content is accessible via fetch/FormData. Skip the check and let the
-          // upload attempt propagate any real access error.
+          // Pre-flight existence check for file:// URIs only.
+          // Use the new SDK 52+ File class — the legacy getInfoAsync is a no-op
+          // on the new native module and always returns exists:false.
           if (!uploadUri.startsWith('content://')) {
-            const fileInfo = await FileSystem.getInfoAsync(uploadUri);
-            if (!fileInfo.exists) { photosSkipped++; continue; }
+            if (!new FSFile(uploadUri).exists) { photosSkipped++; continue; }
           }
 
           const formData = new FormData();
