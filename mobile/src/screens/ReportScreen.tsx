@@ -80,26 +80,6 @@ const scale = (size: number) => Math.round(screenWidth / 375 * size);
 
 // ── GeoJSON helpers ────────────────────────────────────────────────────────────
 
-async function fetchBuildingsForBounds(
-  west: number, south: number, east: number, north: number
-): Promise<GeoJSON.FeatureCollection | null> {
-  try {
-    const res = await api.get('/api/buildings', {
-      params: {
-        south: south.toFixed(6),
-        west: west.toFixed(6),
-        north: north.toFixed(6),
-        east: east.toFixed(6),
-      },
-      timeout: 30000,
-    });
-    const fc = res.data as GeoJSON.FeatureCollection;
-    return fc.features?.length ? fc : null;
-  } catch {
-    return null;
-  }
-}
-
 function computeCentroid(ring: number[][]): [number, number] {
   if (!ring || ring.length === 0) return [0, 0];
   const pts =
@@ -406,6 +386,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
 
   // Map refs
   const cameraRef = useRef<CameraRef | null>(null);
+  const mapViewRef = useRef<any>(null);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchDebounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchAbortController = useRef<AbortController | null>(null);
@@ -958,16 +939,25 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
         zoom: 15,
         duration: 1000,
       });
-      // Programmatic flyTo may not fire onRegionDidChange with valid bounds.
-      // Wait for animation to settle then explicitly fetch footprints.
-      await new Promise<void>((resolve) => setTimeout(resolve, 800));
+      // Wait for flyTo animation to finish so tiles are fully rendered before querying.
+      await new Promise<void>((resolve) => setTimeout(resolve, 1200));
       if (!isMountedRef.current) return;
-      const delta = 0.006; // matches zoom-15 delta used by handleRegionChange
-      if (isMountedRef.current) setBuildingsLoading(true);
-      const fc = await fetchBuildingsForBounds(lng - delta, lat - delta, lng + delta, lat + delta);
-      if (isMountedRef.current) {
-        if (fc) { setBuildingsFC(fc); setBuildingsKey(k => k + 1); }
-        setBuildingsLoading(false);
+      if (mapViewRef.current) {
+        if (isMountedRef.current) setBuildingsLoading(true);
+        try {
+          const { width, height } = Dimensions.get('window');
+          const fc: GeoJSON.FeatureCollection = await mapViewRef.current.queryRenderedFeaturesInRect(
+            [0, width, height, 0],
+            null,
+            ['building', 'building-part']
+          );
+          if (isMountedRef.current && fc.features?.length) {
+            setBuildingsFC(fc);
+            setBuildingsKey(k => k + 1);
+          }
+        } catch { /* silent */ } finally {
+          if (isMountedRef.current) setBuildingsLoading(false);
+        }
       }
     } catch {
       if (isMountedRef.current) setBuildingsLoading(false);
@@ -975,21 +965,26 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
   };
 
   const handleRegionChange = (event: NativeSyntheticEvent<ViewStateChangeEvent>) => {
-    const { zoom, center } = event.nativeEvent;
+    const { zoom } = event.nativeEvent;
     setMapZoom(zoom);
-    // center = [longitude, latitude] — always populated on Android unlike bounds.
-    if (zoom < 14 || !center) return;
-    const [lng, lat] = center as [number, number];
-    // Use a zoom-scaled bounding box rather than getBounds() which can be null
-    // on Android when the MapRef imperative handle isn't fully initialised yet.
-    const delta = zoom >= 16 ? 0.004 : zoom >= 15 ? 0.006 : 0.010;
+    if (zoom < 14) return;
     if (debounceTimer.current) clearTimeout(debounceTimer.current);
     debounceTimer.current = setTimeout(async () => {
-      if (isMountedRef.current) setBuildingsLoading(true);
-      const fc = await fetchBuildingsForBounds(lng - delta, lat - delta, lng + delta, lat + delta);
-      if (isMountedRef.current) {
-        if (fc) { setBuildingsFC(fc); setBuildingsKey(k => k + 1); }
-        setBuildingsLoading(false);
+      if (!isMountedRef.current || !mapViewRef.current) return;
+      setBuildingsLoading(true);
+      try {
+        const { width, height } = Dimensions.get('window');
+        const fc: GeoJSON.FeatureCollection = await mapViewRef.current.queryRenderedFeaturesInRect(
+          [0, width, height, 0],
+          null,
+          ['building', 'building-part']
+        );
+        if (isMountedRef.current && fc.features?.length) {
+          setBuildingsFC(fc);
+          setBuildingsKey(k => k + 1);
+        }
+      } catch { /* silent */ } finally {
+        if (isMountedRef.current) setBuildingsLoading(false);
       }
     }, 600);
   };
@@ -2395,6 +2390,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                   </View>
                 )}
                 <MLMap
+                  ref={mapViewRef}
                   mapStyle={MAP_STYLE_URL}
                   style={{ flex: 1 }}
                   androidView="texture"
