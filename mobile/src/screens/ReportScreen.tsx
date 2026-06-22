@@ -187,15 +187,25 @@ async function queryMapBuildings(
 ): Promise<GeoJSON.FeatureCollection | null> {
   if (!mapRef.current) return null;
   try {
+    // Query only the fill layer — 'building-3d' (fill-extrusion) references the
+    // same source-layer data and querying both returns every building twice.
     const features: GeoJSON.Feature[] = await mapRef.current.queryRenderedFeatures({
-      layers: ['building', 'building-3d'],
+      layers: ['building'],
     });
     if (!features?.length) {
       console.warn('[buildings] queryRenderedFeatures returned 0 features');
       return null;
     }
+    // Deduplicate by tile feature ID (defensive safety net)
+    const seen = new Set<number | string>();
+    const unique = features.filter((f: GeoJSON.Feature) => {
+      if (f.id == null) return true;
+      if (seen.has(f.id as number)) return false;
+      seen.add(f.id as number);
+      return true;
+    });
     // Normalise to the shape handleBuildingPress expects: osm_id, name, building
-    const normalized = features.map((f: GeoJSON.Feature, idx: number) => ({
+    const normalized = unique.map((f: GeoJSON.Feature, idx: number) => ({
       ...f,
       properties: {
         osm_id: typeof f.id === 'number' ? f.id : idx + 1,
@@ -203,7 +213,7 @@ async function queryMapBuildings(
         building: 'yes',
       },
     }));
-    console.warn(`[buildings] queryRenderedFeatures OK — ${normalized.length} buildings`);
+    console.warn(`[buildings] queryRenderedFeatures OK — ${normalized.length} buildings (${features.length} raw)`);
     return { type: 'FeatureCollection' as const, features: normalized };
   } catch (e) {
     console.warn('[buildings] queryRenderedFeatures threw:', e);
@@ -1181,19 +1191,28 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
     const props = f.properties as { osm_id: number; name: string; building: string };
     const geom = f.geometry as GeoJSON.Geometry;
     if (!geom) return;
-    // MapLibre RN can return MultiPolygon for complex buildings even when the
-    // source data is Polygon (internal tile decomposition). Handle both.
-    let ring: GeoJSON.Position[];
-    if (geom.type === 'Polygon') {
-      ring = (geom as GeoJSON.Polygon).coordinates[0];
-    } else if (geom.type === 'MultiPolygon') {
-      const allRings = (geom as GeoJSON.MultiPolygon).coordinates;
-      ring = allRings.reduce((a, b) => (b[0].length > a[0].length ? b : a))[0];
+
+    // Prefer the tap lngLat as the building location — queryRenderedFeatures returns
+    // tile-clipped polygons (only the visible fragment), so computeCentroid on a
+    // clipped ring gives a wrong point that sends the camera to the wrong place.
+    // The tap point is guaranteed to be inside the building and in the viewport.
+    const tapLngLat = (event.nativeEvent as any).lngLat as [number, number] | undefined;
+    let centLng: number;
+    let centLat: number;
+    if (tapLngLat?.length === 2) {
+      [centLng, centLat] = tapLngLat;
     } else {
-      return;
+      // Fallback: compute centroid from geometry (may be wrong for clipped tiles)
+      let ring: GeoJSON.Position[] | undefined;
+      if (geom.type === 'Polygon') {
+        ring = (geom as GeoJSON.Polygon).coordinates[0];
+      } else if (geom.type === 'MultiPolygon') {
+        const allRings = (geom as GeoJSON.MultiPolygon).coordinates;
+        ring = allRings.reduce((a, b) => (b[0].length > a[0].length ? b : a))[0];
+      }
+      if (!ring || ring.length < 3) return;
+      [centLng, centLat] = computeCentroid(ring);
     }
-    if (!ring || ring.length < 3) return;
-    const [centLng, centLat] = computeCentroid(ring);
 
     setPendingBuilding({
       id: props.osm_id,
@@ -2533,18 +2552,19 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                     <UserLocation animated heading />
                   )}
 
-                  {/* Default building footprints */}
+                  {/* Default building footprints — subtle blue tint so the base map
+                      shows through clearly; outline marks buildings as selectable */}
                   {buildingsFC && buildingsFC.features.length > 0 && (
                     <GeoJSONSource key={buildingsKey} id="buildings" data={buildingsFC} onPress={handleBuildingPress}>
                       <Layer
                         id="buildings-fill"
                         type="fill"
-                        paint={{ "fill-color": "#CBD5E0", "fill-opacity": 0.5 }}
+                        paint={{ "fill-color": "#0468B1", "fill-opacity": 0.08 }}
                       />
                       <Layer
                         id="buildings-outline"
                         type="line"
-                        paint={{ "line-color": "#718096", "line-width": 0.6 }}
+                        paint={{ "line-color": "#0468B1", "line-width": 1.2 }}
                       />
                     </GeoJSONSource>
                   )}
