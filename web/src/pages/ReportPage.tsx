@@ -3623,7 +3623,6 @@ export default function ReportPage() {
             onClick={() => setStep("location")}
           >
             {t('common.next')}
-            <span className="material-symbols-outlined" style={{ fontSize: 20 }}>arrow_forward</span>
           </button>
         </div>
       )}

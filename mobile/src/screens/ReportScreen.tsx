@@ -141,52 +141,45 @@ async function fetchBuildingsForBounds(
   west: number, south: number, east: number, north: number
 ): Promise<GeoJSON.FeatureCollection | null> {
   const query =
-    `[out:json][timeout:25][bbox:${south.toFixed(6)},${west.toFixed(6)},${north.toFixed(6)},${east.toFixed(6)}];` +
+    `[out:json][timeout:18][bbox:${south.toFixed(6)},${west.toFixed(6)},${north.toFixed(6)},${east.toFixed(6)}];` +
     `(way["building"];relation["building"]["type"="multipolygon"];);out body;>;out skel qt;`;
 
-  // Try two Overpass endpoints — primary can be throttled on mobile networks.
-  // Use explicit Content-Type + string body instead of URLSearchParams —
-  // React Native's fetch polyfill on Android does not automatically set
-  // Content-Type: application/x-www-form-urlencoded when the body is a
-  // URLSearchParams object, causing Overpass to reject the request.
+  // Fire both Overpass mirrors in parallel — take whichever responds first.
+  // Sequential fallback was too slow (45 s × 2 = 90 s worst case on throttled primary).
+  // Use explicit Content-Type + string body — React Native's fetch polyfill on Android
+  // does not auto-set application/x-www-form-urlencoded for URLSearchParams bodies.
   const endpoints = [
     "https://overpass-api.de/api/interpreter",
     "https://overpass.kumi.systems/api/interpreter",
   ];
+  const controllers = endpoints.map(() => new AbortController());
+  const globalTimeout = setTimeout(() => controllers.forEach((c) => c.abort()), 20000);
 
-  let lastDiag = 'no attempt';
-  for (const endpoint of endpoints) {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 45000);
-    try {
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: `data=${encodeURIComponent(query)}`,
-        signal: controller.signal,
-      });
-      clearTimeout(timeoutId);
-      if (!res.ok) { lastDiag = `HTTP ${res.status} from ${endpoint}`; continue; }
-      const text = await res.text();
-      let data: OverpassResponse;
-      try { data = JSON.parse(text); }
-      catch { lastDiag = `JSON parse fail: ${text.slice(0, 120)}`; continue; }
-      if (!data.elements || !Array.isArray(data.elements) || data.elements.length === 0) {
-        lastDiag = `elements empty/missing (remark: ${(data as any).remark ?? 'none'})`;
-        continue;
-      }
-      const fc = buildBuildingsFC(data);
-      if (fc.features.length === 0) {
-        lastDiag = `${data.elements.length} elements but 0 way features`;
-        continue;
-      }
-      return fc;
-    } catch (e) {
-      clearTimeout(timeoutId);
-      lastDiag = `fetch threw: ${e instanceof Error ? e.message : String(e)}`;
-    }
+  const tryEndpoint = async (url: string, ctrl: AbortController): Promise<GeoJSON.FeatureCollection> => {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: `data=${encodeURIComponent(query)}`,
+      signal: ctrl.signal,
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const text = await res.text();
+    const data: OverpassResponse = JSON.parse(text);
+    if (!data.elements?.length) throw new Error('empty');
+    const fc = buildBuildingsFC(data);
+    if (fc.features.length === 0) throw new Error('no way features');
+    return fc;
+  };
+
+  try {
+    const fc = await Promise.any(endpoints.map((url, i) => tryEndpoint(url, controllers[i])));
+    clearTimeout(globalTimeout);
+    controllers.forEach((c) => c.abort()); // cancel any still-in-flight sibling
+    return fc;
+  } catch {
+    clearTimeout(globalTimeout);
+    return null;
   }
-  return null;
 }
 
 // ── Question package types ────────────────────────────────────────────────────
@@ -1036,10 +1029,10 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
         duration: 1000,
       });
       // Programmatic flyTo may not fire onRegionDidChange with valid bounds.
-      // Wait for animation then explicitly fetch footprints.
-      await new Promise<void>((resolve) => setTimeout(resolve, 1200));
+      // Wait for animation to settle then explicitly fetch footprints.
+      await new Promise<void>((resolve) => setTimeout(resolve, 800));
       if (!isMountedRef.current) return;
-      const delta = 0.01;
+      const delta = 0.006; // matches zoom-15 delta used by handleRegionChange
       if (isMountedRef.current) setBuildingsLoading(true);
       const fc = await fetchBuildingsForBounds(lng - delta, lat - delta, lng + delta, lat + delta);
       if (isMountedRef.current) {
@@ -1068,7 +1061,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
         if (fc) { setBuildingsFC(fc); setBuildingsKey(k => k + 1); }
         setBuildingsLoading(false);
       }
-    }, 1000);
+    }, 600);
   };
 
   const handleSearch = (query: string) => {
@@ -1461,10 +1454,17 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
         );
         return;
       }
-      const result = await ImagePicker.launchCameraAsync({ mediaTypes: ["images"], allowsEditing: false, quality: 1 });
+      setIsPhotoProcessing(true); // show spinner immediately so return-from-camera gap has a loading state
+      let result;
+      try {
+        result = await ImagePicker.launchCameraAsync({ mediaTypes: ["images"], allowsEditing: false, quality: 1 });
+      } catch (e) {
+        setIsPhotoProcessing(false);
+        Alert.alert(t('report.camera_error_title'), String(e));
+        return;
+      }
       if (!result.canceled && result.assets?.[0]) {
         const asset = result.assets[0];
-        setIsPhotoProcessing(true);
         try {
           const processed = await processPhoto(asset.uri, asset.mimeType ?? '');
           if (processed) {
@@ -1480,8 +1480,11 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
         } finally {
           setIsPhotoProcessing(false);
         }
+      } else {
+        setIsPhotoProcessing(false); // cancelled
       }
     } catch (e) {
+      setIsPhotoProcessing(false);
       Alert.alert(t('report.camera_error_title'), String(e));
     }
   };
