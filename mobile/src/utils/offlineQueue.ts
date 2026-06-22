@@ -89,12 +89,10 @@ export function addToQueue(
         photos.map(async (photo, i) => {
           const dest = `${PHOTO_STORE_DIR!}${local_id}_${i}.jpg`;
           try {
-            // Use bytes()+write() — File.copy() on SDK 52+ native module does not
-            // reliably write to the exact destination path when passed a File arg.
-            const bytes = await new FSFile(photo.uri).bytes();
-            const destFile = new FSFile(dest);
-            destFile.write(bytes);
-            if (!destFile.exists) throw new Error('write produced no file');
+            // File.move() is an OS-level rename — atomic, binary-safe, cannot
+            // silently produce an empty or misnamed file. File.copy() and
+            // bytes()+write() both had silent failure modes on SDK 52+.
+            await new FSFile(photo.uri).move(new FSFile(dest));
             return { ...photo, persistent_uri: dest };
           } catch {
             anyPhotoCopyFailed = true;
@@ -139,10 +137,7 @@ export async function queuePhotosForReport(reportId: string, photos: QueuedPhoto
         photos.map(async (photo, i) => {
           const dest = `${PHOTO_STORE_DIR!}${local_id}_${i}.jpg`;
           try {
-            const bytes = await new FSFile(photo.uri).bytes();
-            const destFile = new FSFile(dest);
-            destFile.write(bytes);
-            if (!destFile.exists) throw new Error('write produced no file');
+            await new FSFile(photo.uri).move(new FSFile(dest));
             return { ...photo, persistent_uri: dest };
           } catch {
             return photo;

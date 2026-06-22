@@ -1248,20 +1248,18 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
       const sessionDir = new FSDirectory(PHOTO_SESSION_DIR);
       if (!sessionDir.exists) sessionDir.create();
       const dest = `${PHOTO_SESSION_DIR}${Date.now()}_${Math.random().toString(36).slice(2)}.jpg`;
+      // Use File.move() — an OS-level rename, atomic and binary-safe. No read/write,
+      // no encoding issues. Falls back to ImageManipulator for content:// URIs that
+      // the new File API cannot address directly.
       try {
-        // Use bytes()+write() for staging — File.copy(File) does not reliably write
-        // to the exact destination path on the SDK 52+ native module.
-        const bytes = await new FSFile(uri).bytes();
-        new FSFile(dest).write(bytes);
+        await new FSFile(uri).move(new FSFile(dest));
       } catch {
-        // content:// URIs from the gallery picker cannot be read by the new File
-        // API directly — resolve via ImageManipulator (uses Android ContentResolver)
-        // to a file:// temp URI, then persist with bytes()+write().
+        // content:// picker URIs or cross-device failure: run ImageManipulator
+        // (resolves via ContentResolver → file:// temp path), then move that.
         const resolved = await ImageManipulator.manipulateAsync(
           uri, [], { format: ImageManipulator.SaveFormat.JPEG, compress: 1 }
         );
-        const bytes = await new FSFile(resolved.uri).bytes();
-        new FSFile(dest).write(bytes);
+        await new FSFile(resolved.uri).move(new FSFile(dest));
       }
       return dest;
     } catch {
