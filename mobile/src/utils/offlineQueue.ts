@@ -89,11 +89,16 @@ export function addToQueue(
         photos.map(async (photo, i) => {
           const dest = `${PHOTO_STORE_DIR!}${local_id}_${i}.jpg`;
           try {
-            await new FSFile(photo.uri).copy(new FSFile(dest));
+            // Use bytes()+write() — File.copy() on SDK 52+ native module does not
+            // reliably write to the exact destination path when passed a File arg.
+            const bytes = await new FSFile(photo.uri).bytes();
+            const destFile = new FSFile(dest);
+            destFile.write(bytes);
+            if (!destFile.exists) throw new Error('write produced no file');
             return { ...photo, persistent_uri: dest };
           } catch {
             anyPhotoCopyFailed = true;
-            return { ...photo, copy_failed: true }; // no persistent_uri — at risk of Android cache clearing
+            return { ...photo, copy_failed: true };
           }
         })
       );
@@ -134,7 +139,10 @@ export async function queuePhotosForReport(reportId: string, photos: QueuedPhoto
         photos.map(async (photo, i) => {
           const dest = `${PHOTO_STORE_DIR!}${local_id}_${i}.jpg`;
           try {
-            await new FSFile(photo.uri).copy(new FSFile(dest));
+            const bytes = await new FSFile(photo.uri).bytes();
+            const destFile = new FSFile(dest);
+            destFile.write(bytes);
+            if (!destFile.exists) throw new Error('write produced no file');
             return { ...photo, persistent_uri: dest };
           } catch {
             return photo;

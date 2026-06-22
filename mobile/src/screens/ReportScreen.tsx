@@ -399,6 +399,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
     centroid: [number, number];
   } | null>(null);
   const [buildingsFC, setBuildingsFC] = useState<GeoJSON.FeatureCollection | null>(null);
+  const [buildingsKey, setBuildingsKey] = useState(0);
   const [selectedBuildingFC, setSelectedBuildingFC] = useState<GeoJSON.FeatureCollection | null>(null);
   const [locationAddress, setLocationAddress] = useState("");
   const [locationLandmark, setLocationLandmark] = useState("");
@@ -1042,7 +1043,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
       if (isMountedRef.current) setBuildingsLoading(true);
       const fc = await fetchBuildingsForBounds(lng - delta, lat - delta, lng + delta, lat + delta);
       if (isMountedRef.current) {
-        if (fc) setBuildingsFC(fc);
+        if (fc) { setBuildingsFC(fc); setBuildingsKey(k => k + 1); }
         setBuildingsLoading(false);
       }
     } catch {
@@ -1064,7 +1065,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
       if (isMountedRef.current) setBuildingsLoading(true);
       const fc = await fetchBuildingsForBounds(lng - delta, lat - delta, lng + delta, lat + delta);
       if (isMountedRef.current) {
-        if (fc) setBuildingsFC(fc);
+        if (fc) { setBuildingsFC(fc); setBuildingsKey(k => k + 1); }
         setBuildingsLoading(false);
       }
     }, 1000);
@@ -1248,15 +1249,19 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
       if (!sessionDir.exists) sessionDir.create();
       const dest = `${PHOTO_SESSION_DIR}${Date.now()}_${Math.random().toString(36).slice(2)}.jpg`;
       try {
-        await new FSFile(uri).copy(new FSFile(dest));
+        // Use bytes()+write() for staging — File.copy(File) does not reliably write
+        // to the exact destination path on the SDK 52+ native module.
+        const bytes = await new FSFile(uri).bytes();
+        new FSFile(dest).write(bytes);
       } catch {
-        // content:// URIs from the system photo picker may not be readable by the
-        // new File API directly — resolve via ImageManipulator (uses ContentResolver)
-        // to get a file:// temp URI, then copy that.
+        // content:// URIs from the gallery picker cannot be read by the new File
+        // API directly — resolve via ImageManipulator (uses Android ContentResolver)
+        // to a file:// temp URI, then persist with bytes()+write().
         const resolved = await ImageManipulator.manipulateAsync(
           uri, [], { format: ImageManipulator.SaveFormat.JPEG, compress: 1 }
         );
-        await new FSFile(resolved.uri).copy(new FSFile(dest));
+        const bytes = await new FSFile(resolved.uri).bytes();
+        new FSFile(dest).write(bytes);
       }
       return dest;
     } catch {
@@ -2464,7 +2469,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
 
                   {/* Default building footprints */}
                   {buildingsFC && buildingsFC.features.length > 0 && (
-                    <GeoJSONSource id="buildings" data={buildingsFC} onPress={handleBuildingPress}>
+                    <GeoJSONSource key={buildingsKey} id="buildings" data={buildingsFC} onPress={handleBuildingPress}>
                       <Layer
                         id="buildings-fill"
                         type="fill"
@@ -2601,47 +2606,6 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                 </TouchableOpacity>
               </View>
 
-              {/* Building selected — compact name edit panel only (no location note) */}
-              {selectedBuilding && (
-                <View style={styles.mapBottomPanel}>
-                  <Text style={styles.panelFieldLabel}>{t('locationScreen.editBuildingName')}</Text>
-                  <TextInput
-                    style={styles.panelInput}
-                    value={editableBuildingName}
-                    onChangeText={setEditableBuildingName}
-                    placeholder={t('locationScreen.buildingNameLabel')}
-                    placeholderTextColor="#999999"
-                  />
-                </View>
-              )}
-
-              {/* Pin dropped — show coordinates + optional location note */}
-              {pinDropActive && !selectedBuilding && (
-                <View style={styles.mapBottomPanel}>
-                  <ScrollView keyboardShouldPersistTaps="handled" style={{ maxHeight: 200 }}>
-                    <View style={styles.pinInfoRow}>
-                      <Text style={styles.pinInfoLabel}>{t('report.pin_location_label')}</Text>
-                      <Text style={styles.pinInfoCoords}>
-                        {pinCoords?.lat.toFixed(5)}, {pinCoords?.lng.toFixed(5)}
-                      </Text>
-                      <Text style={styles.pinInfoHint}>
-                        Tap anywhere on the map to move the pin
-                      </Text>
-                    </View>
-                    <Text style={styles.panelFieldLabel}>{t('locationScreen.locationNote')}</Text>
-                    <TextInput
-                      style={[styles.panelInput, { height: 72 }]}
-                      value={locationNote}
-                      onChangeText={setLocationNote}
-                      placeholder={t('locationScreen.locationNoteHint')}
-                      placeholderTextColor="#999999"
-                      multiline
-                      numberOfLines={3}
-                    />
-                  </ScrollView>
-                </View>
-              )}
-
               {/* Bottom panel */}
               <ScrollView
                 style={styles.locationPanel}
@@ -2680,6 +2644,34 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                       </Text>
                     </View>
                   </View>
+                )}
+
+                {/* Pin-drop card + location note — shown in bottom panel, not as a map overlay */}
+                {pinDropActive && !selectedBuilding && pinCoords && (
+                  <>
+                    <View style={styles.selectionCard}>
+                      <Text style={styles.selectionCardTitle}>PIN DROPPED</Text>
+                      <View style={styles.selectionCardCoordsRow}>
+                        <MaterialIcons name="location-pin" size={scale(12)} color="#717782" />
+                        <Text style={styles.selectionCardCoords}>
+                          {pinCoords.lat.toFixed(5)}° N, {pinCoords.lng.toFixed(5)}° E
+                        </Text>
+                      </View>
+                      <Text style={[styles.selectionCardMeta, { marginTop: 4 }]}>
+                        Tap anywhere on the map to reposition the pin
+                      </Text>
+                    </View>
+                    <Text style={styles.panelFieldLabel}>{t('locationScreen.locationNote')}</Text>
+                    <TextInput
+                      style={[styles.panelInput, { height: 72 }]}
+                      value={locationNote}
+                      onChangeText={setLocationNote}
+                      placeholder={t('locationScreen.locationNoteHint')}
+                      placeholderTextColor="#999999"
+                      multiline
+                      numberOfLines={3}
+                    />
+                  </>
                 )}
 
                 {/* GPS geo-fence: hard error — location too far from reporter's GPS */}
@@ -3092,6 +3084,8 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                   setGpsCoords({ lat: pendingBuilding.centroid[1], lng: pendingBuilding.centroid[0] });
                   setSelectedBuildingFC({ type: "FeatureCollection", features: [pendingBuilding.feature] });
                   setLocationMethod('map_selection');
+                  setPinDropActive(false);
+                  setPinCoords(null);
                   if (fromReview && infrastructureName) {
                     setLocationChangedForReview(true);
                   }
