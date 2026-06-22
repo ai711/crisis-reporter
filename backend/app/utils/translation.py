@@ -7,17 +7,66 @@ from app.config import settings
 
 log = logging.getLogger(__name__)
 
-# Supported language codes for LibreTranslate.
-# If a target language is not in this map the request is rejected early
-# rather than sending an invalid code to the API.
+# All ISO 639-1 codes that LibreTranslate supports (v1.6+).
+# This map serves two purposes:
+#   1. Early-reject unsupported codes before making a network call.
+#   2. Triggers the ValueError→Google fallback path in translate_text when
+#      LibreTranslate is primary but the language is unsupported.
+# When adding a new language via the dashboard, verify it appears here.
+# Note: LibreTranslate uses non-standard codes for a few languages:
+#   Chinese Traditional → "zt"  (not "zh-TW")
+#   Norwegian Bokmål   → "nb"  (not "no")
 LIBRETRANSLATE_LANG_MAP: dict[str, str] = {
+    "af": "af",  # Afrikaans
+    "sq": "sq",  # Albanian
+    "am": "am",  # Amharic
     "ar": "ar",  # Arabic
+    "az": "az",  # Azerbaijani
+    "eu": "eu",  # Basque
+    "bn": "bn",  # Bengali
+    "bg": "bg",  # Bulgarian
+    "ca": "ca",  # Catalan
     "zh": "zh",  # Chinese (Simplified)
+    "zt": "zt",  # Chinese (Traditional) — LibreTranslate code, not zh-TW
+    "cs": "cs",  # Czech
+    "da": "da",  # Danish
+    "nl": "nl",  # Dutch
     "en": "en",  # English
+    "eo": "eo",  # Esperanto
+    "et": "et",  # Estonian
+    "fi": "fi",  # Finnish
     "fr": "fr",  # French
+    "gl": "gl",  # Galician
+    "de": "de",  # German
+    "el": "el",  # Greek
+    "he": "he",  # Hebrew
+    "hi": "hi",  # Hindi
+    "hu": "hu",  # Hungarian
+    "id": "id",  # Indonesian
+    "ga": "ga",  # Irish
+    "it": "it",  # Italian
+    "ja": "ja",  # Japanese
+    "ko": "ko",  # Korean
+    "lv": "lv",  # Latvian
+    "lt": "lt",  # Lithuanian
+    "ms": "ms",  # Malay
+    "nb": "nb",  # Norwegian Bokmål — LibreTranslate code, not "no"
+    "fa": "fa",  # Persian / Farsi
+    "pl": "pl",  # Polish
+    "pt": "pt",  # Portuguese
+    "ro": "ro",  # Romanian
     "ru": "ru",  # Russian
+    "sk": "sk",  # Slovak
+    "sl": "sl",  # Slovenian
     "es": "es",  # Spanish
-    # Add further ISO 639-1 codes here as LibreTranslate support is confirmed
+    "sv": "sv",  # Swedish
+    "tl": "tl",  # Tagalog / Filipino
+    "th": "th",  # Thai
+    "tr": "tr",  # Turkish
+    "uk": "uk",  # Ukrainian
+    "ur": "ur",  # Urdu
+    "vi": "vi",  # Vietnamese
+    "cy": "cy",  # Welsh
 }
 
 
@@ -47,8 +96,9 @@ async def _translate_via_libretranslate(text: str, target_lang: str, source_lang
     mapped_lang = LIBRETRANSLATE_LANG_MAP.get(target_lang)
     if mapped_lang is None:
         raise ValueError(
-            f"Language '{target_lang}' is not supported by the LibreTranslate fallback. "
-            f"Supported codes: {', '.join(sorted(LIBRETRANSLATE_LANG_MAP))}"
+            f"Language '{target_lang}' is not in LIBRETRANSLATE_LANG_MAP — "
+            f"add it if LibreTranslate supports it, or use Google Translate. "
+            f"Known codes: {', '.join(sorted(LIBRETRANSLATE_LANG_MAP))}"
         )
 
     translate_url = url_base.rstrip("/") + "/translate"
@@ -109,8 +159,19 @@ async def translate_text(text: str, target_lang: str, source_lang: str = "en") -
                 target_lang,
                 exc,
             )
-        result = await _translate_via_libretranslate(protected, target_lang, source_lang)
-        return _restore_vars(result, originals), "libretranslate"
+        # Google failed — try LibreTranslate as fallback. If LibreTranslate also
+        # fails (e.g. language not in map, or network error), propagate the error
+        # so the caller can log it and mark the translation as failed.
+        try:
+            result = await _translate_via_libretranslate(protected, target_lang, source_lang)
+            return _restore_vars(result, originals), "libretranslate"
+        except Exception as lt_exc:
+            log.warning(
+                "LibreTranslate fallback also failed for [%s]: %s",
+                target_lang,
+                lt_exc,
+            )
+            raise lt_exc
 
     # LibreTranslate is primary. Fall back to Google when the language is unsupported.
     try:
