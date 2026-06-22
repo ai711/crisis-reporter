@@ -133,13 +133,9 @@ async function fetchBuildingsForBounds(
       if (res.ok) {
         const fc: GeoJSON.FeatureCollection = await res.json();
         if (fc.features?.length > 0) return fc;
-        console.warn('[buildings] backend proxy returned 0 features');
-      } else {
-        console.warn(`[buildings] backend proxy HTTP ${res.status}`);
       }
     } catch (e) {
       clearTimeout(timeoutId);
-      console.warn('[buildings] backend proxy failed:', e);
     }
   }
 
@@ -171,11 +167,9 @@ async function fetchBuildingsForBounds(
       if (fc.features.length > 0) return fc;
     } catch (e) {
       clearTimeout(timeoutId);
-      console.warn(`[buildings] Overpass ${endpoint} failed:`, e);
     }
   }
 
-  console.warn('[buildings] all sources failed — no footprints loaded');
   return null;
 }
 
