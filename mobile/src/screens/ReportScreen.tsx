@@ -112,51 +112,6 @@ function computeCentroid(ring: number[][]): [number, number] {
   return [lng, lat];
 }
 
-async function fetchBuildingsForBounds(
-  west: number, south: number, east: number, north: number
-): Promise<GeoJSON.FeatureCollection | null> {
-  const query =
-    `[out:json][timeout:18][bbox:${south.toFixed(6)},${west.toFixed(6)},${north.toFixed(6)},${east.toFixed(6)}];` +
-    `(way["building"];relation["building"]["type"="multipolygon"];);out body;>;out skel qt;`;
-
-  // Use GET — avoids Content-Type negotiation issues with Android's fetch polyfill
-  // (POST with explicit Content-Type header triggers HTTP 406 on Overpass endpoints).
-  const endpoints = [
-    "https://overpass-api.de/api/interpreter",
-    "https://overpass.kumi.systems/api/interpreter",
-  ];
-  const controllers = endpoints.map(() => new AbortController());
-  const globalTimeout = setTimeout(() => controllers.forEach((c) => c.abort()), 20000);
-
-  const tryEndpoint = async (url: string, ctrl: AbortController): Promise<GeoJSON.FeatureCollection> => {
-    const res = await fetch(`${url}?data=${encodeURIComponent(query)}`, {
-      method: "GET",
-      signal: ctrl.signal,
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const text = await res.text();
-    const data: OverpassResponse = JSON.parse(text);
-    if (!data.elements?.length) throw new Error('empty');
-    const fc = buildBuildingsFC(data);
-    if (fc.features.length === 0) throw new Error('no way features');
-    return fc;
-  };
-
-  // Suppress unhandled rejection on the "losing" endpoint's AbortError.
-  const promises = endpoints.map((url, i) => tryEndpoint(url, controllers[i]));
-  promises.forEach((p) => p.catch(() => {}));
-
-  try {
-    const fc = await Promise.any(promises);
-    clearTimeout(globalTimeout);
-    controllers.forEach((c) => c.abort());
-    return fc;
-  } catch {
-    clearTimeout(globalTimeout);
-    return null;
-  }
-}
-
 // ── Question package types ────────────────────────────────────────────────────
 
 interface ApiOption { option_text: string; option_value: string; }
