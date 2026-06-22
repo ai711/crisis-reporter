@@ -57,14 +57,15 @@ async def get_buildings(
     Railway's per-request limit and the mobile's 22 s abort controller.
     """
     query = (
-        f"[out:json][timeout:10]"
+        f"[out:json][timeout:25]"
         f"[bbox:{south:.6f},{west:.6f},{north:.6f},{east:.6f}];"
         f'(way["building"];relation["building"]["type"="multipolygon"];);'
         f"out body;>;out skel qt;"
     )
 
-    # connect + read budgeted to stay under 18 s total
-    timeout = httpx.Timeout(connect=5.0, read=13.0, write=5.0, pool=2.0)
+    # Overpass internal timeout is 25 s; read=28 s gives it the full window
+    # before httpx cuts off. Mobile abort is 35 s > 5+28 = 33 s max.
+    timeout = httpx.Timeout(connect=5.0, read=28.0, write=5.0, pool=2.0)
     async with httpx.AsyncClient(timeout=timeout) as client:
         for endpoint in _OVERPASS_ENDPOINTS:
             try:

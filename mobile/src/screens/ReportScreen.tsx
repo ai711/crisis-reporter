@@ -127,15 +127,15 @@ async function fetchBuildingsForBounds(
   const diag: string[] = [`BBOX: ${bbox}`];
 
   // 1. Backend proxy first — avoids Android carrier blocking Overpass directly.
-  //    Backend timeout budget: connect 5s + read 13s = 18s max.
-  //    We give 22s here so we never abort before the backend has finished.
+  //    Backend timeout budget: connect 5s + read 28s = 33s max.
+  //    We give 35s here so mobile never aborts before the backend finishes.
   const apiBase = (process.env.EXPO_PUBLIC_API_URL ?? '').replace(/\/$/, '');
   const backendUrl =
     `${apiBase}/api/buildings?south=${south.toFixed(6)}&west=${west.toFixed(6)}` +
     `&north=${north.toFixed(6)}&east=${east.toFixed(6)}`;
   {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 22000);
+    const timeoutId = setTimeout(() => controller.abort(), 35000);
     try {
       const res = await fetch(backendUrl, { signal: controller.signal });
       clearTimeout(timeoutId);
