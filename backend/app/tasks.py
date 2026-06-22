@@ -131,7 +131,7 @@ async def auto_translate_question_package(package_version: str) -> None:
                             translated_by="",
                         ))
 
-        if translated_total > 0 or True:
+        if translated_total > 0:
             await db.commit()
 
     log.info(
