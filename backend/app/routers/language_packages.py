@@ -778,10 +778,12 @@ async def ensure_string_keys_synced(db: AsyncSession) -> dict:
     )
     active_keys = active_keys_result.scalars().all()
 
-    # All active or protected languages
+    # All active, pending, or protected languages.
+    # Pending languages are included so Translation rows exist before activation,
+    # allowing the Translate button to work while a language is still being staged.
     active_langs_result = await db.execute(
         select(Language).where(
-            or_(Language.status == "active", Language.is_protected == True)
+            or_(Language.status == "active", Language.status == "pending", Language.is_protected == True)
         )
     )
     active_langs = active_langs_result.scalars().all()
@@ -1564,6 +1566,11 @@ async def auto_translate(
     except Exception as exc:
         log.warning("Failed to check Redis for running translation: %s", exc)
 
+    # Sync Translation rows for this language first. If it is new or pending,
+    # ensure_string_keys_synced creates the missing rows so the count below is
+    # accurate. The call is idempotent — no harm if rows already exist.
+    await ensure_string_keys_synced(db)
+
     missing_count_result = await db.execute(
         select(func.count(Translation.id))
         .join(StringKey, StringKey.id == Translation.string_key_id)
@@ -1576,7 +1583,7 @@ async def auto_translate(
     missing_count = missing_count_result.scalar() or 0
 
     if missing_count == 0:
-        return {"status": "no_op", "language_code": body.language_code, "translated": 0, "skipped": 0, "failed": 0}
+        return {"status": "no_op", "language_code": body.language_code, "missing_count": 0, "translated": 0, "skipped": 0, "failed": 0}
 
     # Seed the progress key immediately so concurrent requests are rejected before
     # the background task starts and so the frontend can start polling right away.

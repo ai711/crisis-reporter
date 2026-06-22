@@ -1294,10 +1294,22 @@ function LanguagesTab() {
       queryClient.invalidateQueries({ queryKey: ["translations", langCode] });
       queryClient.invalidateQueries({ queryKey: ["string-keys"] });
       queryClient.invalidateQueries({ queryKey: ["queue-status-by-lang"] });
+
+      if (res.data.status === "no_op") {
+        // Backend found nothing to translate — clear spinner state and tell the user.
+        setAutoTranslatingLang(null);
+        setTranslateProgress(null);
+        setTranslateStartTime(null);
+        setTranslateBaseline(0);
+        setTranslateBaselineFailed(0);
+        setTranslateFailedCount(0);
+        showBanner(`No missing strings found for ${langName}. All strings are already translated.`, true);
+        return;
+      }
+
       setSelectedLang(langCode);
-      // Use the authoritative count from the backend (strings queried at job-start
-      // time), falling back to the client-side missing count if unavailable.
-      const missingCount = res.data.missing_count ?? statusByLang[langCode]?.missing ?? 0;
+      // Use the authoritative count from the backend (strings queried at job-start time).
+      const missingCount = res.data.missing_count ?? 0;
       setTranslateProgress({ completed: 0, total: Math.max(missingCount, 1) });
       setTranslateMsg(`Auto-translation started for ${langName}. Check the Review Queue tab for progress.`);
       setTimeout(() => setTranslateMsg(""), 5000);
