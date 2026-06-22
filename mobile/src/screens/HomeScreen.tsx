@@ -15,8 +15,9 @@ import * as SecureStore from "expo-secure-store";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import SideMenu from "../components/SideMenu";
 import { fetchLanguagePackageFromBackend } from "../i18n";
-const { width: _screenWidthRaw } = Dimensions.get("window");
+const { width: _screenWidthRaw, height: _screenHeightRaw } = Dimensions.get("window");
 const screenWidth = _screenWidthRaw || 375;
+const SCREEN_HEIGHT = _screenHeightRaw || 800;
 const scale = (size: number) => Math.round((screenWidth / 375) * size);
 
 // Module-level flag — survives navigation, ensures one check per app session
@@ -840,7 +841,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    maxHeight: "82%",
+    height: SCREEN_HEIGHT * 0.82,
   },
   modalHeader: {
     flexDirection: "row",

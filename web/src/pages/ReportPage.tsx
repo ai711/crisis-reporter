@@ -685,6 +685,8 @@ export default function ReportPage() {
             .then((data: { features?: Array<{ bbox?: number[]; center?: [number, number] }> } | null) => {
               const feature = data?.features?.[0];
               if (!feature) return;
+              // If GPS was acquired while this request was in-flight, don't override it
+              if (gpsMarkerRef.current) return;
               const bbox = feature.bbox;
               if (bbox && bbox.length === 4) {
                 mapInstance.fitBounds(
@@ -1102,26 +1104,12 @@ export default function ReportPage() {
 
   // ── Draft auto-save ──────────────────────────────────────────────────────────
 
-  // On mount: check localStorage for an existing draft and offer to restore it.
+  // On mount: clear any existing draft — restore feature is temporarily hidden.
   useEffect(() => {
     try {
-      const raw = localStorage.getItem(DRAFT_KEY);
-      if (!raw) return;
-      const parsed = JSON.parse(raw) as Record<string, unknown>;
-      const hasProgress =
-        (typeof parsed.step === "string" && parsed.step !== "photos") ||
-        (typeof parsed.damageLevel === "string" && parsed.damageLevel !== "") ||
-        (Array.isArray(parsed.infrastructureTypes) && (parsed.infrastructureTypes as string[]).length > 0) ||
-        (typeof parsed.locationAddress === "string" && parsed.locationAddress !== "") ||
-        (typeof parsed.selectedBuildingId === "string" && parsed.selectedBuildingId !== "");
-      if (hasProgress && parsed.savedAt) {
-        setDraftPrompt("showing");
-      } else {
-        localStorage.removeItem(DRAFT_KEY);
-      }
-    } catch {
-      try { localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ }
-    }
+      localStorage.removeItem(DRAFT_KEY);
+      void clearDraftPhotos();
+    } catch { /* ignore */ }
   }, []);
 
   // Save immediately whenever the user advances a step or damage sub-question.
@@ -1827,7 +1815,24 @@ export default function ReportPage() {
       if (isTimeout) {
         setSubmitError("timeout");
       } else if (isNetworkError) {
-        setSubmitError("no_internet");
+        // Network failed after health probe passed — queue the report rather than
+        // showing an error, so the user doesn't lose their submission.
+        try {
+          const queuedPhotos: QueuedPhoto[] = compressedPhotos.map((file, i) => ({
+            blob: file,
+            filename: `photo_${i}.jpg`,
+            content_type: file.type || "image/jpeg",
+            display_order: i,
+          }));
+          await addToQueue({ ...reportPayload, was_queued: true } as unknown as ReportSubmitRequest, queuedPhotos);
+          try { localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ }
+          void requestSyncNotificationPermission();
+          isSubmittedRef.current = true;
+          setWasQueued(true);
+          setSubmitted(true);
+        } catch {
+          setSubmitError("no_internet");
+        }
       } else {
         // Log full error to console so 422 validation detail is visible in DevTools
         if (axiosErr?.response) {
@@ -2427,8 +2432,8 @@ export default function ReportPage() {
                       : "Building"}
                   </div>
                   <div style={styles.confirmBuildingCoords}>
-                    {Math.abs(pendingBuilding.lat).toFixed(4)}°{pendingBuilding.lat >= 0 ? "N" : "S"},{" "}
-                    {Math.abs(pendingBuilding.lng).toFixed(4)}°{pendingBuilding.lng >= 0 ? "E" : "W"}
+                    {Math.abs(pendingBuilding.lat).toFixed(5)}°{pendingBuilding.lat >= 0 ? "N" : "S"},{" "}
+                    {Math.abs(pendingBuilding.lng).toFixed(5)}°{pendingBuilding.lng >= 0 ? "E" : "W"}
                   </div>
                   <hr style={{ margin: "12px 0", border: "none", borderTop: "1px solid #E2E8F0" }} />
                   <div style={{ display: "flex", gap: 8 }}>
@@ -2453,8 +2458,8 @@ export default function ReportPage() {
                     : "Building"}
                 </div>
                 <div style={styles.confirmBuildingCoords}>
-                  {Math.abs(pendingBuilding.lat).toFixed(4)}°{pendingBuilding.lat >= 0 ? "N" : "S"},{" "}
-                  {Math.abs(pendingBuilding.lng).toFixed(4)}°{pendingBuilding.lng >= 0 ? "E" : "W"}
+                  {Math.abs(pendingBuilding.lat).toFixed(5)}°{pendingBuilding.lat >= 0 ? "N" : "S"},{" "}
+                  {Math.abs(pendingBuilding.lng).toFixed(5)}°{pendingBuilding.lng >= 0 ? "E" : "W"}
                 </div>
                 <hr style={{ margin: "12px 0", border: "none", borderTop: "1px solid #E2E8F0" }} />
                 <div style={{ display: "flex", gap: 8 }}>

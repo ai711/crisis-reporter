@@ -468,7 +468,9 @@ export default function MapScreen() {
         logo={false}
         attribution={false}
         androidView="texture"
-        onPress={() => setSelectedReport(null)}
+        onPress={(e: NativeSyntheticEvent<PressEventWithFeatures>) => {
+          if (!e.nativeEvent.features?.length) setSelectedReport(null);
+        }}
         onRegionDidChange={handleRegionChange}
         onDidFinishLoadingMap={handleMapLoaded}
         onDidFailLoadingMap={() => setMapLoadError(true)}

@@ -524,11 +524,6 @@ export default function MapPage() {
       {/* D33/D34: Pin detail panel — right panel on desktop, bottom sheet on mobile */}
       {selectedPin && (
         <>
-          {/* Invisible overlay to close panel when clicking outside */}
-          <div
-            style={s.panelOverlay}
-            onClick={() => setSelectedPin(null)}
-          />
           <div style={isMobile ? s.bottomSheet : s.rightPanel}>
             <div style={s.panelHeader}>
               <span style={s.panelTitle}>
