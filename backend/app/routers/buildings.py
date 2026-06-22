@@ -1,6 +1,8 @@
+import logging
 from fastapi import APIRouter, Query
 import httpx
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["buildings"])
 
 _OVERPASS_ENDPOINTS = [
@@ -52,9 +54,8 @@ async def get_buildings(
     Mobile's Android networking layer blocks direct connections to Overpass
     mirrors. This endpoint proxies from Railway → Overpass server-side.
 
-    Timeout budget: connect=5 s + read=13 s = 18 s max. Overpass internal
-    timeout is capped at [timeout:10] so the round-trip stays well within
-    Railway's per-request limit and the mobile's 22 s abort controller.
+    Uses POST (matching the PWA's direct Overpass call) — more reliable than
+    GET for queries that may exceed URL length limits.
     """
     query = (
         f"[out:json][timeout:25]"
@@ -63,20 +64,36 @@ async def get_buildings(
         f"out body;>;out skel qt;"
     )
 
-    # Overpass internal timeout is 25 s; read=28 s gives it the full window
-    # before httpx cuts off. Mobile abort is 35 s > 5+28 = 33 s max.
+    bbox_desc = f"bbox=[{south:.4f},{west:.4f},{north:.4f},{east:.4f}]"
     timeout = httpx.Timeout(connect=5.0, read=28.0, write=5.0, pool=2.0)
     async with httpx.AsyncClient(timeout=timeout) as client:
         for endpoint in _OVERPASS_ENDPOINTS:
             try:
-                resp = await client.get(endpoint, params={"data": query})
+                resp = await client.post(endpoint, data={"data": query})
                 if resp.status_code != 200:
+                    logger.warning(
+                        "[buildings] %s → HTTP %d %s",
+                        endpoint, resp.status_code, resp.text[:200],
+                    )
                     continue
-                elements = resp.json().get("elements", [])
+                payload = resp.json()
+                elements = payload.get("elements", [])
                 if not elements:
+                    logger.warning(
+                        "[buildings] %s → 0 elements for %s; remark=%r",
+                        endpoint, bbox_desc, payload.get("remark"),
+                    )
                     continue
-                return _overpass_to_geojson(elements)
-            except Exception:
-                continue
+                fc = _overpass_to_geojson(elements)
+                logger.info(
+                    "[buildings] %s → %d elements → %d features for %s",
+                    endpoint, len(elements), len(fc["features"]), bbox_desc,
+                )
+                return fc
+            except httpx.TimeoutException as exc:
+                logger.warning("[buildings] %s timeout for %s: %s", endpoint, bbox_desc, exc)
+            except Exception as exc:
+                logger.warning("[buildings] %s error for %s: %s", endpoint, bbox_desc, exc)
 
+    logger.error("[buildings] all endpoints failed for %s", bbox_desc)
     return {"type": "FeatureCollection", "features": []}

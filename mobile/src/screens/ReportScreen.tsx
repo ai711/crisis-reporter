@@ -179,55 +179,6 @@ async function fetchBuildingsForBounds(
   return null;
 }
 
-// Query building polygons already rendered in the MapLibre tile cache — no network call.
-// MapTiler streets-v2 uses layer IDs "building" (fill) and "building-3d" (fill-extrusion),
-// both sourced from the OpenMapTiles "building" source-layer.
-async function queryMapBuildings(
-  mapRef: { current: any }
-): Promise<GeoJSON.FeatureCollection | null> {
-  if (!mapRef.current) return null;
-  try {
-    // Query only the fill layer — 'building-3d' (fill-extrusion) references the
-    // same source-layer data and querying both returns every building twice.
-    const features: GeoJSON.Feature[] = await mapRef.current.queryRenderedFeatures({
-      layers: ['building'],
-    });
-    if (!features?.length) {
-      console.warn('[buildings] queryRenderedFeatures returned 0 features');
-      return null;
-    }
-    // DIAG: inspect what tile feature IDs and property keys look like
-    const sample = features.slice(0, 5);
-    console.warn('[buildings] DIAG sample ids:', sample.map(f => f.id));
-    console.warn('[buildings] DIAG sample prop keys:', sample.map(f => Object.keys(f.properties ?? {})));
-    console.warn('[buildings] DIAG geometry types:', sample.map(f => f.geometry?.type));
-    const nullIdCount = features.filter(f => f.id == null).length;
-    console.warn(`[buildings] DIAG id breakdown: ${features.length} total, ${nullIdCount} null-id, ${features.length - nullIdCount} have id`);
-    // Deduplicate by tile feature ID (defensive safety net)
-    const seen = new Set<number | string>();
-    const unique = features.filter((f: GeoJSON.Feature) => {
-      if (f.id == null) return true;
-      if (seen.has(f.id as number)) return false;
-      seen.add(f.id as number);
-      return true;
-    });
-    // Normalise to the shape handleBuildingPress expects: osm_id, name, building
-    const normalized = unique.map((f: GeoJSON.Feature, idx: number) => ({
-      ...f,
-      properties: {
-        osm_id: typeof f.id === 'number' ? f.id : idx + 1,
-        name: '',
-        building: 'yes',
-      },
-    }));
-    console.warn(`[buildings] queryRenderedFeatures OK — ${normalized.length} buildings (${features.length} raw)`);
-    return { type: 'FeatureCollection' as const, features: normalized };
-  } catch (e) {
-    console.warn('[buildings] queryRenderedFeatures threw:', e);
-    return null;
-  }
-}
-
 function computeCentroid(ring: number[][]): [number, number] {
   if (!ring || ring.length === 0) return [0, 0];
   const pts =
@@ -1087,20 +1038,12 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
         zoom: 15,
         duration: 1000,
       });
-      // Programmatic flyTo may not fire onRegionDidChange with valid bounds.
-      // Wait for animation + tile loading to settle, then query rendered features.
-      // flyTo duration is 1000ms; extra 1000ms for tile download on LTE.
-      await new Promise<void>((resolve) => setTimeout(resolve, 2000));
+      // Wait for animation to settle before fetching.
+      await new Promise<void>((resolve) => setTimeout(resolve, 1000));
       if (!isMountedRef.current) return;
       const delta = 0.006;
       if (isMountedRef.current) setBuildingsLoading(true);
-      // Primary: query tiles already rendered in the viewport (no network call).
-      // Fallback: backend proxy → Overpass if tiles not yet loaded.
-      let fc = await queryMapBuildings(mapViewRef);
-      if (!fc || fc.features.length === 0) {
-        console.warn('[buildings] tile query empty — falling back to network');
-        fc = await fetchBuildingsForBounds(lng - delta, lat - delta, lng + delta, lat + delta);
-      }
+      const fc = await fetchBuildingsForBounds(lng - delta, lat - delta, lng + delta, lat + delta);
       if (isMountedRef.current) {
         if (fc) { setBuildingsFC(fc); setBuildingsKey(k => k + 1); }
         setBuildingsLoading(false);
@@ -1118,14 +1061,8 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
     const delta = zoom >= 16 ? 0.004 : zoom >= 15 ? 0.006 : 0.010;
     if (debounceTimer.current) clearTimeout(debounceTimer.current);
     debounceTimer.current = setTimeout(async () => {
-      console.warn(`[buildings] querying at zoom ${zoom.toFixed(2)} center ${lat.toFixed(5)},${lng.toFixed(5)}`);
       if (isMountedRef.current) setBuildingsLoading(true);
-      // Primary: query tiles already rendered in the viewport (no network call).
-      // Fallback: backend proxy → Overpass if tiles not yet rendered.
-      let fc = await queryMapBuildings(mapViewRef);
-      if (!fc || fc.features.length === 0) {
-        fc = await fetchBuildingsForBounds(lng - delta, lat - delta, lng + delta, lat + delta);
-      }
+      const fc = await fetchBuildingsForBounds(lng - delta, lat - delta, lng + delta, lat + delta);
       if (isMountedRef.current) {
         if (fc) { setBuildingsFC(fc); setBuildingsKey(k => k + 1); }
         setBuildingsLoading(false);
@@ -1200,17 +1137,15 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
     const geom = f.geometry as GeoJSON.Geometry;
     if (!geom) return;
 
-    // Prefer the tap lngLat as the building location — queryRenderedFeatures returns
-    // tile-clipped polygons (only the visible fragment), so computeCentroid on a
-    // clipped ring gives a wrong point that sends the camera to the wrong place.
-    // The tap point is guaranteed to be inside the building and in the viewport.
+    // Use tap lngLat as the building location — it's guaranteed to be inside the
+    // building and avoids computing a centroid from the polygon ring.
     const tapLngLat = (event.nativeEvent as any).lngLat as [number, number] | undefined;
     let centLng: number;
     let centLat: number;
     if (tapLngLat?.length === 2) {
       [centLng, centLat] = tapLngLat;
     } else {
-      // Fallback: compute centroid from geometry (may be wrong for clipped tiles)
+      // Fallback: compute centroid from geometry (Overpass returns full polygons, so this is accurate)
       let ring: GeoJSON.Position[] | undefined;
       if (geom.type === 'Polygon') {
         ring = (geom as GeoJSON.Polygon).coordinates[0];
@@ -1220,23 +1155,6 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
       }
       if (!ring || ring.length < 3) return;
       [centLng, centLat] = computeCentroid(ring);
-    }
-
-    // DIAG: log the raw feature to understand what we actually tapped
-    const allCoords: GeoJSON.Position[] =
-      geom.type === 'Polygon'
-        ? (geom as GeoJSON.Polygon).coordinates[0]
-        : geom.type === 'MultiPolygon'
-          ? (geom as GeoJSON.MultiPolygon).coordinates.flat(2)
-          : [];
-    if (allCoords.length) {
-      const lngs = allCoords.map(c => c[0]);
-      const lats = allCoords.map(c => c[1]);
-      const bboxW = Math.min(...lngs), bboxE = Math.max(...lngs);
-      const bboxS = Math.min(...lats), bboxN = Math.max(...lats);
-      const widthM = (bboxE - bboxW) * 111320 * Math.cos(centLat * Math.PI / 180);
-      const heightM = (bboxN - bboxS) * 111320;
-      console.warn(`[buildings] TAP osm_id=${props.osm_id} geom=${geom.type} vertices=${allCoords.length} size=${widthM.toFixed(0)}m×${heightM.toFixed(0)}m`);
     }
 
     setPendingBuilding({
