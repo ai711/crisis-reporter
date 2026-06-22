@@ -318,6 +318,55 @@ Built with Expo SDK 56 / React Native 0.81. Managed workflow — no `android/` e
 
 **Bearer-header auth:** Android uses `Authorization: Bearer <token>` with tokens in `SecureStore`. The backend refresh endpoint accepts both cookie (web) and request-body token (mobile) so mobile auth is unaffected by the HttpOnly cookie migration.
 
+### Building Footprint Loading — Architecture and Solved Problems
+
+**How it works (final architecture — June 2026):**
+
+1. Mobile map pan/zoom fires `handleRegionChange`. When zoom ≥ 14, it calls `fetchBuildingsForBounds(west, south, east, north)` with a delta derived from zoom level.
+2. `fetchBuildingsForBounds` calls `GET /api/buildings?south=…&west=…&north=…&east=…` on the backend (Railway).
+3. The backend (`backend/app/routers/buildings.py`) fires POST requests to **all 4 Overpass mirrors in parallel** and returns the first successful GeoJSON response, cancelling the rest.
+4. The GeoJSON (full OSM building polygons with `osm_id`, `name`, `building` properties) is set as the `buildingsFC` state, which renders as a `<GeoJSONSource>` with fill + outline layers.
+5. Tapping a building fires `handleBuildingPress` → shows a confirmation popup → reporter confirms → building centroid (from tap `lngLat`) is used as the report's location.
+
+**This approach is identical to the PWA** (`web/src/pages/ReportPage.tsx` → `fetchBuildingsForMap` → Overpass POST → custom GeoJSON source). Both platforms get full OSM polygon geometry, real OSM IDs, and building names.
+
+**Why the tile-based approach (`queryRenderedFeatures`) does NOT work — do not revert to it:**
+
+MapTiler streets-v2 tiles render buildings from OpenMapTiles vector data. `queryRenderedFeatures` on the `'building'` tile layer seems attractive (no network call) but has two fatal defects:
+- **Tile-clipped fragments**: MapLibre splits polygons at tile boundaries. A single building spanning tiles A/B/C/D appears as 4 separate clipped fragments in query results. Adding all fragments to a GeoJSON source makes one building render as a patchwork of highlighted polygons — the "adjacent blocks highlighted" visual bug.
+- **Compound campus polygons**: OSM `building=yes` can cover entire estates (confirmed: 1161 m × 1161 m polygon with 6,045 vertices, tile feature ID `'6450700371'`). These are legitimate OSM data and appear in tile queries but are useless for individual building selection.
+
+**Why backend proxy was needed (Android carrier blocks Overpass):**
+
+Direct `fetch()` from Android to Overpass endpoints (`overpass-api.de`, etc.) gets `"Fetch request has been canceled"` after the AbortController timeout fires. This is carrier-level blocking — the request is accepted by the TCP stack but Overpass is unreachable through the carrier NAT. The PWA works because it runs in Chrome on a desktop/laptop where Overpass is reachable.
+
+**Problems solved getting the backend proxy to work:**
+
+| Problem | Symptom | Fix |
+|---|---|---|
+| Missing `User-Agent` | Overpass returned HTTP 200 with `{"elements": []}` and remark `"runtime error: Query timed out"` | Added `User-Agent: CrisisReporter/1.0` header — Overpass docs explicitly require this for automated clients; Python's default `python-httpx/x.x` UA triggers stricter throttling |
+| `overpass-api.de` rate-limiting | HTTP 429 on every request from Railway's IP | Added 3 more mirrors; shuffled endpoint order per request to distribute load |
+| `overpass.kumi.systems` slow | 65 s timeout exceeded mobile's 35 s AbortController | Switched from sequential to **parallel race**: all 4 mirrors fire simultaneously, first success wins, rest are cancelled |
+| Sequential timeouts > mobile abort | Sequential: 429 fast + kumi 65 s = 65 s total > 35 s mobile limit | Parallel race: total latency = fastest mirror (~5–15 s) |
+
+**Overpass empty-result gotcha (important for future debugging):**
+
+Overpass returns **HTTP 200 with `{"elements": [], "remark": "runtime error: Query timed out..."}`** when a query exceeds its internal `[timeout:N]` — it does NOT return HTTP 504. This means a status-code check alone cannot detect timeouts. Always log the `remark` field from the Overpass JSON response. See: https://github.com/drolbr/Overpass-API/issues/382
+
+**Overpass mirrors currently in use** (`backend/app/routers/buildings.py`):
+```
+https://overpass-api.de/api/interpreter       (often 429 from Railway IP)
+https://overpass.kumi.systems/api/interpreter  (EU mirror, sometimes slow)
+https://overpass.private.coffee/api/interpreter (US mirror, fast)
+https://maps.mail.ru/osm/tools/overpass/api/interpreter (fast alternative)
+```
+
+**OTA update command for mobile** (must run from Git Bash on Windows — PowerShell causes `0xC0000409` crash):
+```bash
+cd "C:/Users/Shivam/crisis-reporter/mobile"
+eas update --channel preview --platform android --environment preview --message "your message"
+```
+
 ## Locked Technical Decisions — Never Re-Open These
 
 ### Database
