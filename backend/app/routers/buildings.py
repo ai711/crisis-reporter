@@ -10,6 +10,13 @@ _OVERPASS_ENDPOINTS = [
     "https://overpass.kumi.systems/api/interpreter",
 ]
 
+# Overpass docs: always set a meaningful User-Agent so the API can identify the
+# caller. Python's default httpx UA triggers stricter throttling/queuing.
+_HEADERS = {
+    "User-Agent": "CrisisReporter/1.0 (+https://github.com/ai711/crisis-reporter)",
+    "Accept": "application/json",
+}
+
 
 def _overpass_to_geojson(elements: list) -> dict:
     nodes: dict[int, list[float]] = {}
@@ -54,31 +61,37 @@ async def get_buildings(
     Mobile's Android networking layer blocks direct connections to Overpass
     mirrors. This endpoint proxies from Railway → Overpass server-side.
 
-    Uses POST (matching the PWA's direct Overpass call) — more reliable than
-    GET for queries that may exceed URL length limits.
+    [timeout:60] gives Overpass adequate time when Railway → Overpass latency
+    is high. Without a meaningful User-Agent, Overpass throttles automated
+    requests — the header is required per the Overpass API usage guidelines.
     """
+    # [timeout:60] — Overpass returns HTTP 200 with empty elements (not a 504)
+    # when the internal timeout fires (github.com/drolbr/Overpass-API/issues/382).
+    # 60 s gives adequate headroom vs the default 25 s used for browser requests.
     query = (
-        f"[out:json][timeout:25]"
+        f"[out:json][timeout:60]"
         f"[bbox:{south:.6f},{west:.6f},{north:.6f},{east:.6f}];"
-        f'(way["building"];relation["building"]["type"="multipolygon"];);'
+        f'(way["building"];);'
         f"out body;>;out skel qt;"
     )
 
     bbox_desc = f"bbox=[{south:.4f},{west:.4f},{north:.4f},{east:.4f}]"
-    timeout = httpx.Timeout(connect=5.0, read=28.0, write=5.0, pool=2.0)
-    async with httpx.AsyncClient(timeout=timeout) as client:
+    # read=65 s > Overpass [timeout:60] so httpx never cuts off a valid slow response
+    timeout = httpx.Timeout(connect=8.0, read=65.0, write=5.0, pool=2.0)
+    async with httpx.AsyncClient(timeout=timeout, headers=_HEADERS) as client:
         for endpoint in _OVERPASS_ENDPOINTS:
             try:
                 resp = await client.post(endpoint, data={"data": query})
                 if resp.status_code != 200:
                     logger.warning(
                         "[buildings] %s → HTTP %d %s",
-                        endpoint, resp.status_code, resp.text[:200],
+                        endpoint, resp.status_code, resp.text[:300],
                     )
                     continue
                 payload = resp.json()
                 elements = payload.get("elements", [])
                 if not elements:
+                    # remark field reveals the reason — usually "Query timed out"
                     logger.warning(
                         "[buildings] %s → 0 elements for %s; remark=%r",
                         endpoint, bbox_desc, payload.get("remark"),
