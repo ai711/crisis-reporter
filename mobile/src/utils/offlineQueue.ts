@@ -535,46 +535,40 @@ export async function syncQueue(apiBaseUrl: string): Promise<void> {
             if (!new FSFile(uploadUri).exists) { photosSkipped++; continue; }
           }
 
-          const formData = new FormData();
-          formData.append("report_id", reportId);
-          formData.append("display_order", String(photo.display_order));
-          formData.append("file", {
-            uri: uploadUri,
-            name: photo.filename,
-            type: photo.content_type,
-          } as any);
-
           const photoHeaders: Record<string, string> = {};
           if (accessToken) {
             photoHeaders["Authorization"] = `Bearer ${accessToken}`;
           }
 
-          // 120 s per photo — generous for 2G/EDGE field networks
-          const photoController = new AbortController();
-          const photoTimeoutId = setTimeout(() => photoController.abort(), 120000);
-          try {
-            const photoResponse = await fetch(`${apiBaseUrl}/api/photos`, {
-              method: "POST",
+          // Use legacy uploadAsync instead of fetch(FormData) — on Android New
+          // Architecture, fetch() cannot read file:// URIs from documentDirectory
+          // and throws "Network request failed" before the request reaches the server.
+          // The legacy FileSystem.uploadAsync uses native Android HTTP and handles
+          // file:// URIs from the app's private storage correctly.
+          const uploadResult = await FileSystem.uploadAsync(
+            `${apiBaseUrl}/api/photos`,
+            uploadUri,
+            {
+              uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+              fieldName: "file",
+              mimeType: photo.content_type,
+              parameters: {
+                report_id: reportId,
+                display_order: String(photo.display_order),
+              },
               headers: photoHeaders,
-              body: formData,
-              signal: photoController.signal,
-            });
-            clearTimeout(photoTimeoutId);
-            if (!photoResponse.ok) {
-              if (photoResponse.status === 401) throw new Error("auth_expired");
-              // 5xx: transient server error — abort and retry the whole item.
-              if (photoResponse.status >= 500) throw new Error(`photo_server_error:${photoResponse.status}`);
-              // 4xx non-401: permanent client error (bad format, too large, etc.)
-              // Log it and skip this photo — retrying won't help.
-              console.warn(`[syncQueue] Photo upload skipped (HTTP ${photoResponse.status})`);
-              skippedStatuses.push(photoResponse.status);
-              photosSkipped++;
-            } else {
-              photosUploaded++;
+              httpMethod: "POST",
             }
-          } catch (photoErr) {
-            clearTimeout(photoTimeoutId);
-            throw photoErr;
+          );
+          if (uploadResult.status >= 400) {
+            if (uploadResult.status === 401) throw new Error("auth_expired");
+            if (uploadResult.status >= 500) throw new Error(`photo_server_error:${uploadResult.status}`);
+            // 4xx non-401: permanent client error — skip, retrying won't help.
+            console.warn(`[syncQueue] Photo upload skipped (HTTP ${uploadResult.status}) body:${uploadResult.body?.slice(0, 200)}`);
+            skippedStatuses.push(uploadResult.status);
+            photosSkipped++;
+          } else {
+            photosUploaded++;
           }
         }
 
@@ -600,6 +594,7 @@ export async function syncQueue(apiBaseUrl: string): Promise<void> {
       } catch (syncErr) {
         const isAuthExpired =
           syncErr instanceof Error && syncErr.message === "auth_expired";
+        const errMsg = syncErr instanceof Error ? syncErr.message.slice(0, 120) : String(syncErr).slice(0, 120);
         const nextRetry = isAuthExpired ? item.retry_count : item.retry_count + 1;
         const nextStatus = (!isAuthExpired && nextRetry >= MAX_RETRIES) ? "failed" : "pending";
         await updateItemStatus(item.local_id, nextStatus, nextRetry);
@@ -609,8 +604,8 @@ export async function syncQueue(apiBaseUrl: string): Promise<void> {
           void showSyncNotification(
             isPhotoOnlyRetry ? "Photo upload failed — tap to retry" : "Upload failed — tap to retry",
             isPhotoOnlyRetry
-              ? "Report was submitted but photos could not be uploaded. Open the app to retry."
-              : "A report could not be uploaded after multiple attempts. Open the app to retry."
+              ? `Report was submitted but photos could not be uploaded [${errMsg}]. Open the app to retry.`
+              : `A report could not be uploaded after multiple attempts [${errMsg}]. Open the app to retry.`
           );
         }
         // Auth expired — no point trying other items; let app refresh the token

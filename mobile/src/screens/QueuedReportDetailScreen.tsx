@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   Image, Alert, ActivityIndicator,
 } from 'react-native';
+import { File as FSFile } from 'expo-file-system';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
@@ -31,6 +32,19 @@ export default function QueuedReportDetailScreen() {
 
   const [retrying, setRetrying] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [imgErrors, setImgErrors] = useState<string[]>([]);
+
+  // ── Photo diagnostic ───────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!qr || qr.photos.length === 0) return;
+    const lines = qr.photos.map((p, i) => {
+      const uri = p.persistent_uri ?? p.uri;
+      let exists = '?';
+      try { exists = new FSFile(uri).exists ? 'yes' : 'NO'; } catch { exists = 'err'; }
+      return `P${i}:\npersistent_uri:${p.persistent_uri ? '✓' : 'NOT SET'}\ncopy_failed:${p.copy_failed ?? false}\nexists:${exists}\nuri:...${uri.slice(-55)}`;
+    });
+    Alert.alert('QueuedDetail photo debug', lines.join('\n\n'));
+  }, []);
 
   if (!qr) {
     return (
@@ -168,9 +182,16 @@ export default function QueuedReportDetailScreen() {
                 source={{ uri: photo.persistent_uri ?? photo.uri }}
                 style={styles.photoThumb}
                 resizeMode="cover"
+                onError={(e) => setImgErrors(prev => [...prev, `P${i} img err: ${e.nativeEvent.error ?? 'unknown'}`])}
+                onLoad={() => setImgErrors(prev => [...prev, `P${i}: loaded ✓`])}
               />
             ))}
           </View>
+          {imgErrors.length > 0 && (
+            <Text style={{ fontSize: 10, color: 'red', marginTop: 4 }}>
+              {imgErrors.join('\n')}
+            </Text>
+          )}
           <Text style={styles.photoNote}>{t('my_reports.photos_tap_to_view')}</Text>
         </View>
       )}
