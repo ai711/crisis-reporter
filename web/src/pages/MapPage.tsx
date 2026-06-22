@@ -170,6 +170,17 @@ function reportsGeoJSON(reports: ReportMapItem[]): Parameters<maplibregl.GeoJSON
 
 // ── Map helpers ───────────────────────────────────────────────────────────────
 
+function getUserGps(timeoutMs = 8000): Promise<{ lat: number; lng: number } | null> {
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) { resolve(null); return; }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => resolve(null),
+      { timeout: timeoutMs },
+    );
+  });
+}
+
 function centerOnGPS(
   mapInstance: maplibregl.Map,
   countryCode: string | null,
@@ -393,34 +404,49 @@ export default function MapPage() {
 
       setReportsLoading(true);
       try {
-        const crisisRes = await api.get("/api/crises/active");
-        const list = Array.isArray(crisisRes.data)
-          ? crisisRes.data
-          : (crisisRes.data?.items ?? []);
-        if (list.length > 0) {
-          const first = list[0] as { id: string; map_center_lat?: number | null; map_center_lng?: number | null; map_default_radius_miles?: number };
-          saveCrisisMeta({
-            id: first.id,
-            map_center_lat: first.map_center_lat ?? null,
-            map_center_lng: first.map_center_lng ?? null,
-            map_default_radius_miles: first.map_default_radius_miles ?? 50,
-            cached_at: new Date().toISOString(),
-          });
-          if (first.map_center_lat && first.map_center_lng) {
-            const [w, s, e, n] = radiusBBox(first.map_center_lat, first.map_center_lng, first.map_default_radius_miles ?? 50);
-            mapInstance.fitBounds([[w, s], [e, n]], { padding: 40, maxZoom: 14 });
+        // Fetch crisis (for map bounds) and user GPS concurrently
+        const [crisisResult, gpsResult] = await Promise.allSettled([
+          api.get("/api/crises/active"),
+          getUserGps(8000),
+        ]);
+
+        // Process crisis meta for map centering
+        if (crisisResult.status === "fulfilled") {
+          const data = crisisResult.value.data;
+          const list = Array.isArray(data) ? data : (data?.items ?? []);
+          if (list.length > 0) {
+            const first = list[0] as { id: string; map_center_lat?: number | null; map_center_lng?: number | null; map_default_radius_miles?: number };
+            saveCrisisMeta({
+              id: first.id,
+              map_center_lat: first.map_center_lat ?? null,
+              map_center_lng: first.map_center_lng ?? null,
+              map_default_radius_miles: first.map_default_radius_miles ?? 50,
+              cached_at: new Date().toISOString(),
+            });
+            if (first.map_center_lat && first.map_center_lng) {
+              const [w, s, e, n] = radiusBBox(first.map_center_lat, first.map_center_lng, first.map_default_radius_miles ?? 50);
+              mapInstance.fitBounds([[w, s], [e, n]], { padding: 40, maxZoom: 14 });
+            } else if (!initialMeta?.map_center_lat) {
+              centerOnGPS(mapInstance, countryCodeAtMount.current);
+            }
           } else if (!initialMeta?.map_center_lat) {
             centerOnGPS(mapInstance, countryCodeAtMount.current);
           }
-          const crisisId: string = first.id;
-          const reportsRes = await api.get<ReportsListResponse>("/api/reports/map", {
-            params: { crisis_id: crisisId, limit: 200 },
-          });
-          const source = mapInstance.getSource("reports") as maplibregl.GeoJSONSource | undefined;
-          source?.setData(reportsGeoJSON(reportsRes.data.reports));
-        } else if (!initialMeta?.map_center_lat) {
-          centerOnGPS(mapInstance, countryCodeAtMount.current);
         }
+
+        // Fetch reports filtered by user's GPS position (50 mile radius)
+        const userGps = gpsResult.status === "fulfilled" ? gpsResult.value : null;
+        const reportsParams: Record<string, string | number> = { limit: 200 };
+        if (userGps) {
+          reportsParams.lat = userGps.lat;
+          reportsParams.lng = userGps.lng;
+          reportsParams.radius_miles = 50;
+        }
+        const reportsRes = await api.get<ReportsListResponse>("/api/reports/map", {
+          params: reportsParams,
+        });
+        const source = mapInstance.getSource("reports") as maplibregl.GeoJSONSource | undefined;
+        source?.setData(reportsGeoJSON(reportsRes.data.reports));
       } catch { /* reports non-critical */ } finally {
         setReportsLoading(false);
       }

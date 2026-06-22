@@ -658,50 +658,38 @@ async def get_my_reports(
 
 @router.get("/map", response_model=MapReportsResponse)
 async def get_map_reports(
+    lat: Optional[float] = Query(None),
+    lng: Optional[float] = Query(None),
+    radius_miles: float = Query(default=50.0, ge=1, le=500),
     crisis_id: Optional[str] = None,
     limit: int = Query(default=200, le=500),
     db: AsyncSession = Depends(get_db),
 ):
     """Returns geolocated, verified reports for map display. No authentication required.
 
-    When crisis_id is provided and the crisis has a configured center + radius, only
-    reports whose location coordinates fall within that radius are returned (haversine distance).
-    Uses location_lat/lng (canonical building coordinate) rather than raw device GPS.
+    When lat+lng are provided, only reports within radius_miles of that point are returned
+    (haversine distance) — centred on the user's GPS position.
+    crisis_id is kept for backward compatibility but is no longer used by frontend clients.
     """
     conditions = [
         Report.location_lat.isnot(None),
         Report.location_lng.isnot(None),
         Report.flag_status.in_(["green", "orange"]),
     ]
-    if crisis_id:
-        conditions.append(Report.crisis_id == crisis_id)
 
-        # Radius filter — only apply when the crisis has a configured center point.
-        try:
-            crisis_uuid = uuid.UUID(crisis_id)
-            crisis_row = await db.execute(
-                select(Crisis.map_center_lat, Crisis.map_center_lng, Crisis.map_default_radius_miles)
-                .where(Crisis.id == crisis_uuid)
+    if lat is not None and lng is not None:
+        radius_km = radius_miles * 1.60934
+        dist_km = 6371.0 * func.acos(
+            func.least(
+                1.0,
+                func.cos(func.radians(lat))
+                * func.cos(func.radians(Report.location_lat))
+                * func.cos(func.radians(Report.location_lng) - func.radians(lng))
+                + func.sin(func.radians(lat))
+                * func.sin(func.radians(Report.location_lat)),
             )
-            crisis = crisis_row.one_or_none()
-        except (ValueError, AttributeError):
-            crisis = None
-
-        if crisis and crisis.map_center_lat and crisis.map_center_lng:
-            radius_km = float(crisis.map_default_radius_miles or 50) * 1.60934
-            clat = float(crisis.map_center_lat)
-            clng = float(crisis.map_center_lng)
-            dist_km = 6371.0 * func.acos(
-                func.least(
-                    1.0,
-                    func.cos(func.radians(clat))
-                    * func.cos(func.radians(Report.location_lat))
-                    * func.cos(func.radians(Report.location_lng) - func.radians(clng))
-                    + func.sin(func.radians(clat))
-                    * func.sin(func.radians(Report.location_lat)),
-                )
-            )
-            conditions.append(dist_km <= radius_km)
+        )
+        conditions.append(dist_km <= radius_km)
 
     query = (
         select(Report)

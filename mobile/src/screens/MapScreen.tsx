@@ -140,15 +140,25 @@ export default function MapScreen() {
   const fetchReports = async () => {
     setLoading(true);
     try {
-      // Fetch crisis first to get crisis_id — reports endpoint applies radius
-      // filter only when crisis_id is provided, matching web/PWA behaviour.
-      let crisisId: string | null = null;
-      try {
-        const crisesRes = await api.get('/api/crises/active');
-        const crises: any[] = crisesRes.data ?? [];
+      // Fetch crisis (for map bounds) and user GPS concurrently
+      const [crisesResult, gpsResult] = await Promise.allSettled([
+        api.get('/api/crises/active'),
+        (async (): Promise<{ lat: number; lng: number } | null> => {
+          const { status } = await Location.getForegroundPermissionsAsync();
+          if (status !== 'granted') return null;
+          const loc = await Promise.race([
+            Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+            new Promise<null>((resolve) => setTimeout(() => resolve(null), 8000)),
+          ]);
+          return loc ? { lat: loc.coords.latitude, lng: loc.coords.longitude } : null;
+        })(),
+      ]);
+
+      // Process crisis meta for map centering
+      if (crisesResult.status === 'fulfilled') {
+        const crises: any[] = crisesResult.value.data ?? [];
         const first = crises[0];
         if (first) {
-          crisisId = first.id as string;
           const radiusMiles: number = first.map_default_radius_miles ?? 50;
           const centerLat: number | null = first.map_center_lat ?? null;
           const centerLng: number | null = first.map_center_lng ?? null;
@@ -167,24 +177,22 @@ export default function MapScreen() {
             cameraRef.current.fitBounds([w, s, e, n], { duration: 800 });
           }
         }
-      } catch {
+      } else {
+        // Crisis fetch failed — use cached meta for map centering
         const cached = await loadCrisisMeta();
-        if (cached) {
-          crisisId = cached.id ?? null;
-          if (cached.map_center_lat && cached.map_center_lng && cameraRef.current) {
-            setCrisisRadius(`${cached.map_default_radius_miles} mi`);
-            setCrisisCenterLat(cached.map_center_lat);
-            setCrisisCenterLng(cached.map_center_lng);
-            const [w, s, e, n] = radiusBBox(cached.map_center_lat, cached.map_center_lng, cached.map_default_radius_miles);
-            cameraRef.current.fitBounds([w, s, e, n], { duration: 800 });
-          }
+        if (cached && cached.map_center_lat && cached.map_center_lng && cameraRef.current) {
+          setCrisisRadius(`${cached.map_default_radius_miles} mi`);
+          setCrisisCenterLat(cached.map_center_lat);
+          setCrisisCenterLng(cached.map_center_lng);
+          const [w, s, e, n] = radiusBBox(cached.map_center_lat, cached.map_center_lng, cached.map_default_radius_miles);
+          cameraRef.current.fitBounds([w, s, e, n], { duration: 800 });
         }
       }
 
-      // Fetch reports with crisis_id so the backend applies the same radius
-      // filter as web/PWA (without crisis_id it returns all global reports).
-      const url = crisisId
-        ? `/api/reports/map?limit=200&crisis_id=${crisisId}`
+      // Fetch reports filtered by user's GPS position (50 mile radius)
+      const userGps = gpsResult.status === 'fulfilled' ? gpsResult.value : null;
+      const url = userGps
+        ? `/api/reports/map?limit=200&lat=${userGps.lat}&lng=${userGps.lng}&radius_miles=50`
         : '/api/reports/map?limit=200';
       const reportsRes = await api.get(url);
       const pins: ReportPin[] = (reportsRes.data.reports ?? [])
