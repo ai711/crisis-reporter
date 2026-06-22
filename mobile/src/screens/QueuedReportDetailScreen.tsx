@@ -4,6 +4,7 @@ import {
   Image, Alert, ActivityIndicator,
 } from 'react-native';
 import { File as FSFile } from 'expo-file-system';
+import * as LegacyFS from 'expo-file-system/legacy';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
@@ -33,6 +34,10 @@ export default function QueuedReportDetailScreen() {
   const [retrying, setRetrying] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [imgErrors, setImgErrors] = useState<string[]>([]);
+  // Data URIs loaded from persistent_uri via legacy readAsStringAsync.
+  // React Native Image (New Architecture) can't load file:// URIs from
+  // documentDirectory, but handles data: URIs reliably.
+  const [photoDataUris, setPhotoDataUris] = useState<(string | null)[]>([]);
 
   // ── Photo diagnostic ───────────────────────────────────────────────────────
   useEffect(() => {
@@ -45,6 +50,30 @@ export default function QueuedReportDetailScreen() {
     });
     Alert.alert('QueuedDetail photo debug', lines.join('\n\n'));
   }, []);
+
+  // ── Load photos as base64 data URIs ───────────────────────────────────────
+  // On Android New Architecture, Image cannot render file:// URIs from
+  // documentDirectory. Reading as base64 and using data: URIs works reliably.
+  useEffect(() => {
+    if (!qr || qr.photos.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      const results: (string | null)[] = [];
+      for (const photo of qr.photos) {
+        const fileUri = photo.persistent_uri ?? photo.uri;
+        try {
+          const b64 = await LegacyFS.readAsStringAsync(fileUri, {
+            encoding: LegacyFS.EncodingType.Base64,
+          });
+          results.push(`data:image/jpeg;base64,${b64}`);
+        } catch {
+          results.push(null); // fall back to file URI (will show blank/error)
+        }
+      }
+      if (!cancelled) setPhotoDataUris(results);
+    })();
+    return () => { cancelled = true; };
+  }, [qr?.local_id]);
 
   if (!qr) {
     return (
@@ -176,16 +205,19 @@ export default function QueuedReportDetailScreen() {
         <View style={styles.photosSection}>
           <Text style={styles.sectionHeader}>{t('my_reports.label_photos')}</Text>
           <View style={styles.photoGrid}>
-            {qr.photos.map((photo, i) => (
-              <Image
-                key={i}
-                source={{ uri: photo.persistent_uri ?? photo.uri }}
-                style={styles.photoThumb}
-                resizeMode="cover"
-                onError={(e) => setImgErrors(prev => [...prev, `P${i} img err: ${e.nativeEvent.error ?? 'unknown'}`])}
-                onLoad={() => setImgErrors(prev => [...prev, `P${i}: loaded ✓`])}
-              />
-            ))}
+            {qr.photos.map((photo, i) => {
+              const displayUri = photoDataUris[i] ?? (photo.persistent_uri ?? photo.uri);
+              return (
+                <Image
+                  key={i}
+                  source={{ uri: displayUri }}
+                  style={styles.photoThumb}
+                  resizeMode="cover"
+                  onError={(e) => setImgErrors(prev => [...prev, `P${i} err(${displayUri.slice(0,10)}): ${e.nativeEvent.error ?? 'unknown'}`])}
+                  onLoad={() => setImgErrors(prev => [...prev, `P${i}: loaded ✓`])}
+                />
+              );
+            })}
           </View>
           {imgErrors.length > 0 && (
             <Text style={{ fontSize: 10, color: 'red', marginTop: 4 }}>

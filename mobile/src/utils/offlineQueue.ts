@@ -467,6 +467,12 @@ export async function syncQueue(apiBaseUrl: string): Promise<void> {
     // Proactively refresh the access token once for the whole pass.
     const accessToken = await refreshAccessTokenIfNeeded(apiBaseUrl);
 
+    // Accumulators for the one summary notification sent at end of this pass.
+    let totalReportsOk = 0;
+    let totalReportsFailed = 0;
+    let totalPhotosMissing = 0;
+    let lastSyncErrMsg = "";
+
     for (const item of pending) {
       await updateItemStatus(item.local_id, "syncing");
 
@@ -575,41 +581,45 @@ export async function syncQueue(apiBaseUrl: string): Promise<void> {
         await removeFromQueue(item.local_id);
         await notifyQueueChange();
         if (photosSkipped > 0 && photosUploaded === 0 && item.photos.length > 0) {
-          const statusStr = skippedStatuses.length > 0 ? ` (HTTP ${skippedStatuses.join(', ')})` : ' (file missing)';
-          void showSyncNotification(
-            "Report submitted — photos missing",
-            `Your report was submitted but photos could not be attached${statusStr}. Open the app to view your report.`
-          );
-        } else if (photosSkipped > 0) {
-          void showSyncNotification(
-            "Report uploaded",
-            `Report submitted. ${photosUploaded} photo(s) uploaded; ${photosSkipped} could not be found and were skipped.`
-          );
+          totalReportsOk++;
+          totalPhotosMissing++;
         } else {
-          void showSyncNotification(
-            "Report uploaded",
-            "Your offline report has been successfully submitted."
-          );
+          totalReportsOk++;
         }
       } catch (syncErr) {
         const isAuthExpired =
           syncErr instanceof Error && syncErr.message === "auth_expired";
         const errMsg = syncErr instanceof Error ? syncErr.message.slice(0, 120) : String(syncErr).slice(0, 120);
+        if (errMsg) lastSyncErrMsg = errMsg;
         const nextRetry = isAuthExpired ? item.retry_count : item.retry_count + 1;
         const nextStatus = (!isAuthExpired && nextRetry >= MAX_RETRIES) ? "failed" : "pending";
         await updateItemStatus(item.local_id, nextStatus, nextRetry);
         await notifyQueueChange();
-        if (nextStatus === "failed") {
-          const isPhotoOnlyRetry = !!item.existing_report_id;
-          void showSyncNotification(
-            isPhotoOnlyRetry ? "Photo upload failed — tap to retry" : "Upload failed — tap to retry",
-            isPhotoOnlyRetry
-              ? `Report was submitted but photos could not be uploaded [${errMsg}]. Open the app to retry.`
-              : `A report could not be uploaded after multiple attempts [${errMsg}]. Open the app to retry.`
-          );
-        }
+        if (nextStatus === "failed") totalReportsFailed++;
         // Auth expired — no point trying other items; let app refresh the token
         if (isAuthExpired) break;
+      }
+    }
+
+    // One summary notification for the entire sync pass — avoids spamming the
+    // user with N notifications when N queued reports upload at the same time.
+    if (totalReportsOk > 0 || totalReportsFailed > 0) {
+      if (totalReportsFailed === 0 && totalPhotosMissing === 0) {
+        const body = totalReportsOk === 1
+          ? "Your offline report has been successfully submitted."
+          : `${totalReportsOk} offline reports have been successfully submitted.`;
+        void showSyncNotification("Report uploaded", body);
+      } else if (totalReportsFailed === 0 && totalPhotosMissing > 0) {
+        void showSyncNotification(
+          "Reports submitted — some photos missing",
+          `${totalReportsOk} report(s) submitted. ${totalPhotosMissing} could not include photos — files were lost. Open the app to view.`
+        );
+      } else {
+        const detail = lastSyncErrMsg ? ` [${lastSyncErrMsg}]` : "";
+        void showSyncNotification(
+          "Upload incomplete — tap to retry",
+          `${totalReportsOk} report(s) uploaded, ${totalReportsFailed} failed${detail}. Open the app to retry.`
+        );
       }
     }
   } finally {
