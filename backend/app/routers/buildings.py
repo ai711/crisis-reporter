@@ -47,20 +47,25 @@ async def get_buildings(
     north: float = Query(...),
     east: float = Query(...),
 ):
-    """Proxy Overpass API building footprint queries for mobile clients.
+    """Proxy Overpass building footprints for mobile clients.
 
-    Mobile's Android fetch polyfill sends malformed Content-Type headers on
-    POST requests, triggering HTTP 406 from Overpass. Server-side fetch avoids
-    this entirely. Returns a GeoJSON FeatureCollection of building polygons.
+    Mobile's Android networking layer blocks direct connections to Overpass
+    mirrors. This endpoint proxies from Railway → Overpass server-side.
+
+    Timeout budget: connect=5 s + read=13 s = 18 s max. Overpass internal
+    timeout is capped at [timeout:10] so the round-trip stays well within
+    Railway's per-request limit and the mobile's 22 s abort controller.
     """
     query = (
-        f"[out:json][timeout:25]"
+        f"[out:json][timeout:10]"
         f"[bbox:{south:.6f},{west:.6f},{north:.6f},{east:.6f}];"
         f'(way["building"];relation["building"]["type"="multipolygon"];);'
         f"out body;>;out skel qt;"
     )
 
-    async with httpx.AsyncClient(timeout=30.0) as client:
+    # connect + read budgeted to stay under 18 s total
+    timeout = httpx.Timeout(connect=5.0, read=13.0, write=5.0, pool=2.0)
+    async with httpx.AsyncClient(timeout=timeout) as client:
         for endpoint in _OVERPASS_ENDPOINTS:
             try:
                 resp = await client.get(endpoint, params={"data": query})

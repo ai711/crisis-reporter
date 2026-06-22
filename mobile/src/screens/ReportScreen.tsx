@@ -121,9 +121,42 @@ async function fetchBuildingsForBounds(
 ): Promise<GeoJSON.FeatureCollection | null> {
   const bbox = `${south.toFixed(6)},${west.toFixed(6)},${north.toFixed(6)},${east.toFixed(6)}`;
   const query =
-    `[out:json][timeout:25][bbox:${bbox}];` +
+    `[out:json][timeout:10][bbox:${bbox}];` +
     `(way["building"];relation["building"]["type"="multipolygon"];);out body;>;out skel qt;`;
 
+  const diag: string[] = [`BBOX: ${bbox}`];
+
+  // 1. Backend proxy first — avoids Android carrier blocking Overpass directly.
+  //    Backend timeout budget: connect 5s + read 13s = 18s max.
+  //    We give 22s here so we never abort before the backend has finished.
+  const apiBase = (process.env.EXPO_PUBLIC_API_URL ?? '').replace(/\/$/, '');
+  const backendUrl =
+    `${apiBase}/api/buildings?south=${south.toFixed(6)}&west=${west.toFixed(6)}` +
+    `&north=${north.toFixed(6)}&east=${east.toFixed(6)}`;
+  {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 22000);
+    try {
+      const res = await fetch(backendUrl, { signal: controller.signal });
+      clearTimeout(timeoutId);
+      if (res.ok) {
+        const fc: GeoJSON.FeatureCollection = await res.json();
+        if (fc.features?.length > 0) {
+          diag.push(`[backend] OK ✓ ${fc.features.length} buildings`);
+          Alert.alert("Footprints DEBUG", diag.join("\n"));
+          return fc;
+        }
+        diag.push(`[backend] OK but 0 features`);
+      } else {
+        diag.push(`[backend] HTTP ${res.status}`);
+      }
+    } catch (e) {
+      clearTimeout(timeoutId);
+      diag.push(`[backend] ERR: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
+  // 2. Direct Overpass fallback (blocked on some carriers, but kept for other networks)
   const endpoints = [
     "https://overpass-api.de/api/interpreter",
     "https://overpass.kumi.systems/api/interpreter",
@@ -131,12 +164,9 @@ async function fetchBuildingsForBounds(
     "https://overpass.openstreetmap.ru/api/interpreter",
   ];
 
-  const diag: string[] = [`BBOX: ${bbox}`];
-
   for (const endpoint of endpoints) {
     const label = endpoint.replace("https://", "").split("/")[0];
     const controller = new AbortController();
-    // 15 s per endpoint for diagnostic (was 45 s)
     const timeoutId = setTimeout(() => controller.abort(), 15000);
     try {
       const res = await fetch(`${endpoint}?data=${encodeURIComponent(query)}`, {
