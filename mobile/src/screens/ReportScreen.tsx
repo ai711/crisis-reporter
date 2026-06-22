@@ -1042,16 +1042,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
       if (isMountedRef.current) setBuildingsLoading(true);
       const fc = await fetchBuildingsForBounds(lng - delta, lat - delta, lng + delta, lat + delta);
       if (isMountedRef.current) {
-        if (fc) {
-          setBuildingsFC(fc);
-        } else {
-          // Overpass returned no buildings for this area (sparse OSM coverage).
-          // Auto-drop a pin at the GPS location so the reporter is not stuck —
-          // they can reposition it by tapping the map, or proceed as-is.
-          setPinCoords({ lat, lng });
-          setPinDropActive(true);
-          setLocationMethod('pin_drop');
-        }
+        if (fc) setBuildingsFC(fc);
         setBuildingsLoading(false);
       }
     } catch {
@@ -2585,8 +2576,8 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                   </View>
                 )}
 
-                {/* Building footprints loading indicator */}
-                {buildingsLoading && (
+                {/* Building footprints loading indicator — hidden once a building or pin is confirmed */}
+                {buildingsLoading && !selectedBuilding && !pinDropActive && (
                   <View style={styles.buildingsLoadingPill} pointerEvents="none">
                     <MaterialIcons name="pending" size={scale(13)} color="#fff" />
                     <Text style={styles.buildingsLoadingText}>{t('report.loading_buildings', 'Loading footprints…')}</Text>
@@ -2610,35 +2601,33 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                 </TouchableOpacity>
               </View>
 
-              {/* Editable building name + location note — shown after building confirmed or pin dropped */}
-              {(selectedBuilding || pinDropActive) && (
+              {/* Building selected — compact name edit panel only (no location note) */}
+              {selectedBuilding && (
+                <View style={styles.mapBottomPanel}>
+                  <Text style={styles.panelFieldLabel}>{t('locationScreen.editBuildingName')}</Text>
+                  <TextInput
+                    style={styles.panelInput}
+                    value={editableBuildingName}
+                    onChangeText={setEditableBuildingName}
+                    placeholder={t('locationScreen.buildingNameLabel')}
+                    placeholderTextColor="#999999"
+                  />
+                </View>
+              )}
+
+              {/* Pin dropped — show coordinates + optional location note */}
+              {pinDropActive && !selectedBuilding && (
                 <View style={styles.mapBottomPanel}>
                   <ScrollView keyboardShouldPersistTaps="handled" style={{ maxHeight: 200 }}>
-                    {pinDropActive && !selectedBuilding && (
-                      <View style={styles.pinInfoRow}>
-                        <Text style={styles.pinInfoLabel}>{t('report.pin_location_label')}</Text>
-                        <Text style={styles.pinInfoCoords}>
-                          {pinCoords?.lat.toFixed(5)}, {pinCoords?.lng.toFixed(5)}
-                        </Text>
-                        <Text style={styles.pinInfoHint}>
-                          Tap anywhere on the map to move the pin
-                        </Text>
-                      </View>
-                    )}
-
-                    {selectedBuilding && (
-                      <>
-                        <Text style={styles.panelFieldLabel}>{t('locationScreen.editBuildingName')}</Text>
-                        <TextInput
-                          style={styles.panelInput}
-                          value={editableBuildingName}
-                          onChangeText={setEditableBuildingName}
-                          placeholder={t('locationScreen.buildingNameLabel')}
-                          placeholderTextColor="#999999"
-                        />
-                      </>
-                    )}
-
+                    <View style={styles.pinInfoRow}>
+                      <Text style={styles.pinInfoLabel}>{t('report.pin_location_label')}</Text>
+                      <Text style={styles.pinInfoCoords}>
+                        {pinCoords?.lat.toFixed(5)}, {pinCoords?.lng.toFixed(5)}
+                      </Text>
+                      <Text style={styles.pinInfoHint}>
+                        Tap anywhere on the map to move the pin
+                      </Text>
+                    </View>
                     <Text style={styles.panelFieldLabel}>{t('locationScreen.locationNote')}</Text>
                     <TextInput
                       style={[styles.panelInput, { height: 72 }]}
@@ -3690,7 +3679,6 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
                   style={styles.footerBackPill}
                   onPress={handleDamageBack}
                 >
-                  <MaterialIcons name="arrow-back" size={scale(18)} color="#0468B1" />
                   <Text style={styles.footerBackPillText}>{t('common.back')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
