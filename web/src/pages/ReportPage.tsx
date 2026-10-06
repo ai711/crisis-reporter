@@ -161,10 +161,13 @@ interface ApiQuestion {
   order_index: number;
   options: ApiOption[];
   is_additional?: boolean;
+  is_mandatory?: boolean;
   country_codes?: string[];
   conditional_on_q4?: string[];
-  question_type?: "single" | "multi";
+  question_type?: string; // single_select | multi_select | text
 }
+
+const isMultiQuestion = (q: ApiQuestion) => q.question_type === "multi_select" || q.question_type === "multi";
 interface ActivePackage {
   version: string;
   content_version?: string;
@@ -1496,10 +1499,10 @@ export default function ReportPage() {
 
   const additionalQuestions = useMemo(() => {
     if (!questionPackage) return [];
-    const reporterCountry = localStorage.getItem("cr_country") || countryCode || "";
+    const reporterCountry = (localStorage.getItem("cr_country") || countryCode || "").toUpperCase();
     return (questionPackage.questions || [])
-      .filter((q) => q.is_additional)
-      .filter((q) => !q.country_codes || q.country_codes.includes(reporterCountry))
+      .filter((q) => q.is_additional ?? q.order_index > 8)
+      .filter((q) => !q.country_codes?.length || q.country_codes.includes(reporterCountry))
       .filter((q) => !q.conditional_on_q4 || q.conditional_on_q4.includes(disasterType || ""));
   }, [questionPackage, disasterType, countryCode]);
 
@@ -1517,11 +1520,11 @@ export default function ReportPage() {
       case 8: return pressingNeeds.length > 0;
       default: {
         const aq = additionalQuestions[damageQuestion - 9];
-        if (!aq) return true;
+        if (!aq || aq.is_mandatory === false) return true;
         const ans = additionalAnswers[damageQuestion];
-        return aq.question_type === "multi"
+        return isMultiQuestion(aq)
           ? Array.isArray(ans) && (ans as string[]).length > 0
-          : typeof ans === "string" && ans.length > 0;
+          : typeof ans === "string" && ans.trim().length > 0;
       }
     }
   };
@@ -1690,6 +1693,9 @@ export default function ReportPage() {
           { question_order: 8, option_values: pressingNeeds, option_texts: pressingNeeds.map((v) => PRESSING_NEEDS_LABELS[v] ?? v), other_text: pressingNeedsOther || null },
           ...additionalQuestions.map((q, i) => {
             const ans = additionalAnswers[9 + i];
+            if (q.question_type === "text") {
+              return { question_order: 9 + i, question_text: q.question_text, free_text: typeof ans === "string" ? ans.trim() : "" };
+            }
             return Array.isArray(ans)
               ? { question_order: 9 + i, question_text: q.question_text, option_values: ans }
               : { question_order: 9 + i, question_text: q.question_text, option_value: ans };
@@ -3132,14 +3138,30 @@ export default function ReportPage() {
             {damageQuestion >= 9 && (() => {
               const aq = additionalQuestions[damageQuestion - 9];
               if (!aq) return null;
-              const isMulti = aq.question_type === "multi";
+              const isMulti = isMultiQuestion(aq);
               const currentVal = additionalAnswers[damageQuestion];
               const selectedValues: string[] = Array.isArray(currentVal) ? currentVal : [];
               const selectedValue: string = typeof currentVal === "string" ? currentVal : "";
               return (
                 <>
-                  <h2 style={styles.questionTitle}>{t(`Q${aq.order_index}_LABEL`, { defaultValue: aq.question_text })} *</h2>
+                  <h2 style={styles.questionTitle}>{t(`Q${aq.order_index}_LABEL`, { defaultValue: aq.question_text })}{aq.is_mandatory === false ? "" : " *"}</h2>
                   {isMulti && <p style={styles.photoHint}>{t('report.select_all_apply')}</p>}
+                  {aq.question_type === "text" && (
+                    <>
+                      <input
+                        style={styles.input}
+                        type="text"
+                        maxLength={200}
+                        placeholder={t('report.answer_placeholder')}
+                        value={selectedValue}
+                        onChange={(e) => {
+                          setShowAnswerPrompt(false);
+                          setAdditionalAnswers((prev) => ({ ...prev, [damageQuestion]: e.target.value }));
+                        }}
+                      />
+                      <div style={styles.charCounter}>{selectedValue.length} / 200</div>
+                    </>
+                  )}
                   {aq.options.map((opt) => {
                     const isSelected = isMulti ? selectedValues.includes(opt.option_value) : selectedValue === opt.option_value;
                     return isMulti ? (

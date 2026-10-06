@@ -1334,6 +1334,8 @@ WHERE code IN (
     # active crisis configured. The NOT NULL constraint is dropped; existing rows
     # are unaffected (they already have a non-null value).
     "ALTER TABLE reports ALTER COLUMN crisis_id DROP NOT NULL",
+    # Question.country_codes — limits an additional question to specific countries
+    "ALTER TABLE questions ADD COLUMN IF NOT EXISTS country_codes JSON",
 ]
 
 

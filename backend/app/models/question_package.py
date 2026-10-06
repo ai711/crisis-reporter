@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import String, Boolean, DateTime, Integer, ForeignKey, Text
+from sqlalchemy import JSON, String, Boolean, DateTime, Integer, ForeignKey, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID
 from app.database import Base
@@ -75,6 +75,8 @@ class Question(Base):
     is_mandatory: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     is_core: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # ISO 3166-1 alpha-2 codes; NULL or empty = shown in every country
+    country_codes: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
 
     # Relationships
     package: Mapped["QuestionPackage"] = relationship(

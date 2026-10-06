@@ -194,6 +194,8 @@ interface ApiQuestion {
   options: ApiOption[];
   type?: 'single_select' | 'multi_select' | 'free_text';
   is_mandatory?: boolean;
+  is_additional?: boolean;
+  country_codes?: string[];
   max_length?: number;
 }
 interface ActivePackage { version: string; translation_version?: string; questions: ApiQuestion[]; }
@@ -902,11 +904,15 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
     });
   };
 
-  // Additional questions — those beyond the 8 core questions (order_index > 8)
+  // Additional questions — those beyond the 8 core questions (order_index > 8),
+  // limited to the reporter's country when the question targets specific countries
   const additionalQuestions = useMemo(() => {
     if (!questionPackage?.questions) return [];
-    return questionPackage.questions.filter((q) => q.order_index > 8);
-  }, [questionPackage]);
+    const country = (reporterCountryCode ?? '').toUpperCase();
+    return questionPackage.questions
+      .filter((q) => q.is_additional ?? q.order_index > 8)
+      .filter((q) => !q.country_codes?.length || q.country_codes.includes(country));
+  }, [questionPackage, reporterCountryCode]);
 
   // Per-question answer persistence — called after each successful Next tap
   const saveDraftAnswers = async () => {

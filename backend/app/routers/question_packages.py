@@ -55,6 +55,11 @@ class QuestionOut(BaseModel):
     is_mandatory: bool
     is_active: bool
     is_core: bool
+    # Read by the reporter apps to render questions beyond the 8 core ones.
+    # `type` repeats question_type in the vocabulary installed Android builds expect.
+    is_additional: bool = False
+    type: str = "single_select"
+    country_codes: list[str] = []
     options: list[OptionOut]
 
     class Config:
@@ -146,6 +151,15 @@ class AddQuestionRequest(BaseModel):
 VALID_QUESTION_TYPES = {"single_select", "multi_select", "text"}
 
 
+def _question_extras(q: Question) -> dict:
+    """Fields the reporter apps use to show additional (Q9+) questions."""
+    return {
+        "is_additional": q.order_index > 8 and not q.is_core,
+        "type": "free_text" if q.question_type == "text" else q.question_type,
+        "country_codes": [c.upper() for c in (q.country_codes or [])],
+    }
+
+
 def _build_question_out(q: Question) -> QuestionOut:
     return QuestionOut(
         id=str(q.id),
@@ -155,6 +169,7 @@ def _build_question_out(q: Question) -> QuestionOut:
         is_mandatory=q.is_mandatory,
         is_active=q.is_active,
         is_core=q.is_core,
+        **_question_extras(q),
         options=[
             OptionOut(
                 id=str(o.id),
@@ -358,6 +373,7 @@ async def get_active_package(
             is_mandatory=q.is_mandatory,
             is_active=q.is_active,
             is_core=q.is_core,
+            **_question_extras(q),
             options=[
                 OptionOut(
                     id=str(o.id),
@@ -610,6 +626,7 @@ async def add_question_to_draft(
                     is_mandatory=q.is_mandatory,
                     is_active=q.is_active,
                     is_core=q.is_core,
+                    country_codes=q.country_codes,
                 )
                 db.add(new_q)
                 await db.flush()
@@ -634,6 +651,7 @@ async def add_question_to_draft(
         is_mandatory=request.is_mandatory,
         is_active=True,
         is_core=False,
+        country_codes=sorted({c.strip().upper() for c in request.country_codes if c.strip()}) or None,
     )
     db.add(new_question)
     await db.flush()

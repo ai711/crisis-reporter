@@ -91,6 +91,7 @@
     "show_manual_entry": "Enter location manually instead ▼",
     "landmark_placeholder": "Landmark (e.g. Near central market)",
     "select_all_apply": "Select all that apply.",
+    "answer_placeholder": "Enter your answer...",
     "please_specify": "Please specify...",
     "location_changed_warning": "Your location has changed. Please confirm or update the infrastructure name.",
     "q4_category_natural": "Natural Hazards",

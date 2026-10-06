@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "../stores/authStore";
 import api from "../services/api";
 import Header from "../components/Header";
+import CountrySelect, { fetchCountries, type CountryOption } from "../components/CountrySelect";
 import { usePageTitle } from "../hooks/usePageTitle";
 import { Toast } from "../components/Toast";
 
@@ -37,6 +38,7 @@ interface ActiveQuestion {
   is_mandatory: boolean;
   is_active: boolean;
   is_core: boolean;
+  country_codes?: string[];
   options: QuestionOption[];
 }
 
@@ -2611,8 +2613,14 @@ function AddQuestionModal({
   const [isMandatory, setIsMandatory] = useState(false);
   const [availableOffline, setAvailableOffline] = useState(true);
   const [options, setOptions] = useState<string[]>(["", ""]);
+  const [countryCodes, setCountryCodes] = useState<string[]>([]);
+  const [countries, setCountries] = useState<CountryOption[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
+
+  useEffect(() => {
+    fetchCountries().then(setCountries).catch(() => setCountries([]));
+  }, []);
 
   const needsOptions = questionType === "single_select" || questionType === "multi_select";
 
@@ -2643,6 +2651,7 @@ function AddQuestionModal({
         question_type: questionType,
         is_mandatory: isMandatory,
         available_offline: availableOffline,
+        country_codes: countryCodes,
         options: needsOptions
           ? options
               .filter((o) => o.trim())
@@ -2718,6 +2727,14 @@ function AddQuestionModal({
               </div>
             </Field>
           )}
+          <Field label="Show only in these countries (leave empty for all countries)">
+            <CountrySelect
+              selected={countryCodes}
+              onChange={setCountryCodes}
+              countries={countries}
+              placeholder="All countries"
+            />
+          </Field>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
             <Field label="Response">
               <div style={s.toggleRow}>
@@ -3019,6 +3036,11 @@ function QuestionsTab({ isAdmin, onSwitchToLanguages: _onSwitchToLanguages }: { 
                   {isDeactivated && (
                     <span style={{ fontSize: 11, fontWeight: 700, background: "var(--c-surface-high)", color: "var(--c-text-muted)", padding: "2px 8px", borderRadius: 10 }}>
                       Deactivated
+                    </span>
+                  )}
+                  {!!q.country_codes?.length && (
+                    <span title="Shown only to reporters in these countries" style={{ fontSize: 11, fontWeight: 600, background: "var(--c-surface-high)", color: "var(--c-text-secondary)", padding: "2px 8px", borderRadius: 10 }}>
+                      {q.country_codes.join(", ")}
                     </span>
                   )}
                   {q.is_core ? (
