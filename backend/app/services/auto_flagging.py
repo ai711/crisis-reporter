@@ -217,19 +217,32 @@ async def auto_flag_report(report_id: str, delay: int = 10) -> None:
     # the main session opens so the wait doesn't hold a pooled DB connection.
     async with AsyncSessionLocal() as db:
         pre = (await db.execute(
-            select(Report.was_queued, Report.created_at, func.count(Photo.id))
+            select(Report.was_queued, Report.created_at, func.count(Photo.id),
+                   Report.ip_address_hash, Report.ip_address_encrypted)
             .outerjoin(Photo, Photo.report_id == Report.id)
             .where(Report.id == report_id)
             .group_by(Report.id)
         )).first()
+    # Rule 7's IP geolocation is an external HTTP call (up to 5 s on a cache miss) —
+    # also done here, outside any session, so it never holds a pooled connection.
+    geo_country: str | None = None
+    geo_failed = False
     if pre is not None:
-        was_queued, created_at, pre_photo_count = pre
+        was_queued, created_at, pre_photo_count, ip_hash, ip_encrypted = pre
         if (
             pre_photo_count == 0
             and not was_queued
             and (datetime.now(timezone.utc) - created_at).total_seconds() < 30
         ):
             await asyncio.sleep(20)
+        if ip_hash and ip_encrypted:
+            import base64
+            from app.services.encryption import decrypt_field
+            raw_ip = decrypt_field(base64.b64decode(ip_encrypted))
+            try:
+                geo_country = await _geolocate_ip_cached(raw_ip, ip_hash)
+            except Exception:
+                geo_failed = True
 
     async with AsyncSessionLocal() as db:
         try:
@@ -493,56 +506,58 @@ async def auto_flag_report(report_id: str, delay: int = 10) -> None:
             # ── Rule 7: IP country mismatch (Redis-cached geolocation) ────────
             # ip-api.com free tier is capped at 45 req/min. Redis caching means
             # each unique IP is geolocated at most once per 24 hours.
+            # geo_country was resolved before this session opened (see top of function).
             if report.ip_address_hash and report.ip_address_encrypted:
-                import base64
-                from app.services.encryption import decrypt_field
-                raw_ip = decrypt_field(base64.b64decode(report.ip_address_encrypted))
                 reporter_country: str | None = (
                     current_reporter.country_code if current_reporter else None
                 )
-                try:
-                    geo_country = await _geolocate_ip_cached(raw_ip, report.ip_address_hash)
-                    if (
-                        geo_country
-                        and reporter_country
-                        and geo_country.upper() != reporter_country.upper()
-                    ):
-                        triggered_rules.append({
-                            "rule_id": "7",
-                            "reason": "ip_country_mismatch",
-                            "metadata": {
-                                # Raw IP intentionally omitted — stored encrypted on the report.
-                                # Use ReportDetail.submission_ip for on-demand decryption.
-                                "geolocated_country": geo_country,
-                                "reporter_selected_country": reporter_country,
-                            },
-                        })
-                except Exception:
+                if geo_failed:
                     log.warning(
                         "auto_flag_report: Rule 7 (IP country) skipped for %s — "
                         "geolocation unavailable or throttled",
                         report_id,
                     )
+                elif (
+                    geo_country
+                    and reporter_country
+                    and geo_country.upper() != reporter_country.upper()
+                ):
+                    triggered_rules.append({
+                        "rule_id": "7",
+                        "reason": "ip_country_mismatch",
+                        "metadata": {
+                            # Raw IP intentionally omitted — stored encrypted on the report.
+                            # Use ReportDetail.submission_ip for on-demand decryption.
+                            "geolocated_country": geo_country,
+                            "reporter_selected_country": reporter_country,
+                        },
+                    })
 
             # ── Rule 8: Same IP, multiple device IDs ──────────────────────────
             if report.ip_address_hash:
                 ip_window = datetime.now(timezone.utc) - timedelta(hours=24)
-                same_ip_result = await db.execute(
-                    select(Report.reporter_id).where(and_(
-                        Report.ip_address_hash == report.ip_address_hash,
-                        Report.id != report.id,
-                        Report.created_at >= ip_window,
-                        Report.reporter_id.isnot(None),
-                        Report.reporter_id != report.reporter_id,
-                    )).distinct()
+                same_ip = and_(
+                    Report.ip_address_hash == report.ip_address_hash,
+                    Report.id != report.id,
+                    Report.created_at >= ip_window,
+                    Report.reporter_id.isnot(None),
+                    Report.reporter_id != report.reporter_id,
                 )
-                other_reporter_id_list = same_ip_result.scalars().all()
+                # Count in SQL and keep only a sample for reviewer links: behind carrier
+                # NAT or shared Wi-Fi one IP can carry thousands of reporters, and listing
+                # them all made every auto-flag run (and FlagEvent row) grow with volume.
+                other_count = (await db.execute(
+                    select(func.count(func.distinct(Report.reporter_id))).where(same_ip)
+                )).scalar() or 0
 
-                if len(other_reporter_id_list) >= settings.SAME_IP_DEVICE_THRESHOLD:
+                if other_count >= settings.SAME_IP_DEVICE_THRESHOLD:
+                    sample_ids = (await db.execute(
+                        select(Report.reporter_id).where(same_ip).distinct().limit(20)
+                    )).scalars().all()
                     # Enrich with display_ids so reviewers see Reporter #N links
                     display_rows = await db.execute(
                         select(Reporter.id, Reporter.display_id).where(
-                            Reporter.id.in_(other_reporter_id_list)
+                            Reporter.id.in_(sample_ids)
                         )
                     )
                     other_reporters = [
@@ -554,8 +569,8 @@ async def auto_flag_report(report_id: str, delay: int = 10) -> None:
                         "reason": "same_ip_multiple_devices",
                         "metadata": {
                             "ip_hash": report.ip_address_hash,
-                            "other_reporters": other_reporters,
-                            "device_count": len(other_reporters) + 1,
+                            "other_reporters": other_reporters,  # sample of up to 20
+                            "device_count": other_count + 1,
                             "window_hours": 24,
                         },
                     })
