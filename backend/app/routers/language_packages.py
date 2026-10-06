@@ -3325,9 +3325,14 @@ async def seed_string_keys() -> None:
         seed_key_set = {k for k, _c, _e in _SEED_KEYS}
 
         added = 0
+        inserted: set[str] = set()
         for key, category, english_text in _SEED_KEYS:
+            if key in inserted:
+                # A few keys appear twice in _SEED_KEYS; inserting both breaks a fresh database
+                continue
             if key not in existing_map:
                 session.add(StringKey(key=key, category=category, english_text=english_text))
+                inserted.add(key)
                 added += 1
             elif not existing_map[key].is_active:
                 # Re-activate a previously retired key that is back in _SEED_KEYS
