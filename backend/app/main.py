@@ -1413,6 +1413,10 @@ async def lifespan(app: FastAPI):
             "Export download URLs will expire on restart. Set this env var in production."
         )
     async with engine.begin() as conn:
+        # Sequences referenced by column defaults (reports.serial_number) must exist
+        # before create_all, or startup fails on a brand-new empty database.
+        for seq in ("reports_serial_seq", "crisis_serial_seq", "reporter_display_id_seq"):
+            await conn.execute(text(f"CREATE SEQUENCE IF NOT EXISTS {seq} START WITH 1 INCREMENT BY 1"))
         await conn.run_sync(Base.metadata.create_all)
         for stmt in _MIGRATIONS:
             try:

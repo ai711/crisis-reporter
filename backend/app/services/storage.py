@@ -1,3 +1,4 @@
+import asyncio
 import os
 import uuid
 from abc import ABC, abstractmethod
@@ -81,7 +82,10 @@ class CloudflareR2Storage(StorageService):
         unique_filename = f"{uuid.uuid4()}{ext}"
         storage_path = f"photos/{unique_filename}"
 
-        self.client.put_object(
+        # boto3 is synchronous — run it in a worker thread so the upload
+        # round-trip to R2 doesn't stall every other request on the event loop.
+        await asyncio.to_thread(
+            self.client.put_object,
             Bucket=self.bucket_name,
             Key=storage_path,
             Body=file_data,
@@ -97,7 +101,8 @@ class CloudflareR2Storage(StorageService):
 
     async def delete(self, storage_path: str) -> bool:
         try:
-            self.client.delete_object(
+            await asyncio.to_thread(
+                self.client.delete_object,
                 Bucket=self.bucket_name,
                 Key=storage_path,
             )

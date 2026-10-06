@@ -33,6 +33,14 @@ class PhotoResponse(BaseModel):
     was_compressed: bool
 
 
+def _process_image(image_bytes: bytes, content_type: str) -> tuple[dict, bytes, bool, float, str]:
+    """EXIF extraction, compression and SHA-256 (for duplicate detection) in one worker-thread call."""
+    exif_data = extract_exif(image_bytes)
+    processed_bytes, was_compressed, compression_ratio = compress_image(image_bytes, content_type)
+    photo_hash = hashlib.sha256(processed_bytes).hexdigest()
+    return exif_data, processed_bytes, was_compressed, compression_ratio, photo_hash
+
+
 @router.post("", response_model=PhotoResponse)
 async def upload_photo(
     report_id: str = Form(...),
@@ -90,18 +98,16 @@ async def upload_photo(
 
     original_size = len(image_bytes)
 
-    # Extract EXIF metadata
-    exif_data = extract_exif(image_bytes)
+    # End the read transaction so the DB connection goes back to the pool while
+    # the image is processed and uploaded (can take hundreds of ms per photo).
+    await db.commit()
 
-    # Compress image
-    processed_bytes, was_compressed, compression_ratio = compress_image(
-        image_bytes, file.content_type
+    # EXIF, compression and hashing are CPU-bound — run them off the event loop
+    exif_data, processed_bytes, was_compressed, compression_ratio, photo_hash = (
+        await asyncio.to_thread(_process_image, image_bytes, file.content_type)
     )
 
     final_size = len(processed_bytes)
-
-    # SHA-256 hash of final bytes for duplicate image detection
-    photo_hash = hashlib.sha256(processed_bytes).hexdigest()
 
     # Store via StorageService
     storage_path = await storage_service.save(
