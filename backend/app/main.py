@@ -1594,6 +1594,8 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    # Lets the dashboard read the export filename on cross-origin downloads
+    expose_headers=["Content-Disposition"],
 )
 
 if settings.STORAGE_BACKEND == "local":

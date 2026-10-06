@@ -160,13 +160,21 @@ const PLATFORM_OPTIONS = [
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
-function triggerDownload(url: string) {
+// download_url is a backend path ("/api/exports/…"). Opening it as a plain link
+// resolved it against the dashboard's own domain and saved the SPA's index.html,
+// so fetch it through the authenticated API client and save the blob instead.
+async function triggerDownload(url: string): Promise<void> {
+  const res = await api.get<Blob>(url, { responseType: "blob" });
+  const disposition = String(res.headers["content-disposition"] ?? "");
+  const filename = /filename="?([^";]+)"?/.exec(disposition)?.[1] ?? "export";
+  const objectUrl = URL.createObjectURL(res.data);
   const a = document.createElement("a");
-  a.href = url;
-  a.download = "";
+  a.href = objectUrl;
+  a.download = filename;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
 }
 
 function fmtDate(iso: string): string {
@@ -513,8 +521,12 @@ export default function ExportPage() {
             clearInterval(pollRef.current!);
             pollRef.current = null;
             setGenerating(false);
-            triggerDownload(data.download_url);
-            setStatusMsg({ kind: "success", text: "Export ready — download started." });
+            try {
+              await triggerDownload(data.download_url);
+              setStatusMsg({ kind: "success", text: "Export ready — download started." });
+            } catch {
+              setStatusMsg({ kind: "error", text: "Export was generated but the download failed. Use Re-download in Recent Exports." });
+            }
             fetchHistory();
           } else if (data.status === "failed") {
             clearInterval(pollRef.current!);
@@ -563,7 +575,11 @@ export default function ExportPage() {
             clearInterval(redownloadPollRef.current!);
             redownloadPollRef.current = null;
             setRedownloadingId(null);
-            triggerDownload(data.download_url);
+            try {
+              await triggerDownload(data.download_url);
+            } catch {
+              setStatusMsg({ kind: "error", text: "Re-download failed. Please try again." });
+            }
             fetchHistory();
           } else if (data.status === "failed") {
             clearInterval(redownloadPollRef.current!);
