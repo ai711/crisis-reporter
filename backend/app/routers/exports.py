@@ -21,13 +21,13 @@ import tempfile
 import time
 import uuid
 import zipfile
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, field_validator, model_validator
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import selectinload
 
 from app.config import settings
@@ -192,6 +192,28 @@ def _parse_date(s: str | None) -> datetime | None:
         return None
 
 
+def _as_utc(dt: datetime) -> datetime:
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+
+
+# Values stored in reports.platform by each client. The Android app sends
+# "Native App Android"; early builds sent "android".
+_PLATFORM_ALIASES: dict[str, list[str]] = {
+    "android": ["android", "Native App Android"],
+    "ios": ["ios", "Native App iOS"],
+    "pwa": ["pwa"],
+    "web": ["web"],
+}
+
+
+def _normalize_disaster_type(value: str) -> str:
+    """Map a label ("Hurricane or Cyclone") to the stored Q4 option_value ("hurricane_cyclone").
+
+    Older dashboard builds sent labels; stored exports in history still carry them.
+    """
+    return value.strip().lower().replace(" or ", "_").replace(" ", "_")
+
+
 def _fmt_dt(dt: datetime | None) -> str:
     return dt.isoformat() if dt else ""
 
@@ -258,16 +280,26 @@ def _build_where_clauses(job: dict, default_flag_statuses: list[str]) -> list:
     date_from = _parse_date(job.get("date_from"))
     date_to = _parse_date(job.get("date_to"))
     if date_from:
-        clauses.append(Report.created_at >= date_from)
+        clauses.append(Report.created_at >= _as_utc(date_from))
     if date_to:
-        clauses.append(Report.created_at <= date_to)
+        # A plain date ("2026-08-27") means the whole day — compare against the next midnight
+        if len(str(job.get("date_to"))) == 10:
+            clauses.append(Report.created_at < _as_utc(date_to) + timedelta(days=1))
+        else:
+            clauses.append(Report.created_at <= _as_utc(date_to))
 
     country_filter = job.get("country_filter")
     if country_filter:
+        codes = [c.upper() for c in country_filter if c]
+        # The report's own country (ISO code set at submission) is authoritative;
+        # fall back to its project's country for reports submitted without one.
         crisis_subq = select(Crisis.id).where(
-            Crisis.country_code.in_(country_filter)
+            func.upper(Crisis.country_code).in_(codes)
         ).scalar_subquery()
-        clauses.append(Report.crisis_id.in_(crisis_subq))
+        clauses.append(or_(
+            func.upper(Report.reporter_country).in_(codes),
+            and_(Report.reporter_country.is_(None), Report.crisis_id.in_(crisis_subq)),
+        ))
 
     damage_level = job.get("damage_level")
     if damage_level:
@@ -275,7 +307,7 @@ def _build_where_clauses(job: dict, default_flag_statuses: list[str]) -> list:
 
     crisis_type = job.get("crisis_type")
     if crisis_type:
-        clauses.append(Report.disaster_type.in_(crisis_type))
+        clauses.append(Report.disaster_type.in_([_normalize_disaster_type(t) for t in crisis_type]))
 
     flag_status = job.get("flag_status")
     if flag_status:
@@ -285,7 +317,8 @@ def _build_where_clauses(job: dict, default_flag_statuses: list[str]) -> list:
 
     platform = job.get("platform")
     if platform:
-        clauses.append(Report.platform.in_(platform))
+        values = [v for p in platform for v in _PLATFORM_ALIASES.get(p, [p])]
+        clauses.append(Report.platform.in_(values))
 
     project_id = job.get("project_id")
     if project_id:

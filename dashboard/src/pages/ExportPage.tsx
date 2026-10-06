@@ -18,6 +18,7 @@ interface ReportTypeConfig {
   formats: string[];
 }
 
+// /api/countries returns { code, name, … } — `id` is the ISO code used as the filter value
 interface Country {
   id: string;
   name: string;
@@ -140,15 +141,16 @@ const DAMAGE_LEVEL_OPTIONS = [
 ];
 
 const CRISIS_TYPE_OPTIONS = [
-  { value: "Earthquake",           label: "Earthquake"           },
-  { value: "Flood",                label: "Flood"                },
-  { value: "Tsunami",              label: "Tsunami"              },
-  { value: "Hurricane or Cyclone", label: "Hurricane or Cyclone" },
-  { value: "Wildfire",             label: "Wildfire"             },
-  { value: "Explosion",            label: "Explosion"            },
-  { value: "Chemical Incident",    label: "Chemical Incident"    },
-  { value: "Conflict",             label: "Conflict"             },
-  { value: "Civil Unrest",         label: "Civil Unrest"         },
+  // Values must match the stored Q4 option_value (reports.disaster_type)
+  { value: "earthquake",        label: "Earthquake"           },
+  { value: "flood",             label: "Flood"                },
+  { value: "tsunami",           label: "Tsunami"              },
+  { value: "hurricane_cyclone", label: "Hurricane or Cyclone" },
+  { value: "wildfire",          label: "Wildfire"             },
+  { value: "explosion",         label: "Explosion"            },
+  { value: "chemical_incident", label: "Chemical Incident"    },
+  { value: "conflict",          label: "Conflict"             },
+  { value: "civil_unrest",      label: "Civil Unrest"         },
 ];
 
 const PLATFORM_OPTIONS = [
@@ -426,8 +428,8 @@ export default function ExportPage() {
 
   useEffect(() => {
     api
-      .get<Country[]>("/api/countries")
-      .then((r) => setCountries(r.data))
+      .get<{ code: string; name: string }[]>("/api/countries")
+      .then((r) => setCountries(r.data.map((c) => ({ id: c.code.toUpperCase(), name: c.name }))))
       .catch(() => {});
   }, []);
 
