@@ -70,7 +70,7 @@ export default function QueuedReportDetailScreen() {
     );
   }
 
-  const isFailed  = qr.retry_count >= 5;
+  const isFailed  = qr.status === 'failed';
   const isSyncing = qr.status === 'syncing';
 
   const loc =

@@ -232,7 +232,7 @@ export default function MyReportsPage() {
       .then((items) => {
         items.sort((a, b) => {
           const rank = (i: QueuedReport) =>
-            i.status === "syncing" ? 0 : i.retry_count >= 5 ? 2 : 1;
+            i.status === "syncing" ? 0 : i.status === "failed" ? 2 : 1;
           return rank(a) - rank(b);
         });
         setOfflineReports(items);
@@ -564,7 +564,7 @@ export default function MyReportsPage() {
 
     const dmgColor  = DAMAGE_COLOR[qr.report.damage_level as string] ?? "#999";
     const dmgLbl    = damageLabel(qr.report.damage_level as string);
-    const isFailed  = qr.retry_count >= 5;
+    const isFailed  = qr.status === "failed";
     const isSyncing = qr.status === "syncing";
     const isDeleting = deletingId === qr.local_id;
     const isRetrying = retryingId === qr.local_id;
@@ -635,7 +635,7 @@ export default function MyReportsPage() {
         ? `${qr.report.location.gps_latitude.toFixed(5)}, ${(qr.report.location.gps_longitude ?? 0).toFixed(5)}`
         : t("my_reports.location_not_recorded"));
     const dmgLbl   = damageLabel(qr.report.damage_level as string);
-    const isFailed = qr.retry_count >= 5;
+    const isFailed = qr.status === "failed";
     const blobUrls: string[] = qr.photos.map((p) =>
       URL.createObjectURL(p.blob)
     );
@@ -813,7 +813,7 @@ export default function MyReportsPage() {
             {hasOffline && (
               <>
                 <p style={styles.sectionLabel}>
-                  {offlineReports.some((r) => r.retry_count >= 5)
+                  {offlineReports.some((r) => r.status === "failed")
                     ? `⚠ ${t("my_reports.upload_issues_label", { count: offlineReports.length })}`
                     : `⏳ ${t("my_reports.pending_upload_label", { count: offlineReports.length })}`}
                 </p>

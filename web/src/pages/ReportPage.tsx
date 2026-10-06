@@ -1747,6 +1747,10 @@ export default function ReportPage() {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 30000);
 
+    // Progress, so a failure part-way through queues only what didn't reach the server
+    let serverReportId: string | undefined;
+    let photosUploaded = 0;
+
     try {
       const response = await api.post("/api/reports", reportPayload, {
         signal: controller.signal,
@@ -1754,6 +1758,7 @@ export default function ReportPage() {
       clearTimeout(timeoutId);
 
       const reportId = response.data.report_id as string;
+      serverReportId = reportId;
 
       for (let i = 0; i < compressedPhotos.length; i++) {
         const formData = new FormData();
@@ -1764,6 +1769,7 @@ export default function ReportPage() {
           headers: { "Content-Type": "multipart/form-data" },
           timeout: 120000,
         });
+        photosUploaded = i + 1;
       }
 
       saveSubmittedLocation();
@@ -1818,26 +1824,31 @@ export default function ReportPage() {
         axiosErr?.code === "ERR_NETWORK" ||
         (err instanceof Error && err.message === "Network Error")
       );
-      if (isTimeout) {
-        setSubmitError("timeout");
-      } else if (isNetworkError) {
-        // Network failed after health probe passed — queue the report rather than
-        // showing an error, so the user doesn't lose their submission.
+      // Server overloaded or unreachable — the report is fine, it just couldn't get
+      // through. Queue it for automatic retry instead of asking the reporter to resubmit.
+      const status = axiosErr?.response?.status;
+      const isServerSide = status !== undefined && (status >= 500 || status === 408 || status === 429);
+      if (isTimeout || isNetworkError || isServerSide) {
         try {
           const queuedPhotos: QueuedPhoto[] = compressedPhotos.map((file, i) => ({
             blob: file,
             filename: `photo_${i}.jpg`,
             content_type: file.type || "image/jpeg",
             display_order: i,
-          }));
-          await addToQueue({ ...reportPayload, was_queued: true } as unknown as ReportSubmitRequest, queuedPhotos);
+          })).slice(photosUploaded);
+          await addToQueue(
+            { ...reportPayload, was_queued: true } as unknown as ReportSubmitRequest,
+            queuedPhotos,
+            serverReportId,
+          );
           try { localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ }
           void requestSyncNotificationPermission();
           isSubmittedRef.current = true;
           setWasQueued(true);
           setSubmitted(true);
         } catch {
-          setSubmitError("no_internet");
+          // Queue unavailable (e.g. private browsing) — the draft is kept for a manual retry
+          setSubmitError(isTimeout ? "timeout" : isServerSide ? "server_error" : "no_internet");
         }
       } else {
         // Log full error to console so 422 validation detail is visible in DevTools

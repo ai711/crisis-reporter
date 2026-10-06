@@ -112,5 +112,10 @@ export interface QueuedReport {
   retry_count: number;
   created_at: string;
   last_attempt_at: string | null;
+  // Set once the report is on the server — retries skip POST /api/reports and
+  // only upload the photos still in `photos` (uploaded ones are removed).
+  existing_report_id?: string;
+  // The server rejected the report as invalid (4xx) — not retried automatically
+  permanent_error?: boolean;
 }
 

@@ -29,7 +29,8 @@ function openDB(): Promise<IDBDatabase> {
 
 export async function addToQueue(
   report: ReportSubmitRequest,
-  photos: QueuedPhoto[]
+  photos: QueuedPhoto[],
+  existingReportId?: string
 ): Promise<string> {
   const db = await openDB();
   const local_id = `local_${generateUUID()}`;
@@ -42,6 +43,7 @@ export async function addToQueue(
     retry_count: 0,
     created_at: new Date().toISOString(),
     last_attempt_at: null,
+    ...(existingReportId ? { existing_report_id: existingReportId } : {}),
   };
 
   return new Promise((resolve, reject) => {
@@ -94,6 +96,46 @@ export async function updateItemStatus(
     };
 
     getRequest.onerror = () => reject(getRequest.error);
+  });
+}
+
+// Merge fields into a queue item (sync progress: server report id, remaining photos, errors)
+async function patchItem(local_id: string, patch: Partial<QueuedReport>): Promise<void> {
+  const db = await openDB();
+
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, "readwrite");
+    const store = tx.objectStore(STORE_NAME);
+    const getRequest = store.get(local_id);
+
+    getRequest.onsuccess = () => {
+      const item = getRequest.result as QueuedReport;
+      if (!item) return resolve();
+      const putRequest = store.put({ ...item, ...patch });
+      putRequest.onsuccess = () => resolve();
+      putRequest.onerror = () => reject(putRequest.error);
+    };
+
+    getRequest.onerror = () => reject(getRequest.error);
+  });
+}
+
+// Reports marked "failed" only because they ran out of retries (older app versions
+// gave up after 5) go back to pending — only server-rejected reports stay failed.
+async function reviveRetryableFailures(): Promise<void> {
+  const db = await openDB();
+
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, "readwrite");
+    const request = tx.objectStore(STORE_NAME).index("status").openCursor("failed");
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (!cursor) return resolve();
+      const item = cursor.value as QueuedReport;
+      if (!item.permanent_error) cursor.update({ ...item, status: "pending" });
+      cursor.continue();
+    };
+    request.onerror = () => reject(request.error);
   });
 }
 
@@ -180,7 +222,32 @@ export async function resetStuckItems(): Promise<void> {
 
 // ── Sync engine ───────────────────────────────────────────────────────────────
 
-const MAX_RETRIES = 5;
+// After this many failed attempts the reporter is told the report is still waiting.
+// Retries never stop — only a server rejection (4xx) marks a report "failed".
+const SLOW_RETRY_NOTICE_AT = 5;
+
+// Wait before retrying: 2, 4, 8, 16, then every 30 minutes. Each report gets a
+// fixed 50–100% share of that wait (derived from its id) so that thousands of
+// phones coming back after an outage don't all retry at the same moment.
+function retryDelayMs(retryCount: number, localId: string): number {
+  const base = Math.min(2 ** retryCount * 60_000, 30 * 60_000);
+  let h = 0;
+  for (let i = 0; i < localId.length; i++) h = (h * 31 + localId.charCodeAt(i)) >>> 0;
+  return base * (0.5 + (h % 1000) / 2000);
+}
+
+function isDueForRetry(item: QueuedReport): boolean {
+  if (item.retry_count === 0 || !item.last_attempt_at) return true;
+  return Date.now() - new Date(item.last_attempt_at).getTime() >= retryDelayMs(item.retry_count, item.local_id);
+}
+
+// 4xx other than auth / timeout / rate-limit means the server rejected the data —
+// retrying the same payload will never succeed.
+function isPermanentRejection(status: number): boolean {
+  return status >= 400 && status < 500 && status !== 401 && status !== 408 && status !== 429;
+}
+
+class PermanentRejection extends Error {}
 
 let isSyncing = false;
 
@@ -216,7 +283,7 @@ export async function syncQueue(apiBaseUrl: string): Promise<void> {
   isSyncing = true;
 
   try {
-    const pending = await getPendingItems();
+    const pending = (await getPendingItems()).filter(isDueForRetry);
     if (pending.length === 0) return;
 
     // Proactively refresh the HttpOnly auth cookie once before the whole pass
@@ -224,40 +291,42 @@ export async function syncQueue(apiBaseUrl: string): Promise<void> {
     await refreshAccessTokenIfNeeded(apiBaseUrl);
 
     for (const item of pending) {
-      // Promote exhausted items to "failed" so the UI can surface them
-      if (item.retry_count >= MAX_RETRIES) {
-        await updateItemStatus(item.local_id, "failed", item.retry_count);
-        showSyncNotification(
-          "Upload failed — tap to retry",
-          "A report could not be uploaded after multiple attempts. Open the app to retry."
-        );
-        continue;
-      }
-
       await updateItemStatus(item.local_id, "syncing");
 
       try {
-        // Submit report — cookie is sent automatically via credentials: 'include'
-        const reportController = new AbortController();
-        const reportTimeoutId = setTimeout(() => reportController.abort(), 20000);
-        const reportResponse = await fetch(`${apiBaseUrl}/api/reports`, {
-          method: "POST",
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(item.report),
-          signal: reportController.signal,
-        });
-        clearTimeout(reportTimeoutId);
+        let reportId = item.existing_report_id;
+        if (!reportId) {
+          // Submit report — cookie is sent automatically via credentials: 'include'.
+          // The payload's local_report_id makes a re-send of an already-received
+          // report return the existing one instead of creating a duplicate.
+          const reportController = new AbortController();
+          const reportTimeoutId = setTimeout(() => reportController.abort(), 20000);
+          const reportResponse = await fetch(`${apiBaseUrl}/api/reports`, {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(item.report),
+            signal: reportController.signal,
+          });
+          clearTimeout(reportTimeoutId);
 
-        if (!reportResponse.ok) {
-          if (reportResponse.status === 401) throw new Error("auth_expired");
-          throw new Error(`Report submission failed: ${reportResponse.status}`);
+          if (!reportResponse.ok) {
+            if (reportResponse.status === 401) throw new Error("auth_expired");
+            if (isPermanentRejection(reportResponse.status)) {
+              throw new PermanentRejection(`Report rejected: ${reportResponse.status}`);
+            }
+            throw new Error(`Report submission failed: ${reportResponse.status}`);
+          }
+
+          const reportData = await reportResponse.json();
+          reportId = reportData.report_id as string;
+          // Remember the server id so a later retry only sends the remaining photos
+          await patchItem(item.local_id, { existing_report_id: reportId });
         }
 
-        const reportData = await reportResponse.json();
-        const reportId = reportData.report_id;
-
-        // Upload photos
+        // Upload photos — each one is dropped from the queued item once it's on the
+        // server, so a retry after a partial failure never uploads a photo twice.
+        let remaining = [...item.photos];
         for (const photo of item.photos) {
           const formData = new FormData();
           formData.append("report_id", reportId);
@@ -283,8 +352,13 @@ export async function syncQueue(apiBaseUrl: string): Promise<void> {
             if (photoResponse.status === 401) {
               throw new Error("auth_expired");
             }
-            throw new Error(`Photo upload failed: ${photoResponse.status}`);
+            // A rejected photo (e.g. bad file) won't succeed on retry — skip it
+            if (!isPermanentRejection(photoResponse.status)) {
+              throw new Error(`Photo upload failed: ${photoResponse.status}`);
+            }
           }
+          remaining = remaining.filter((p) => p !== photo);
+          await patchItem(item.local_id, { photos: remaining });
         }
 
         // Persist a local record so My Reports shows this report even when
@@ -316,14 +390,24 @@ export async function syncQueue(apiBaseUrl: string): Promise<void> {
       } catch (syncErr) {
         const isAuthExpired =
           syncErr instanceof Error && syncErr.message === "auth_expired";
+        if (syncErr instanceof PermanentRejection) {
+          await patchItem(item.local_id, { permanent_error: true });
+          await updateItemStatus(item.local_id, "failed", item.retry_count + 1);
+          showSyncNotification(
+            "Report could not be accepted",
+            "The server could not accept one of your reports. Open the app to review it."
+          );
+          continue;
+        }
+        // Don't burn a retry on auth expiry — the token just needs refreshing
         const nextRetry = isAuthExpired ? item.retry_count : item.retry_count + 1;
-        const nextStatus = (!isAuthExpired && nextRetry >= MAX_RETRIES) ? "failed" : "pending";
-        await updateItemStatus(
-          item.local_id,
-          nextStatus,
-          // Don't burn a retry on auth expiry — the token just needs refreshing
-          nextRetry
-        );
+        await updateItemStatus(item.local_id, "pending", nextRetry);
+        if (nextRetry === SLOW_RETRY_NOTICE_AT) {
+          showSyncNotification(
+            "Report waiting to upload",
+            "We couldn't reach the server yet. Your report is saved and we'll keep trying automatically."
+          );
+        }
         // Auth expired — no point trying other items this pass
         if (isAuthExpired) break;
       }
@@ -405,12 +489,20 @@ export function registerSyncTriggers(apiBaseUrl: string): void {
     }
   });
 
+  // Periodic pass while the app is open — retries become due on their own
+  // schedule (see retryDelayMs) even when no online/visibility event fires.
+  window.setInterval(() => {
+    if (navigator.onLine) syncQueue(apiBaseUrl);
+  }, 60_000);
+
   // Proactive cold-start sync — if the browser is already online when this
   // function runs (page load / refresh), neither event above will fire because
   // there is no transition from an offline or hidden state. Trigger one pass now.
-  if (navigator.onLine) {
-    syncQueue(apiBaseUrl);
-  }
+  void reviveRetryableFailures()
+    .catch(() => { /* IndexedDB unavailable — nothing queued */ })
+    .finally(() => {
+      if (navigator.onLine) syncQueue(apiBaseUrl);
+    });
 }
 
 // Register (or re-register) a Web Background Sync tag so the SW can trigger

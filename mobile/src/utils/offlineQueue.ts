@@ -375,13 +375,24 @@ async function showSyncNotification(title: string, body: string): Promise<void> 
 
 // ── Sync engine ───────────────────────────────────────────────────────────────
 
-const MAX_RETRIES = 5;
-
-// Minimum wait between successive retries: 2, 4, 8, 16, 30 minutes.
-// Prevents burning all 5 retries in 5 minutes when the server is temporarily down.
-function getBackoffMs(retryCount: number): number {
-  return Math.min(Math.pow(2, retryCount) * 60_000, 30 * 60_000);
+// Retries never stop — only a server rejection (4xx) marks a report "failed".
+// Wait before retrying: 2, 4, 8, 16, then every 30 minutes. Each report gets a
+// fixed 50–100% share of that wait (derived from its id) so that thousands of
+// phones coming back after an outage don't all retry at the same moment.
+function getBackoffMs(retryCount: number, localId: string): number {
+  const base = Math.min(Math.pow(2, retryCount) * 60_000, 30 * 60_000);
+  let h = 0;
+  for (let i = 0; i < localId.length; i++) h = (h * 31 + localId.charCodeAt(i)) >>> 0;
+  return base * (0.5 + (h % 1000) / 2000);
 }
+
+// 4xx other than auth / timeout / rate-limit means the server rejected the data —
+// retrying the same payload will never succeed.
+function isPermanentRejection(status: number): boolean {
+  return status >= 400 && status < 500 && status !== 401 && status !== 408 && status !== 429;
+}
+
+class PermanentRejection extends Error {}
 
 let isSyncing = false;
 
@@ -394,11 +405,14 @@ export async function resetItemForRetry(local_id: string): Promise<void> {
 export function resetStuckItems(): Promise<void> {
   return withQueueLock(async () => {
     const queue = await getQueue();
-    const hasStuck = queue.some((i) => i.status === "syncing");
-    if (!hasStuck) return;
+    // Also revive reports that older app versions marked "failed" only because they
+    // ran out of retries — only server-rejected reports stay failed.
+    const needsReset = (i: QueuedReport) =>
+      i.status === "syncing" || (i.status === "failed" && !i.permanent_error);
+    if (!queue.some(needsReset)) return;
 
     const reset = queue.map((i) =>
-      i.status === "syncing" ? { ...i, status: "pending" as const } : i
+      needsReset(i) ? { ...i, status: "pending" as const } : i
     );
     await saveQueue(reset);
     await notifyQueueChange();
@@ -455,10 +469,10 @@ export async function syncQueue(apiBaseUrl: string): Promise<void> {
     const pending = await withQueueLock(async () => {
       const queue = await getQueue();
       return queue.filter((item) => {
-        if (item.status !== "pending" || item.retry_count >= MAX_RETRIES) return false;
+        if (item.status !== "pending") return false;
         if (item.retry_count === 0 || !item.last_attempt_at) return true;
         const elapsed = Date.now() - new Date(item.last_attempt_at).getTime();
-        return elapsed >= getBackoffMs(item.retry_count);
+        return elapsed >= getBackoffMs(item.retry_count, item.local_id);
       });
     });
 
@@ -471,6 +485,7 @@ export async function syncQueue(apiBaseUrl: string): Promise<void> {
     let totalReportsOk = 0;
     let totalReportsFailed = 0;
     let totalPhotosMissing = 0;
+    let totalStillWaiting = 0;
     let lastSyncErrMsg = "";
 
     for (const item of pending) {
@@ -504,6 +519,9 @@ export async function syncQueue(apiBaseUrl: string): Promise<void> {
 
           if (!reportResponse.ok) {
             if (reportResponse.status === 401) throw new Error("auth_expired");
+            if (isPermanentRejection(reportResponse.status)) {
+              throw new PermanentRejection(`Rejected: ${reportResponse.status}`);
+            }
             throw new Error(`Failed: ${reportResponse.status}`);
           }
 
@@ -568,14 +586,26 @@ export async function syncQueue(apiBaseUrl: string): Promise<void> {
           );
           if (uploadResult.status >= 400) {
             if (uploadResult.status === 401) throw new Error("auth_expired");
-            if (uploadResult.status >= 500) throw new Error(`photo_server_error:${uploadResult.status}`);
-            // 4xx non-401: permanent client error — skip, retrying won't help.
+            if (!isPermanentRejection(uploadResult.status)) {
+              throw new Error(`photo_server_error:${uploadResult.status}`);
+            }
+            // Permanent client error — skip, retrying won't help.
             console.warn(`[syncQueue] Photo upload skipped (HTTP ${uploadResult.status}) body:${uploadResult.body?.slice(0, 200)}`);
             skippedStatuses.push(uploadResult.status);
             photosSkipped++;
           } else {
             photosUploaded++;
           }
+          // Drop this photo from the queued item so a retry after a later failure
+          // never uploads it twice.
+          await withQueueLock(async () => {
+            const q = await getQueue();
+            const idx = q.findIndex((i) => i.local_id === item.local_id);
+            if (idx !== -1) {
+              q[idx].photos = q[idx].photos.filter((p) => p.display_order !== photo.display_order);
+              await saveQueue(q);
+            }
+          });
         }
 
         await removeFromQueue(item.local_id);
@@ -591,11 +621,25 @@ export async function syncQueue(apiBaseUrl: string): Promise<void> {
           syncErr instanceof Error && syncErr.message === "auth_expired";
         const errMsg = syncErr instanceof Error ? syncErr.message.slice(0, 120) : String(syncErr).slice(0, 120);
         if (errMsg) lastSyncErrMsg = errMsg;
+        const isPermanent = syncErr instanceof PermanentRejection;
+        if (isPermanent) {
+          await withQueueLock(async () => {
+            const q = await getQueue();
+            const idx = q.findIndex((i) => i.local_id === item.local_id);
+            if (idx !== -1) {
+              q[idx].permanent_error = true;
+              await saveQueue(q);
+            }
+          });
+        }
+        // Server/network trouble keeps the report pending forever (with growing
+        // waits); only a server rejection marks it failed.
         const nextRetry = isAuthExpired ? item.retry_count : item.retry_count + 1;
-        const nextStatus = (!isAuthExpired && nextRetry >= MAX_RETRIES) ? "failed" : "pending";
+        const nextStatus = isPermanent ? "failed" : "pending";
         await updateItemStatus(item.local_id, nextStatus, nextRetry);
         await notifyQueueChange();
         if (nextStatus === "failed") totalReportsFailed++;
+        if (nextStatus === "pending" && nextRetry === 5) totalStillWaiting++;
         // Auth expired — no point trying other items; let app refresh the token
         if (isAuthExpired) break;
       }
@@ -603,6 +647,12 @@ export async function syncQueue(apiBaseUrl: string): Promise<void> {
 
     // One summary notification for the entire sync pass — avoids spamming the
     // user with N notifications when N queued reports upload at the same time.
+    if (totalStillWaiting > 0 && totalReportsOk === 0 && totalReportsFailed === 0) {
+      void showSyncNotification(
+        "Report waiting to upload",
+        "We couldn't reach the server yet. Your report is saved and we'll keep trying automatically."
+      );
+    }
     if (totalReportsOk > 0 || totalReportsFailed > 0) {
       if (totalReportsFailed === 0 && totalPhotosMissing === 0) {
         const body = totalReportsOk === 1

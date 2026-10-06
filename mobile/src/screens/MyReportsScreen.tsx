@@ -87,9 +87,8 @@ const formatTime = (isoString: string | null | undefined): string => {
   }
 };
 
-// "failed" status is either explicitly set, or the item has exhausted retries
-const isFailed = (report: QueuedReport): boolean =>
-  report.status === 'failed' || (report.status === 'pending' && report.retry_count >= 5);
+// Only a server rejection marks a report failed — otherwise it keeps retrying
+const isFailed = (report: QueuedReport): boolean => report.status === 'failed';
 
 // A reporter is "anonymous" if they have no JWT access token — anonymous
 // reporters are registered by device ID only and never receive tokens.

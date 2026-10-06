@@ -109,4 +109,6 @@ export interface QueuedReport {
   // When set, the report already exists on the server — syncQueue skips the
   // POST /api/reports step and only uploads photos for this report_id.
   existing_report_id?: string;
+  // The server rejected the report as invalid (4xx) — not retried automatically
+  permanent_error?: boolean;
 }

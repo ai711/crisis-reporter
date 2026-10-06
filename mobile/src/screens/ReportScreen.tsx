@@ -2021,6 +2021,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
       const timeoutId = setTimeout(() => controller.abort(), 60000);
 
       let onlineReportId: string | null = null;
+      let photosUploaded = 0;
       try {
         const response = await api.post("/api/reports", reportPayload, {
           signal: controller.signal,
@@ -2039,6 +2040,7 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
             headers: { "Content-Type": "multipart/form-data" },
             timeout: 120000,
           });
+          photosUploaded = i + 1;
         }
 
         await saveSubmittedLocation();
@@ -2062,14 +2064,15 @@ export default function ReportScreen({ navigation }: ReportScreenProps) {
         // Temporarily surface the exact error so we can diagnose why online
         if (onlineReportId) {
           // Report reached the server; only photo uploads failed.
-          // Queue photos only — re-submitting the full report would create a duplicate.
+          // Queue the photos that didn't make it — re-submitting the full report
+          // would create a duplicate, and re-sending uploaded photos would too.
           await registerPushToken();
           const queuedPhotos: QueuedPhoto[] = photos.map((p, i) => ({
             uri: p.uri,
             filename: `photo_${i}.jpg`,
             content_type: p.mimeType,
             display_order: i,
-          }));
+          })).slice(photosUploaded);
           await queuePhotosForReport(onlineReportId, queuedPhotos);
           await saveSubmittedLocation();
           await saveDirectSubmittedRecord(onlineReportId, {
