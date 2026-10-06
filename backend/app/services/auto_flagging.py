@@ -693,6 +693,20 @@ async def auto_flag_report(report_id: str, delay: int = 10) -> None:
 # Runs every 5 minutes. Finds reports stuck in Grey for > 10 minutes and
 # publishes SSE events + logs warnings so ops can investigate.
 
+# Retries of stuck reports run at most 5 at a time: after a surge there can be
+# thousands, and firing them all at once would exhaust the DB connection pool.
+_stuck_retry_semaphore = asyncio.Semaphore(5)
+_stuck_retry_inflight: set[str] = set()
+
+
+async def _retry_stuck_report(report_id: str) -> None:
+    try:
+        async with _stuck_retry_semaphore:
+            await auto_flag_report(report_id, delay=0)
+    finally:
+        _stuck_retry_inflight.discard(report_id)
+
+
 async def monitor_stuck_grey_reports() -> None:
     """Periodic task: find and alert on reports stuck in Grey for > threshold minutes.
     Reads stuck_report_threshold_minutes from AppSetting, falling back to config."""
@@ -747,7 +761,10 @@ async def monitor_stuck_grey_reports() -> None:
                     "re-running auto-flag",
                     report.id, report.crisis_id, minutes_stuck,
                 )
-                asyncio.create_task(auto_flag_report(str(report.id), delay=0))
+                rid = str(report.id)
+                if rid not in _stuck_retry_inflight:
+                    _stuck_retry_inflight.add(rid)
+                    asyncio.create_task(_retry_stuck_report(rid))
                 try:
                     if report.crisis_id is not None:
                         from app.routers.dashboard_sse import publish_event
