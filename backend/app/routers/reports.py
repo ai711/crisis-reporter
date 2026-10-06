@@ -533,6 +533,11 @@ async def submit_report(
             },
         )
 
+    # End the request's transaction now: get_db only closes the session after
+    # background tasks finish, so without this every submission would hold a
+    # pooled connection through auto-flagging's 10 s delay and exhaust the pool.
+    await db.commit()
+
     # Auto-flagging runs after the response is sent to the reporter
     background_tasks.add_task(auto_flag_report, str(report.id))
 

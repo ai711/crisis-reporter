@@ -1596,6 +1596,9 @@ async def auto_translate(
     except Exception as exc:
         log.warning("Failed to seed progress key in Redis: %s", exc)
 
+    # Release the pooled connection before the (long) background translation runs —
+    # get_db only closes the session after background tasks finish.
+    await db.commit()
     background_tasks.add_task(_run_auto_translation, body.language_code)
     return {"status": "translation_started", "language_code": body.language_code, "missing_count": missing_count}
 

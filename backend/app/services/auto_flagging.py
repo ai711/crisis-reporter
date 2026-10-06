@@ -213,6 +213,24 @@ async def auto_flag_report(report_id: str, delay: int = 10) -> None:
     from app.models.reporter import Reporter
     from app.config import settings
 
+    # Rule 3 grace window: give slow live photo uploads up to 20 s more. Done before
+    # the main session opens so the wait doesn't hold a pooled DB connection.
+    async with AsyncSessionLocal() as db:
+        pre = (await db.execute(
+            select(Report.was_queued, Report.created_at, func.count(Photo.id))
+            .outerjoin(Photo, Photo.report_id == Report.id)
+            .where(Report.id == report_id)
+            .group_by(Report.id)
+        )).first()
+    if pre is not None:
+        was_queued, created_at, pre_photo_count = pre
+        if (
+            pre_photo_count == 0
+            and not was_queued
+            and (datetime.now(timezone.utc) - created_at).total_seconds() < 30
+        ):
+            await asyncio.sleep(20)
+
     async with AsyncSessionLocal() as db:
         try:
             result = await db.execute(select(Report).where(Report.id == report_id))
@@ -335,21 +353,10 @@ async def auto_flag_report(report_id: str, delay: int = 10) -> None:
                     )
 
             # ── Rule 3: No photos ─────────────────────────────────────────────
-            # Grace window: wait up to 20 s for slow photo uploads on new reports.
-            async def _photo_count() -> int:
-                r = await db.execute(
-                    select(func.count(Photo.id)).where(Photo.report_id == report.id)
-                )
-                return r.scalar() or 0
-
-            photo_count = await _photo_count()
-            if photo_count == 0 and not report.was_queued:
-                # Grace window: wait for slow live photo uploads.
-                # Queued reports are fully uploaded before auto_flag runs — skip sleep.
-                age_seconds = (datetime.now(timezone.utc) - report.created_at).total_seconds()
-                if age_seconds < 30:
-                    await asyncio.sleep(20)
-                    photo_count = await _photo_count()
+            # The 20 s grace window for slow uploads already ran before this session opened.
+            photo_count = (await db.execute(
+                select(func.count(Photo.id)).where(Photo.report_id == report.id)
+            )).scalar() or 0
             if photo_count == 0:
                 triggered_rules.append({
                     "rule_id": "3",
